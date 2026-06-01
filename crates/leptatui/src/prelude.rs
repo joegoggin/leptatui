@@ -1,4 +1,7 @@
 //! Common imports for Leptatui applications.
+//!
+//! This module gathers the runtime, component, node, style, context, and
+//! Leptos reactive APIs most application code needs.
 
 // Leptatui public API re-exports belong here as the APIs are implemented:
 // - issue #10: App runner and runtime error/result types

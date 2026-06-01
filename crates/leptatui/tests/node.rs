@@ -1,6 +1,24 @@
+//! Node rendering tests.
+//!
+//! These tests render node trees against Ratatui's test backend and inspect the
+//! resulting terminal buffer.
+
 use leptatui::{RenderCtx, Result, block, text};
 use ratatui::{Terminal, backend::TestBackend};
 
+/// Verifies a block node renders its child text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// block(text("Hello"))
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The node render call succeeds.
+/// - The rendered buffer contains `Hello`.
 #[test]
 fn renders_block_and_text_nodes() -> Result<()> {
     let backend = TestBackend::new(24, 5);

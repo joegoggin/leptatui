@@ -13,3 +13,4 @@
 cargo metadata --format-version 1
 cargo check --workspace
 cargo check --workspace --examples
+```

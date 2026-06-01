@@ -1,5 +1,27 @@
+//! Prelude export tests.
+//!
+//! These tests ensure common runtime, node, style, context, and Leptos
+//! reactivity APIs are available through [`leptatui::prelude`].
+
 use leptatui::prelude::*;
 
+/// Verifies the prelude exposes reactivity, context, nodes, and styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// use leptatui::prelude::*;
+/// signal(0)
+/// provide_context(String::from("from prelude"))
+/// block(column([text("from prelude"), button("OK")]))
+/// ```
+///
+/// # Assertions
+///
+/// - Signals can be read, set, and updated from the prelude.
+/// - A memo can derive from a prelude signal.
+/// - Context values can be provided and read from the prelude.
+/// - Node and style helpers type-check from the prelude.
 #[test]
 fn prelude_exposes_reactivity_and_context() {
     Owner::new().with(|| {
