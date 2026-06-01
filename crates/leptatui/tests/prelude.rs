@@ -27,18 +27,22 @@ fn prelude_exposes_reactivity_and_context() {
     Owner::new().with(|| {
         let (count, set_count) = signal(0);
 
-        assert_eq!(count.get(), 0);
+        assert_eq!(count.get_untracked(), 0);
 
         set_count.set(1);
         set_count.update(|value| *value += 1);
 
-        assert_eq!(count.get(), 2);
+        assert_eq!(count.get_untracked(), 2);
 
         let doubled = Memo::new(move |_| count.get() * 2);
 
-        assert_eq!(doubled.get(), 4);
+        assert_eq!(doubled.get_untracked(), 4);
 
-        provide_context(String::from("from prelude"));
+        leptatui::context::__with_context_scope(|| {
+            provide_context(String::from("from prelude"));
+
+            assert_eq!(use_context::<String>().as_deref(), Some("from prelude"));
+        });
 
         let node: Node = block(column([text("from prelude"), button("OK")]));
         let _ = node;
@@ -52,6 +56,5 @@ fn prelude_exposes_reactivity_and_context() {
             .padding(TuiSpacing::uniform(1));
         let _ = style.to_block();
 
-        assert_eq!(use_context::<String>().as_deref(), Some("from prelude"));
     });
 }

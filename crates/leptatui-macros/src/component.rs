@@ -50,8 +50,10 @@ fn expand_component(input_fn: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
                 &mut self,
                 ctx: &mut ::leptatui::RenderCtx<'_, '_>,
             ) -> ::leptatui::Result<()> {
-                let node: ::leptatui::Node = (|| #body)().into();
-                ctx.render_node(&node)
+                ::leptatui::context::__with_context_scope(|| {
+                    let node: ::leptatui::Node = (|| #body)().into();
+                    ctx.render_node(&node)
+                })
             }
         }
     })

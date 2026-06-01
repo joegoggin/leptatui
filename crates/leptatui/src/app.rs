@@ -16,7 +16,10 @@ use crossterm::{
 };
 use ratatui::{Frame, Terminal, backend::CrosstermBackend};
 
-use crate::component::{Component, RenderCtx};
+use crate::{
+    component::{Component, RenderCtx},
+    context,
+};
 
 /// Time between event polls when no input is available.
 const DEFAULT_REDRAW_INTERVAL: Duration = Duration::from_millis(16);
@@ -99,38 +102,13 @@ impl<T> AppRoot for T
 where
     T: Component,
 {
-    /// Renders a [`Component`] through a full-frame [`RenderCtx`].
-    ///
-    /// # Arguments
-    ///
-    /// * `frame` — Ratatui frame for the current draw pass.
-    ///
-    /// # Returns
-    ///
-    /// An empty [`Result`] on success.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Io`] if component rendering performs terminal I/O that fails.
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
-        let mut ctx = RenderCtx::new(frame);
-        Component::render(self, &mut ctx)
+        context::__with_context_scope(|| {
+            let mut ctx = RenderCtx::new(frame);
+            Component::render(self, &mut ctx)
+        })
     }
 
-    /// Handles a terminal event by delegating to the wrapped [`Component`].
-    ///
-    /// # Arguments
-    ///
-    /// * `event` — Crossterm event emitted by the terminal.
-    ///
-    /// # Returns
-    ///
-    /// An [`AppControl`] value indicating whether the app loop should continue.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Io`] if component event handling performs terminal I/O
-    /// that fails.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         Component::handle_event(self, event)
     }
