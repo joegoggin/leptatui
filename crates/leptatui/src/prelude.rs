@@ -5,7 +5,10 @@
 // - issue #11: Component, RenderCtx, and basic node builders
 // - issue #12: TuiStyle and related style helpers
 
-pub use crate::context::{provide_context, use_context};
+pub use crate::{
+    App, AppControl, AppRoot, Error, Result,
+    context::{provide_context, use_context},
+};
 
 pub use leptos::prelude::{
     Callback, Effect, Get, GetUntracked, IntoSignalSetter, Memo, Owner, ReadSignal, RenderEffect,
