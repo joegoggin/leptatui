@@ -21,6 +21,15 @@ fn prelude_exposes_reactivity_and_context() {
         let node: Node = block(column([text("from prelude"), button("OK")]));
         let _ = node;
 
+        let style = TuiStyle::new()
+            .foreground(Color::LightCyan)
+            .background(Color::Black)
+            .modifier(Modifier::BOLD)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .padding(TuiSpacing::uniform(1));
+        let _ = style.to_block();
+
         assert_eq!(use_context::<String>().as_deref(), Some("from prelude"));
     });
 }

@@ -6,7 +6,8 @@
 // - issue #12: TuiStyle and related style helpers
 
 pub use crate::{
-    App, AppControl, AppRoot, Component, Error, Node, RenderCtx, Result, block, button, column,
+    App, AppControl, AppRoot, BorderType, Borders, Color, Component, Error, Modifier, Node,
+    RenderCtx, Result, TuiSpacing, TuiStyle, block, button, column,
     context::{provide_context, use_context},
     row, text,
 };
