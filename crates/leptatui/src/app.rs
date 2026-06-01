@@ -117,22 +117,30 @@ where
 
     async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
         loop {
-            let mut render_result: Result<()> = Ok(());
+            draw_root(&mut self.root, &mut session.terminal)?;
 
-            session.terminal.draw(|frame| {
-                render_result = self.root.render(frame);
-            })?;
-            render_result?;
-
-            if let Some(event) = next_event(self.redraw_interval).await? {
-                if self.root.handle_event(event)? == AppControl::Exit {
-                    break;
-                }
+            if let Some(event) = next_event(self.redraw_interval).await?
+                && self.root.handle_event(event)? == AppControl::Exit
+            {
+                break;
             }
         }
 
         Ok(())
     }
+}
+
+fn draw_root<R>(root: &mut R, terminal: &mut DefaultTerminal) -> Result<()>
+where
+    R: AppRoot,
+{
+    let mut render_result: Result<()> = Ok(());
+
+    terminal.draw(|frame| {
+        render_result = root.render(frame);
+    })?;
+
+    render_result
 }
 
 async fn next_event(timeout: Duration) -> Result<Option<Event>> {

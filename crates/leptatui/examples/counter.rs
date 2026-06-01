@@ -47,7 +47,7 @@ impl Component for Counter {
 
         ctx.with_area(areas[1], |ctx| {
             ctx.render_widget(
-                    Paragraph::new(format!("Count: {}", self.count.get_untracked()))
+                Paragraph::new(format!("Count: {}", self.count.get_untracked()))
                     .centered()
                     .style(self.theme.value.to_ratatui_style())
                     .block(self.theme.value_panel.to_block()),
@@ -104,31 +104,23 @@ struct CounterTheme {
 
 impl Default for CounterTheme {
     fn default() -> Self {
+        let base = TuiStyle::new().background(Color::Black);
+
         Self {
-            panel: TuiStyle::new()
+            panel: base
                 .foreground(Color::LightCyan)
-                .background(Color::Black)
                 .modifier(Modifier::BOLD)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .padding(TuiSpacing::horizontal(1)),
-            value_panel: TuiStyle::new()
+            value_panel: base
                 .foreground(Color::Yellow)
-                .background(Color::Black)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Thick)
                 .padding(TuiSpacing::uniform(1)),
-            heading: TuiStyle::new()
-                .foreground(Color::White)
-                .background(Color::Black)
-                .modifier(Modifier::BOLD),
-            value: TuiStyle::new()
-                .foreground(Color::LightGreen)
-                .background(Color::Black)
-                .modifier(Modifier::BOLD),
-            help: TuiStyle::new()
-                .foreground(Color::Gray)
-                .background(Color::Black),
+            heading: base.foreground(Color::White).modifier(Modifier::BOLD),
+            value: base.foreground(Color::LightGreen).modifier(Modifier::BOLD),
+            help: base.foreground(Color::Gray),
         }
     }
 }
