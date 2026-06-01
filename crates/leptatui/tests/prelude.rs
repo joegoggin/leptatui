@@ -18,6 +18,9 @@ fn prelude_exposes_reactivity_and_context() {
 
         provide_context(String::from("from prelude"));
 
+        let node: Node = block(column([text("from prelude"), button("OK")]));
+        let _ = node;
+
         assert_eq!(use_context::<String>().as_deref(), Some("from prelude"));
     });
 }

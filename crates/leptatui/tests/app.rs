@@ -1,15 +1,14 @@
 use std::time::Duration;
 
 use crossterm::event::Event;
-use leptatui::{App, AppControl, AppRoot, Result};
-use ratatui::Frame;
+use leptatui::{App, AppControl, AppRoot, Component, RenderCtx, Result};
 
 struct TestRoot {
     events: usize,
 }
 
-impl AppRoot for TestRoot {
-    fn render(&mut self, _frame: &mut Frame<'_>) -> Result<()> {
+impl Component for TestRoot {
+    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         Ok(())
     }
 
@@ -20,8 +19,12 @@ impl AppRoot for TestRoot {
 }
 
 #[test]
-fn app_accepts_root_component_contract() {
-    let _app = App::new(TestRoot { events: 0 }).with_redraw_interval(Duration::from_millis(50));
+fn app_accepts_component_contract() {
+    fn assert_app_root<R: AppRoot>(root: R) {
+        let _app = App::new(root).with_redraw_interval(Duration::from_millis(50));
+    }
+
+    assert_app_root(TestRoot { events: 0 });
 }
 
 #[test]

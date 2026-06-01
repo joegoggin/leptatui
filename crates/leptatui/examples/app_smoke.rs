@@ -1,16 +1,14 @@
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use leptatui::prelude::*;
-use ratatui::{Frame, widgets::Paragraph};
 
 struct Root;
 
-impl AppRoot for Root {
-    fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
-        frame.render_widget(
-            Paragraph::new("Leptatui smoke runner. Press q to quit."),
-            frame.area(),
-        );
-        Ok(())
+impl Component for Root {
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        ctx.render_node(&block(column([
+            text("Leptatui smoke runner. Press q or Esc to quit."),
+            button("Quit"),
+        ])))
     }
 
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {

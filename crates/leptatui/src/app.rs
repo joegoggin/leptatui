@@ -12,6 +12,8 @@ use crossterm::{
 };
 use ratatui::{Frame, Terminal, backend::CrosstermBackend};
 
+use crate::component::{Component, RenderCtx};
+
 const DEFAULT_REDRAW_INTERVAL: Duration = Duration::from_millis(16);
 
 /// Result type returned by Leptatui runtime APIs.
@@ -29,6 +31,12 @@ pub enum Error {
     EventTask(#[from] tokio::task::JoinError),
 }
 
+impl From<std::convert::Infallible> for Error {
+    fn from(error: std::convert::Infallible) -> Self {
+        match error {}
+    }
+}
+
 /// Controls whether the app runner keeps looping.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppControl {
@@ -38,10 +46,7 @@ pub enum AppControl {
     Exit,
 }
 
-/// Minimal root contract consumed by `App`.
-///
-/// Issue #11 should adapt the real `Component` API to this runtime contract
-/// instead of adding node builders or render context abstractions here.
+/// Runtime adapter consumed by `App`.
 pub trait AppRoot {
     /// Render the current root state into the Ratatui frame.
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()>;
@@ -49,6 +54,20 @@ pub trait AppRoot {
     /// Handle a terminal event.
     fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
         Ok(AppControl::Continue)
+    }
+}
+
+impl<T> AppRoot for T
+where
+    T: Component,
+{
+    fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
+        let mut ctx = RenderCtx::new(frame);
+        Component::render(self, &mut ctx)
+    }
+
+    fn handle_event(&mut self, event: Event) -> Result<AppControl> {
+        Component::handle_event(self, event)
     }
 }
 
