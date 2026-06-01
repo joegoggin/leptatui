@@ -1,0 +1,5 @@
+error: Text expects text content, not child elements
+ --> tests/fixtures/view_macro/fail/text_element_child.rs:5:10
+  |
+5 |         <Text>
+  |          ^^^^

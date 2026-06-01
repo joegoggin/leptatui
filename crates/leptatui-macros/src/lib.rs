@@ -4,6 +4,7 @@
 //! runtime crate.
 
 mod component;
+mod view;
 
 use proc_macro::TokenStream;
 
@@ -12,4 +13,10 @@ use proc_macro::TokenStream;
 #[proc_macro_attribute]
 pub fn component(args: TokenStream, input: TokenStream) -> TokenStream {
     component::expand(args, input)
+}
+
+/// Converts declarative terminal element syntax into Leptatui node builders.
+#[proc_macro]
+pub fn view(input: TokenStream) -> TokenStream {
+    view::expand(input)
 }
