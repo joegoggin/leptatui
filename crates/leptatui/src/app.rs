@@ -371,6 +371,13 @@ struct TerminalCleanup {
     alternate_screen: bool,
 }
 
+impl Drop for TerminalCleanup {
+    /// Retries terminal cleanup when explicit restoration leaves active modes.
+    fn drop(&mut self) {
+        let _ = self.restore();
+    }
+}
+
 impl TerminalCleanup {
     /// Restores all active terminal modes, returning the first cleanup error.
     ///
@@ -386,17 +393,21 @@ impl TerminalCleanup {
         let mut first_error = None;
 
         if self.raw_mode {
-            if let Err(error) = disable_raw_mode() {
-                first_error.get_or_insert(error);
+            match disable_raw_mode() {
+                Ok(()) => self.raw_mode = false,
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
             }
-            self.raw_mode = false;
         }
 
         if self.alternate_screen {
-            if let Err(error) = execute!(stdout(), LeaveAlternateScreen) {
-                first_error.get_or_insert(error);
+            match execute!(stdout(), LeaveAlternateScreen) {
+                Ok(()) => self.alternate_screen = false,
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
             }
-            self.alternate_screen = false;
         }
 
         if let Some(error) = first_error {
