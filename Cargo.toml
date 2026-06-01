@@ -1,6 +1,8 @@
-[package]
-name = "leptatui"
+[workspace]
+members = ["crates/leptatui", "crates/leptatui-macros"]
+default-members = ["crates/leptatui"]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
-
-[dependencies]
