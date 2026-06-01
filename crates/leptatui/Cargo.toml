@@ -15,7 +15,9 @@ thiserror = "2.0.18"
 tokio = { version = "1.52.3", default-features = false, features = ["rt"] }
 
 [dev-dependencies]
+leptatui-macros = { path = "../leptatui-macros" }
 tokio = { version = "1.52.3", default-features = false, features = [
     "macros",
     "rt-multi-thread",
 ] }
+trybuild = "1"
