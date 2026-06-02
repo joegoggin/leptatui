@@ -3,13 +3,11 @@
 //! The view macro accepts a small XML-like syntax and lowers supported terminal
 //! elements into Leptatui node builder calls.
 
-mod ast;
-mod expand;
-mod parse;
+mod model;
 
 use proc_macro::TokenStream;
 
-use ast::ViewRoot;
+use model::ViewRoot;
 use syn::Error;
 
 /// Expands `view!` input into Leptatui node builder calls.

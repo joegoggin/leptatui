@@ -1,26 +1,75 @@
-//! Expansion for parsed `view!` macro syntax.
-//!
-//! This module validates supported element and child combinations, then emits
-//! calls to Leptatui node builder functions.
-
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Error, Expr, Result};
+use syn::{
+    Error, Ident, Result, Token,
+    parse::{Parse, ParseStream},
+};
 
-use super::ast::{Child, Element, TextContent, ViewRoot};
+use super::{attr::Attr, child::Child, text_content::TextContent};
 
-impl ViewRoot {
-    /// Expands the root element into generated node code.
+/// Parsed terminal element with attributes and children.
+pub(super) struct Element {
+    /// Element tag name, such as `Text` or `Column`.
+    pub(super) name: Ident,
+    /// Attribute names attached to the element.
+    pub(super) attrs: Vec<Attr>,
+    /// Child elements or text content nested inside this element.
+    pub(super) children: Vec<Child>,
+}
+
+impl Parse for Element {
+    /// Parses an opening tag, children, and matching closing tag.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - Macro input stream positioned at an opening `<`.
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing the expanded root node.
+    /// An [`Element`] containing the tag name, attributes, and children.
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if the root element is unsupported or malformed.
-    pub(super) fn expand(self) -> Result<TokenStream> {
-        self.element.expand()
+    /// Returns [`syn::Error`] if the element starts with a closing tag, has
+    /// invalid syntax, or closes with a mismatched tag name.
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        input.parse::<Token![<]>()?;
+
+        if input.peek(Token![/]) {
+            return Err(input.error("view! element cannot start with a closing tag"));
+        }
+
+        let name: Ident = input.parse()?;
+        let mut attrs = Vec::new();
+
+        while !input.peek(Token![>]) {
+            attrs.push(input.parse()?);
+        }
+
+        input.parse::<Token![>]>()?;
+
+        let mut children = Vec::new();
+        while !input.is_empty() && !next_is_closing_tag(input) {
+            children.push(input.parse()?);
+        }
+
+        input.parse::<Token![<]>()?;
+        input.parse::<Token![/]>()?;
+        let closing_name: Ident = input.parse()?;
+        input.parse::<Token![>]>()?;
+
+        if closing_name != name {
+            return Err(Error::new_spanned(
+                closing_name,
+                format!("expected closing tag </{}>", name),
+            ));
+        }
+
+        Ok(Self {
+            name,
+            attrs,
+            children,
+        })
     }
 }
 
@@ -35,7 +84,7 @@ impl Element {
     ///
     /// Returns [`syn::Error`] if attributes, children, or the element name are
     /// unsupported.
-    fn expand(&self) -> Result<TokenStream> {
+    pub(super) fn expand(&self) -> Result<TokenStream> {
         self.validate_attrs()?;
         let leptatui = crate::crate_path::leptatui();
 
@@ -91,8 +140,8 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `element_name` — Name to use in compile diagnostics.
-    /// * `wrap` — Function that wraps the expanded child in this element's
+    /// * `element_name` - Name to use in compile diagnostics.
+    /// * `wrap` - Function that wraps the expanded child in this element's
     ///   builder call.
     ///
     /// # Returns
@@ -123,8 +172,8 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `element_name` — Name to use in compile diagnostics.
-    /// * `wrap` — Function that wraps the expanded children in this element's
+    /// * `element_name` - Name to use in compile diagnostics.
+    /// * `wrap` - Function that wraps the expanded children in this element's
     ///   builder call.
     ///
     /// # Returns
@@ -159,8 +208,8 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `child` — Parsed child to expand.
-    /// * `element_name` — Parent element name to use in diagnostics.
+    /// * `child` - Parsed child to expand.
+    /// * `element_name` - Parent element name to use in diagnostics.
     ///
     /// # Returns
     ///
@@ -188,8 +237,8 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `element_name` — Name to use in compile diagnostics.
-    /// * `wrap` — Function that wraps the expanded content in this element's
+    /// * `element_name` - Name to use in compile diagnostics.
+    /// * `wrap` - Function that wraps the expanded content in this element's
     ///   builder call.
     ///
     /// # Returns
@@ -223,17 +272,17 @@ impl Element {
     }
 }
 
-impl TextContent {
-    /// Expands text content into an expression suitable for text builders.
-    ///
-    /// # Returns
-    ///
-    /// A [`TokenStream`] containing a literal, expression, or invoked closure.
-    fn expand(&self) -> TokenStream {
-        match self {
-            Self::Literal(value) => quote! { #value },
-            Self::Expr(expr) if matches!(expr.as_ref(), Expr::Closure(_)) => quote! { (#expr)() },
-            Self::Expr(expr) => quote! { #expr },
-        }
-    }
+/// Returns whether the next tokens begin a closing tag.
+///
+/// # Arguments
+///
+/// * `input` - Macro input stream to inspect without consuming.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the stream begins with `</`.
+fn next_is_closing_tag(input: ParseStream<'_>) -> bool {
+    let fork = input.fork();
+
+    fork.parse::<Token![<]>().is_ok() && fork.parse::<Token![/]>().is_ok()
 }
