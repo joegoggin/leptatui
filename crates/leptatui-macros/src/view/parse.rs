@@ -114,9 +114,7 @@ impl Parse for Attr {
         if input.peek(LitStr) {
             let _value: LitStr = input.parse()?;
         } else if input.peek(syn::token::Brace) {
-            let content;
-            braced!(content in input);
-            let _value: Expr = content.parse()?;
+            let _value = parse_braced_expr(input)?;
         } else {
             return Err(
                 input.error("view! attribute values must be string literals or braced expressions")
@@ -174,13 +172,37 @@ impl Parse for TextContent {
         }
 
         if input.peek(syn::token::Brace) {
-            let content;
-            braced!(content in input);
-            return Ok(Self::Expr(Box::new(content.parse()?)));
+            return Ok(Self::Expr(Box::new(parse_braced_expr(input)?)));
         }
 
         Err(input.error("expected string literal or braced expression"))
     }
+}
+
+/// Parses braced content as exactly one Rust expression.
+///
+/// # Arguments
+///
+/// * `input` — Macro input stream positioned at a braced expression.
+///
+/// # Returns
+///
+/// An [`Expr`] parsed from inside the braces.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the braced content is missing, invalid, or contains
+/// tokens after the expression.
+fn parse_braced_expr(input: ParseStream<'_>) -> Result<Expr> {
+    let content;
+    braced!(content in input);
+    let value = content.parse()?;
+
+    if !content.is_empty() {
+        return Err(content.error("view! braced content must be a single Rust expression"));
+    }
+
+    Ok(value)
 }
 
 /// Returns whether the next tokens begin a closing tag.

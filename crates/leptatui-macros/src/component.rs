@@ -55,10 +55,11 @@ fn expand_component(input_fn: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
     let vis = input_fn.vis;
     let ident = input_fn.sig.ident;
     let body = input_fn.block;
+    let leptatui = crate::crate_path::leptatui();
 
     let render_body = quote! {
-        ::leptatui::context::__with_context_scope(|| {
-            let node: ::leptatui::Node = (|| #body)().into();
+        #leptatui::context::__with_context_scope(|| {
+            let node: #leptatui::Node = (|| #body)().into();
             node
         })
     };
@@ -75,7 +76,7 @@ fn expand_component(input_fn: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
             }
 
             #[doc = "Converts this component into a Leptatui node."]
-            #vis fn into_node(self) -> ::leptatui::Node {
+            #vis fn into_node(self) -> #leptatui::Node {
                 #render_body
             }
         }
@@ -87,19 +88,19 @@ fn expand_component(input_fn: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
             }
         }
 
-        impl ::core::convert::From<#ident> for ::leptatui::Node {
+        impl ::core::convert::From<#ident> for #leptatui::Node {
             #[doc = "Converts the component into a Leptatui node."]
             fn from(component: #ident) -> Self {
                 component.into_node()
             }
         }
 
-        impl ::leptatui::Component for #ident {
+        impl #leptatui::Component for #ident {
             #[doc = "Renders the component into the provided Leptatui context."]
             fn render(
                 &mut self,
-                ctx: &mut ::leptatui::RenderCtx<'_, '_>,
-            ) -> ::leptatui::Result<()> {
+                ctx: &mut #leptatui::RenderCtx<'_, '_>,
+            ) -> #leptatui::Result<()> {
                 let node = Self::new().into_node();
                 ctx.render_node(&node)
             }

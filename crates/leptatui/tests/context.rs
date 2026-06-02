@@ -33,7 +33,7 @@ impl Component for ContextRoot {
 
         Owner::new().with(|| {
             let (count, set_count) = signal(1);
-            provide_context(count);
+            leptos::context::provide_context(count);
             set_count.set(2);
 
             self.observed_count =
@@ -51,7 +51,7 @@ impl Component for ContextRoot {
 /// ```text
 /// AppRoot::render(&mut ContextRoot, frame)
 /// provide_context(String::from("from component"))
-/// provide_context(ReadSignal<i32>)
+/// leptos::context::provide_context(ReadSignal<i32>)
 /// ```
 ///
 /// # Assertions

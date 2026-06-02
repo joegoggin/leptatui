@@ -7,7 +7,7 @@
 //!
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
 //! - [`mod@component`] — Component rendering contracts and frame contexts.
-//! - [`context`] — Leptos context re-exports for terminal applications.
+//! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
 //! - [`node`] — Basic renderable node builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
@@ -18,6 +18,8 @@ pub mod context;
 pub mod node;
 pub mod prelude;
 pub mod style;
+
+extern crate self as leptatui;
 
 pub use app::{App, AppControl, AppRoot, Error, Result};
 pub use component::{Component, RenderCtx};

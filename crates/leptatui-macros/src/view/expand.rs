@@ -37,22 +37,23 @@ impl Element {
     /// unsupported.
     fn expand(&self) -> Result<TokenStream> {
         self.validate_attrs()?;
+        let leptatui = crate::crate_path::leptatui();
 
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
-                quote! { ::leptatui::block(#child) }
+                quote! { #leptatui::block(#child) }
             }),
             "Row" => self.expand_child_list("Row", |children| {
-                quote! { ::leptatui::row(::std::vec![#(#children),*]) }
+                quote! { #leptatui::row(::std::vec![#(#children),*]) }
             }),
             "Column" => self.expand_child_list("Column", |children| {
-                quote! { ::leptatui::column(::std::vec![#(#children),*]) }
+                quote! { #leptatui::column(::std::vec![#(#children),*]) }
             }),
             "Text" => self.expand_text_like("Text", |content| {
-                quote! { ::leptatui::text(#content) }
+                quote! { #leptatui::text(#content) }
             }),
             "Button" => self.expand_text_like("Button", |content| {
-                quote! { ::leptatui::button(#content) }
+                quote! { #leptatui::button(#content) }
             }),
             _ => Err(Error::new_spanned(
                 &self.name,
@@ -173,7 +174,8 @@ impl Element {
         match child {
             Child::Element(child) => child.expand(),
             Child::Text(TextContent::Expr(expr)) => {
-                Ok(quote! { ::core::convert::Into::<::leptatui::Node>::into(#expr) })
+                let leptatui = crate::crate_path::leptatui();
+                Ok(quote! { ::core::convert::Into::<#leptatui::Node>::into(#expr) })
             }
             Child::Text(TextContent::Literal(_)) => Err(Error::new_spanned(
                 &self.name,
