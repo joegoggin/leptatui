@@ -22,23 +22,24 @@ pub fn provide_context<T>(value: T)
 where
     T: Send + Sync + 'static,
 {
-    let mut value = Some(value);
-    let provided = CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let Some(frame) = stack.last_mut() else {
-            return false;
-        };
-
-        let value = value
-            .take()
-            .expect("context value should only be stored once");
-        frame.insert(TypeId::of::<T>(), Box::new(value));
-        true
-    });
-
-    if !provided && let Some(value) = value {
+    if let Err(value) = provide_leptatui_context(value) {
         leptos::context::provide_context(value);
     }
+}
+
+fn provide_leptatui_context<T>(value: T) -> Result<(), T>
+where
+    T: Send + Sync + 'static,
+{
+    CONTEXT_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        let Some(frame) = stack.last_mut() else {
+            return Err(value);
+        };
+
+        frame.insert(TypeId::of::<T>(), Box::new(value));
+        Ok(())
+    })
 }
 
 /// Returns a typed context value from the nearest render scope that provides it.

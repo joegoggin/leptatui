@@ -21,5 +21,5 @@ pub(super) enum Child {
 
 pub(super) enum TextContent {
     Literal(LitStr),
-    Expr(Expr),
+    Expr(Box<Expr>),
 }

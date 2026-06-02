@@ -129,7 +129,7 @@ impl TextContent {
     fn expand(&self) -> TokenStream {
         match self {
             Self::Literal(value) => quote! { #value },
-            Self::Expr(expr) if matches!(expr, Expr::Closure(_)) => quote! { (#expr)() },
+            Self::Expr(expr) if matches!(expr.as_ref(), Expr::Closure(_)) => quote! { (#expr)() },
             Self::Expr(expr) => quote! { #expr },
         }
     }

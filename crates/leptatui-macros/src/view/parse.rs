@@ -103,7 +103,7 @@ impl Parse for TextContent {
         if input.peek(syn::token::Brace) {
             let content;
             braced!(content in input);
-            return Ok(Self::Expr(content.parse()?));
+            return Ok(Self::Expr(Box::new(content.parse()?)));
         }
 
         Err(input.error("expected string literal or braced expression"))
