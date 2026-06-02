@@ -5,7 +5,7 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
-use super::parse_braced_expr;
+use crate::view::utils::parse::parse_braced_expr;
 
 /// Parsed text-like content inside `Text` or `Button` elements.
 pub(super) enum TextContent {

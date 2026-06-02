@@ -4,6 +4,7 @@
 //! elements into Leptatui node builder calls.
 
 mod model;
+mod utils;
 
 use proc_macro::TokenStream;
 

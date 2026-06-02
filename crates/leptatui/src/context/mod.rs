@@ -4,21 +4,12 @@
 //! Leptatui component render scopes. Values provided in an inner scope shadow
 //! values of the same type from ancestor scopes.
 
-use std::{
-    any::{Any, TypeId, type_name},
-    cell::RefCell,
-    collections::HashMap,
-};
+use std::any::type_name;
 
-/// Stored context value erased behind its Rust type identifier.
-type ContextValue = Box<dyn Any + Send + Sync>;
-/// Single render-scope frame containing context values keyed by type.
-type ContextFrame = HashMap<TypeId, ContextValue>;
+mod scope;
+mod storage;
 
-thread_local! {
-    /// Stack of active Leptatui render context frames for the current thread.
-    static CONTEXT_STACK: RefCell<Vec<ContextFrame>> = RefCell::new(Vec::new());
-}
+use scope::ContextScopeGuard;
 
 /// Provides a typed context value to descendant component render scopes.
 ///
@@ -32,34 +23,9 @@ pub fn provide_context<T>(value: T)
 where
     T: Send + Sync + 'static,
 {
-    if let Err(value) = provide_leptatui_context(value) {
+    if let Err(value) = storage::provide(value) {
         leptos::context::provide_context(value);
     }
-}
-
-/// Stores a context value in the current Leptatui render scope.
-///
-/// # Arguments
-///
-/// * `value` — Context value to store in the top context frame.
-///
-/// # Returns
-///
-/// A [`Result`] containing `()` when a Leptatui context scope is active, or the
-/// original value when no Leptatui scope exists.
-fn provide_leptatui_context<T>(value: T) -> Result<(), T>
-where
-    T: Send + Sync + 'static,
-{
-    CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let Some(frame) = stack.last_mut() else {
-            return Err(value);
-        };
-
-        frame.insert(TypeId::of::<T>(), Box::new(value));
-        Ok(())
-    })
 }
 
 /// Returns a typed context value from the nearest render scope that provides it.
@@ -74,7 +40,7 @@ pub fn use_context<T>() -> Option<T>
 where
     T: Clone + 'static,
 {
-    use_leptatui_context::<T>().or_else(leptos::context::use_context::<T>)
+    storage::get::<T>().or_else(leptos::context::use_context::<T>)
 }
 
 /// Returns a typed context value or panics with a clear missing-context error.
@@ -112,51 +78,6 @@ where
 pub fn __with_context_scope<R>(render: impl FnOnce() -> R) -> R {
     let _scope = ContextScopeGuard::enter();
     render()
-}
-
-/// Returns a typed context value from the Leptatui context stack.
-///
-/// # Returns
-///
-/// An [`Option<T>`] containing the nearest scoped context value of type `T`.
-fn use_leptatui_context<T>() -> Option<T>
-where
-    T: Clone + 'static,
-{
-    CONTEXT_STACK.with(|stack| {
-        stack.borrow().iter().rev().find_map(|frame| {
-            frame
-                .get(&TypeId::of::<T>())
-                .and_then(|value| value.downcast_ref::<T>())
-                .cloned()
-        })
-    })
-}
-
-/// Guard that pops a Leptatui context frame when a render scope ends.
-struct ContextScopeGuard;
-
-impl ContextScopeGuard {
-    /// Pushes a new empty context frame for the current thread.
-    ///
-    /// # Returns
-    ///
-    /// A [`ContextScopeGuard`] that restores the previous context stack on
-    /// drop.
-    fn enter() -> Self {
-        CONTEXT_STACK.with(|stack| stack.borrow_mut().push(HashMap::new()));
-        Self
-    }
-}
-
-impl Drop for ContextScopeGuard {
-    /// Pops the current context frame when the scope guard is dropped.
-    fn drop(&mut self) {
-        CONTEXT_STACK.with(|stack| {
-            let popped = stack.borrow_mut().pop();
-            debug_assert!(popped.is_some(), "context scope stack underflow");
-        });
-    }
 }
 
 #[cfg(test)]

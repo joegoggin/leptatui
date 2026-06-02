@@ -3,7 +3,7 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
-use super::parse_braced_expr;
+use crate::view::utils::parse::parse_braced_expr;
 
 /// Parsed element attribute.
 pub(super) struct Attr {

@@ -5,6 +5,8 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
+use crate::view::utils::parse::next_is_closing_tag;
+
 use super::{attr::Attr, child::Child, text_content::TextContent};
 
 /// Parsed terminal element with attributes and children.
@@ -86,7 +88,7 @@ impl Element {
     /// unsupported.
     pub(super) fn expand(&self) -> Result<TokenStream> {
         self.validate_attrs()?;
-        let leptatui = crate::crate_path::leptatui();
+        let leptatui = crate::utils::crate_path::leptatui();
 
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
@@ -223,7 +225,7 @@ impl Element {
         match child {
             Child::Element(child) => child.expand(),
             Child::Text(TextContent::Expr(expr)) => {
-                let leptatui = crate::crate_path::leptatui();
+                let leptatui = crate::utils::crate_path::leptatui();
                 Ok(quote! { ::core::convert::Into::<#leptatui::Node>::into(#expr) })
             }
             Child::Text(TextContent::Literal(_)) => Err(Error::new_spanned(
@@ -270,19 +272,4 @@ impl Element {
 
         Ok(wrap(content.expand()))
     }
-}
-
-/// Returns whether the next tokens begin a closing tag.
-///
-/// # Arguments
-///
-/// * `input` - Macro input stream to inspect without consuming.
-///
-/// # Returns
-///
-/// A [`bool`] indicating whether the stream begins with `</`.
-fn next_is_closing_tag(input: ParseStream<'_>) -> bool {
-    let fork = input.fork();
-
-    fork.parse::<Token![<]>().is_ok() && fork.parse::<Token![/]>().is_ok()
 }

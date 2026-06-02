@@ -4,7 +4,7 @@
 //! runtime crate.
 
 mod component;
-mod crate_path;
+mod utils;
 mod view;
 
 use proc_macro::TokenStream;
