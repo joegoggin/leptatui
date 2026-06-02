@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 crossterm = "0.29.0"
+leptatui-macros = { path = "../leptatui-macros" }
 leptos = { version = "0.9.0-alpha", default-features = false, features = [
     "csr",
 ] }
@@ -19,3 +20,4 @@ tokio = { version = "1.52.3", default-features = false, features = [
     "macros",
     "rt-multi-thread",
 ] }
+trybuild = "1"

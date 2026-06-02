@@ -1,52 +1,6 @@
-//! Component rendering contract.
-//!
-//! Components render into a [`RenderCtx`], which wraps a Ratatui frame and the
-//! rectangular area currently assigned to the component.
-
-use crossterm::event::Event;
 use ratatui::{Frame, layout::Rect, widgets::Widget};
 
-use crate::{
-    app::{AppControl, Result},
-    node::Node,
-};
-
-/// Root or child component that can render into a terminal frame.
-pub trait Component {
-    /// Renders the current component state into the provided context.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` — Rendering context for the component's current area.
-    ///
-    /// # Returns
-    ///
-    /// An empty [`Result`] on success.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if rendering performs terminal I/O
-    /// that fails.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()>;
-
-    /// Handles a terminal event.
-    ///
-    /// # Arguments
-    ///
-    /// * `_event` — Crossterm event emitted by the terminal.
-    ///
-    /// # Returns
-    ///
-    /// An [`AppControl`] value indicating whether the app loop should continue.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if event handling performs terminal I/O
-    /// that fails.
-    fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
-        Ok(AppControl::Continue)
-    }
-}
+use crate::{app::Result, node::Node};
 
 /// Rendering context for a single frame and target area.
 pub struct RenderCtx<'frame, 'buffer> {

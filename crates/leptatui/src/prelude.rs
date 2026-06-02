@@ -11,9 +11,11 @@
 pub use crate::{
     App, AppControl, AppRoot, BorderType, Borders, Color, Component, Error, Modifier, Node,
     RenderCtx, Result, TuiSpacing, TuiStyle, block, button, column,
-    context::{provide_context, use_context},
+    context::{expect_context, provide_context, use_context},
     row, text,
 };
+
+pub use leptatui_macros::{component, view};
 
 pub use leptos::prelude::{
     Callback, Effect, Get, GetUntracked, IntoSignalSetter, Memo, Owner, ReadSignal, RenderEffect,

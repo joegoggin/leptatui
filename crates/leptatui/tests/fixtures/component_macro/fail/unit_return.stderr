@@ -1,0 +1,5 @@
+error: #[component] functions must not return ()
+ --> tests/fixtures/component_macro/fail/unit_return.rs:4:20
+  |
+4 | fn UnitReturn() -> () {}
+  |                    ^^
