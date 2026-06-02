@@ -28,6 +28,13 @@ fn expand_component(input_fn: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
     let ident = input_fn.sig.ident;
     let body = input_fn.block;
 
+    let render_body = quote! {
+        ::leptatui::context::__with_context_scope(|| {
+            let node: ::leptatui::Node = (|| #body)().into();
+            node
+        })
+    };
+
     Ok(quote! {
         #[allow(non_camel_case_types)]
         #(#attrs)*
@@ -37,6 +44,10 @@ fn expand_component(input_fn: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
             #vis const fn new() -> Self {
                 Self
             }
+
+            #vis fn into_node(self) -> ::leptatui::Node {
+                #render_body
+            }
         }
 
         impl ::core::default::Default for #ident {
@@ -45,15 +56,19 @@ fn expand_component(input_fn: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
             }
         }
 
+        impl ::core::convert::From<#ident> for ::leptatui::Node {
+            fn from(component: #ident) -> Self {
+                component.into_node()
+            }
+        }
+
         impl ::leptatui::Component for #ident {
             fn render(
                 &mut self,
                 ctx: &mut ::leptatui::RenderCtx<'_, '_>,
             ) -> ::leptatui::Result<()> {
-                ::leptatui::context::__with_context_scope(|| {
-                    let node: ::leptatui::Node = (|| #body)().into();
-                    ctx.render_node(&node)
-                })
+                let node = Self::new().into_node();
+                ctx.render_node(&node)
             }
         }
     })

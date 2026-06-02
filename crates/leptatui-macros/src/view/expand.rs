@@ -65,14 +65,8 @@ impl Element {
             ));
         }
 
-        let Child::Element(child) = &self.children[0] else {
-            return Err(Error::new_spanned(
-                &self.name,
-                format!("{element_name} expects an element child"),
-            ));
-        };
-
-        Ok(wrap(child.expand()?))
+        let child = self.expand_node_child(&self.children[0], element_name)?;
+        Ok(wrap(child))
     }
 
     fn expand_child_list(
@@ -89,17 +83,23 @@ impl Element {
 
         let mut expanded = Vec::new();
         for child in &self.children {
-            let Child::Element(child) = child else {
-                return Err(Error::new_spanned(
-                    &self.name,
-                    format!("{element_name} expects element children"),
-                ));
-            };
-
-            expanded.push(child.expand()?);
+            expanded.push(self.expand_node_child(child, element_name)?);
         }
 
         Ok(wrap(expanded))
+    }
+
+    fn expand_node_child(&self, child: &Child, element_name: &str) -> Result<TokenStream> {
+        match child {
+            Child::Element(child) => child.expand(),
+            Child::Text(TextContent::Expr(expr)) => {
+                Ok(quote! { ::core::convert::Into::<::leptatui::Node>::into(#expr) })
+            }
+            Child::Text(TextContent::Literal(_)) => Err(Error::new_spanned(
+                &self.name,
+                format!("{element_name} expects element children or braced node expressions"),
+            )),
+        }
     }
 
     fn expand_text_like(
