@@ -1,5 +1,4 @@
-use leptatui::{Node, text};
-use leptatui_macros::view;
+use leptatui::prelude::*;
 
 fn main() {
     let count = 7;

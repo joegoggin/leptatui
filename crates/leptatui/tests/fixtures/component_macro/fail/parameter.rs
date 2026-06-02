@@ -1,4 +1,4 @@
-use leptatui_macros::component;
+use leptatui::prelude::*;
 
 #[component]
 fn WithProps(label: String) -> leptatui::Node {

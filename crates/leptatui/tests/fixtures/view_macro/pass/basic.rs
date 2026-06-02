@@ -1,5 +1,4 @@
-use leptatui::{Node, block, text};
-use leptatui_macros::view;
+use leptatui::prelude::*;
 
 fn main() {
     let node: Node = view! {

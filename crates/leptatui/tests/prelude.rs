@@ -4,6 +4,41 @@
 //! reactivity APIs are available through [`leptatui::prelude`].
 
 use leptatui::prelude::*;
+use ratatui::{Terminal, backend::TestBackend};
+
+#[component]
+fn PreludeComponent() -> Node {
+    provide_context(String::from("from prelude component"));
+    let label = expect_context::<String>();
+
+    view! { <Text>{label}</Text> }
+}
+
+#[test]
+fn prelude_exposes_macros_and_required_context() -> Result<()> {
+    let backend = TestBackend::new(32, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let mut component = PreludeComponent::new();
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = Component::render(&mut component, &mut ctx);
+    })?;
+    render_result?;
+
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+
+    assert!(rendered.contains("from prelude component"));
+
+    Ok(())
+}
 
 /// Verifies the prelude exposes reactivity, context, nodes, and styles.
 ///
@@ -42,6 +77,7 @@ fn prelude_exposes_reactivity_and_context() {
             provide_context(String::from("from prelude"));
 
             assert_eq!(use_context::<String>().as_deref(), Some("from prelude"));
+            assert_eq!(expect_context::<String>(), "from prelude");
         });
 
         let node: Node = block(column([text("from prelude"), button("OK")]));
@@ -55,6 +91,5 @@ fn prelude_exposes_reactivity_and_context() {
             .border_type(BorderType::Rounded)
             .padding(TuiSpacing::uniform(1));
         let _ = style.to_block();
-
     });
 }

@@ -1,8 +1,7 @@
-use leptatui::{Component, text};
-use leptatui_macros::component;
+use leptatui::prelude::*;
 
 #[component]
-fn Greeting() -> leptatui::Node {
+fn Greeting() -> Node {
     text("hello")
 }
 

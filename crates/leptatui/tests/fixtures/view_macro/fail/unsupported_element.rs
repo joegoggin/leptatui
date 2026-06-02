@@ -1,4 +1,4 @@
-use leptatui_macros::view;
+use leptatui::prelude::*;
 
 fn main() {
     let _ = view! {

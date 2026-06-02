@@ -1,4 +1,4 @@
-use leptatui_macros::component;
+use leptatui::prelude::*;
 
 #[component]
 fn UnitReturn() -> () {}
