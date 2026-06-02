@@ -6,7 +6,7 @@
 //! # Modules
 //!
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
-//! - [`component`] — Component rendering contracts and frame contexts.
+//! - [`mod@component`] — Component rendering contracts and frame contexts.
 //! - [`context`] — Leptos context re-exports for terminal applications.
 //! - [`node`] — Basic renderable node builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.

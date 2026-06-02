@@ -6,6 +6,7 @@
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
 
+/// Component used to prove prelude macro and context exports work together.
 #[component]
 fn PreludeComponent() -> Node {
     provide_context(String::from("from prelude component"));
@@ -14,6 +15,28 @@ fn PreludeComponent() -> Node {
     view! { <Text>{label}</Text> }
 }
 
+/// Verifies prelude macro exports can render with required context.
+///
+/// # Example Under Test
+///
+/// ```text
+/// #[component]
+/// fn PreludeComponent() -> Node {
+///     provide_context(String::from("from prelude component"));
+///     view! { <Text>{expect_context::<String>()}</Text> }
+/// }
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The component render call succeeds.
+/// - The rendered buffer contains `from prelude component`.
+///
+/// # Why
+///
+/// The prelude should expose enough macro, node, component, and context APIs for
+/// a small component to render without extra imports.
 #[test]
 fn prelude_exposes_macros_and_required_context() -> Result<()> {
     let backend = TestBackend::new(32, 3);

@@ -1,3 +1,8 @@
+//! Expansion for parsed `view!` macro syntax.
+//!
+//! This module validates supported element and child combinations, then emits
+//! calls to Leptatui node builder functions.
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Error, Expr, Result};
@@ -5,12 +10,31 @@ use syn::{Error, Expr, Result};
 use super::ast::{Child, Element, TextContent, ViewRoot};
 
 impl ViewRoot {
+    /// Expands the root element into generated node code.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the expanded root node.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the root element is unsupported or malformed.
     pub(super) fn expand(self) -> Result<TokenStream> {
         self.element.expand()
     }
 }
 
 impl Element {
+    /// Expands this element based on its supported Leptatui tag name.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing node builder calls for this element.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if attributes, children, or the element name are
+    /// unsupported.
     fn expand(&self) -> Result<TokenStream> {
         self.validate_attrs()?;
 
@@ -37,6 +61,15 @@ impl Element {
         }
     }
 
+    /// Validates that every attribute name is currently accepted by `view!`.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`syn::Result`] when all attributes are accepted.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if an attribute is not `class`, `id`, or `style`.
     fn validate_attrs(&self) -> Result<()> {
         for attr in &self.attrs {
             match attr.name.to_string().as_str() {
@@ -53,6 +86,22 @@ impl Element {
         Ok(())
     }
 
+    /// Expands an element that must contain exactly one node child.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `wrap` — Function that wraps the expanded child in this element's
+    ///   builder call.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the wrapped child node.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the element does not have exactly one valid
+    /// node child.
     fn expand_single_child(
         &self,
         element_name: &str,
@@ -69,6 +118,22 @@ impl Element {
         Ok(wrap(child))
     }
 
+    /// Expands an element that must contain one or more node children.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `wrap` — Function that wraps the expanded children in this element's
+    ///   builder call.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the wrapped child list.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the element has no children or contains an
+    /// invalid node child.
     fn expand_child_list(
         &self,
         element_name: &str,
@@ -89,6 +154,21 @@ impl Element {
         Ok(wrap(expanded))
     }
 
+    /// Expands a child position that expects a node-compatible value.
+    ///
+    /// # Arguments
+    ///
+    /// * `child` — Parsed child to expand.
+    /// * `element_name` — Parent element name to use in diagnostics.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing a node expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the child is a string literal where a node is
+    /// required.
     fn expand_node_child(&self, child: &Child, element_name: &str) -> Result<TokenStream> {
         match child {
             Child::Element(child) => child.expand(),
@@ -102,6 +182,22 @@ impl Element {
         }
     }
 
+    /// Expands an element that must contain exactly one text child.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `wrap` — Function that wraps the expanded content in this element's
+    ///   builder call.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the text-like builder call.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the element has the wrong number or kind of
+    /// children.
     fn expand_text_like(
         &self,
         element_name: &str,
@@ -126,6 +222,11 @@ impl Element {
 }
 
 impl TextContent {
+    /// Expands text content into an expression suitable for text builders.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing a literal, expression, or invoked closure.
     fn expand(&self) -> TokenStream {
         match self {
             Self::Literal(value) => quote! { #value },

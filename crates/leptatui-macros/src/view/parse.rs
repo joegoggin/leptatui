@@ -1,3 +1,8 @@
+//! Parsing for `view!` macro input.
+//!
+//! This module implements `syn` parsers for the small XML-like syntax consumed
+//! by `view!` before expansion validates supported elements.
+
 use syn::{
     Error, Expr, Ident, LitStr, Result, Token, braced,
     parse::{Parse, ParseStream},
@@ -6,6 +11,20 @@ use syn::{
 use super::ast::{Attr, Child, Element, TextContent, ViewRoot};
 
 impl Parse for ViewRoot {
+    /// Parses a `view!` invocation with exactly one root element.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Macro input stream to parse.
+    ///
+    /// # Returns
+    ///
+    /// A [`ViewRoot`] containing the parsed root element.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if parsing fails or tokens remain after the root
+    /// element.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let element = input.parse()?;
 
@@ -18,6 +37,20 @@ impl Parse for ViewRoot {
 }
 
 impl Parse for Element {
+    /// Parses an opening tag, children, and matching closing tag.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Macro input stream positioned at an opening `<`.
+    ///
+    /// # Returns
+    ///
+    /// An [`Element`] containing the tag name, attributes, and children.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the element starts with a closing tag, has
+    /// invalid syntax, or closes with a mismatched tag name.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         input.parse::<Token![<]>()?;
 
@@ -60,6 +93,20 @@ impl Parse for Element {
 }
 
 impl Parse for Attr {
+    /// Parses an element attribute with a literal or expression value.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Macro input stream positioned at an attribute name.
+    ///
+    /// # Returns
+    ///
+    /// An [`Attr`] containing the parsed attribute name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the attribute is missing `=` or its value is
+    /// not a string literal or braced expression.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let name: Ident = input.parse()?;
         input.parse::<Token![=]>()?;
@@ -81,6 +128,19 @@ impl Parse for Attr {
 }
 
 impl Parse for Child {
+    /// Parses a child element or text-like child.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Macro input stream positioned at child content.
+    ///
+    /// # Returns
+    ///
+    /// A [`Child`] containing an element, string literal, or braced expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the next tokens cannot form a supported child.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         if input.peek(Token![<]) {
             return Ok(Self::Element(input.parse()?));
@@ -95,6 +155,19 @@ impl Parse for Child {
 }
 
 impl Parse for TextContent {
+    /// Parses text content from a literal or braced expression.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Macro input stream positioned at text content.
+    ///
+    /// # Returns
+    ///
+    /// A [`TextContent`] value containing the parsed literal or expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the next tokens are not text-like content.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         if input.peek(LitStr) {
             return Ok(Self::Literal(input.parse()?));
@@ -110,6 +183,15 @@ impl Parse for TextContent {
     }
 }
 
+/// Returns whether the next tokens begin a closing tag.
+///
+/// # Arguments
+///
+/// * `input` — Macro input stream to inspect without consuming.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the stream begins with `</`.
 fn next_is_closing_tag(input: ParseStream<'_>) -> bool {
     let fork = input.fork();
 
