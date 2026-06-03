@@ -126,13 +126,17 @@ impl Node {
             && key.kind == KeyEventKind::Press
         {
             match key.code {
-                KeyCode::Tab if self.focusable_count() > 0 => {
-                    self.move_focus(FocusDirection::Forward);
-                    return Ok(AppControl::Continue);
-                }
-                KeyCode::BackTab if self.focusable_count() > 0 => {
-                    self.move_focus(FocusDirection::Backward);
-                    return Ok(AppControl::Continue);
+                KeyCode::Tab | KeyCode::BackTab => {
+                    let count = self.focusable_count();
+                    if count > 0 {
+                        let direction = match key.code {
+                            KeyCode::Tab => FocusDirection::Forward,
+                            KeyCode::BackTab => FocusDirection::Backward,
+                            _ => unreachable!("only tab keys are matched"),
+                        };
+                        self.move_focus(direction, count);
+                        return Ok(AppControl::Continue);
+                    }
                 }
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     if let Some(control) = self.activate_focused_button() {
@@ -196,8 +200,8 @@ impl Node {
     /// # Arguments
     ///
     /// * `direction` — Direction to move through focusable buttons.
-    fn move_focus(&mut self, direction: FocusDirection) {
-        let count = self.focusable_count();
+    /// * `count` — Number of focusable buttons in the node tree.
+    fn move_focus(&mut self, direction: FocusDirection, count: usize) {
         if count == 0 {
             return;
         }

@@ -12,6 +12,8 @@ use syn::{
 
 use crate::view::utils::parse::next_is_closing_tag;
 
+use self::attr_validation::{AttrKind, ValidatedAttr};
+
 use super::{attr::Attr, child::Child, text_content::TextContent};
 
 /// Parsed terminal element with attributes and children.
@@ -92,7 +94,7 @@ impl Element {
     /// Returns [`syn::Error`] if attributes, children, or the element name are
     /// unsupported.
     pub(super) fn expand(&self) -> Result<TokenStream> {
-        self.validate_attrs()?;
+        let attrs = self.validate_attrs()?;
         let leptatui = crate::utils::crate_path::leptatui();
 
         let node = match self.name.to_string().as_str() {
@@ -117,25 +119,28 @@ impl Element {
             )),
         }?;
 
-        self.expand_attrs(node)
+        self.expand_attrs(node, &attrs)
     }
 
-    /// Validates that every attribute name is currently accepted by `view!`.
+    /// Validates and classifies every attribute name accepted by `view!`.
     ///
     /// # Returns
     ///
-    /// An empty [`syn::Result`] when all attributes are accepted.
+    /// Attribute references paired with their accepted kinds.
     ///
     /// # Errors
     ///
     /// Returns [`syn::Error`] if an attribute is unsupported for the element.
-    fn validate_attrs(&self) -> Result<()> {
+    fn validate_attrs(&self) -> Result<Vec<ValidatedAttr<'_>>> {
         let element_name = self.name.to_string();
+        let mut attrs = Vec::with_capacity(self.attrs.len());
 
         for attr in &self.attrs {
-            match attr.name.to_string().as_str() {
-                "class" | "id" | "style" => {}
-                "on_press" if element_name == "Button" => {}
+            let kind = match attr.name.to_string().as_str() {
+                "class" => AttrKind::Class,
+                "id" => AttrKind::Id,
+                "style" => AttrKind::Style,
+                "on_press" if element_name == "Button" => AttrKind::OnPress,
                 "on_press" => {
                     return Err(Error::new_spanned(
                         &attr.name,
@@ -148,10 +153,12 @@ impl Element {
                         "unsupported view! attribute; expected class, id, style, or button on_press",
                     ));
                 }
-            }
+            };
+
+            attrs.push(ValidatedAttr { attr, kind });
         }
 
-        Ok(())
+        Ok(attrs)
     }
 
     /// Expands supported attributes into selector metadata setters.
@@ -168,15 +175,15 @@ impl Element {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if `style` or `on_press` receives a literal.
-    fn expand_attrs(&self, node: TokenStream) -> Result<TokenStream> {
+    fn expand_attrs(&self, node: TokenStream, attrs: &[ValidatedAttr<'_>]) -> Result<TokenStream> {
         let mut expanded = node;
 
-        for attr in &self.attrs {
+        for ValidatedAttr { attr, kind } in attrs {
             let value = attr.value.to_tokens();
-            expanded = match attr.name.to_string().as_str() {
-                "class" => quote! { (#expanded).with_classes(#value) },
-                "id" => quote! { (#expanded).with_id(#value) },
-                "style" => {
+            expanded = match kind {
+                AttrKind::Class => quote! { (#expanded).with_classes(#value) },
+                AttrKind::Id => quote! { (#expanded).with_id(#value) },
+                AttrKind::Style => {
                     if attr.value.is_literal() {
                         return Err(Error::new_spanned(
                             &attr.name,
@@ -186,7 +193,7 @@ impl Element {
 
                     quote! { (#expanded).with_inline_style(#value) }
                 }
-                "on_press" => {
+                AttrKind::OnPress => {
                     if attr.value.is_literal() {
                         return Err(Error::new_spanned(
                             &attr.name,
@@ -196,7 +203,6 @@ impl Element {
 
                     quote! { (#expanded).on_press(#value) }
                 }
-                _ => unreachable!("attributes are validated before expansion"),
             };
         }
 
@@ -342,5 +348,31 @@ impl Element {
         };
 
         Ok(wrap(content.expand()))
+    }
+}
+
+/// Internal attribute validation output for `Element` expansion.
+mod attr_validation {
+    use super::Attr;
+
+    /// Supported `view!` attribute kinds after validation.
+    #[derive(Clone, Copy)]
+    pub(super) enum AttrKind {
+        /// `class` selector metadata.
+        Class,
+        /// `id` selector metadata.
+        Id,
+        /// Inline `style` override.
+        Style,
+        /// Button activation callback.
+        OnPress,
+    }
+
+    /// Attribute paired with its validated kind.
+    pub(super) struct ValidatedAttr<'a> {
+        /// Parsed source attribute.
+        pub(super) attr: &'a Attr,
+        /// Accepted attribute kind.
+        pub(super) kind: AttrKind,
     }
 }

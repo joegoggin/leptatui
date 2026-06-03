@@ -137,24 +137,12 @@ impl TuiStyle {
     }
 
     pub(crate) fn overlay(&mut self, style: Self) {
-        if style.foreground.is_some() {
-            self.foreground = style.foreground;
-        }
-        if style.background.is_some() {
-            self.background = style.background;
-        }
-        if style.modifiers.is_some() {
-            self.modifiers = style.modifiers;
-        }
-        if style.borders.is_some() {
-            self.borders = style.borders;
-        }
-        if style.border_type.is_some() {
-            self.border_type = style.border_type;
-        }
-        if style.padding.is_some() {
-            self.padding = style.padding;
-        }
+        self.foreground = style.foreground.or(self.foreground);
+        self.background = style.background.or(self.background);
+        self.modifiers = style.modifiers.or(self.modifiers);
+        self.borders = style.borders.or(self.borders);
+        self.border_type = style.border_type.or(self.border_type);
+        self.padding = style.padding.or(self.padding);
     }
 
     pub(crate) const fn inherited_values(self) -> Self {
@@ -184,10 +172,10 @@ impl TuiStyle {
             style = style.bg(color);
         }
 
-        if let Some(modifiers) = self.modifiers {
-            if !modifiers.is_empty() {
-                style = style.add_modifier(modifiers);
-            }
+        if let Some(modifiers) = self.modifiers
+            && !modifiers.is_empty()
+        {
+            style = style.add_modifier(modifiers);
         }
 
         style
