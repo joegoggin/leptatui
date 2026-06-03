@@ -45,6 +45,11 @@ pub(super) fn pop_frame() -> bool {
     CONTEXT_STACK.with(|stack| stack.borrow_mut().pop().is_some())
 }
 
+/// Returns whether the current thread has an active Leptatui context frame.
+pub(super) fn has_active_frame() -> bool {
+    CONTEXT_STACK.with(|stack| !stack.borrow().is_empty())
+}
+
 /// Stores a context value in the current Leptatui render scope.
 ///
 /// # Arguments

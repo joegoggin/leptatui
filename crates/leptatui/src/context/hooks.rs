@@ -72,6 +72,25 @@ pub fn __with_context_scope<R>(render: impl FnOnce() -> R) -> R {
     ContextScope::new().with(render)
 }
 
+/// Runs a closure inside the active Leptatui context scope, creating one only
+/// when no scope is active.
+///
+/// # Arguments
+///
+/// * `render` — Closure that can provide and read scoped context values.
+///
+/// # Returns
+///
+/// An `R` value returned by `render`.
+#[doc(hidden)]
+pub fn __with_context_scope_if_missing<R>(render: impl FnOnce() -> R) -> R {
+    if storage::has_active_frame() {
+        render()
+    } else {
+        __with_context_scope(render)
+    }
+}
+
 #[cfg(test)]
 /// Unit tests for Leptatui context stack behavior.
 mod tests {

@@ -8,5 +8,8 @@ mod hooks;
 mod scope;
 mod storage;
 
-pub use hooks::{__with_context_scope, expect_context, provide_context, use_context};
+pub use hooks::{
+    __with_context_scope, __with_context_scope_if_missing, expect_context, provide_context,
+    use_context,
+};
 pub(crate) use scope::ContextScope;

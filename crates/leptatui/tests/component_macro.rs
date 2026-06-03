@@ -4,8 +4,58 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
+
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use leptatui::{AppControl, Component, RenderCtx, Result, button, component};
+use ratatui::{Terminal, backend::TestBackend};
+
+static MACRO_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+static MACRO_CONTEXT_OBSERVED: Mutex<Option<MacroLabel>> = Mutex::new(None);
+
+/// Context value used by generated component provider tests.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct MacroLabel(&'static str);
+
+/// Component with an interactive button used by macro runtime tests.
+#[component]
+fn MacroButtonRoot() -> leptatui::Node {
+    button("Save").on_press(|| {
+        MACRO_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
+        AppControl::Continue
+    })
+}
+
+/// Component that records the label visible from its render context.
+struct MacroContextConsumer;
+
+impl Component for MacroContextConsumer {
+    /// Records the context label visible during render.
+    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        *MACRO_CONTEXT_OBSERVED
+            .lock()
+            .expect("context observation lock should be available") =
+            leptatui::context::use_context::<MacroLabel>();
+        Ok(())
+    }
+}
+
+/// Component that provides context to a descendant component boundary.
+#[component]
+fn MacroContextProvider() -> leptatui::Node {
+    leptatui::context::provide_context(MacroLabel("macro"));
+    component(MacroContextConsumer)
+}
+
+/// Creates a key-press event for a key code.
+fn key(code: KeyCode) -> Event {
+    Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+}
 
 /// Verifies component macro pass and fail fixtures compile as expected.
 ///
@@ -30,6 +80,113 @@ fn component_macro_compile_cases() {
     let cases = trybuild::TestCases::new();
     cases.pass("tests/fixtures/component_macro/pass/*.rs");
     cases.compile_fail("tests/fixtures/component_macro/fail/*.rs");
+}
+
+/// Verifies generated components dispatch events through their rendered tree.
+///
+/// # Example Under Test
+///
+/// ```text
+/// #[component]
+/// fn MacroButtonRoot() -> Node { button("Save").on_press(...) }
+/// render, Tab, render, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - The first render initializes the generated component's node tree.
+/// - Tab focuses the generated button node.
+/// - A redraw after Tab preserves the focused node tree.
+/// - Enter activates the focused button action.
+///
+/// # Why
+///
+/// App loops redraw between key events, so generated components must keep their
+/// event-capable node tree across render passes.
+#[test]
+fn generated_components_dispatch_events_after_redraw() -> Result<()> {
+    MACRO_BUTTON_PRESSES.store(0, Ordering::SeqCst);
+
+    let backend = TestBackend::new(16, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let mut component = MacroButtonRoot::new();
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = Component::render(&mut component, &mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        AppControl::Continue
+    );
+
+    render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = Component::render(&mut component, &mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(MACRO_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
+/// Verifies generated component providers remain visible to descendants.
+///
+/// # Example Under Test
+///
+/// ```text
+/// #[component]
+/// fn MacroContextProvider() -> Node {
+///     provide_context(MacroLabel("macro"));
+///     component(MacroContextConsumer)
+/// }
+/// ```
+///
+/// # Assertions
+///
+/// - The generated provider renders successfully.
+/// - The descendant component reads the macro-provided context value.
+///
+/// # Why
+///
+/// Generated component bodies must provide context into the same render scope
+/// used while rendering their returned node tree.
+#[test]
+fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
+    let backend = TestBackend::new(16, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let mut component = MacroContextProvider::new();
+
+    for _ in 0..2 {
+        *MACRO_CONTEXT_OBSERVED
+            .lock()
+            .expect("context observation lock should be available") = None;
+
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            render_result = Component::render(&mut component, &mut ctx);
+        })?;
+        render_result?;
+
+        assert_eq!(
+            *MACRO_CONTEXT_OBSERVED
+                .lock()
+                .expect("context observation lock should be available"),
+            Some(MacroLabel("macro"))
+        );
+    }
+
+    Ok(())
 }
 
 /// Verifies macros compile when the runtime crate dependency is renamed.
