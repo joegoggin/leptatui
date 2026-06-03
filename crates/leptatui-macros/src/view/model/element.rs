@@ -128,15 +128,24 @@ impl Element {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if an attribute is not `class`, `id`, or `style`.
+    /// Returns [`syn::Error`] if an attribute is unsupported for the element.
     fn validate_attrs(&self) -> Result<()> {
+        let element_name = self.name.to_string();
+
         for attr in &self.attrs {
             match attr.name.to_string().as_str() {
                 "class" | "id" | "style" => {}
+                "on_press" if element_name == "Button" => {}
+                "on_press" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! on_press attribute is only supported on Button",
+                    ));
+                }
                 _ => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "unsupported view! attribute; expected class, id, or style",
+                        "unsupported view! attribute; expected class, id, style, or button on_press",
                     ));
                 }
             }
@@ -158,7 +167,7 @@ impl Element {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if `style` is provided as a string literal.
+    /// Returns [`syn::Error`] if `style` or `on_press` receives a literal.
     fn expand_attrs(&self, node: TokenStream) -> Result<TokenStream> {
         let mut expanded = node;
 
@@ -176,6 +185,16 @@ impl Element {
                     }
 
                     quote! { (#expanded).with_inline_style(#value) }
+                }
+                "on_press" => {
+                    if attr.value.is_literal() {
+                        return Err(Error::new_spanned(
+                            &attr.name,
+                            "view! on_press attribute must be a braced callback expression",
+                        ));
+                    }
+
+                    quote! { (#expanded).on_press(#value) }
                 }
                 _ => unreachable!("attributes are validated before expansion"),
             };

@@ -12,4 +12,4 @@ mod render;
 
 pub use builders::{block, button, column, component, dynamic, row, text};
 pub use metadata::{NodeType, StyleMetadata};
-pub use model::Node;
+pub use model::{ButtonAction, Node};

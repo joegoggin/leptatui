@@ -8,7 +8,7 @@ use std::time::Duration;
 use crossterm::event::Event;
 use leptatui::{
     App, AppControl, AppRoot, Color, Component, RenderCtx, Result, StyleSelector, Stylesheet,
-    TuiStyle,
+    TuiStyle, button,
 };
 
 /// Test component used to prove component-to-root adaptation.
@@ -94,4 +94,35 @@ fn app_accepts_component_contract() {
 fn app_control_is_comparable() {
     assert_eq!(AppControl::Continue, AppControl::Continue);
     assert_ne!(AppControl::Continue, AppControl::Exit);
+}
+
+/// Verifies node roots with button actions satisfy the app root contract.
+///
+/// # Example Under Test
+///
+/// ```text
+/// button("Quit").on_press(|| AppControl::Exit)
+/// ```
+///
+/// # Assertions
+///
+/// - A button node with an action type-checks as an [`AppRoot`].
+/// - An [`App`] can be constructed with the node root.
+///
+/// # Why
+///
+/// Button action callbacks should not prevent node trees from being used as
+/// app roots.
+#[test]
+fn app_accepts_node_root_with_button_action() {
+    /// Accepts any root type that implements [`AppRoot`].
+    ///
+    /// # Arguments
+    ///
+    /// * `root` — Root value to pass into the app constructor.
+    fn assert_app_root<R: AppRoot>(root: R) {
+        let _app = App::new(root);
+    }
+
+    assert_app_root(button("Quit").on_press(|| AppControl::Exit));
 }

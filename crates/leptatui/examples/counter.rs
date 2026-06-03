@@ -1,187 +1,106 @@
 //! Interactive counter example.
 //!
-//! This binary demonstrates Leptos signals, Leptatui styling helpers, component
-//! rendering, and keyboard event handling in a terminal app.
+//! This binary demonstrates Leptos signals, Leptatui node rendering, stylesheet
+//! focus rules, and button activation through the application runner.
 
-use crossterm::event::{Event, KeyCode, KeyEventKind};
+use crossterm::event::Event;
 use leptatui::prelude::*;
-use ratatui::{
-    layout::{Constraint, Layout},
-    widgets::Paragraph,
-};
 
 /// Root component for the interactive counter example.
 struct Counter {
     /// Leptos owner that keeps the component's reactive graph alive.
     _owner: Owner,
-    /// Current counter value.
-    count: ReadSignal<i32>,
-    /// Setter used to mutate the counter value.
-    set_count: WriteSignal<i32>,
-    /// Style values used while rendering the counter UI.
-    theme: CounterTheme,
+    /// Node tree that owns counter controls and dispatches focused events.
+    root: Node,
 }
 
 impl Counter {
     /// Creates a counter component with a zero value.
-    ///
-    /// # Returns
-    ///
-    /// A [`Counter`] initialized with its own Leptos owner and default theme.
     fn new() -> Self {
         let owner = Owner::new();
         let (count, set_count) = owner.with(|| signal(0));
 
+        let increment = set_count;
+        let decrement = set_count;
+        let reset = set_count;
+
+        let root = column([
+            block(dynamic(move || {
+                text(format!("Count: {}", count.get_untracked())).with_classes("counter-value")
+            }))
+            .with_classes("counter-panel"),
+            row([
+                button("Increment")
+                    .with_classes("counter-button")
+                    .on_press(move || {
+                        increment.update(|count| *count += 1);
+                        AppControl::Continue
+                    }),
+                button("Decrement")
+                    .with_classes("counter-button")
+                    .on_press(move || {
+                        decrement.update(|count| *count -= 1);
+                        AppControl::Continue
+                    }),
+                button("Reset")
+                    .with_classes("counter-button")
+                    .on_press(move || {
+                        reset.set(0);
+                        AppControl::Continue
+                    }),
+                button("Quit")
+                    .with_classes("counter-button danger")
+                    .on_press(|| AppControl::Exit),
+            ])
+            .with_classes("counter-controls"),
+            text("Tab/Shift+Tab move focus. Enter/Space activate.").with_classes("counter-help"),
+        ]);
+
         Self {
             _owner: owner,
-            count,
-            set_count,
-            theme: CounterTheme::default(),
+            root,
         }
     }
 }
 
 impl Component for Counter {
-    /// Renders the current counter value and keyboard help.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` — Rendering context for the current frame.
-    ///
-    /// # Returns
-    ///
-    /// An empty [`Result`] on success.
+    /// Renders the current counter node tree.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let areas = Layout::vertical([
-            Constraint::Length(3),
-            Constraint::Length(5),
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
-        .split(ctx.area());
-
-        ctx.with_area(areas[0], |ctx| {
-            ctx.render_widget(
-                Paragraph::new("Leptatui counter")
-                    .centered()
-                    .style(self.theme.heading.to_ratatui_style())
-                    .block(self.theme.panel.to_block().title("Demo")),
-            );
-        });
-
-        ctx.with_area(areas[1], |ctx| {
-            ctx.render_widget(
-                Paragraph::new(format!("Count: {}", self.count.get_untracked()))
-                    .centered()
-                    .style(self.theme.value.to_ratatui_style())
-                    .block(self.theme.value_panel.to_block()),
-            );
-        });
-
-        ctx.with_area(areas[2], |ctx| {
-            ctx.render_widget(
-                Paragraph::new("+/Up increment  -/Down decrement  0 reset  q/Esc quit")
-                    .centered()
-                    .style(self.theme.help.to_ratatui_style()),
-            );
-        });
-
-        Ok(())
+        ctx.render_node(&self.root)
     }
 
-    /// Handles keyboard input for counter updates and app exit.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` — Terminal event emitted by Crossterm.
-    ///
-    /// # Returns
-    ///
-    /// An [`AppControl`] value indicating whether to continue or exit.
+    /// Delegates terminal events to the node tree.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        let Event::Key(key) = event else {
-            return Ok(AppControl::Continue);
-        };
-
-        if key.kind != KeyEventKind::Press {
-            return Ok(AppControl::Continue);
-        }
-
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => Ok(AppControl::Exit),
-            KeyCode::Char('+') | KeyCode::Char('=') | KeyCode::Up => {
-                self.set_count.update(|count| *count += 1);
-                Ok(AppControl::Continue)
-            }
-            KeyCode::Char('-') | KeyCode::Down => {
-                self.set_count.update(|count| *count -= 1);
-                Ok(AppControl::Continue)
-            }
-            KeyCode::Char('0') => {
-                self.set_count.set(0);
-                Ok(AppControl::Continue)
-            }
-            _ => Ok(AppControl::Continue),
-        }
-    }
-}
-
-/// Style bundle for the counter example.
-#[derive(Clone, Copy)]
-struct CounterTheme {
-    /// Outer panel style used by the heading.
-    panel: TuiStyle,
-    /// Panel style used by the current value display.
-    value_panel: TuiStyle,
-    /// Text style used by the heading.
-    heading: TuiStyle,
-    /// Text style used by the current value.
-    value: TuiStyle,
-    /// Text style used by the keyboard help.
-    help: TuiStyle,
-}
-
-impl Default for CounterTheme {
-    /// Creates the default counter theme.
-    ///
-    /// # Returns
-    ///
-    /// A [`CounterTheme`] with contrasting panel, value, heading, and help
-    /// styles.
-    fn default() -> Self {
-        let base = TuiStyle::new().background(Color::Black);
-
-        Self {
-            panel: base
-                .foreground(Color::LightCyan)
-                .modifier(Modifier::BOLD)
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .padding(TuiSpacing::horizontal(1)),
-            value_panel: base
-                .foreground(Color::Yellow)
-                .borders(Borders::ALL)
-                .border_type(BorderType::Thick)
-                .padding(TuiSpacing::uniform(1)),
-            heading: base.foreground(Color::White).modifier(Modifier::BOLD),
-            value: base.foreground(Color::LightGreen).modifier(Modifier::BOLD),
-            help: base.foreground(Color::Gray),
-        }
+        self.root.handle_event(event)
     }
 }
 
 /// Runs the counter example application.
-///
-/// # Returns
-///
-/// An empty [`Result`] when the app exits successfully.
-///
-/// # Errors
-///
-/// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
-/// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    let root = Counter::new();
-    App::new(root).run().await
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::node_type(NodeType::Button),
+            TuiStyle::new()
+                .foreground(Color::White)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
+        .rule(
+            StyleSelector::class("danger"),
+            TuiStyle::new().foreground(Color::LightRed),
+        )
+        .rule(
+            StyleSelector::focus(),
+            TuiStyle::new()
+                .foreground(Color::Black)
+                .background(Color::Yellow)
+                .modifier(Modifier::BOLD)
+                .border_type(BorderType::Thick),
+        );
+
+    App::new(Counter::new())
+        .with_stylesheet(stylesheet)
+        .run()
+        .await
 }

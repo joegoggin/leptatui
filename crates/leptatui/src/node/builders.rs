@@ -90,6 +90,7 @@ pub fn button(label: impl Into<String>) -> Node {
     Node::Button {
         label: label.into(),
         metadata: StyleMetadata::new(NodeType::Button),
+        on_press: None,
     }
 }
 

@@ -10,6 +10,10 @@ use super::{
     dynamic::DynamicNode,
     metadata::{NodeType, StyleMetadata},
 };
+use crate::app::AppControl;
+
+/// Shared callback invoked when a button is activated.
+pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
 
 /// Minimal renderable node tree for hand-written terminal UI.
 #[derive(Clone)]
@@ -48,6 +52,8 @@ pub enum Node {
         label: String,
         /// Selector metadata for matching this node.
         metadata: StyleMetadata,
+        /// Optional activation callback.
+        on_press: Option<ButtonAction>,
     },
     /// Child node produced when the tree is traversed.
     Dynamic(DynamicNode),
@@ -115,6 +121,15 @@ impl Node {
 
         self
     }
+
+    /// Stores an activation callback on a button node.
+    pub fn on_press(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
+        if let Self::Button { on_press, .. } = &mut self {
+            *on_press = Some(Rc::new(action));
+        }
+
+        self
+    }
 }
 
 impl fmt::Debug for Node {
@@ -152,14 +167,37 @@ impl fmt::Debug for Node {
                 .field("children", children)
                 .field("metadata", metadata)
                 .finish(),
-            Self::Button { label, metadata } => f
+            Self::Button {
+                label,
+                metadata,
+                on_press,
+            } => f
                 .debug_struct("Button")
                 .field("label", label)
                 .field("metadata", metadata)
+                .field("on_press", &on_press.is_some())
                 .finish(),
             Self::Dynamic(_) => f.write_str("Dynamic(..)"),
             Self::Component(component) => f.debug_tuple("Component").field(component).finish(),
         }
+    }
+}
+
+/// Returns whether optional button actions represent the same callback.
+///
+/// # Arguments
+///
+/// * `left` — Left optional button action to compare.
+/// * `right` — Right optional button action to compare.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether both callbacks are absent or share identity.
+fn button_actions_equal(left: &Option<ButtonAction>, right: &Option<ButtonAction>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => Rc::ptr_eq(left, right),
+        _ => false,
     }
 }
 
@@ -219,12 +257,18 @@ impl PartialEq for Node {
                 Self::Button {
                     label: left_label,
                     metadata: left_metadata,
+                    on_press: left_on_press,
                 },
                 Self::Button {
                     label: right_label,
                     metadata: right_metadata,
+                    on_press: right_on_press,
                 },
-            ) => left_label == right_label && left_metadata == right_metadata,
+            ) => {
+                left_label == right_label
+                    && left_metadata == right_metadata
+                    && button_actions_equal(left_on_press, right_on_press)
+            }
             (Self::Dynamic(left), Self::Dynamic(right)) => Rc::ptr_eq(left, right),
             (Self::Component(left), Self::Component(right)) => left.ptr_eq(right),
             _ => false,

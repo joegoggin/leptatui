@@ -3,9 +3,8 @@
 //! These tests cover public context APIs at runtime boundaries.
 
 use leptatui::{
-    AppControl, AppRoot, Component, RenderCtx, Result, Stylesheet,
+    AppControl, AppRoot, Component, RenderCtx, Result, Stylesheet, column, component,
     context::{expect_context, provide_context, use_context},
-    column, component,
 };
 use leptos::prelude::{GetUntracked, Owner, ReadSignal, Set, signal};
 use ratatui::{Terminal, backend::TestBackend};
@@ -267,7 +266,7 @@ fn component_context_is_available_during_descendant_events() -> Result<()> {
     let observed = Rc::new(RefCell::new(None));
     let backend = TestBackend::new(24, 4);
     let mut terminal = Terminal::new(backend)?;
-    let node = component(EventLabelProvider {
+    let mut node = component(EventLabelProvider {
         value: ScopeLabel("event"),
         child: component(EventLabelConsumer {
             observed: Rc::clone(&observed),

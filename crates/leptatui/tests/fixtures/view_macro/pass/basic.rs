@@ -35,4 +35,13 @@ fn main() {
         }
         other => panic!("expected block node, got {other:?}"),
     }
+
+    let action_node: Node = view! {
+        <Button on_press={|| AppControl::Continue}>"Save"</Button>
+    };
+
+    match action_node {
+        Node::Button { on_press, .. } => assert!(on_press.is_some()),
+        other => panic!("expected button node, got {other:?}"),
+    }
 }

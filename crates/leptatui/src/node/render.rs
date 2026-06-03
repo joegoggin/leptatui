@@ -3,7 +3,7 @@
 //! This module maps [`Node`] variants to Ratatui widgets, layout splits, and
 //! component event propagation.
 
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Block, Paragraph},
@@ -17,6 +17,16 @@ use crate::{
 
 use super::{metadata::StyleMetadata, model::Node};
 
+/// Resolves a node style from context stylesheets and inherited style values.
+///
+/// # Arguments
+///
+/// * `metadata` — Node selector metadata used by stylesheet resolution.
+/// * `ctx` — Rendering context containing the stylesheet and inherited style.
+///
+/// # Returns
+///
+/// A [`TuiStyle`] containing the resolved node style.
 fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle {
     ctx.stylesheet().resolve(metadata, ctx.inherited_style())
 }
@@ -62,7 +72,9 @@ impl Node {
                 ctx.render_widget(Block::new().style(style.to_ratatui_style()));
                 render_children(children, Direction::Column, style.inherited_values(), ctx)
             }
-            Self::Button { label, metadata } => {
+            Self::Button {
+                label, metadata, ..
+            } => {
                 let style = resolve_style(metadata, ctx);
                 ctx.render_widget(
                     Paragraph::new(label.as_str())
@@ -91,7 +103,7 @@ impl Node {
     ///
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
     /// I/O that fails.
-    pub fn handle_event(&self, event: Event) -> Result<AppControl> {
+    pub fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         self.handle_event_ref(&event)
     }
 
@@ -109,15 +121,183 @@ impl Node {
     ///
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
     /// I/O that fails.
-    fn handle_event_ref(&self, event: &Event) -> Result<AppControl> {
+    fn handle_event_ref(&mut self, event: &Event) -> Result<AppControl> {
+        if let Event::Key(key) = event
+            && key.kind == KeyEventKind::Press
+        {
+            match key.code {
+                KeyCode::Tab if self.focusable_count() > 0 => {
+                    self.move_focus(FocusDirection::Forward);
+                    return Ok(AppControl::Continue);
+                }
+                KeyCode::BackTab if self.focusable_count() > 0 => {
+                    self.move_focus(FocusDirection::Backward);
+                    return Ok(AppControl::Continue);
+                }
+                KeyCode::Enter | KeyCode::Char(' ') => {
+                    if let Some(control) = self.activate_focused_button() {
+                        return Ok(control);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        self.dispatch_event_ref(event)
+    }
+
+    /// Dispatches an event to child nodes and component boundaries.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — Crossterm event to dispatch without cloning at every branch.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value indicating whether traversal should continue.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
+    /// I/O that fails.
+    fn dispatch_event_ref(&mut self, event: &Event) -> Result<AppControl> {
         match self {
             Self::Block { child, .. } => child.handle_event_ref(event),
             Self::Row { children, .. } | Self::Column { children, .. } => {
                 handle_child_events(children, event)
             }
-            Self::Dynamic(child) => child().handle_event_ref(event),
+            Self::Dynamic(child) => {
+                let mut child = child();
+                child.handle_event_ref(event)
+            }
             Self::Component(component) => component.handle_event(event.clone()),
             Self::Text { .. } | Self::Button { .. } => Ok(AppControl::Continue),
+        }
+    }
+
+    /// Returns the number of focusable buttons in this node tree.
+    ///
+    /// # Returns
+    ///
+    /// A [`usize`] count of focusable button nodes.
+    fn focusable_count(&self) -> usize {
+        match self {
+            Self::Button { .. } => 1,
+            Self::Block { child, .. } => child.focusable_count(),
+            Self::Row { children, .. } | Self::Column { children, .. } => {
+                children.iter().map(Self::focusable_count).sum()
+            }
+            Self::Text { .. } | Self::Dynamic(_) | Self::Component(_) => 0,
+        }
+    }
+
+    /// Moves focus to the next or previous focusable button.
+    ///
+    /// # Arguments
+    ///
+    /// * `direction` — Direction to move through focusable buttons.
+    fn move_focus(&mut self, direction: FocusDirection) {
+        let count = self.focusable_count();
+        if count == 0 {
+            return;
+        }
+
+        let target = match (self.focused_index(), direction) {
+            (Some(index), FocusDirection::Forward) => (index + 1) % count,
+            (Some(0), FocusDirection::Backward) => count - 1,
+            (Some(index), FocusDirection::Backward) => index - 1,
+            (None, FocusDirection::Forward) => 0,
+            (None, FocusDirection::Backward) => count - 1,
+        };
+
+        self.set_focus_by_index(target);
+    }
+
+    /// Returns the flattened index of the currently focused button.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<usize>`] containing the focused button index.
+    fn focused_index(&self) -> Option<usize> {
+        let mut index = 0;
+        self.focused_index_inner(&mut index)
+    }
+
+    /// Returns the focused button index while tracking traversal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` — Current flattened button index during traversal.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<usize>`] containing the focused button index.
+    fn focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        match self {
+            Self::Button { metadata, .. } => {
+                let current = *index;
+                *index += 1;
+                metadata.is_focused().then_some(current)
+            }
+            Self::Block { child, .. } => child.focused_index_inner(index),
+            Self::Row { children, .. } | Self::Column { children, .. } => children
+                .iter()
+                .find_map(|child| child.focused_index_inner(index)),
+            Self::Text { .. } | Self::Dynamic(_) | Self::Component(_) => None,
+        }
+    }
+
+    /// Sets focus by flattened button index.
+    ///
+    /// # Arguments
+    ///
+    /// * `target` — Flattened button index that should receive focus.
+    fn set_focus_by_index(&mut self, target: usize) {
+        let mut index = 0;
+        self.set_focus_by_index_inner(target, &mut index);
+    }
+
+    /// Sets focus by flattened button index while tracking traversal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `target` — Flattened button index that should receive focus.
+    /// * `index` — Current flattened button index during traversal.
+    fn set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        match self {
+            Self::Button { metadata, .. } => {
+                metadata.set_focused(*index == target);
+                *index += 1;
+            }
+            Self::Block { child, .. } => child.set_focus_by_index_inner(target, index),
+            Self::Row { children, .. } | Self::Column { children, .. } => {
+                for child in children {
+                    child.set_focus_by_index_inner(target, index);
+                }
+            }
+            Self::Text { .. } | Self::Dynamic(_) | Self::Component(_) => {}
+        }
+    }
+
+    /// Activates the focused button if this node tree contains one.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<AppControl>`] containing the focused button action result.
+    fn activate_focused_button(&self) -> Option<AppControl> {
+        match self {
+            Self::Button {
+                metadata, on_press, ..
+            } if metadata.is_focused() => Some(
+                on_press
+                    .as_ref()
+                    .map_or(AppControl::Continue, |action| action()),
+            ),
+            Self::Block { child, .. } => child.activate_focused_button(),
+            Self::Row { children, .. } | Self::Column { children, .. } => {
+                children.iter().find_map(Self::activate_focused_button)
+            }
+            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
 }
@@ -167,6 +347,15 @@ enum Direction {
     Row,
     /// Split the available area vertically.
     Column,
+}
+
+/// Direction used to move focus through focusable nodes.
+#[derive(Clone, Copy)]
+enum FocusDirection {
+    /// Move focus to the next focusable node.
+    Forward,
+    /// Move focus to the previous focusable node.
+    Backward,
 }
 
 /// Renders child nodes into equally sized row or column areas.
@@ -225,7 +414,7 @@ fn render_children(
 ///
 /// Returns [`crate::app::Error::Io`] if child event handling performs terminal
 /// I/O that fails.
-fn handle_child_events(children: &[Node], event: &Event) -> Result<AppControl> {
+fn handle_child_events(children: &mut [Node], event: &Event) -> Result<AppControl> {
     for child in children {
         if child.handle_event_ref(event)? == AppControl::Exit {
             return Ok(AppControl::Exit);
