@@ -1,62 +1,11 @@
 //! Render-tree node data structures.
 //!
-//! This module defines the node enum, deferred child storage, component
-//! boundaries, and equality/debug behavior used by node builders and renderers.
+//! This module defines the node enum and its equality/debug behavior used by
+//! node builders and renderers.
 
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{fmt, rc::Rc};
 
-use crate::component::Component;
-
-/// Shared dynamic child that can produce a fresh node during traversal.
-pub type DynamicNode = Rc<dyn Fn() -> Node>;
-
-/// Shared component boundary stored inside a render tree.
-#[derive(Clone)]
-pub struct ComponentNode {
-    /// Shared mutable component stored behind the node boundary.
-    inner: Rc<RefCell<dyn Component>>,
-}
-
-impl ComponentNode {
-    /// Creates a component boundary from a component value.
-    ///
-    /// # Arguments
-    ///
-    /// * `component` — Component value stored behind this render-tree boundary.
-    ///
-    /// # Returns
-    ///
-    /// A [`ComponentNode`] containing the provided component.
-    pub(crate) fn new(component: impl Component + 'static) -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(component)),
-        }
-    }
-
-    /// Borrows the stored component mutably.
-    ///
-    /// # Returns
-    ///
-    /// A mutable borrow of the component boundary.
-    pub(crate) fn borrow_mut(&self) -> std::cell::RefMut<'_, dyn Component> {
-        self.inner.borrow_mut()
-    }
-}
-
-impl fmt::Debug for ComponentNode {
-    /// Formats the component boundary without borrowing the stored component.
-    ///
-    /// # Arguments
-    ///
-    /// * `f` — Formatter receiving the debug representation.
-    ///
-    /// # Returns
-    ///
-    /// A [`fmt::Result`] indicating whether formatting succeeded.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ComponentNode").finish()
-    }
-}
+use super::{component_node::ComponentNode, dynamic::DynamicNode};
 
 /// Minimal renderable node tree for hand-written terminal UI.
 #[derive(Clone)]
@@ -124,9 +73,7 @@ impl PartialEq for Node {
             (Self::Column(left), Self::Column(right)) => left == right,
             (Self::Button(left), Self::Button(right)) => left == right,
             (Self::Dynamic(left), Self::Dynamic(right)) => Rc::ptr_eq(left, right),
-            (Self::Component(left), Self::Component(right)) => {
-                Rc::ptr_eq(&left.inner, &right.inner)
-            }
+            (Self::Component(left), Self::Component(right)) => left.ptr_eq(right),
             _ => false,
         }
     }

@@ -4,6 +4,8 @@
 //! and builder functions for creating common node variants.
 
 mod builders;
+mod component_node;
+mod dynamic;
 mod model;
 mod render;
 

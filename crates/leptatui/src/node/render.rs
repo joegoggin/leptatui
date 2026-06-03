@@ -54,7 +54,7 @@ impl Node {
                 Ok(())
             }
             Self::Dynamic(child) => child().render(ctx),
-            Self::Component(component) => component.borrow_mut().render(ctx),
+            Self::Component(component) => component.render(ctx),
         }
     }
 
@@ -95,7 +95,7 @@ impl Node {
             Self::Block { child } => child.handle_event_ref(event),
             Self::Row(children) | Self::Column(children) => handle_child_events(children, event),
             Self::Dynamic(child) => child().handle_event_ref(event),
-            Self::Component(component) => component.borrow_mut().handle_event(event.clone()),
+            Self::Component(component) => component.handle_event(event.clone()),
             Self::Text(_) | Self::Button(_) => Ok(AppControl::Continue),
         }
     }

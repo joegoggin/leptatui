@@ -3,11 +3,91 @@
 //! These tests cover public context APIs at runtime boundaries.
 
 use leptatui::{
-    AppRoot, Component, RenderCtx, Result,
+    AppControl, AppRoot, Component, RenderCtx, Result,
     context::{expect_context, provide_context, use_context},
+    column, component,
 };
 use leptos::prelude::{GetUntracked, Owner, ReadSignal, Set, signal};
 use ratatui::{Terminal, backend::TestBackend};
+use std::{cell::RefCell, rc::Rc};
+
+/// Context value used by subtree scope tests.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ScopeLabel(&'static str);
+
+/// Shared observations captured by test components.
+type ObservedLabels = Rc<RefCell<Vec<Option<ScopeLabel>>>>;
+
+/// Component that provides a label to its child subtree.
+struct LabelProvider {
+    value: ScopeLabel,
+    child: leptatui::Node,
+}
+
+impl Component for LabelProvider {
+    /// Provides a label, then renders the child subtree.
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        provide_context(self.value.clone());
+        ctx.render_node(&self.child)
+    }
+}
+
+/// Component that records the label visible from its current context scope.
+struct LabelConsumer {
+    observed: ObservedLabels,
+}
+
+impl LabelConsumer {
+    /// Creates a consumer writing into shared observations.
+    fn new(observed: ObservedLabels) -> Self {
+        Self { observed }
+    }
+}
+
+impl Component for LabelConsumer {
+    /// Records the visible label during render.
+    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        self.observed.borrow_mut().push(use_context::<ScopeLabel>());
+        Ok(())
+    }
+}
+
+/// Component that provides a label during render and forwards events to a child.
+struct EventLabelProvider {
+    value: ScopeLabel,
+    child: leptatui::Node,
+}
+
+impl Component for EventLabelProvider {
+    /// Provides a label while rendering the provider subtree.
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        provide_context(self.value.clone());
+        ctx.render_node(&self.child)
+    }
+
+    /// Forwards events to the child while this provider's scope is active.
+    fn handle_event(&mut self, event: crossterm::event::Event) -> Result<AppControl> {
+        self.child.handle_event(event)
+    }
+}
+
+/// Component that records context visible during event handling.
+struct EventLabelConsumer {
+    observed: Rc<RefCell<Option<ScopeLabel>>>,
+}
+
+impl Component for EventLabelConsumer {
+    /// Renders nothing; this component only observes event-time context.
+    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        Ok(())
+    }
+
+    /// Records the label visible during event handling.
+    fn handle_event(&mut self, _event: crossterm::event::Event) -> Result<AppControl> {
+        *self.observed.borrow_mut() = use_context::<ScopeLabel>();
+        Ok(AppControl::Continue)
+    }
+}
 
 /// Component that records context values observed during rendering.
 struct ContextRoot {
@@ -112,4 +192,100 @@ fn leptos_owner_context_fallback_still_works() {
         assert_eq!(use_context::<String>().as_deref(), Some("from leptos"));
         assert_eq!(expect_context::<String>(), "from leptos");
     });
+}
+
+/// Verifies context follows component subtree ancestry during rendering.
+///
+/// # Example Under Test
+///
+/// ```text
+/// outer provider
+///   consumer -> outer
+///   inner provider
+///     consumer -> inner
+///   consumer -> outer
+/// ```
+///
+/// # Assertions
+///
+/// - The first descendant sees the outer provider value.
+/// - The inner descendant sees the inner provider value.
+/// - The sibling after the inner provider sees the restored outer value.
+#[test]
+fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
+    let observed = Rc::new(RefCell::new(Vec::new()));
+    let backend = TestBackend::new(24, 6);
+    let mut terminal = Terminal::new(backend)?;
+    let node = component(LabelProvider {
+        value: ScopeLabel("outer"),
+        child: column([
+            component(LabelConsumer::new(Rc::clone(&observed))),
+            component(LabelProvider {
+                value: ScopeLabel("inner"),
+                child: component(LabelConsumer::new(Rc::clone(&observed))),
+            }),
+            component(LabelConsumer::new(Rc::clone(&observed))),
+        ]),
+    });
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = node.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(
+        observed.borrow().as_slice(),
+        [
+            Some(ScopeLabel("outer")),
+            Some(ScopeLabel("inner")),
+            Some(ScopeLabel("outer")),
+        ]
+    );
+
+    Ok(())
+}
+
+/// Verifies provider ancestry is available during descendant event handling.
+///
+/// # Example Under Test
+///
+/// ```text
+/// render provider -> stores ScopeLabel("event")
+/// dispatch event through same provider subtree
+/// child event handler reads ScopeLabel("event")
+/// ```
+///
+/// # Assertions
+///
+/// - The initial render succeeds.
+/// - Event traversal continues.
+/// - The child event handler sees the provider value from the latest render.
+#[test]
+fn component_context_is_available_during_descendant_events() -> Result<()> {
+    let observed = Rc::new(RefCell::new(None));
+    let backend = TestBackend::new(24, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let node = component(EventLabelProvider {
+        value: ScopeLabel("event"),
+        child: component(EventLabelConsumer {
+            observed: Rc::clone(&observed),
+        }),
+    });
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = node.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(
+        node.handle_event(crossterm::event::Event::Resize(24, 4))?,
+        AppControl::Continue
+    );
+    assert_eq!(*observed.borrow(), Some(ScopeLabel("event")));
+
+    Ok(())
 }

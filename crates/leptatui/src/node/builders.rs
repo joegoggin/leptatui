@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::component::Component;
 
-use super::model::{ComponentNode, Node};
+use super::{component_node::ComponentNode, model::Node};
 
 /// Creates a bordered block around a child node.
 ///

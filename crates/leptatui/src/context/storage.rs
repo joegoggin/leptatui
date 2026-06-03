@@ -7,21 +7,33 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::HashMap,
+    rc::Rc,
 };
 
 /// Stored context value erased behind its Rust type identifier.
 type ContextValue = Box<dyn Any + Send + Sync>;
 /// Single render-scope frame containing context values keyed by type.
-type ContextFrame = HashMap<TypeId, ContextValue>;
+type ContextFrameValues = HashMap<TypeId, ContextValue>;
+pub(super) type ContextFrame = Rc<RefCell<ContextFrameValues>>;
 
 thread_local! {
     /// Stack of active Leptatui render context frames for the current thread.
     static CONTEXT_STACK: RefCell<Vec<ContextFrame>> = RefCell::new(Vec::new());
 }
 
-/// Pushes a new empty context frame onto the current thread's stack.
-pub(super) fn push_frame() {
-    CONTEXT_STACK.with(|stack| stack.borrow_mut().push(HashMap::new()));
+/// Creates an empty reusable context frame.
+pub(super) fn new_frame() -> ContextFrame {
+    Rc::new(RefCell::new(HashMap::new()))
+}
+
+/// Clears values stored in a reusable context frame.
+pub(super) fn clear_frame(frame: &ContextFrame) {
+    frame.borrow_mut().clear();
+}
+
+/// Pushes an existing context frame onto the current thread's active stack.
+pub(super) fn push_frame(frame: &ContextFrame) {
+    CONTEXT_STACK.with(|stack| stack.borrow_mut().push(Rc::clone(frame)));
 }
 
 /// Pops the active context frame from the current thread's stack.
@@ -48,12 +60,14 @@ where
     T: Send + Sync + 'static,
 {
     CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let Some(frame) = stack.last_mut() else {
+        let stack = stack.borrow();
+        let Some(frame) = stack.last() else {
             return Err(value);
         };
 
-        frame.insert(TypeId::of::<T>(), Box::new(value));
+        frame
+            .borrow_mut()
+            .insert(TypeId::of::<T>(), Box::new(value));
         Ok(())
     })
 }
@@ -70,6 +84,7 @@ where
     CONTEXT_STACK.with(|stack| {
         stack.borrow().iter().rev().find_map(|frame| {
             frame
+                .borrow()
                 .get(&TypeId::of::<T>())
                 .and_then(|value| value.downcast_ref::<T>())
                 .cloned()
