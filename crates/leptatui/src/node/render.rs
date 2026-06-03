@@ -12,9 +12,14 @@ use ratatui::{
 use crate::{
     app::{AppControl, Result},
     component::{Component, RenderCtx},
+    style::{Borders, TuiStyle},
 };
 
-use super::model::Node;
+use super::{metadata::StyleMetadata, model::Node};
+
+fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle {
+    ctx.stylesheet().resolve(metadata, ctx.inherited_style())
+}
 
 impl Node {
     /// Renders this node into a context.
@@ -33,23 +38,37 @@ impl Node {
     /// that fails.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         match self {
-            Self::Block { child, .. } => {
-                let block = Block::bordered();
+            Self::Block { child, metadata } => {
+                let style = resolve_style(metadata, ctx);
+                let block = style.to_block_with_default_borders(Borders::ALL);
                 let inner = block.inner(ctx.area());
                 ctx.render_widget(block);
-                ctx.with_area(inner, |ctx| child.render(ctx))
+                ctx.with_area_and_inherited_style(inner, style.inherited_values(), |ctx| {
+                    child.render(ctx)
+                })
             }
-            Self::Text { content, .. } => {
-                ctx.render_widget(Paragraph::new(content.as_str()));
+            Self::Text { content, metadata } => {
+                let style = resolve_style(metadata, ctx);
+                ctx.render_widget(Paragraph::new(content.as_str()).style(style.to_ratatui_style()));
                 Ok(())
             }
-            Self::Row { children, .. } => render_children(children, Direction::Row, ctx),
-            Self::Column { children, .. } => render_children(children, Direction::Column, ctx),
-            Self::Button { label, .. } => {
+            Self::Row { children, metadata } => {
+                let style = resolve_style(metadata, ctx);
+                ctx.render_widget(Block::new().style(style.to_ratatui_style()));
+                render_children(children, Direction::Row, style.inherited_values(), ctx)
+            }
+            Self::Column { children, metadata } => {
+                let style = resolve_style(metadata, ctx);
+                ctx.render_widget(Block::new().style(style.to_ratatui_style()));
+                render_children(children, Direction::Column, style.inherited_values(), ctx)
+            }
+            Self::Button { label, metadata } => {
+                let style = resolve_style(metadata, ctx);
                 ctx.render_widget(
                     Paragraph::new(label.as_str())
                         .centered()
-                        .block(Block::bordered()),
+                        .style(style.to_ratatui_style())
+                        .block(style.to_block_with_default_borders(Borders::ALL)),
                 );
                 Ok(())
             }
@@ -156,6 +175,7 @@ enum Direction {
 ///
 /// * `children` — Nodes to render into equal areas.
 /// * `direction` — Axis used to split the current context area.
+/// * `inherited_style` — Style values inherited by child nodes.
 /// * `ctx` — Rendering context for the parent area.
 ///
 /// # Returns
@@ -169,6 +189,7 @@ enum Direction {
 fn render_children(
     children: &[Node],
     direction: Direction,
+    inherited_style: TuiStyle,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     if children.is_empty() {
@@ -182,7 +203,7 @@ fn render_children(
     };
 
     for (child, area) in children.iter().zip(areas.iter()) {
-        ctx.with_area(*area, |ctx| child.render(ctx))?;
+        ctx.with_area_and_inherited_style(*area, inherited_style, |ctx| child.render(ctx))?;
     }
 
     Ok(())

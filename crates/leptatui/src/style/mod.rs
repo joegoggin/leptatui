@@ -8,8 +8,12 @@ pub use ratatui::{
     widgets::{BorderType, Borders},
 };
 
+mod selector;
 mod spacing;
+mod stylesheet;
 mod tui_style;
 
+pub use selector::StyleSelector;
 pub use spacing::TuiSpacing;
+pub use stylesheet::{StyleRule, Stylesheet};
 pub use tui_style::TuiStyle;

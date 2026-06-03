@@ -6,7 +6,10 @@
 use std::time::Duration;
 
 use crossterm::event::Event;
-use leptatui::{App, AppControl, AppRoot, Component, RenderCtx, Result};
+use leptatui::{
+    App, AppControl, AppRoot, Color, Component, RenderCtx, Result, StyleSelector, Stylesheet,
+    TuiStyle,
+};
 
 /// Test component used to prove component-to-root adaptation.
 struct TestRoot {
@@ -63,7 +66,12 @@ fn app_accepts_component_contract() {
     ///
     /// * `root` — Root value to pass into the app constructor.
     fn assert_app_root<R: AppRoot>(root: R) {
-        let _app = App::new(root).with_redraw_interval(Duration::from_millis(50));
+        let _app = App::new(root)
+            .with_redraw_interval(Duration::from_millis(50))
+            .with_stylesheet(Stylesheet::new().rule(
+                StyleSelector::class("root"),
+                TuiStyle::new().foreground(Color::White),
+            ));
     }
 
     assert_app_root(TestRoot { events: 0 });

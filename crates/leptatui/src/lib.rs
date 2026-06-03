@@ -27,4 +27,7 @@ pub use leptatui_macros::{component, view};
 pub use node::{
     Node, NodeType, StyleMetadata, block, button, column, component, dynamic, row, text,
 };
-pub use style::{BorderType, Borders, Color, Modifier, TuiSpacing, TuiStyle};
+pub use style::{
+    BorderType, Borders, Color, Modifier, StyleRule, StyleSelector, Stylesheet, TuiSpacing,
+    TuiStyle,
+};

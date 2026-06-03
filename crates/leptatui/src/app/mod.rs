@@ -22,6 +22,8 @@ use event::next_event;
 use render::draw_root;
 use terminal::TerminalSession;
 
+use crate::style::Stylesheet;
+
 /// Time between event polls when no input is available.
 const DEFAULT_REDRAW_INTERVAL: Duration = Duration::from_millis(16);
 
@@ -32,6 +34,8 @@ pub struct App<R> {
     root: R,
     /// Polling timeout that also controls idle redraw cadence.
     redraw_interval: Duration,
+    /// Application stylesheet used when rendering nodes.
+    stylesheet: Stylesheet,
 }
 
 impl<R> App<R> {
@@ -48,6 +52,7 @@ impl<R> App<R> {
         Self {
             root,
             redraw_interval: DEFAULT_REDRAW_INTERVAL,
+            stylesheet: Stylesheet::new(),
         }
     }
 
@@ -71,6 +76,20 @@ impl<R> App<R> {
             "redraw interval must be greater than zero"
         );
         self.redraw_interval = redraw_interval;
+        self
+    }
+
+    /// Sets the application stylesheet used when rendering nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `stylesheet` — Stylesheet used to resolve node styles.
+    ///
+    /// # Returns
+    ///
+    /// An [`App`] configured with the provided stylesheet.
+    pub fn with_stylesheet(mut self, stylesheet: Stylesheet) -> Self {
+        self.stylesheet = stylesheet;
         self
     }
 }
@@ -117,7 +136,7 @@ where
     /// Returns [`Error::EventTask`] if the blocking event task fails.
     async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
         loop {
-            draw_root(&mut self.root, &mut session.terminal)?;
+            draw_root(&mut self.root, &mut session.terminal, &self.stylesheet)?;
 
             if let Some(event) = next_event(self.redraw_interval).await?
                 && self.root.handle_event(event)? == AppControl::Exit

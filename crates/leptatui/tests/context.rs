@@ -3,7 +3,7 @@
 //! These tests cover public context APIs at runtime boundaries.
 
 use leptatui::{
-    AppControl, AppRoot, Component, RenderCtx, Result,
+    AppControl, AppRoot, Component, RenderCtx, Result, Stylesheet,
     context::{expect_context, provide_context, use_context},
     column, component,
 };
@@ -129,7 +129,7 @@ impl Component for ContextRoot {
 /// # Example Under Test
 ///
 /// ```text
-/// AppRoot::render(&mut ContextRoot, frame)
+/// AppRoot::render(&mut ContextRoot, frame, &Stylesheet::empty())
 /// provide_context(String::from("from component"))
 /// leptos::context::provide_context(ReadSignal<i32>)
 /// ```
@@ -155,7 +155,7 @@ fn component_render_scope_can_provide_and_read_context() -> Result<()> {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
-        render_result = AppRoot::render(&mut root, frame);
+        render_result = AppRoot::render(&mut root, frame, &Stylesheet::empty());
     })?;
     render_result?;
 

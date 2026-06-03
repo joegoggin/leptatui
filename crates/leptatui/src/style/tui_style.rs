@@ -15,13 +15,13 @@ pub struct TuiStyle {
     /// Text background color.
     pub background: Option<Color>,
     /// Text modifiers such as bold or italic.
-    pub modifiers: Modifier,
+    pub modifiers: Option<Modifier>,
     /// Widget border sides.
-    pub borders: Borders,
+    pub borders: Option<Borders>,
     /// Widget border glyph set.
-    pub border_type: BorderType,
+    pub border_type: Option<BorderType>,
     /// Internal widget padding.
-    pub padding: TuiSpacing,
+    pub padding: Option<TuiSpacing>,
 }
 
 impl Default for TuiStyle {
@@ -45,10 +45,10 @@ impl TuiStyle {
         Self {
             foreground: None,
             background: None,
-            modifiers: Modifier::empty(),
-            borders: Borders::NONE,
-            border_type: BorderType::Plain,
-            padding: TuiSpacing::ZERO,
+            modifiers: None,
+            borders: None,
+            border_type: None,
+            padding: None,
         }
     }
 
@@ -90,7 +90,7 @@ impl TuiStyle {
     ///
     /// A [`TuiStyle`] with `modifier` added to the current modifiers.
     pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.modifiers |= modifier;
+        self.modifiers = Some(self.modifiers.unwrap_or(Modifier::empty()) | modifier);
         self
     }
 
@@ -104,7 +104,7 @@ impl TuiStyle {
     ///
     /// A [`TuiStyle`] with the provided border sides.
     pub const fn borders(mut self, borders: Borders) -> Self {
-        self.borders = borders;
+        self.borders = Some(borders);
         self
     }
 
@@ -118,7 +118,7 @@ impl TuiStyle {
     ///
     /// A [`TuiStyle`] with the provided border glyph style.
     pub const fn border_type(mut self, border_type: BorderType) -> Self {
-        self.border_type = border_type;
+        self.border_type = Some(border_type);
         self
     }
 
@@ -132,8 +132,40 @@ impl TuiStyle {
     ///
     /// A [`TuiStyle`] with the provided padding.
     pub const fn padding(mut self, padding: TuiSpacing) -> Self {
-        self.padding = padding;
+        self.padding = Some(padding);
         self
+    }
+
+    pub(crate) fn overlay(&mut self, style: Self) {
+        if style.foreground.is_some() {
+            self.foreground = style.foreground;
+        }
+        if style.background.is_some() {
+            self.background = style.background;
+        }
+        if style.modifiers.is_some() {
+            self.modifiers = style.modifiers;
+        }
+        if style.borders.is_some() {
+            self.borders = style.borders;
+        }
+        if style.border_type.is_some() {
+            self.border_type = style.border_type;
+        }
+        if style.padding.is_some() {
+            self.padding = style.padding;
+        }
+    }
+
+    pub(crate) const fn inherited_values(self) -> Self {
+        Self {
+            foreground: self.foreground,
+            background: self.background,
+            modifiers: None,
+            borders: None,
+            border_type: None,
+            padding: None,
+        }
     }
 
     /// Converts this style to Ratatui's text and cell style.
@@ -152,8 +184,10 @@ impl TuiStyle {
             style = style.bg(color);
         }
 
-        if !self.modifiers.is_empty() {
-            style = style.add_modifier(self.modifiers);
+        if let Some(modifiers) = self.modifiers {
+            if !modifiers.is_empty() {
+                style = style.add_modifier(modifiers);
+            }
         }
 
         style
@@ -165,11 +199,15 @@ impl TuiStyle {
     ///
     /// A [`Block`] value containing configured style, borders, and padding.
     pub fn to_block(self) -> Block<'static> {
+        self.to_block_with_default_borders(Borders::NONE)
+    }
+
+    pub(crate) fn to_block_with_default_borders(self, default_borders: Borders) -> Block<'static> {
         Block::new()
             .style(self.to_ratatui_style())
-            .borders(self.borders)
-            .border_type(self.border_type)
-            .padding(self.padding.into())
+            .borders(self.borders.unwrap_or(default_borders))
+            .border_type(self.border_type.unwrap_or(BorderType::Plain))
+            .padding(self.padding.unwrap_or(TuiSpacing::ZERO).into())
     }
 }
 

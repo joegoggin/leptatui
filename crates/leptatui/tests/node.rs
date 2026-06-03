@@ -10,10 +10,10 @@ use std::{
 
 use crossterm::event::Event;
 use leptatui::{
-    AppControl, Color, Component, NodeType, RenderCtx, Result, StyleMetadata, TuiStyle, block,
-    button, column, component, dynamic, text,
+    block, button, column, component, dynamic, text, AppControl, Color, Component, NodeType,
+    RenderCtx, Result, StyleMetadata, StyleSelector, Stylesheet, TuiStyle,
 };
-use ratatui::{Terminal, backend::TestBackend};
+use ratatui::{backend::TestBackend, Terminal};
 
 /// Verifies a block node renders its child text.
 ///
@@ -49,6 +49,39 @@ fn renders_block_and_text_nodes() -> Result<()> {
         .collect::<String>();
 
     assert!(rendered.contains("Hello"));
+
+    Ok(())
+}
+
+#[test]
+fn renders_text_with_resolved_stylesheet_style() -> Result<()> {
+    let backend = TestBackend::new(12, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let node = text("Hi").with_classes("accent");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("accent"),
+        TuiStyle::new()
+            .foreground(Color::Yellow)
+            .background(Color::Blue),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::with_stylesheet(frame, &stylesheet);
+        render_result = node.render(&mut ctx);
+    })?;
+    render_result?;
+
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "H")
+        .expect("rendered H cell");
+
+    assert_eq!(cell.fg, Color::Yellow);
+    assert_eq!(cell.bg, Color::Blue);
 
     Ok(())
 }

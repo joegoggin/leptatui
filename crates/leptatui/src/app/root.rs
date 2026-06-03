@@ -9,6 +9,7 @@ use ratatui::Frame;
 use crate::{
     component::{Component, RenderCtx},
     context,
+    style::Stylesheet,
 };
 
 use super::{AppControl, Result};
@@ -20,6 +21,7 @@ pub trait AppRoot {
     /// # Arguments
     ///
     /// * `frame` — Ratatui frame for the current draw pass.
+    /// * `stylesheet` — Application stylesheet for resolving node styles.
     ///
     /// # Returns
     ///
@@ -29,7 +31,7 @@ pub trait AppRoot {
     ///
     /// Returns [`crate::app::Error::Io`] if rendering through the terminal
     /// backend fails.
-    fn render(&mut self, frame: &mut Frame<'_>) -> Result<()>;
+    fn render(&mut self, frame: &mut Frame<'_>, stylesheet: &Stylesheet) -> Result<()>;
 
     /// Handles a terminal event.
     ///
@@ -59,6 +61,7 @@ where
     /// # Arguments
     ///
     /// * `frame` — Ratatui frame for the current draw pass.
+    /// * `stylesheet` — Application stylesheet for resolving node styles.
     ///
     /// # Returns
     ///
@@ -68,9 +71,9 @@ where
     ///
     /// Returns [`crate::app::Error::Io`] if component rendering performs terminal
     /// I/O that fails.
-    fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
+    fn render(&mut self, frame: &mut Frame<'_>, stylesheet: &Stylesheet) -> Result<()> {
         context::__with_context_scope(|| {
-            let mut ctx = RenderCtx::new(frame);
+            let mut ctx = RenderCtx::with_stylesheet(frame, stylesheet);
             Component::render(self, &mut ctx)
         })
     }
