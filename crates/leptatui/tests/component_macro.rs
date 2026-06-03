@@ -114,7 +114,7 @@ fn Greeting() -> Node {
 
 fn main() {
     let node: Node = Greeting::new().into();
-    assert_eq!(node, text("hi"));
+    assert!(matches!(node, Node::Component(_)));
 }
 "#,
     )

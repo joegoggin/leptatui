@@ -1,3 +1,8 @@
+//! Attribute model for `view!` elements.
+//!
+//! This module parses element attributes and stores the attribute names later
+//! validated by element expansion.
+
 use syn::{
     Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream},
@@ -16,7 +21,7 @@ impl Parse for Attr {
     ///
     /// # Arguments
     ///
-    /// * `input` - Macro input stream positioned at an attribute name.
+    /// * `input` — Macro input stream positioned at an attribute name.
     ///
     /// # Returns
     ///

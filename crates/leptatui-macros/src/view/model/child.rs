@@ -1,3 +1,8 @@
+//! Child model for `view!` elements.
+//!
+//! This module distinguishes nested element children from text-like literal or
+//! expression children.
+
 use syn::{
     LitStr, Result, Token,
     parse::{Parse, ParseStream},
@@ -18,7 +23,7 @@ impl Parse for Child {
     ///
     /// # Arguments
     ///
-    /// * `input` - Macro input stream positioned at child content.
+    /// * `input` — Macro input stream positioned at child content.
     ///
     /// # Returns
     ///

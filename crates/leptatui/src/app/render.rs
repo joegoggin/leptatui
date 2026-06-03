@@ -1,3 +1,8 @@
+//! App root drawing helpers.
+//!
+//! This module contains the frame draw wrapper used by the app loop to render
+//! an [`AppRoot`] into the active terminal.
+
 use super::{AppRoot, Result, terminal::DefaultTerminal};
 
 /// Draws a root application into the terminal.

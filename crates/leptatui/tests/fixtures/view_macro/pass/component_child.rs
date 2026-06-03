@@ -1,5 +1,11 @@
+//! Pass fixture for component children in `view!`.
+//!
+//! This binary verifies a braced component constructor lowers into a component
+//! node when used inside a layout element.
+
 use leptatui::prelude::*;
 
+/// Builds a component used as a braced child expression.
 #[component]
 fn Label() -> Node {
     view! {
@@ -7,6 +13,7 @@ fn Label() -> Node {
     }
 }
 
+/// Exercises component child expansion within a column.
 fn main() {
     let node: Node = view! {
         <Column>
@@ -15,5 +22,10 @@ fn main() {
         </Column>
     };
 
-    assert_eq!(node, column([text("Count"), text("Help")]));
+    assert!(matches!(
+        node,
+        Node::Column(children)
+            if matches!(children.first(), Some(Node::Component(_)))
+                && children.get(1) == Some(&text("Help"))
+    ));
 }

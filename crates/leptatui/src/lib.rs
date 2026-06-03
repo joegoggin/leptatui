@@ -24,5 +24,5 @@ extern crate self as leptatui;
 pub use app::{App, AppControl, AppRoot, Error, Result};
 pub use component::{Component, RenderCtx};
 pub use leptatui_macros::{component, view};
-pub use node::{Node, block, button, column, row, text};
+pub use node::{Node, block, button, column, component, dynamic, row, text};
 pub use style::{BorderType, Borders, Color, Modifier, TuiSpacing, TuiStyle};

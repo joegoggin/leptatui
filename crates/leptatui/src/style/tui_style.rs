@@ -1,3 +1,8 @@
+//! Builder-style terminal UI style values.
+//!
+//! This module collects text colors, modifiers, borders, and padding before
+//! converting them into Ratatui [`Style`] and [`Block`] values.
+
 use ratatui::{style::Style, widgets::Block};
 
 use super::{BorderType, Borders, Color, Modifier, TuiSpacing};

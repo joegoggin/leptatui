@@ -7,5 +7,5 @@ mod builders;
 mod model;
 mod render;
 
-pub use builders::{block, button, column, row, text};
+pub use builders::{block, button, column, component, dynamic, row, text};
 pub use model::Node;

@@ -1,3 +1,8 @@
+//! Terminal session setup and cleanup.
+//!
+//! This module enters raw mode and the alternate screen for app execution, then
+//! restores terminal state through explicit cleanup and drop guards.
+
 use std::io::{Stdout, stdout};
 
 use crossterm::{

@@ -1,3 +1,7 @@
+//! Root model for a `view!` invocation.
+//!
+//! This module enforces the single-root-element contract before expansion.
+
 use proc_macro2::TokenStream;
 use syn::{
     Result,
@@ -17,7 +21,7 @@ impl Parse for ViewRoot {
     ///
     /// # Arguments
     ///
-    /// * `input` - Macro input stream to parse.
+    /// * `input` — Macro input stream to parse.
     ///
     /// # Returns
     ///

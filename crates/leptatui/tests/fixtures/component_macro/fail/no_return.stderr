@@ -1,5 +1,5 @@
 error: #[component] functions must return a value convertible into leptatui::Node
- --> tests/fixtures/component_macro/fail/no_return.rs:4:4
-  |
-4 | fn NoReturn() {}
-  |    ^^^^^^^^
+  --> tests/fixtures/component_macro/fail/no_return.rs:10:4
+   |
+10 | fn NoReturn() {}
+   |    ^^^^^^^^

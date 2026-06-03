@@ -3,7 +3,10 @@
 //! These tests render node trees against Ratatui's test backend and inspect the
 //! resulting terminal buffer.
 
-use leptatui::{RenderCtx, Result, block, text};
+use std::{cell::Cell, rc::Rc};
+
+use crossterm::event::Event;
+use leptatui::{AppControl, Component, RenderCtx, Result, block, column, component, dynamic, text};
 use ratatui::{Terminal, backend::TestBackend};
 
 /// Verifies a block node renders its child text.
@@ -42,4 +45,188 @@ fn renders_block_and_text_nodes() -> Result<()> {
     assert!(rendered.contains("Hello"));
 
     Ok(())
+}
+
+/// Component that renders text and exits on any event.
+struct EventExit;
+
+impl Component for EventExit {
+    /// Renders the component's child text.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Rendering context supplied by the node boundary.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] on success.
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        ctx.render_node(&text("Child"))
+    }
+
+    /// Handles an event by requesting app exit.
+    ///
+    /// # Arguments
+    ///
+    /// * `_event` — Event dispatched through the node tree.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value requesting exit.
+    fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
+        Ok(AppControl::Exit)
+    }
+}
+
+/// Component that counts how many events it receives.
+struct EventCounter {
+    /// Shared event count updated by event handling.
+    count: Rc<Cell<usize>>,
+}
+
+impl Component for EventCounter {
+    /// Renders nothing for event-only tests.
+    ///
+    /// # Arguments
+    ///
+    /// * `_ctx` — Rendering context supplied by the node boundary.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] on success.
+    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        Ok(())
+    }
+
+    /// Handles an event by incrementing the shared count.
+    ///
+    /// # Arguments
+    ///
+    /// * `_event` — Event dispatched through the node tree.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value requesting continued traversal.
+    fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
+        self.count.set(self.count.get() + 1);
+        Ok(AppControl::Continue)
+    }
+}
+
+/// Verifies dynamic and component node boundaries render through the node tree.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([dynamic(|| text("Dynamic")), component(EventExit)])
+/// ```
+///
+/// # Assertions
+///
+/// - The dynamic closure is evaluated during rendering.
+/// - The component boundary renders through its `Component::render` method.
+#[test]
+fn renders_dynamic_and_component_child_nodes() -> Result<()> {
+    let backend = TestBackend::new(24, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let node = column([dynamic(|| text("Dynamic")), component(EventExit)]);
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = node.render(&mut ctx);
+    })?;
+    render_result?;
+
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+
+    assert!(rendered.contains("Dynamic"));
+    assert!(rendered.contains("Child"));
+
+    Ok(())
+}
+
+/// Verifies node roots dispatch events through component child boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("Static"), component(EventExit)])
+///     .handle_event(Event::Resize(24, 5))
+/// ```
+///
+/// # Assertions
+///
+/// - Static leaf nodes are skipped.
+/// - Event traversal reaches the component boundary.
+/// - `AppControl::Exit` short-circuits child traversal.
+#[test]
+fn dispatches_events_through_component_child_nodes() -> Result<()> {
+    let node = column([text("Static"), component(EventExit)]);
+
+    assert_eq!(node.handle_event(Event::Resize(24, 5))?, AppControl::Exit);
+
+    Ok(())
+}
+
+/// Verifies dynamic children are also traversed during event dispatch.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([dynamic(|| component(EventCounter))])
+///     .handle_event(Event::Resize(24, 5))
+/// ```
+///
+/// # Assertions
+///
+/// - The dynamic closure is evaluated during event dispatch.
+/// - Events reach the node produced by the dynamic closure.
+#[test]
+fn dispatches_events_through_dynamic_child_nodes() -> Result<()> {
+    let count = Rc::new(Cell::new(0));
+    let child_count = Rc::clone(&count);
+    let node = column([dynamic(move || {
+        component(EventCounter {
+            count: Rc::clone(&child_count),
+        })
+    })]);
+
+    assert_eq!(
+        node.handle_event(Event::Resize(24, 5))?,
+        AppControl::Continue
+    );
+    assert_eq!(count.get(), 1);
+
+    Ok(())
+}
+
+/// Verifies deferred node equality stays identity-based.
+///
+/// # Example Under Test
+///
+/// ```text
+/// let first = dynamic(|| text("same"));
+/// let first_clone = first.clone();
+/// let second = dynamic(|| text("same"));
+/// ```
+///
+/// # Assertions
+///
+/// - A cloned dynamic node compares equal to its source.
+/// - Separate dynamic nodes with identical closures do not compare equal.
+#[test]
+fn compares_dynamic_nodes_by_identity() {
+    let first = dynamic(|| text("same"));
+    let first_clone = first.clone();
+    let second = dynamic(|| text("same"));
+
+    assert_eq!(first, first_clone);
+    assert_ne!(first, second);
 }

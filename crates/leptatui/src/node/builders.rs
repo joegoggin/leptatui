@@ -1,4 +1,13 @@
-use super::model::Node;
+//! Convenience constructors for render-tree nodes.
+//!
+//! This module provides the public helper functions re-exported by
+//! [`crate::node`] and [`crate::prelude`].
+
+use std::rc::Rc;
+
+use crate::component::Component;
+
+use super::model::{ComponentNode, Node};
 
 /// Creates a bordered block around a child node.
 ///
@@ -65,4 +74,30 @@ pub fn column(children: impl IntoIterator<Item = Node>) -> Node {
 /// A [`Node::Button`] containing the provided label.
 pub fn button(label: impl Into<String>) -> Node {
     Node::Button(label.into())
+}
+
+/// Creates a dynamic child node.
+///
+/// # Arguments
+///
+/// * `child` — Closure that produces a node during render-tree traversal.
+///
+/// # Returns
+///
+/// A [`Node::Dynamic`] containing the provided child closure.
+pub fn dynamic(child: impl Fn() -> Node + 'static) -> Node {
+    Node::Dynamic(Rc::new(child))
+}
+
+/// Creates a component-boundary node.
+///
+/// # Arguments
+///
+/// * `component` — Component value to preserve as a render-tree boundary.
+///
+/// # Returns
+///
+/// A [`Node::Component`] containing the provided component.
+pub fn component(component: impl Component + 'static) -> Node {
+    Node::Component(ComponentNode::new(component))
 }

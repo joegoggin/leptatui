@@ -1,3 +1,8 @@
+//! Thread-local render-scope context storage.
+//!
+//! This module stores type-erased context values in a stack of render frames so
+//! descendant component scopes can shadow ancestor values.
+
 use std::{
     any::{Any, TypeId},
     cell::RefCell,

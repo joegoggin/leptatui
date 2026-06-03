@@ -1,3 +1,8 @@
+//! Text content model for `view!` elements.
+//!
+//! This module parses literal and braced-expression content accepted by text
+//! and button elements.
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
@@ -20,7 +25,7 @@ impl Parse for TextContent {
     ///
     /// # Arguments
     ///
-    /// * `input` - Macro input stream positioned at text content.
+    /// * `input` — Macro input stream positioned at text content.
     ///
     /// # Returns
     ///

@@ -1,3 +1,8 @@
+//! Code generation for the `component` attribute macro.
+//!
+//! This module emits the component wrapper type, node conversions, default
+//! constructor, and render implementation for validated component functions.
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::ItemFn;
@@ -44,9 +49,14 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 Self
             }
 
+            #[doc(hidden)]
+            fn __render_tree(self) -> #leptatui::Node {
+                #render_body
+            }
+
             #[doc = "Converts this component into a Leptatui node."]
             #vis fn into_node(self) -> #leptatui::Node {
-                #render_body
+                #leptatui::component(self)
             }
         }
 
@@ -70,7 +80,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 &mut self,
                 ctx: &mut #leptatui::RenderCtx<'_, '_>,
             ) -> #leptatui::Result<()> {
-                let node = Self::new().into_node();
+                let node = Self::new().__render_tree();
                 ctx.render_node(&node)
             }
         }

@@ -1,3 +1,8 @@
+//! Async terminal event polling.
+//!
+//! This module bridges Crossterm's blocking event API into async app loops by
+//! running terminal polling on a blocking task.
+
 use std::time::Duration;
 
 use crossterm::event::{self, Event};

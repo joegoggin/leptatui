@@ -1,9 +1,18 @@
+//! Rendering and event traversal for Leptatui nodes.
+//!
+//! This module maps [`Node`] variants to Ratatui widgets, layout splits, and
+//! component event propagation.
+
+use crossterm::event::Event;
 use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Block, Paragraph},
 };
 
-use crate::{app::Result, component::RenderCtx};
+use crate::{
+    app::{AppControl, Result},
+    component::{Component, RenderCtx},
+};
 
 use super::model::Node;
 
@@ -44,7 +53,89 @@ impl Node {
                 );
                 Ok(())
             }
+            Self::Dynamic(child) => child().render(ctx),
+            Self::Component(component) => component.borrow_mut().render(ctx),
         }
+    }
+
+    /// Dispatches an event through this node tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — Crossterm event emitted by the terminal.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value indicating whether traversal should continue.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
+    /// I/O that fails.
+    pub fn handle_event(&self, event: Event) -> Result<AppControl> {
+        self.handle_event_ref(&event)
+    }
+
+    /// Dispatches an event by reference through this node tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — Crossterm event to dispatch without cloning at every branch.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value indicating whether traversal should continue.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
+    /// I/O that fails.
+    fn handle_event_ref(&self, event: &Event) -> Result<AppControl> {
+        match self {
+            Self::Block { child } => child.handle_event_ref(event),
+            Self::Row(children) | Self::Column(children) => handle_child_events(children, event),
+            Self::Dynamic(child) => child().handle_event_ref(event),
+            Self::Component(component) => component.borrow_mut().handle_event(event.clone()),
+            Self::Text(_) | Self::Button(_) => Ok(AppControl::Continue),
+        }
+    }
+}
+
+impl Component for Node {
+    /// Renders the node when it is used as a component.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Rendering context for the node's target area.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if rendering performs terminal I/O
+    /// that fails.
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        Node::render(self, ctx)
+    }
+
+    /// Dispatches an event when the node is used as a component.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — Crossterm event emitted by the terminal.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value indicating whether traversal should continue.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
+    /// I/O that fails.
+    fn handle_event(&mut self, event: Event) -> Result<AppControl> {
+        Node::handle_event(self, event)
     }
 }
 
@@ -93,4 +184,30 @@ fn render_children(
     }
 
     Ok(())
+}
+
+/// Dispatches an event through child nodes until one requests exit.
+///
+/// # Arguments
+///
+/// * `children` — Child nodes to visit in order.
+/// * `event` — Event to dispatch to each child.
+///
+/// # Returns
+///
+/// An [`AppControl`] value requesting exit when any child exits, otherwise
+/// continue.
+///
+/// # Errors
+///
+/// Returns [`crate::app::Error::Io`] if child event handling performs terminal
+/// I/O that fails.
+fn handle_child_events(children: &[Node], event: &Event) -> Result<AppControl> {
+    for child in children {
+        if child.handle_event_ref(event)? == AppControl::Exit {
+            return Ok(AppControl::Exit);
+        }
+    }
+
+    Ok(AppControl::Continue)
 }

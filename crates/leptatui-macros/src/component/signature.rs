@@ -1,3 +1,8 @@
+//! Signature validation for `#[component]` functions.
+//!
+//! This module rejects unsupported component function shapes before macro code
+//! generation begins.
+
 use syn::{Error, ReturnType, Signature, Type};
 
 /// Validates that a component function can be expanded.

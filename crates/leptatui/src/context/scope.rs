@@ -1,3 +1,8 @@
+//! Context-scope guard management.
+//!
+//! This module owns the RAII guard that pushes a context frame on entry and
+//! restores the previous stack state on drop.
+
 use super::storage;
 
 /// Guard that pops a Leptatui context frame when a render scope ends.

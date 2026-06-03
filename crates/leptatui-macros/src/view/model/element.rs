@@ -1,3 +1,8 @@
+//! Element model for `view!` syntax.
+//!
+//! This module parses supported XML-like terminal elements and expands them
+//! into Leptatui node builder calls.
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
@@ -24,7 +29,7 @@ impl Parse for Element {
     ///
     /// # Arguments
     ///
-    /// * `input` - Macro input stream positioned at an opening `<`.
+    /// * `input` — Macro input stream positioned at an opening `<`.
     ///
     /// # Returns
     ///
@@ -142,8 +147,8 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `element_name` - Name to use in compile diagnostics.
-    /// * `wrap` - Function that wraps the expanded child in this element's
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `wrap` — Function that wraps the expanded child in this element's
     ///   builder call.
     ///
     /// # Returns
@@ -174,8 +179,8 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `element_name` - Name to use in compile diagnostics.
-    /// * `wrap` - Function that wraps the expanded children in this element's
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `wrap` — Function that wraps the expanded children in this element's
     ///   builder call.
     ///
     /// # Returns
@@ -210,8 +215,8 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `child` - Parsed child to expand.
-    /// * `element_name` - Parent element name to use in diagnostics.
+    /// * `child` — Parsed child to expand.
+    /// * `element_name` — Parent element name to use in diagnostics.
     ///
     /// # Returns
     ///
@@ -224,6 +229,12 @@ impl Element {
     fn expand_node_child(&self, child: &Child, element_name: &str) -> Result<TokenStream> {
         match child {
             Child::Element(child) => child.expand(),
+            Child::Text(TextContent::Expr(expr))
+                if matches!(expr.as_ref(), syn::Expr::Closure(_)) =>
+            {
+                let leptatui = crate::utils::crate_path::leptatui();
+                Ok(quote! { #leptatui::dynamic(#expr) })
+            }
             Child::Text(TextContent::Expr(expr)) => {
                 let leptatui = crate::utils::crate_path::leptatui();
                 Ok(quote! { ::core::convert::Into::<#leptatui::Node>::into(#expr) })
@@ -239,8 +250,8 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `element_name` - Name to use in compile diagnostics.
-    /// * `wrap` - Function that wraps the expanded content in this element's
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `wrap` — Function that wraps the expanded content in this element's
     ///   builder call.
     ///
     /// # Returns

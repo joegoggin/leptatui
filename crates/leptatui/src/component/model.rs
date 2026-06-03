@@ -1,3 +1,8 @@
+//! Frame rendering context model.
+//!
+//! This module wraps a Ratatui frame with the currently assigned render area and
+//! helper methods for drawing widgets or child nodes.
+
 use ratatui::{Frame, layout::Rect, widgets::Widget};
 
 use crate::{app::Result, node::Node};
