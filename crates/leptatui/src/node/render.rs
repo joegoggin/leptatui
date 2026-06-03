@@ -33,19 +33,19 @@ impl Node {
     /// that fails.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         match self {
-            Self::Block { child } => {
+            Self::Block { child, .. } => {
                 let block = Block::bordered();
                 let inner = block.inner(ctx.area());
                 ctx.render_widget(block);
                 ctx.with_area(inner, |ctx| child.render(ctx))
             }
-            Self::Text(content) => {
+            Self::Text { content, .. } => {
                 ctx.render_widget(Paragraph::new(content.as_str()));
                 Ok(())
             }
-            Self::Row(children) => render_children(children, Direction::Row, ctx),
-            Self::Column(children) => render_children(children, Direction::Column, ctx),
-            Self::Button(label) => {
+            Self::Row { children, .. } => render_children(children, Direction::Row, ctx),
+            Self::Column { children, .. } => render_children(children, Direction::Column, ctx),
+            Self::Button { label, .. } => {
                 ctx.render_widget(
                     Paragraph::new(label.as_str())
                         .centered()
@@ -92,11 +92,13 @@ impl Node {
     /// I/O that fails.
     fn handle_event_ref(&self, event: &Event) -> Result<AppControl> {
         match self {
-            Self::Block { child } => child.handle_event_ref(event),
-            Self::Row(children) | Self::Column(children) => handle_child_events(children, event),
+            Self::Block { child, .. } => child.handle_event_ref(event),
+            Self::Row { children, .. } | Self::Column { children, .. } => {
+                handle_child_events(children, event)
+            }
             Self::Dynamic(child) => child().handle_event_ref(event),
             Self::Component(component) => component.handle_event(event.clone()),
-            Self::Text(_) | Self::Button(_) => Ok(AppControl::Continue),
+            Self::Text { .. } | Self::Button { .. } => Ok(AppControl::Continue),
         }
     }
 }

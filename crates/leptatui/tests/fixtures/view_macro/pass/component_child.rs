@@ -24,7 +24,7 @@ fn main() {
 
     assert!(matches!(
         node,
-        Node::Column(children)
+        Node::Column { children, .. }
             if matches!(children.first(), Some(Node::Component(_)))
                 && children.get(1) == Some(&text("Help"))
     ));

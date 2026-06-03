@@ -95,7 +95,7 @@ impl Element {
         self.validate_attrs()?;
         let leptatui = crate::utils::crate_path::leptatui();
 
-        match self.name.to_string().as_str() {
+        let node = match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 quote! { #leptatui::block(#child) }
             }),
@@ -115,7 +115,9 @@ impl Element {
                 &self.name,
                 "unsupported Leptatui element; expected Block, Text, Row, Column, or Button",
             )),
-        }
+        }?;
+
+        self.expand_attrs(node)
     }
 
     /// Validates that every attribute name is currently accepted by `view!`.
@@ -141,6 +143,45 @@ impl Element {
         }
 
         Ok(())
+    }
+
+    /// Expands supported attributes into selector metadata setters.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` — Already-expanded node builder expression.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the node expression wrapped with metadata
+    /// setters.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if `style` is provided as a string literal.
+    fn expand_attrs(&self, node: TokenStream) -> Result<TokenStream> {
+        let mut expanded = node;
+
+        for attr in &self.attrs {
+            let value = attr.value.to_tokens();
+            expanded = match attr.name.to_string().as_str() {
+                "class" => quote! { (#expanded).with_classes(#value) },
+                "id" => quote! { (#expanded).with_id(#value) },
+                "style" => {
+                    if attr.value.is_literal() {
+                        return Err(Error::new_spanned(
+                            &attr.name,
+                            "view! style attribute must be a braced TuiStyle expression",
+                        ));
+                    }
+
+                    quote! { (#expanded).with_inline_style(#value) }
+                }
+                _ => unreachable!("attributes are validated before expansion"),
+            };
+        }
+
+        Ok(expanded)
     }
 
     /// Expands an element that must contain exactly one node child.

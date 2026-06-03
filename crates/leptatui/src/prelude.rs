@@ -10,7 +10,7 @@
 
 pub use crate::{
     App, AppControl, AppRoot, BorderType, Borders, Color, Component, Error, Modifier, Node,
-    RenderCtx, Result, TuiSpacing, TuiStyle, block, button, column,
+    NodeType, RenderCtx, Result, StyleMetadata, TuiSpacing, TuiStyle, block, button, column,
     context::{expect_context, provide_context, use_context},
     node::{component, dynamic},
     row, text,

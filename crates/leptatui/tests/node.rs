@@ -3,10 +3,16 @@
 //! These tests render node trees against Ratatui's test backend and inspect the
 //! resulting terminal buffer.
 
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use crossterm::event::Event;
-use leptatui::{AppControl, Component, RenderCtx, Result, block, column, component, dynamic, text};
+use leptatui::{
+    AppControl, Color, Component, NodeType, RenderCtx, Result, StyleMetadata, TuiStyle, block,
+    button, column, component, dynamic, text,
+};
 use ratatui::{Terminal, backend::TestBackend};
 
 /// Verifies a block node renders its child text.
@@ -45,6 +51,38 @@ fn renders_block_and_text_nodes() -> Result<()> {
     assert!(rendered.contains("Hello"));
 
     Ok(())
+}
+
+#[test]
+fn node_builders_store_default_selector_metadata() {
+    let block_node = block(text("child"));
+    let metadata = block_node.style_metadata().expect("block metadata");
+
+    assert_eq!(metadata.node_type(), NodeType::Block);
+    assert_eq!(metadata.id(), None);
+    assert!(metadata.classes().is_empty());
+    assert_eq!(metadata.inline_style(), None);
+    assert!(!metadata.is_focused());
+}
+
+#[test]
+fn node_metadata_setters_store_selector_fields() {
+    let style = TuiStyle::new().foreground(Color::Yellow);
+    let node = button("Save")
+        .with_id("save")
+        .with_classes("primary toolbar")
+        .with_inline_style(style)
+        .with_focus(true);
+    let metadata = node.style_metadata().expect("button metadata");
+
+    assert_eq!(metadata.node_type(), NodeType::Button);
+    assert_eq!(metadata.id(), Some("save"));
+    assert_eq!(
+        metadata.classes(),
+        &[String::from("primary"), String::from("toolbar")]
+    );
+    assert_eq!(metadata.inline_style(), Some(style));
+    assert!(metadata.is_focused());
 }
 
 /// Component that renders text and exits on any event.
@@ -111,6 +149,41 @@ impl Component for EventCounter {
         self.count.set(self.count.get() + 1);
         Ok(AppControl::Continue)
     }
+}
+
+struct MetadataRecorder {
+    seen: Rc<RefCell<Option<StyleMetadata>>>,
+}
+
+impl Component for MetadataRecorder {
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let node = text("Child").with_id("inside").with_classes("component-child");
+        *self.seen.borrow_mut() = node.style_metadata().cloned();
+        ctx.render_node(&node)
+    }
+}
+
+#[test]
+fn selector_metadata_remains_available_inside_component_boundaries() -> Result<()> {
+    let seen = Rc::new(RefCell::new(None));
+    let node = component(MetadataRecorder {
+        seen: Rc::clone(&seen),
+    });
+    let backend = TestBackend::new(24, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = node.render(&mut ctx);
+    })?;
+    render_result?;
+
+    let metadata = seen.borrow().clone().expect("recorded metadata");
+    assert_eq!(metadata.id(), Some("inside"));
+    assert_eq!(metadata.classes(), &[String::from("component-child")]);
+
+    Ok(())
 }
 
 /// Verifies dynamic and component node boundaries render through the node tree.

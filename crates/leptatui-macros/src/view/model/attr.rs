@@ -1,10 +1,12 @@
 //! Attribute model for `view!` elements.
 //!
-//! This module parses element attributes and stores the attribute names later
-//! validated by element expansion.
+//! This module parses element attributes and stores the attribute names and
+//! values later validated by element expansion.
 
+use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{
-    Ident, LitStr, Result, Token,
+    Expr, Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream},
 };
 
@@ -14,6 +16,31 @@ use crate::view::utils::parse::parse_braced_expr;
 pub(super) struct Attr {
     /// Attribute name accepted by validation.
     pub(super) name: Ident,
+    /// Attribute value emitted by expansion.
+    pub(super) value: AttrValue,
+}
+
+/// Parsed element attribute value.
+pub(super) enum AttrValue {
+    /// String literal attribute value.
+    Literal(LitStr),
+    /// Braced Rust expression attribute value.
+    Expr(Expr),
+}
+
+impl AttrValue {
+    /// Expands the attribute value into Rust tokens.
+    pub(super) fn to_tokens(&self) -> TokenStream {
+        match self {
+            Self::Literal(value) => quote! { #value },
+            Self::Expr(value) => quote! { #value },
+        }
+    }
+
+    /// Returns whether this value came from a string literal.
+    pub(super) const fn is_literal(&self) -> bool {
+        matches!(self, Self::Literal(_))
+    }
 }
 
 impl Parse for Attr {
@@ -25,7 +52,7 @@ impl Parse for Attr {
     ///
     /// # Returns
     ///
-    /// An [`Attr`] containing the parsed attribute name.
+    /// An [`Attr`] containing the parsed attribute name and value.
     ///
     /// # Errors
     ///
@@ -35,16 +62,16 @@ impl Parse for Attr {
         let name: Ident = input.parse()?;
         input.parse::<Token![=]>()?;
 
-        if input.peek(LitStr) {
-            let _value: LitStr = input.parse()?;
+        let value = if input.peek(LitStr) {
+            AttrValue::Literal(input.parse()?)
         } else if input.peek(syn::token::Brace) {
-            let _value = parse_braced_expr(input)?;
+            AttrValue::Expr(parse_braced_expr(input)?)
         } else {
             return Err(
                 input.error("view! attribute values must be string literals or braced expressions")
             );
-        }
+        };
 
-        Ok(Self { name })
+        Ok(Self { name, value })
     }
 }

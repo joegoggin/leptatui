@@ -6,8 +6,10 @@
 mod builders;
 mod component_node;
 mod dynamic;
+mod metadata;
 mod model;
 mod render;
 
 pub use builders::{block, button, column, component, dynamic, row, text};
+pub use metadata::{NodeType, StyleMetadata};
 pub use model::Node;

@@ -7,7 +7,11 @@ use std::rc::Rc;
 
 use crate::component::Component;
 
-use super::{component_node::ComponentNode, model::Node};
+use super::{
+    component_node::ComponentNode,
+    metadata::{NodeType, StyleMetadata},
+    model::Node,
+};
 
 /// Creates a bordered block around a child node.
 ///
@@ -21,6 +25,7 @@ use super::{component_node::ComponentNode, model::Node};
 pub fn block(child: impl Into<Node>) -> Node {
     Node::Block {
         child: Box::new(child.into()),
+        metadata: StyleMetadata::new(NodeType::Block),
     }
 }
 
@@ -34,7 +39,10 @@ pub fn block(child: impl Into<Node>) -> Node {
 ///
 /// A [`Node::Text`] containing the provided content.
 pub fn text(content: impl Into<String>) -> Node {
-    Node::Text(content.into())
+    Node::Text {
+        content: content.into(),
+        metadata: StyleMetadata::new(NodeType::Text),
+    }
 }
 
 /// Creates a horizontal row.
@@ -47,7 +55,10 @@ pub fn text(content: impl Into<String>) -> Node {
 ///
 /// A [`Node::Row`] containing the provided children.
 pub fn row(children: impl IntoIterator<Item = Node>) -> Node {
-    Node::Row(children.into_iter().collect())
+    Node::Row {
+        children: children.into_iter().collect(),
+        metadata: StyleMetadata::new(NodeType::Row),
+    }
 }
 
 /// Creates a vertical column.
@@ -60,7 +71,10 @@ pub fn row(children: impl IntoIterator<Item = Node>) -> Node {
 ///
 /// A [`Node::Column`] containing the provided children.
 pub fn column(children: impl IntoIterator<Item = Node>) -> Node {
-    Node::Column(children.into_iter().collect())
+    Node::Column {
+        children: children.into_iter().collect(),
+        metadata: StyleMetadata::new(NodeType::Column),
+    }
 }
 
 /// Creates a basic button.
@@ -73,7 +87,10 @@ pub fn column(children: impl IntoIterator<Item = Node>) -> Node {
 ///
 /// A [`Node::Button`] containing the provided label.
 pub fn button(label: impl Into<String>) -> Node {
-    Node::Button(label.into())
+    Node::Button {
+        label: label.into(),
+        metadata: StyleMetadata::new(NodeType::Button),
+    }
 }
 
 /// Creates a dynamic child node.
