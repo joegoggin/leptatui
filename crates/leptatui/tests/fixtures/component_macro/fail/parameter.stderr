@@ -1,5 +1,5 @@
 error: #[component] functions cannot take parameters yet
- --> tests/fixtures/component_macro/fail/parameter.rs:4:14
-  |
-4 | fn WithProps(label: String) -> leptatui::Node {
-  |              ^^^^^^^^^^^^^
+  --> tests/fixtures/component_macro/fail/parameter.rs:14:14
+   |
+14 | fn WithProps(label: String) -> leptatui::Node {
+   |              ^^^^^^^^^^^^^

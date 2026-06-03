@@ -1,10 +1,15 @@
+//! Low-level parsers for `view!` braced expressions and closing tags.
+//!
+//! This module keeps token-stream lookahead and braced-expression validation
+//! separate from the parsed syntax model.
+
 use syn::{Expr, Result, Token, braced, parse::ParseStream};
 
 /// Parses braced content as exactly one Rust expression.
 ///
 /// # Arguments
 ///
-/// * `input` - Macro input stream positioned at a braced expression.
+/// * `input` — Macro input stream positioned at a braced expression.
 ///
 /// # Returns
 ///
@@ -30,7 +35,7 @@ pub(crate) fn parse_braced_expr(input: ParseStream<'_>) -> Result<Expr> {
 ///
 /// # Arguments
 ///
-/// * `input` - Macro input stream to inspect without consuming.
+/// * `input` — Macro input stream to inspect without consuming.
 ///
 /// # Returns
 ///

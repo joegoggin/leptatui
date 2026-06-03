@@ -3,7 +3,10 @@
 //! These tests cover conversion from Leptatui style helpers into Ratatui style,
 //! padding, and block values.
 
-use leptatui::{BorderType, Borders, Color, Modifier, TuiSpacing, TuiStyle};
+use leptatui::{
+    BorderType, Borders, Color, Modifier, NodeType, StyleSelector, Stylesheet, TuiSpacing,
+    TuiStyle, button, text,
+};
 use ratatui::{style::Style, widgets::Padding};
 
 /// Verifies terminal UI style maps to Ratatui style.
@@ -84,4 +87,177 @@ fn tui_style_builds_a_block_with_border_configuration() {
         .padding(TuiSpacing::uniform(1));
 
     let _block = style.to_block();
+}
+
+/// Verifies class stylesheet rules override type stylesheet rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text("Save").with_classes("primary")
+/// Stylesheet::new()
+///     .rule(StyleSelector::node_type(NodeType::Text), white)
+///     .rule(StyleSelector::class("primary"), yellow)
+/// ```
+///
+/// # Assertions
+///
+/// - Node metadata is available for stylesheet resolution.
+/// - The resolved foreground color is yellow.
+///
+/// # Why
+///
+/// Class selectors should have higher specificity than type selectors.
+#[test]
+fn stylesheet_class_overrides_type_style() {
+    let node = text("Save").with_classes("primary");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::node_type(NodeType::Text),
+            TuiStyle::new().foreground(Color::White),
+        )
+        .rule(
+            StyleSelector::class("primary"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+
+    assert_eq!(resolved.foreground, Some(Color::Yellow));
+}
+
+/// Verifies id stylesheet rules override class stylesheet rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text("Save").with_classes("primary").with_id("save")
+/// Stylesheet::new()
+///     .rule(StyleSelector::class("primary"), yellow)
+///     .rule(StyleSelector::id("save"), green)
+/// ```
+///
+/// # Assertions
+///
+/// - Node metadata is available for stylesheet resolution.
+/// - The resolved foreground color is green.
+///
+/// # Why
+///
+/// Id selectors should have higher specificity than class selectors.
+#[test]
+fn stylesheet_id_overrides_class_style() {
+    let node = text("Save").with_classes("primary").with_id("save");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("primary"),
+            TuiStyle::new().foreground(Color::Yellow),
+        )
+        .rule(
+            StyleSelector::id("save"),
+            TuiStyle::new().foreground(Color::Green),
+        );
+
+    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+}
+
+/// Verifies inline styles override stylesheet rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text("Save").with_id("save").with_inline_style(black)
+/// Stylesheet::new().rule(StyleSelector::id("save"), green)
+/// ```
+///
+/// # Assertions
+///
+/// - Node metadata is available for stylesheet resolution.
+/// - The resolved foreground color is black.
+///
+/// # Why
+///
+/// Inline styles are the final override in style resolution.
+#[test]
+fn inline_style_overrides_stylesheet_rules() {
+    let node = text("Save")
+        .with_id("save")
+        .with_inline_style(TuiStyle::new().foreground(Color::Black));
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::id("save"),
+        TuiStyle::new().foreground(Color::Green),
+    );
+
+    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+
+    assert_eq!(resolved.foreground, Some(Color::Black));
+}
+
+/// Verifies inherited colors remain unless the node overrides them.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text("Child").with_inline_style(foreground: yellow)
+/// inherited = foreground: green, background: blue
+/// ```
+///
+/// # Assertions
+///
+/// - Node metadata is available for stylesheet resolution.
+/// - The resolved foreground color is yellow.
+/// - The resolved background color is blue.
+///
+/// # Why
+///
+/// Child styles should preserve inherited fields that are not locally set.
+#[test]
+fn inherited_colors_flow_to_children_unless_overridden() {
+    let node = text("Child").with_inline_style(TuiStyle::new().foreground(Color::Yellow));
+    let inherited = TuiStyle::new()
+        .foreground(Color::Green)
+        .background(Color::Blue);
+
+    let resolved = Stylesheet::new().resolve(node.style_metadata().unwrap(), inherited);
+
+    assert_eq!(resolved.foreground, Some(Color::Yellow));
+    assert_eq!(resolved.background, Some(Color::Blue));
+}
+
+/// Verifies focus selectors match only focused nodes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// button("Save").with_focus(true)
+/// button("Cancel")
+/// Stylesheet::new().rule(StyleSelector::focus(), yellow)
+/// ```
+///
+/// # Assertions
+///
+/// - Focused button metadata is available for stylesheet resolution.
+/// - Blurred button metadata is available for stylesheet resolution.
+/// - The focused button resolves to a yellow foreground.
+/// - The blurred button resolves with no foreground color.
+///
+/// # Why
+///
+/// Focus styling should depend on node focus state, not just node type.
+#[test]
+fn stylesheet_focus_selector_matches_only_focused_nodes() {
+    let focused = button("Save").with_focus(true);
+    let blurred = button("Cancel");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::focus(),
+        TuiStyle::new().foreground(Color::Yellow),
+    );
+
+    let focused_style = stylesheet.resolve(focused.style_metadata().unwrap(), TuiStyle::new());
+    let blurred_style = stylesheet.resolve(blurred.style_metadata().unwrap(), TuiStyle::new());
+
+    assert_eq!(focused_style.foreground, Some(Color::Yellow));
+    assert_eq!(blurred_style.foreground, None);
 }

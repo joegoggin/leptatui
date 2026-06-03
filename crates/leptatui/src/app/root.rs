@@ -1,9 +1,15 @@
+//! App root adapter contract.
+//!
+//! This module defines the root-level rendering interface and adapts
+//! [`Component`](crate::Component) values into app roots.
+
 use crossterm::event::Event;
 use ratatui::Frame;
 
 use crate::{
     component::{Component, RenderCtx},
     context,
+    style::Stylesheet,
 };
 
 use super::{AppControl, Result};
@@ -15,6 +21,7 @@ pub trait AppRoot {
     /// # Arguments
     ///
     /// * `frame` — Ratatui frame for the current draw pass.
+    /// * `stylesheet` — Application stylesheet for resolving node styles.
     ///
     /// # Returns
     ///
@@ -24,7 +31,7 @@ pub trait AppRoot {
     ///
     /// Returns [`crate::app::Error::Io`] if rendering through the terminal
     /// backend fails.
-    fn render(&mut self, frame: &mut Frame<'_>) -> Result<()>;
+    fn render(&mut self, frame: &mut Frame<'_>, stylesheet: &Stylesheet) -> Result<()>;
 
     /// Handles a terminal event.
     ///
@@ -49,13 +56,42 @@ impl<T> AppRoot for T
 where
     T: Component,
 {
-    fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
+    /// Renders a component root inside a fresh Leptatui context scope.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` — Ratatui frame for the current draw pass.
+    /// * `stylesheet` — Application stylesheet for resolving node styles.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if component rendering performs terminal
+    /// I/O that fails.
+    fn render(&mut self, frame: &mut Frame<'_>, stylesheet: &Stylesheet) -> Result<()> {
         context::__with_context_scope(|| {
-            let mut ctx = RenderCtx::new(frame);
+            let mut ctx = RenderCtx::with_stylesheet(frame, stylesheet);
             Component::render(self, &mut ctx)
         })
     }
 
+    /// Forwards a terminal event to the component root.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — Crossterm event emitted by the terminal.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value indicating whether the app loop should continue.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
+    /// I/O that fails.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         Component::handle_event(self, event)
     }

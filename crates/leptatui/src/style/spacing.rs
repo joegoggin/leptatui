@@ -1,3 +1,8 @@
+//! Terminal-cell spacing primitives.
+//!
+//! This module stores side-specific padding values and converts them into
+//! Ratatui [`Padding`] values for block widgets.
+
 use ratatui::widgets::Padding;
 
 /// Simple terminal-cell spacing values.

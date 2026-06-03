@@ -1,5 +1,5 @@
-error: unsupported view! attribute; expected class, id, or style
- --> tests/fixtures/view_macro/fail/unsupported_element.rs:5:16
-  |
-5 |         <Block data_id="bad">
-  |                ^^^^^^^
+error: unsupported view! attribute; expected class, id, style, or button on_press
+  --> tests/fixtures/view_macro/fail/unsupported_element.rs:11:16
+   |
+11 |         <Block data_id="bad">
+   |                ^^^^^^^

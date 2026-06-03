@@ -1,3 +1,8 @@
+//! Component trait contract for terminal rendering.
+//!
+//! This module defines the render and event-handling interface implemented by
+//! root components, child components, and node trees.
+
 use crossterm::event::Event;
 
 use super::model::RenderCtx;

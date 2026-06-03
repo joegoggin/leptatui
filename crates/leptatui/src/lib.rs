@@ -24,5 +24,72 @@ extern crate self as leptatui;
 pub use app::{App, AppControl, AppRoot, Error, Result};
 pub use component::{Component, RenderCtx};
 pub use leptatui_macros::{component, view};
-pub use node::{Node, block, button, column, row, text};
-pub use style::{BorderType, Borders, Color, Modifier, TuiSpacing, TuiStyle};
+pub use node::{
+    ButtonAction, Node, NodeType, StyleMetadata, block, button, column, component, dynamic, row,
+    text,
+};
+pub use style::{
+    BorderType, Borders, Color, Modifier, StyleRule, StyleSelector, Stylesheet, TuiSpacing,
+    TuiStyle,
+};
+
+#[doc(hidden)]
+pub mod __private {
+    use crate::Node;
+
+    pub use crossterm::event::Event;
+
+    pub fn __reconcile_node(next: &mut Node, previous: &Node) {
+        match (next, previous) {
+            (
+                Node::Block {
+                    child: next_child, ..
+                },
+                Node::Block {
+                    child: previous_child,
+                    ..
+                },
+            ) => __reconcile_node(next_child, previous_child),
+            (
+                Node::Row {
+                    children: next_children,
+                    ..
+                },
+                Node::Row {
+                    children: previous_children,
+                    ..
+                },
+            )
+            | (
+                Node::Column {
+                    children: next_children,
+                    ..
+                },
+                Node::Column {
+                    children: previous_children,
+                    ..
+                },
+            ) => {
+                for (next_child, previous_child) in
+                    next_children.iter_mut().zip(previous_children.iter())
+                {
+                    __reconcile_node(next_child, previous_child);
+                }
+            }
+            (
+                Node::Button {
+                    metadata: next_metadata,
+                    ..
+                },
+                Node::Button {
+                    metadata: previous_metadata,
+                    ..
+                },
+            ) => next_metadata.set_focused(previous_metadata.is_focused()),
+            (next_node @ Node::Component(_), Node::Component(_)) => {
+                *next_node = previous.clone();
+            }
+            _ => {}
+        }
+    }
+}

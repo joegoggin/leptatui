@@ -1,5 +1,11 @@
+//! Pass fixture for converting generated components into nodes.
+//!
+//! This binary verifies generated component values can cross the node boundary
+//! through [`Into`] conversion.
+
 use leptatui::prelude::*;
 
+/// Returns a node built from `view!` syntax.
 #[component]
 fn Greeting() -> Node {
     view! {
@@ -7,8 +13,9 @@ fn Greeting() -> Node {
     }
 }
 
+/// Exercises conversion from a generated component into [`Node`].
 fn main() {
     let node: Node = Greeting::new().into();
 
-    assert_eq!(node, text("hello"));
+    assert!(matches!(node, Node::Component(_)));
 }

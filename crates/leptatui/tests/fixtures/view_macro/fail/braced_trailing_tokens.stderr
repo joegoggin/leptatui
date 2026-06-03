@@ -1,5 +1,5 @@
 error: view! braced content must be a single Rust expression
- --> tests/fixtures/view_macro/fail/braced_trailing_tokens.rs:7:22
-  |
-7 |         <Text>{label extra}</Text>
-  |                      ^^^^^
+  --> tests/fixtures/view_macro/fail/braced_trailing_tokens.rs:13:22
+   |
+13 |         <Text>{label extra}</Text>
+   |                      ^^^^^

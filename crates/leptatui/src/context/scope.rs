@@ -1,17 +1,49 @@
+//! Context-scope guard management.
+//!
+//! This module owns the RAII guard that pushes a context frame on entry and
+//! restores the previous stack state on drop.
+
 use super::storage;
+
+/// Owned context frame for one component subtree.
+#[derive(Clone)]
+pub(crate) struct ContextScope {
+    frame: storage::ContextFrame,
+}
+
+impl ContextScope {
+    /// Creates an empty component context scope.
+    pub(crate) fn new() -> Self {
+        Self {
+            frame: storage::new_frame(),
+        }
+    }
+
+    /// Runs a closure with this scope added to the active context stack.
+    pub(crate) fn with<R>(&self, render: impl FnOnce() -> R) -> R {
+        let _scope = ContextScopeGuard::enter(&self.frame);
+        render()
+    }
+
+    /// Clears this scope, then runs a closure with it active.
+    pub(crate) fn with_reset<R>(&self, render: impl FnOnce() -> R) -> R {
+        storage::clear_frame(&self.frame);
+        self.with(render)
+    }
+}
 
 /// Guard that pops a Leptatui context frame when a render scope ends.
 pub(super) struct ContextScopeGuard;
 
 impl ContextScopeGuard {
-    /// Pushes a new empty context frame for the current thread.
+    /// Pushes an existing context frame for the current thread.
     ///
     /// # Returns
     ///
     /// A [`ContextScopeGuard`] that restores the previous context stack on
     /// drop.
-    pub(super) fn enter() -> Self {
-        storage::push_frame();
+    pub(super) fn enter(frame: &storage::ContextFrame) -> Self {
+        storage::push_frame(frame);
         Self
     }
 }
