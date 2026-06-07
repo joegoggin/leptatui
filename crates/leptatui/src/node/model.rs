@@ -63,6 +63,11 @@ pub enum Node {
 
 impl Node {
     /// Returns selector metadata for styleable static nodes.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing a [`StyleMetadata`] reference for nodes that
+    /// carry selector metadata.
     pub fn style_metadata(&self) -> Option<&StyleMetadata> {
         match self {
             Self::Block { metadata, .. }
@@ -75,6 +80,11 @@ impl Node {
     }
 
     /// Returns mutable selector metadata for styleable static nodes.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing a mutable [`StyleMetadata`] reference for nodes
+    /// that carry selector metadata.
     pub fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
         match self {
             Self::Block { metadata, .. }
@@ -87,6 +97,14 @@ impl Node {
     }
 
     /// Sets an id selector value on a styleable node.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` — Id selector value to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`Node`] updated with the provided id when the node is styleable.
     pub fn with_id(mut self, id: impl Into<String>) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_id(id);
@@ -96,6 +114,14 @@ impl Node {
     }
 
     /// Sets class selector values on a styleable node.
+    ///
+    /// # Arguments
+    ///
+    /// * `classes` — Whitespace-separated class selector values to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`Node`] updated with the provided classes when the node is styleable.
     pub fn with_classes(mut self, classes: impl Into<String>) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_classes(classes);
@@ -105,6 +131,15 @@ impl Node {
     }
 
     /// Sets an inline style override on a styleable node.
+    ///
+    /// # Arguments
+    ///
+    /// * `style` — Inline style override to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`Node`] updated with the provided inline style when the node is
+    /// styleable.
     pub fn with_inline_style(mut self, style: crate::style::TuiStyle) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_inline_style(style);
@@ -114,6 +149,15 @@ impl Node {
     }
 
     /// Sets the current focus pseudo-class state on a styleable node.
+    ///
+    /// # Arguments
+    ///
+    /// * `focused` — Whether the node should match `:focus`.
+    ///
+    /// # Returns
+    ///
+    /// A [`Node`] updated with the provided focus state when the node is
+    /// styleable.
     pub fn with_focus(mut self, focused: bool) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_focused(focused);
@@ -123,6 +167,14 @@ impl Node {
     }
 
     /// Stores an activation callback on a button node.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback invoked when this button is focused and activated.
+    ///
+    /// # Returns
+    ///
+    /// A [`Node`] updated with the callback when the node is a button.
     pub fn on_press(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
         if let Self::Button { on_press, .. } = &mut self {
             *on_press = Some(Rc::new(action));

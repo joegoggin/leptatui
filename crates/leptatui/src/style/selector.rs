@@ -16,6 +16,8 @@ pub enum StyleSelector {
     Id(String),
     /// Matches nodes currently marked as focused.
     Focus,
+    /// Matches nodes that satisfy every nested selector.
+    Compound(Vec<StyleSelector>),
 }
 
 impl StyleSelector {
@@ -67,6 +69,29 @@ impl StyleSelector {
         Self::Focus
     }
 
+    /// Creates a selector that matches only when every nested selector matches.
+    ///
+    /// # Arguments
+    ///
+    /// * `selectors` — Selector list to match together.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleSelector::Compound`] selector.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `selectors` is empty.
+    pub fn compound(selectors: impl Into<Vec<Self>>) -> Self {
+        let selectors = selectors.into();
+        debug_assert!(
+            !selectors.is_empty(),
+            "compound selector requires at least one nested selector",
+        );
+
+        Self::Compound(selectors)
+    }
+
     /// Returns whether this selector matches node style metadata.
     ///
     /// # Arguments
@@ -82,6 +107,9 @@ impl StyleSelector {
             Self::Class(class) => metadata.classes().iter().any(|value| value == class),
             Self::Id(id) => metadata.id() == Some(id.as_str()),
             Self::Focus => metadata.is_focused(),
+            Self::Compound(selectors) => {
+                selectors.iter().all(|selector| selector.matches(metadata))
+            }
         }
     }
 
@@ -90,17 +118,22 @@ impl StyleSelector {
     /// # Returns
     ///
     /// A [`Specificity`] value used to order rule application.
-    pub(crate) const fn specificity(&self) -> Specificity {
+    pub(crate) fn specificity(&self) -> Specificity {
         match self {
             Self::Type(_) => Specificity::Type,
             Self::Class(_) | Self::Focus => Specificity::Class,
             Self::Id(_) => Specificity::Id,
+            Self::Compound(selectors) => selectors
+                .iter()
+                .map(Self::specificity)
+                .max()
+                .unwrap_or(Specificity::Type),
         }
     }
 }
 
 /// Cascade specificity group for stylesheet rule application.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) enum Specificity {
     /// Type selector specificity.
     Type,

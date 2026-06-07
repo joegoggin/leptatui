@@ -17,7 +17,7 @@ pub use crate::{
     row, text,
 };
 
-pub use leptatui_macros::{component, view};
+pub use leptatui_macros::{component, stylesheet, view};
 
 pub use leptos::prelude::{
     Callback, Effect, Get, GetUntracked, IntoSignalSetter, Memo, Owner, ReadSignal, RenderEffect,

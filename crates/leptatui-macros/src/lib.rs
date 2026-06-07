@@ -4,6 +4,7 @@
 //! runtime crate.
 
 mod component;
+mod stylesheet;
 mod utils;
 mod view;
 
@@ -20,4 +21,10 @@ pub fn component(args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn view(input: TokenStream) -> TokenStream {
     view::expand(input)
+}
+
+/// Converts declarative terminal stylesheet syntax into Leptatui style rules.
+#[proc_macro]
+pub fn stylesheet(input: TokenStream) -> TokenStream {
+    stylesheet::expand(input)
 }

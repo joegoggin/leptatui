@@ -23,7 +23,7 @@ extern crate self as leptatui;
 
 pub use app::{App, AppControl, AppRoot, Error, Result};
 pub use component::{Component, RenderCtx};
-pub use leptatui_macros::{component, view};
+pub use leptatui_macros::{component, stylesheet, view};
 pub use node::{
     ButtonAction, Node, NodeType, StyleMetadata, block, button, column, component, dynamic, row,
     text,

@@ -11,6 +11,7 @@ use crate::{
     style::{Stylesheet, TuiStyle},
 };
 
+/// Shared empty stylesheet used by render contexts created without app styles.
 static EMPTY_STYLESHEET: Stylesheet = Stylesheet::empty();
 
 /// Rendering context for a single frame and target area.
@@ -72,11 +73,19 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     }
 
     /// Returns the stylesheet used by this render context.
+    ///
+    /// # Returns
+    ///
+    /// A [`Stylesheet`] reference used for node style resolution.
     pub(crate) fn stylesheet(&self) -> &Stylesheet {
         self.stylesheet
     }
 
     /// Returns the style declarations inherited by the current node.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] containing inherited style values for the current area.
     pub(crate) fn inherited_style(&self) -> TuiStyle {
         self.inherited_style
     }

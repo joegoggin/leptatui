@@ -80,6 +80,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// - A memo can derive from a prelude signal.
 /// - Context values can be provided and read from the prelude.
 /// - Node and style helpers type-check from the prelude.
+/// - The stylesheet macro builds the expected stylesheet from prelude exports.
 #[test]
 fn prelude_exposes_reactivity_and_context() {
     Owner::new().with(|| {
@@ -114,5 +115,16 @@ fn prelude_exposes_reactivity_and_context() {
             .border_type(BorderType::Rounded)
             .padding(TuiSpacing::uniform(1));
         let _ = style.to_block();
+
+        let stylesheet = stylesheet! {
+            Text => { fg: Color::LightCyan }
+        };
+        assert_eq!(
+            stylesheet,
+            Stylesheet::new().rule(
+                StyleSelector::node_type(NodeType::Text),
+                TuiStyle::new().foreground(Color::LightCyan),
+            )
+        );
     });
 }

@@ -1,4 +1,8 @@
 //! Public context hooks.
+//!
+//! This module exposes typed context helpers that prefer Leptatui render-scope
+//! storage and fall back to Leptos owner context when no matching render value
+//! is available.
 
 use std::any::type_name;
 

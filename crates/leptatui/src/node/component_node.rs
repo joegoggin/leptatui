@@ -1,4 +1,8 @@
 //! Component-boundary storage for render-tree nodes.
+//!
+//! This module wraps component values so they can live inside a cloneable node
+//! tree while preserving component state and render-scope context between
+//! events.
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
@@ -45,6 +49,11 @@ impl ComponentNode {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if the component render path performs
+    /// terminal I/O that fails.
     pub(crate) fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         self.context
             .with_reset(|| self.inner.borrow_mut().render(ctx))
@@ -59,6 +68,11 @@ impl ComponentNode {
     /// # Returns
     ///
     /// An [`AppControl`] value returned by the component.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if the component event path performs
+    /// terminal I/O that fails.
     pub(crate) fn handle_event(&self, event: Event) -> Result<AppControl> {
         self.context
             .with(|| self.inner.borrow_mut().handle_event(event))

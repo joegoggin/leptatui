@@ -69,6 +69,10 @@ mod attr_value {
 
     impl AttrValue {
         /// Expands the attribute value into Rust tokens.
+        ///
+        /// # Returns
+        ///
+        /// A [`TokenStream`] containing the literal or expression value.
         pub(in crate::view::model) fn to_tokens(&self) -> TokenStream {
             match self {
                 Self::Literal(value) => quote! { #value },
@@ -77,6 +81,10 @@ mod attr_value {
         }
 
         /// Returns whether this value came from a string literal.
+        ///
+        /// # Returns
+        ///
+        /// A [`bool`] indicating whether the value is a literal.
         pub(in crate::view::model) const fn is_literal(&self) -> bool {
             matches!(self, Self::Literal(_))
         }

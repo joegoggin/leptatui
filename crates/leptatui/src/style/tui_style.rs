@@ -136,6 +136,14 @@ impl TuiStyle {
         self
     }
 
+    /// Overlays explicitly configured style values onto this style.
+    ///
+    /// Values present in `style` replace values already present on `self`;
+    /// values absent from `style` leave the current value unchanged.
+    ///
+    /// # Arguments
+    ///
+    /// * `style` — Style values to overlay onto the current style.
     pub(crate) fn overlay(&mut self, style: Self) {
         self.foreground = style.foreground.or(self.foreground);
         self.background = style.background.or(self.background);
@@ -145,6 +153,14 @@ impl TuiStyle {
         self.padding = style.padding.or(self.padding);
     }
 
+    /// Returns the style values inherited by descendant nodes.
+    ///
+    /// Only foreground and background colors currently inherit across node
+    /// boundaries.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] containing inheritable values from this style.
     pub(crate) const fn inherited_values(self) -> Self {
         Self {
             foreground: self.foreground,
@@ -190,6 +206,16 @@ impl TuiStyle {
         self.to_block_with_default_borders(Borders::NONE)
     }
 
+    /// Converts this style to a Ratatui block with fallback borders.
+    ///
+    /// # Arguments
+    ///
+    /// * `default_borders` — Border sides to use when this style does not
+    ///   configure borders explicitly.
+    ///
+    /// # Returns
+    ///
+    /// A [`Block`] value containing configured style, borders, and padding.
     pub(crate) fn to_block_with_default_borders(self, default_borders: Borders) -> Block<'static> {
         Block::new()
             .style(self.to_ratatui_style())
