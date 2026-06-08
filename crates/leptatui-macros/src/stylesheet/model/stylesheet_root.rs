@@ -44,6 +44,7 @@ impl Parse for StylesheetRoot {
         }
 
         let mut rules = Vec::new();
+
         while !input.is_empty() {
             rules.push(input.parse()?);
 

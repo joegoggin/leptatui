@@ -4,8 +4,8 @@
 //! padding, and block values.
 
 use leptatui::{
-    BorderType, Borders, Color, Modifier, NodeType, StyleSelector, Stylesheet, TuiSpacing,
-    TuiStyle, button, stylesheet, text,
+    BorderType, Borders, Color, Modifier, NodeType, StyleMetadata, StyleSelector, Stylesheet,
+    TuiSpacing, TuiStyle, button, stylesheet, text,
 };
 use ratatui::{style::Style, widgets::Padding};
 
@@ -121,7 +121,7 @@ fn stylesheet_class_overrides_type_style() {
             TuiStyle::new().foreground(Color::Yellow),
         );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new());
 
     assert_eq!(resolved.foreground, Some(Color::Yellow));
 }
@@ -158,7 +158,7 @@ fn stylesheet_id_overrides_class_style() {
             TuiStyle::new().foreground(Color::Green),
         );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new());
 
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
@@ -190,7 +190,7 @@ fn inline_style_overrides_stylesheet_rules() {
         TuiStyle::new().foreground(Color::Green),
     );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new());
 
     assert_eq!(resolved.foreground, Some(Color::Black));
 }
@@ -220,7 +220,7 @@ fn inherited_colors_flow_to_children_unless_overridden() {
         .foreground(Color::Green)
         .background(Color::Blue);
 
-    let resolved = Stylesheet::new().resolve(node.style_metadata().unwrap(), inherited);
+    let resolved = Stylesheet::new().resolve(node.style_metadata().unwrap(), &[], inherited);
 
     assert_eq!(resolved.foreground, Some(Color::Yellow));
     assert_eq!(resolved.background, Some(Color::Blue));
@@ -255,8 +255,106 @@ fn stylesheet_focus_selector_matches_only_focused_nodes() {
         TuiStyle::new().foreground(Color::Yellow),
     );
 
-    let focused_style = stylesheet.resolve(focused.style_metadata().unwrap(), TuiStyle::new());
-    let blurred_style = stylesheet.resolve(blurred.style_metadata().unwrap(), TuiStyle::new());
+    let focused_style = stylesheet.resolve(focused.style_metadata().unwrap(), &[], TuiStyle::new());
+    let blurred_style = stylesheet.resolve(blurred.style_metadata().unwrap(), &[], TuiStyle::new());
+
+    assert_eq!(focused_style.foreground, Some(Color::Yellow));
+    assert_eq!(blurred_style.foreground, None);
+}
+
+/// Verifies descendant selectors match ancestor metadata in source order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// ancestors = [.app, .panel]
+/// target = Button
+/// selector = descendant([.app, .panel], Button)
+/// ```
+///
+/// # Assertions
+///
+/// - The button metadata is available for stylesheet resolution.
+/// - The selector matches when `.app` appears before `.panel`.
+/// - The selector does not match when `.panel` appears before `.app`.
+///
+/// # Why
+///
+/// Descendant selector matching should honor ordered render ancestors without
+/// requiring direct parent-child adjacency.
+#[test]
+fn descendant_selector_matches_ordered_ancestors() {
+    let mut app = StyleMetadata::new(NodeType::Column);
+    app.set_classes("app");
+    let mut panel = StyleMetadata::new(NodeType::Block);
+    panel.set_classes("panel");
+    let button = button("Save");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::descendant(
+            vec![StyleSelector::class("app"), StyleSelector::class("panel")],
+            StyleSelector::node_type(NodeType::Button),
+        ),
+        TuiStyle::new().foreground(Color::Yellow),
+    );
+
+    let matched = stylesheet.resolve(
+        button.style_metadata().unwrap(),
+        &[app.clone(), panel.clone()],
+        TuiStyle::new(),
+    );
+    let wrong_order = stylesheet.resolve(
+        button.style_metadata().unwrap(),
+        &[panel, app],
+        TuiStyle::new(),
+    );
+
+    assert_eq!(matched.foreground, Some(Color::Yellow));
+    assert_eq!(wrong_order.foreground, None);
+}
+
+/// Verifies nested stylesheet macro rules resolve against ancestor metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .panel => {
+///     Button => {
+///         &:focus => { fg: Color::Yellow }
+///     }
+/// }
+/// ```
+///
+/// # Assertions
+///
+/// - The macro accepts nested rules with `&:focus`.
+/// - The focused button resolves to a yellow foreground under `.panel`.
+/// - The blurred button resolves with no foreground color under `.panel`.
+///
+/// # Why
+///
+/// Nested macro selectors should lower into descendant selectors that preserve
+/// terminal-node focus matching.
+#[test]
+fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
+    let styles = stylesheet! {
+        .panel => {
+            Button => {
+                &:focus => { fg: Color::Yellow }
+            }
+        }
+    };
+    let mut panel = StyleMetadata::new(NodeType::Block);
+    panel.set_classes("panel");
+    let focused = button("Save").with_focus(true);
+    let blurred = button("Cancel");
+
+    let focused_style = styles.resolve(
+        focused.style_metadata().unwrap(),
+        &[panel.clone()],
+        TuiStyle::new(),
+    );
+    let blurred_style =
+        styles.resolve(blurred.style_metadata().unwrap(), &[panel], TuiStyle::new());
 
     assert_eq!(focused_style.foreground, Some(Color::Yellow));
     assert_eq!(blurred_style.foreground, None);

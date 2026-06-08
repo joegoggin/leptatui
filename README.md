@@ -34,7 +34,23 @@ async fn main() -> Result<()> {
 ```
 
 Styles can be built directly with `Stylesheet::new().rule(...)` or with the
-`stylesheet!` macro.
+`stylesheet!` macro. The macro supports flat terminal selectors and nested
+rules that lower into explicit descendant selectors. Use `&:focus` inside a
+nested rule to combine focus with the current terminal selector.
+
+```rust
+let stylesheet = stylesheet! {
+    .panel => {
+        bg: Color::Black
+
+        Text => { fg: Color::White }
+
+        Button => {
+            &:focus => { bg: Color::Yellow }
+        }
+    }
+};
+```
 
 ## Examples
 

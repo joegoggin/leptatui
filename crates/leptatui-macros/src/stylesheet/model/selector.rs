@@ -1,10 +1,10 @@
 //! Selector model for `stylesheet!` syntax.
 //!
-//! This module parses type, class, id, focus, and type-focus selectors and
-//! lowers them into public `StyleSelector` constructor calls.
+//! This module parses type, class, id, focus, type-focus, and nested `&:focus`
+//! selectors and lowers them into public `StyleSelector` constructor calls.
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{ToTokens, quote};
 use syn::{
     Error, Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream},
@@ -27,6 +27,9 @@ pub(super) enum Selector {
         /// Pseudo-selector part of the compound selector.
         pseudo: Ident,
     },
+    /// Nested parent pseudo selector containing the pseudo identifier from
+    /// selectors such as `&:focus`.
+    ParentPseudo(Ident),
 }
 
 impl Parse for Selector {
@@ -43,8 +46,21 @@ impl Parse for Selector {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the selector is not a supported type, class,
-    /// id, focus, or type-focus selector.
+    /// id, focus, type-focus, or nested `&:focus` selector.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
+        if input.peek(Token![&]) {
+            input.parse::<Token![&]>()?;
+
+            if input.peek(Token![:]) {
+                input.parse::<Token![:]>()?;
+                return Ok(Self::ParentPseudo(input.parse()?));
+            }
+
+            return Err(
+                input.error("stylesheet! parent selector only supports &:focus in nested rules")
+            );
+        }
+
         if input.peek(Token![.]) {
             input.parse::<Token![.]>()?;
             return Ok(Self::Class(input.parse()?));
@@ -72,7 +88,7 @@ impl Parse for Selector {
         }
 
         Err(input.error(
-            "stylesheet! selector must be a type, .class, #id, :focus, or Type:focus selector",
+            "stylesheet! selector must be a type, .class, #id, :focus, Type:focus, or nested &:focus selector",
         ))
     }
 }
@@ -87,7 +103,8 @@ impl Selector {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the selector uses an unsupported node type or
-    /// pseudo-selector.
+    /// pseudo-selector, or if a parent-reference selector is expanded without a
+    /// selector path.
     pub(super) fn expand(&self) -> Result<TokenStream> {
         let leptatui = crate::utils::crate_path::leptatui();
 
@@ -116,7 +133,70 @@ impl Selector {
                     ])
                 })
             }
+            Self::ParentPseudo(_) => Err(Error::new_spanned(
+                self.span_tokens(),
+                "stylesheet! parent selector &:focus can only appear inside a nested rule",
+            )),
         }
+    }
+
+    /// Expands a selector path into a single runtime selector expression.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Ordered selector path from outermost rule to current rule.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing a public `StyleSelector` expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if parent-reference selectors appear without a
+    /// parent selector or any selector segment cannot be expanded.
+    pub(super) fn expand_path(path: &[&Selector]) -> Result<TokenStream> {
+        let leptatui = crate::utils::crate_path::leptatui();
+        let mut segments: Vec<Vec<TokenStream>> = Vec::new();
+
+        for selector in path {
+            match selector {
+                Self::ParentPseudo(pseudo) => {
+                    let pseudo = Self::expand_pseudo(pseudo)?;
+                    let Some(segment) = segments.last_mut() else {
+                        return Err(Error::new_spanned(
+                            selector.span_tokens(),
+                            "stylesheet! parent selector &:focus requires a parent selector",
+                        ));
+                    };
+
+                    segment.push(pseudo);
+                }
+                _ => segments.push(vec![selector.expand()?]),
+            }
+        }
+
+        let Some(target) = segments.pop() else {
+            return Err(Error::new(
+                proc_macro2::Span::call_site(),
+                "stylesheet! rule requires a selector",
+            ));
+        };
+
+        let target = expand_selector_segment(&leptatui, target);
+        if segments.is_empty() {
+            return Ok(target);
+        }
+
+        let ancestors = segments
+            .into_iter()
+            .map(|segment| expand_selector_segment(&leptatui, segment));
+
+        Ok(quote! {
+            #leptatui::StyleSelector::descendant(
+                ::std::vec![#(#ancestors),*],
+                #target,
+            )
+        })
     }
 
     /// Expands a supported node type selector identifier.
@@ -173,4 +253,40 @@ impl Selector {
             )),
         }
     }
+
+    /// Returns tokens that identify this selector in diagnostics.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the selector span source.
+    fn span_tokens(&self) -> TokenStream {
+        match self {
+            Self::Type(ident)
+            | Self::Class(ident)
+            | Self::Id(ident)
+            | Self::Pseudo(ident)
+            | Self::ParentPseudo(ident) => ident.to_token_stream(),
+            Self::TypePseudo { node_type, pseudo } => quote! { #node_type : #pseudo },
+        }
+    }
+}
+
+/// Expands one selector path segment into a runtime selector expression.
+///
+/// # Arguments
+///
+/// * `leptatui` — Token path to the Leptatui crate used in generated code.
+/// * `selectors` — Runtime selector expressions in the same path segment.
+///
+/// # Returns
+///
+/// A [`TokenStream`] containing either a single selector expression or a
+/// compound selector expression.
+fn expand_selector_segment(leptatui: &TokenStream, selectors: Vec<TokenStream>) -> TokenStream {
+    if selectors.len() == 1 {
+        let mut selectors = selectors.into_iter();
+        return selectors.next().expect("checked selector segment length");
+    }
+
+    quote! { #leptatui::StyleSelector::compound(::std::vec![#(#selectors),*]) }
 }

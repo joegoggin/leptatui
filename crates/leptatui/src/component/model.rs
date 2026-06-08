@@ -1,11 +1,13 @@
 //! Frame rendering context model.
 //!
-//! This module wraps a Ratatui frame with the currently assigned render area and
-//! helper methods for drawing widgets or child nodes.
+//! This module wraps a Ratatui frame with the currently assigned render area,
+//! inherited style values, selector ancestor metadata, and helper methods for
+//! drawing widgets or child nodes.
 
 use ratatui::{Frame, layout::Rect, widgets::Widget};
 
 use crate::{
+    StyleMetadata,
     app::Result,
     node::Node,
     style::{Stylesheet, TuiStyle},
@@ -24,6 +26,8 @@ pub struct RenderCtx<'frame, 'buffer> {
     stylesheet: &'frame Stylesheet,
     /// Inherited style declarations available to the current node.
     inherited_style: TuiStyle,
+    /// Ancestor metadata used by descendant selector resolution.
+    selector_ancestors: Vec<StyleMetadata>,
 }
 
 impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
@@ -60,6 +64,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             area,
             stylesheet,
             inherited_style: TuiStyle::new(),
+            selector_ancestors: Vec::new(),
         }
     }
 
@@ -88,6 +93,16 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// A [`TuiStyle`] containing inherited style values for the current area.
     pub(crate) fn inherited_style(&self) -> TuiStyle {
         self.inherited_style
+    }
+
+    /// Returns selector metadata for ancestor nodes in render order.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleMetadata`] slice ordered from outermost ancestor to innermost
+    /// ancestor.
+    pub(crate) fn selector_ancestors(&self) -> &[StyleMetadata] {
+        &self.selector_ancestors
     }
 
     /// Renders a Ratatui widget into the current target area.
@@ -122,6 +137,8 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
 
     /// Renders into a temporary child area with explicit inherited style.
     ///
+    /// Preserves the current selector ancestor path for the child context.
+    ///
     /// # Arguments
     ///
     /// * `area` — Child area to use while invoking `render`.
@@ -142,6 +159,41 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             area,
             stylesheet: self.stylesheet,
             inherited_style,
+            selector_ancestors: self.selector_ancestors.clone(),
+        };
+
+        render(&mut child)
+    }
+
+    /// Renders into a child area with inherited style and one added selector ancestor.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Child area to use while invoking `render`.
+    /// * `inherited_style` — Inherited style declarations for the child area.
+    /// * `selector_ancestor` — Parent node metadata to append to the selector
+    ///   ancestor path.
+    /// * `render` — Closure that renders into the child context.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
+    pub(crate) fn with_area_inherited_style_and_selector_ancestor<R>(
+        &mut self,
+        area: Rect,
+        inherited_style: TuiStyle,
+        selector_ancestor: StyleMetadata,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let mut selector_ancestors = self.selector_ancestors.clone();
+        selector_ancestors.push(selector_ancestor);
+
+        let mut child = RenderCtx {
+            frame: &mut *self.frame,
+            area,
+            stylesheet: self.stylesheet,
+            inherited_style,
+            selector_ancestors,
         };
 
         render(&mut child)

@@ -1,7 +1,8 @@
 //! Stylesheet rule storage and resolution.
 //!
 //! This module stores ordered style rules and resolves them against node
-//! selector metadata, inherited styles, and inline style overrides.
+//! selector metadata, ancestor metadata, inherited styles, and inline style
+//! overrides.
 
 use crate::node::StyleMetadata;
 
@@ -89,22 +90,29 @@ impl Stylesheet {
     /// Resolves the style for a node.
     ///
     /// Starts with inherited style values, overlays matching type, class, and id
-    /// rules, then overlays any inline style stored in the node metadata.
+    /// rules using the current node and ancestor chain, then overlays any
+    /// inline style stored in the node metadata.
     ///
     /// # Arguments
     ///
     /// * `metadata` — Node selector metadata used for rule matching.
+    /// * `ancestors` — Ancestor metadata ordered from outermost to innermost.
     /// * `inherited` — Style values inherited from the parent render context.
     ///
     /// # Returns
     ///
     /// A [`TuiStyle`] containing the resolved style.
-    pub fn resolve(&self, metadata: &StyleMetadata, inherited: TuiStyle) -> TuiStyle {
+    pub fn resolve(
+        &self,
+        metadata: &StyleMetadata,
+        ancestors: &[StyleMetadata],
+        inherited: TuiStyle,
+    ) -> TuiStyle {
         let mut resolved = inherited;
 
-        self.apply_matching(&mut resolved, metadata, Specificity::Type);
-        self.apply_matching(&mut resolved, metadata, Specificity::Class);
-        self.apply_matching(&mut resolved, metadata, Specificity::Id);
+        self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Type);
+        self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Class);
+        self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Id);
 
         if let Some(inline_style) = metadata.inline_style() {
             resolved.overlay(inline_style);
@@ -119,15 +127,19 @@ impl Stylesheet {
     ///
     /// * `resolved` — Style being accumulated for the target node.
     /// * `metadata` — Node selector metadata used for rule matching.
+    /// * `ancestors` — Ancestor metadata ordered from outermost to innermost.
     /// * `specificity` — Specificity group to apply.
     fn apply_matching(
         &self,
         resolved: &mut TuiStyle,
         metadata: &StyleMetadata,
+        ancestors: &[StyleMetadata],
         specificity: Specificity,
     ) {
         for rule in &self.rules {
-            if rule.selector.specificity() == specificity && rule.selector.matches(metadata) {
+            if rule.selector.specificity() == specificity
+                && rule.selector.matches(metadata, ancestors)
+            {
                 resolved.overlay(rule.style);
             }
         }

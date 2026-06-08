@@ -43,8 +43,8 @@ fn main() {
 
     let focused = button("Save").with_focus(true);
     let blurred = button("Cancel");
-    let focused_style = styles.resolve(focused.style_metadata().unwrap(), TuiStyle::new());
-    let blurred_style = styles.resolve(blurred.style_metadata().unwrap(), TuiStyle::new());
+    let focused_style = styles.resolve(focused.style_metadata().unwrap(), &[], TuiStyle::new());
+    let blurred_style = styles.resolve(blurred.style_metadata().unwrap(), &[], TuiStyle::new());
 
     assert_eq!(focused_style.background, Some(Color::Yellow));
     assert_ne!(blurred_style.background, Some(Color::Yellow));
