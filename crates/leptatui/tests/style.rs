@@ -5,7 +5,7 @@
 
 use leptatui::{
     BorderType, Borders, Color, Modifier, NodeType, StyleSelector, Stylesheet, TuiSpacing,
-    TuiStyle, button, text,
+    TuiStyle, button, stylesheet, text,
 };
 use ratatui::{style::Style, widgets::Padding};
 
@@ -260,4 +260,55 @@ fn stylesheet_focus_selector_matches_only_focused_nodes() {
 
     assert_eq!(focused_style.foreground, Some(Color::Yellow));
     assert_eq!(blurred_style.foreground, None);
+}
+
+/// Verifies stylesheet variables reuse their stored style expressions.
+///
+/// # Example Under Test
+///
+/// ```text
+/// $primary: Color::LightCyan;
+/// $surface: Color::Black;
+/// $pad: TuiSpacing::uniform(1);
+/// Text => { fg: $primary, bg: $surface }
+/// .panel => { background: $surface, padding: $pad }
+/// ```
+///
+/// # Assertions
+///
+/// - The macro expands to a stylesheet with a text rule.
+/// - The text rule reuses foreground and background variables.
+/// - The macro expands to a stylesheet with a panel class rule.
+/// - The panel rule reuses background and padding variables.
+///
+/// # Why
+///
+/// Stylesheet variables should expand to the same expressions wherever they
+/// are referenced.
+#[test]
+fn stylesheet_macro_variables_reuse_values() {
+    let styles = stylesheet! {
+        $primary: Color::LightCyan;
+        $surface: Color::Black;
+        $pad: TuiSpacing::uniform(1);
+
+        Text => { fg: $primary, bg: $surface }
+        .panel => { background: $surface, padding: $pad }
+    };
+
+    let expected = Stylesheet::new()
+        .rule(
+            StyleSelector::node_type(NodeType::Text),
+            TuiStyle::new()
+                .foreground(Color::LightCyan)
+                .background(Color::Black),
+        )
+        .rule(
+            StyleSelector::class("panel"),
+            TuiStyle::new()
+                .background(Color::Black)
+                .padding(TuiSpacing::uniform(1)),
+        );
+
+    assert_eq!(styles, expected);
 }

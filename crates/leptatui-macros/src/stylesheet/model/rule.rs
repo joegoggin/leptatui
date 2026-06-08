@@ -10,6 +10,8 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
+use crate::stylesheet::model::variable::StylesheetVariables;
+
 use super::{declaration::Declaration, selector::Selector};
 
 /// Parsed stylesheet rule.
@@ -70,6 +72,7 @@ impl Rule {
     /// # Arguments
     ///
     /// * `stylesheet` — Existing stylesheet expression to wrap with this rule.
+    /// * `variables` — Stylesheet variables available to rule declarations.
     ///
     /// # Returns
     ///
@@ -77,15 +80,19 @@ impl Rule {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if the selector or any declaration cannot be
-    /// expanded.
-    pub(super) fn expand(&self, stylesheet: TokenStream) -> Result<TokenStream> {
+    /// Returns [`syn::Error`] if the selector cannot be expanded, a declaration
+    /// name is unsupported, or a referenced stylesheet variable is unknown.
+    pub(super) fn expand(
+        &self,
+        stylesheet: TokenStream,
+        variables: &StylesheetVariables<'_>,
+    ) -> Result<TokenStream> {
         let selector = self.selector.expand()?;
         let leptatui = crate::utils::crate_path::leptatui();
         let mut style = quote! { #leptatui::TuiStyle::new() };
 
         for declaration in &self.declarations {
-            style = declaration.expand(style)?;
+            style = declaration.expand(style, variables)?;
         }
 
         Ok(quote! { (#stylesheet).rule(#selector, #style) })

@@ -1,0 +1,5 @@
+error: unknown stylesheet variable `$missing`
+ --> tests/fixtures/stylesheet_macro/fail/unknown_variable.rs:9:24
+  |
+9 |         Text => { fg: $missing }
+  |                        ^^^^^^^

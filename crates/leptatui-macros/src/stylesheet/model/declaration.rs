@@ -1,21 +1,23 @@
 //! Style declaration model for `stylesheet!` syntax.
 //!
 //! This module parses property declarations inside a stylesheet rule and
-//! expands each accepted declaration into a `TuiStyle` builder call.
+//! expands each accepted declaration value into a `TuiStyle` builder call.
 
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    Error, Expr, Ident, Result, Token,
+    Error, Ident, Result, Token,
     parse::{Parse, ParseStream},
 };
+
+use crate::stylesheet::model::{value::StyleValue, variable::StylesheetVariables};
 
 /// Parsed style declaration such as `fg: Color::White`.
 pub(super) struct Declaration {
     /// Declaration property name.
     name: Ident,
-    /// Rust expression assigned to the declaration.
-    value: Expr,
+    /// Value assigned to the declaration.
+    value: StyleValue,
 }
 
 impl Parse for Declaration {
@@ -48,6 +50,7 @@ impl Declaration {
     ///
     /// * `style` — Existing `TuiStyle` expression to wrap with this
     ///   declaration.
+    /// * `variables` — Stylesheet variables available to declaration values.
     ///
     /// # Returns
     ///
@@ -55,9 +58,14 @@ impl Declaration {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if the declaration name is unsupported.
-    pub(super) fn expand(&self, style: TokenStream) -> Result<TokenStream> {
-        let value = &self.value;
+    /// Returns [`syn::Error`] if the declaration name is unsupported or a
+    /// referenced stylesheet variable is unknown.
+    pub(super) fn expand(
+        &self,
+        style: TokenStream,
+        variables: &StylesheetVariables<'_>,
+    ) -> Result<TokenStream> {
+        let value = self.value.expand(variables)?;
 
         match self.name.to_string().as_str() {
             "fg" | "foreground" => Ok(quote! { (#style).foreground(#value) }),
