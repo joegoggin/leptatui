@@ -52,6 +52,33 @@ let stylesheet = stylesheet! {
 };
 ```
 
+Reusable declaration groups can be declared with `@mixin` and expanded in rule
+bodies with `@include`.
+
+```rust
+let stylesheet = stylesheet! {
+    @mixin panel_chrome {
+        bg: Color::Black,
+        padding: TuiSpacing::uniform(1)
+    }
+
+    @mixin focused_control {
+        fg: Color::Black,
+        bg: Color::Yellow
+    }
+
+    .panel => {
+        @include panel_chrome
+
+        Text => { fg: Color::White }
+
+        Button => {
+            &:focus => { @include focused_control }
+        }
+    }
+};
+```
+
 ## Examples
 
 Run the smoke example:

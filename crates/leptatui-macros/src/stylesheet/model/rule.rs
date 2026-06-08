@@ -1,7 +1,8 @@
 //! Rule model for `stylesheet!` syntax.
 //!
-//! This module parses a selector and a non-empty block of declarations, nested
-//! rules, or both, then expands them into stylesheet rule builder calls.
+//! This module parses a selector and a non-empty block of declarations, mixin
+//! includes, nested rules, or a combination of them, then expands them into
+//! stylesheet rule builder calls.
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -10,7 +11,10 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
-use crate::stylesheet::model::variable::StylesheetVariables;
+use crate::stylesheet::model::{
+    mixin::{MixinInclude, StylesheetMixins},
+    variable::StylesheetVariables,
+};
 
 use super::{declaration::Declaration, selector::Selector};
 
@@ -18,10 +22,48 @@ use super::{declaration::Declaration, selector::Selector};
 pub(super) struct Rule {
     /// Selector that determines which nodes receive the style.
     selector: Selector,
-    /// Style declarations applied when the selector matches.
-    declarations: Vec<Declaration>,
+    /// Style declarations and mixin includes applied when the selector matches.
+    style_items: Vec<StyleItem>,
     /// Nested descendant rules applied below this selector.
     nested_rules: Vec<Rule>,
+}
+
+/// Ordered style item inside a rule body.
+enum StyleItem {
+    /// Ordinary style declaration.
+    Declaration(Declaration),
+    /// Reusable declaration mixin include.
+    MixinInclude(MixinInclude),
+}
+
+impl StyleItem {
+    /// Appends this item to an in-progress `TuiStyle` expression.
+    ///
+    /// # Arguments
+    ///
+    /// * `style` — Existing `TuiStyle` expression to wrap with this item.
+    /// * `variables` — Stylesheet variables available to item values.
+    /// * `mixins` — Stylesheet mixins available to item includes.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the updated style expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if a declaration name is unsupported or a
+    /// referenced stylesheet variable or mixin is unknown.
+    fn expand(
+        &self,
+        style: TokenStream,
+        variables: &StylesheetVariables<'_>,
+        mixins: &StylesheetMixins<'_>,
+    ) -> Result<TokenStream> {
+        match self {
+            Self::Declaration(declaration) => declaration.expand(style, variables),
+            Self::MixinInclude(include) => include.expand(style, variables, mixins),
+        }
+    }
 }
 
 impl Parse for Rule {
@@ -33,13 +75,13 @@ impl Parse for Rule {
     ///
     /// # Returns
     ///
-    /// A [`Rule`] containing the parsed selector, declarations, and nested
-    /// rules.
+    /// A [`Rule`] containing the parsed selector, style items, and nested rules.
     ///
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the rule is missing `=>`, has malformed
-    /// declaration separators, or contains no declarations or nested rules.
+    /// declaration or include separators, or contains no style items or nested
+    /// rules.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let selector = input.parse()?;
         input.parse::<Token![=>]>()?;
@@ -47,14 +89,16 @@ impl Parse for Rule {
         let content;
         braced!(content in input);
 
-        let mut declarations = Vec::new();
+        let mut style_items = Vec::new();
         let mut nested_rules = Vec::new();
 
         while !content.is_empty() {
             if content.peek(Token![&]) || starts_nested_rule(&content) {
                 nested_rules.push(content.parse()?);
+            } else if content.peek(Token![@]) {
+                style_items.push(StyleItem::MixinInclude(content.parse()?));
             } else {
-                declarations.push(content.parse()?);
+                style_items.push(StyleItem::Declaration(content.parse()?));
             }
 
             if content.peek(Token![,]) {
@@ -63,19 +107,21 @@ impl Parse for Rule {
                 && !content.peek(Token![&])
                 && !starts_nested_rule(&content)
             {
-                return Err(content.error("stylesheet! declarations must be separated by commas"));
+                return Err(content.error(
+                    "stylesheet! declarations and mixin includes must be separated by commas",
+                ));
             }
         }
 
-        if declarations.is_empty() && nested_rules.is_empty() {
-            return Err(
-                content.error("stylesheet! rule requires at least one declaration or nested rule")
-            );
+        if style_items.is_empty() && nested_rules.is_empty() {
+            return Err(content.error(
+                "stylesheet! rule requires at least one declaration, mixin include, or nested rule",
+            ));
         }
 
         Ok(Self {
             selector,
-            declarations,
+            style_items,
             nested_rules,
         })
     }
@@ -102,6 +148,7 @@ impl Rule {
     ///
     /// * `stylesheet` — Existing stylesheet expression to wrap with this rule.
     /// * `variables` — Stylesheet variables available to rule declarations.
+    /// * `mixins` — Stylesheet mixins available to rule includes.
     ///
     /// # Returns
     ///
@@ -110,13 +157,15 @@ impl Rule {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the selector cannot be expanded, a declaration
-    /// name is unsupported, or a referenced stylesheet variable is unknown.
+    /// name is unsupported, or a referenced stylesheet variable or mixin is
+    /// unknown.
     pub(super) fn expand(
         &self,
         stylesheet: TokenStream,
         variables: &StylesheetVariables<'_>,
+        mixins: &StylesheetMixins<'_>,
     ) -> Result<TokenStream> {
-        self.expand_with_parent_path(stylesheet, variables, &[])
+        self.expand_with_parent_path(stylesheet, variables, mixins, &[])
     }
 
     /// Appends this rule and any nested rules using an accumulated selector path.
@@ -125,6 +174,7 @@ impl Rule {
     ///
     /// * `stylesheet` — Existing stylesheet expression to wrap with this rule.
     /// * `variables` — Stylesheet variables available to rule declarations.
+    /// * `mixins` — Stylesheet mixins available to rule includes.
     /// * `parent_path` — Selector path from outer rules to this rule's parent.
     ///
     /// # Returns
@@ -134,31 +184,33 @@ impl Rule {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if a selector path cannot be expanded, a
-    /// declaration name is unsupported, or a referenced stylesheet variable is
-    /// unknown.
+    /// declaration name is unsupported, or a referenced stylesheet variable or
+    /// mixin is unknown.
     fn expand_with_parent_path(
         &self,
         mut stylesheet: TokenStream,
         variables: &StylesheetVariables<'_>,
+        mixins: &StylesheetMixins<'_>,
         parent_path: &[&Selector],
     ) -> Result<TokenStream> {
         let mut path = parent_path.to_vec();
         path.push(&self.selector);
 
-        if !self.declarations.is_empty() {
+        if !self.style_items.is_empty() {
             let selector = Selector::expand_path(&path)?;
             let leptatui = crate::utils::crate_path::leptatui();
             let mut style = quote! { #leptatui::TuiStyle::new() };
 
-            for declaration in &self.declarations {
-                style = declaration.expand(style, variables)?;
+            for item in &self.style_items {
+                style = item.expand(style, variables, mixins)?;
             }
 
             stylesheet = quote! { (#stylesheet).rule(#selector, #style) };
         }
 
         for nested_rule in &self.nested_rules {
-            stylesheet = nested_rule.expand_with_parent_path(stylesheet, variables, &path)?;
+            stylesheet =
+                nested_rule.expand_with_parent_path(stylesheet, variables, mixins, &path)?;
         }
 
         Ok(stylesheet)

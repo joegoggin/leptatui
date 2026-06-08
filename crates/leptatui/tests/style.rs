@@ -410,3 +410,53 @@ fn stylesheet_macro_variables_reuse_values() {
 
     assert_eq!(styles, expected);
 }
+
+/// Verifies stylesheet mixins expand into ordinary declarations in source order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// @mixin control_chrome { fg: Color::White, bg: Color::Blue }
+/// Button => { @include control_chrome, fg: Color::Yellow }
+/// .primary => { @include control_chrome }
+/// ```
+///
+/// # Assertions
+///
+/// - The mixin can be reused across two rules.
+/// - The mixin expands to ordinary `TuiStyle` builder calls.
+/// - Rule-local declarations after the include override mixin defaults.
+///
+/// # Why
+///
+/// Mixin reuse should remain a compile-time macro convenience and preserve
+/// existing style resolution behavior.
+#[test]
+fn stylesheet_macro_mixins_expand_in_source_order() {
+    let styles = stylesheet! {
+        @mixin control_chrome {
+            fg: Color::White,
+            bg: Color::Blue
+        }
+
+        Button => { @include control_chrome, fg: Color::Yellow }
+        .primary => { @include control_chrome }
+    };
+
+    let expected = Stylesheet::new()
+        .rule(
+            StyleSelector::node_type(NodeType::Button),
+            TuiStyle::new()
+                .foreground(Color::White)
+                .background(Color::Blue)
+                .foreground(Color::Yellow),
+        )
+        .rule(
+            StyleSelector::class("primary"),
+            TuiStyle::new()
+                .foreground(Color::White)
+                .background(Color::Blue),
+        );
+
+    assert_eq!(styles, expected);
+}

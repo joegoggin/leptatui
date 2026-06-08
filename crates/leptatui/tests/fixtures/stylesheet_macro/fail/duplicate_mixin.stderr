@@ -1,0 +1,5 @@
+error: duplicate stylesheet mixin `chrome`
+  --> tests/fixtures/stylesheet_macro/fail/duplicate_mixin.rs:12:16
+   |
+12 |         @mixin chrome {
+   |                ^^^^^^
