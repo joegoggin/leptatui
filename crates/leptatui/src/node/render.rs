@@ -10,8 +10,10 @@ use ratatui::{
 };
 
 use crate::{
+    ThemeVariables,
     app::{AppControl, Result},
     component::{Component, RenderCtx},
+    context,
     style::{Borders, TuiStyle},
 };
 
@@ -29,8 +31,14 @@ use super::{metadata::StyleMetadata, model::Node};
 ///
 /// A [`TuiStyle`] containing the resolved node style.
 fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle {
-    ctx.stylesheet()
-        .resolve(metadata, ctx.selector_ancestors(), ctx.inherited_style())
+    let theme = context::use_context::<ThemeVariables>().unwrap_or_default();
+
+    ctx.stylesheet().resolve(
+        metadata,
+        ctx.selector_ancestors(),
+        ctx.inherited_style(),
+        &theme,
+    )
 }
 
 impl Node {

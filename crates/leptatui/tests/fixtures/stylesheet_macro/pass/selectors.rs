@@ -7,7 +7,9 @@ fn main() {
     let styles = stylesheet! {
         Text => { fg: Color::White }
         .primary => { bg: Color::Blue, modifier: Modifier::BOLD }
+        .primary-action => { fg: Color::Green }
         #submit => { padding: TuiSpacing::uniform(1) }
+        #submit-button => { borders: Borders::ALL }
         :focus => { foreground: Color::Black }
         Button:focus => { background: Color::Yellow }
     };
@@ -24,8 +26,16 @@ fn main() {
                 .modifier(Modifier::BOLD),
         )
         .rule(
+            StyleSelector::class("primary-action"),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .rule(
             StyleSelector::id("submit"),
             TuiStyle::new().padding(TuiSpacing::uniform(1)),
+        )
+        .rule(
+            StyleSelector::id("submit-button"),
+            TuiStyle::new().borders(Borders::ALL),
         )
         .rule(
             StyleSelector::focus(),
@@ -43,8 +53,11 @@ fn main() {
 
     let focused = button("Save").with_focus(true);
     let blurred = button("Cancel");
-    let focused_style = styles.resolve(focused.style_metadata().unwrap(), &[], TuiStyle::new());
-    let blurred_style = styles.resolve(blurred.style_metadata().unwrap(), &[], TuiStyle::new());
+    let theme = ThemeVariables::default();
+    let focused_style =
+        styles.resolve(focused.style_metadata().unwrap(), &[], TuiStyle::new(), &theme);
+    let blurred_style =
+        styles.resolve(blurred.style_metadata().unwrap(), &[], TuiStyle::new(), &theme);
 
     assert_eq!(focused_style.background, Some(Color::Yellow));
     assert_ne!(blurred_style.background, Some(Color::Yellow));

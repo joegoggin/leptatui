@@ -1,7 +1,8 @@
 //! Style declaration model for `stylesheet!` syntax.
 //!
 //! This module parses property declarations inside a stylesheet rule and
-//! expands each accepted declaration value into a `TuiStyle` builder call.
+//! expands each accepted declaration value into a `StyleDeclarations` builder
+//! call.
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -44,11 +45,11 @@ impl Parse for Declaration {
 }
 
 impl Declaration {
-    /// Appends this declaration to an in-progress `TuiStyle` expression.
+    /// Appends this declaration to an in-progress `StyleDeclarations` expression.
     ///
     /// # Arguments
     ///
-    /// * `style` — Existing `TuiStyle` expression to wrap with this
+    /// * `style` — Existing `StyleDeclarations` expression to wrap with this
     ///   declaration.
     /// * `variables` — Stylesheet variables available to declaration values.
     ///

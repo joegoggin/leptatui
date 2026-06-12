@@ -37,11 +37,11 @@ enum StyleItem {
 }
 
 impl StyleItem {
-    /// Appends this item to an in-progress `TuiStyle` expression.
+    /// Appends this item to an in-progress `StyleDeclarations` expression.
     ///
     /// # Arguments
     ///
-    /// * `style` — Existing `TuiStyle` expression to wrap with this item.
+    /// * `style` — Existing `StyleDeclarations` expression to wrap with this item.
     /// * `variables` — Stylesheet variables available to item values.
     /// * `mixins` — Stylesheet mixins available to item includes.
     ///
@@ -199,7 +199,7 @@ impl Rule {
         if !self.style_items.is_empty() {
             let selector = Selector::expand_path(&path)?;
             let leptatui = crate::utils::crate_path::leptatui();
-            let mut style = quote! { #leptatui::TuiStyle::new() };
+            let mut style = quote! { #leptatui::StyleDeclarations::new() };
 
             for item in &self.style_items {
                 style = item.expand(style, variables, mixins)?;

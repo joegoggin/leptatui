@@ -4,8 +4,9 @@
 //! padding, and block values.
 
 use leptatui::{
-    BorderType, Borders, Color, Modifier, NodeType, StyleMetadata, StyleSelector, Stylesheet,
-    TuiSpacing, TuiStyle, button, stylesheet, text,
+    BorderType, Borders, Color, Modifier, NodeType, StyleDeclarations, StyleMetadata,
+    StyleSelector, Stylesheet, ThemeVariables, TuiSpacing, TuiStyle, button, stylesheet, text,
+    theme_color,
 };
 use ratatui::{style::Style, widgets::Padding};
 
@@ -121,7 +122,12 @@ fn stylesheet_class_overrides_type_style() {
             TuiStyle::new().foreground(Color::Yellow),
         );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new());
+    let resolved = stylesheet.resolve(
+        node.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(resolved.foreground, Some(Color::Yellow));
 }
@@ -158,7 +164,12 @@ fn stylesheet_id_overrides_class_style() {
             TuiStyle::new().foreground(Color::Green),
         );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new());
+    let resolved = stylesheet.resolve(
+        node.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
@@ -190,7 +201,12 @@ fn inline_style_overrides_stylesheet_rules() {
         TuiStyle::new().foreground(Color::Green),
     );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new());
+    let resolved = stylesheet.resolve(
+        node.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(resolved.foreground, Some(Color::Black));
 }
@@ -220,10 +236,42 @@ fn inherited_colors_flow_to_children_unless_overridden() {
         .foreground(Color::Green)
         .background(Color::Blue);
 
-    let resolved = Stylesheet::new().resolve(node.style_metadata().unwrap(), &[], inherited);
+    let resolved = Stylesheet::new().resolve(
+        node.style_metadata().unwrap(),
+        &[],
+        inherited,
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(resolved.foreground, Some(Color::Yellow));
     assert_eq!(resolved.background, Some(Color::Blue));
+}
+
+#[test]
+fn stylesheet_theme_variables_resolve_against_active_theme() {
+    let node = text("Status").with_classes("status");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("status"),
+        StyleDeclarations::new()
+            .foreground(theme_color("text"))
+            .background(theme_color("surface")),
+    );
+    let light = ThemeVariables::new()
+        .color("text", Color::Black)
+        .color("surface", Color::White);
+    let dark = ThemeVariables::new()
+        .color("text", Color::White)
+        .color("surface", Color::Black);
+
+    let light_style =
+        stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new(), &light);
+    let dark_style =
+        stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new(), &dark);
+
+    assert_eq!(light_style.foreground, Some(Color::Black));
+    assert_eq!(light_style.background, Some(Color::White));
+    assert_eq!(dark_style.foreground, Some(Color::White));
+    assert_eq!(dark_style.background, Some(Color::Black));
 }
 
 /// Verifies focus selectors match only focused nodes.
@@ -255,8 +303,18 @@ fn stylesheet_focus_selector_matches_only_focused_nodes() {
         TuiStyle::new().foreground(Color::Yellow),
     );
 
-    let focused_style = stylesheet.resolve(focused.style_metadata().unwrap(), &[], TuiStyle::new());
-    let blurred_style = stylesheet.resolve(blurred.style_metadata().unwrap(), &[], TuiStyle::new());
+    let focused_style = stylesheet.resolve(
+        focused.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let blurred_style = stylesheet.resolve(
+        blurred.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(focused_style.foreground, Some(Color::Yellow));
     assert_eq!(blurred_style.foreground, None);
@@ -301,11 +359,13 @@ fn descendant_selector_matches_ordered_ancestors() {
         button.style_metadata().unwrap(),
         &[app.clone(), panel.clone()],
         TuiStyle::new(),
+        &ThemeVariables::new(),
     );
     let wrong_order = stylesheet.resolve(
         button.style_metadata().unwrap(),
         &[panel, app],
         TuiStyle::new(),
+        &ThemeVariables::new(),
     );
 
     assert_eq!(matched.foreground, Some(Color::Yellow));
@@ -352,9 +412,14 @@ fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
         focused.style_metadata().unwrap(),
         &[panel.clone()],
         TuiStyle::new(),
+        &ThemeVariables::new(),
     );
-    let blurred_style =
-        styles.resolve(blurred.style_metadata().unwrap(), &[panel], TuiStyle::new());
+    let blurred_style = styles.resolve(
+        blurred.style_metadata().unwrap(),
+        &[panel],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(focused_style.foreground, Some(Color::Yellow));
     assert_eq!(blurred_style.foreground, None);

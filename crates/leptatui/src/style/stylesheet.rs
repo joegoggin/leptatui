@@ -4,7 +4,7 @@
 //! selector metadata, ancestor metadata, inherited styles, and inline style
 //! overrides.
 
-use crate::node::StyleMetadata;
+use crate::{StyleDeclarations, ThemeVariables, node::StyleMetadata};
 
 use super::{StyleSelector, TuiStyle, selector::Specificity};
 
@@ -14,7 +14,7 @@ pub struct StyleRule {
     /// Selector used to decide whether the rule applies to a node.
     selector: StyleSelector,
     /// Style overlay applied when the selector matches.
-    style: TuiStyle,
+    style: StyleDeclarations,
 }
 
 impl StyleRule {
@@ -28,8 +28,11 @@ impl StyleRule {
     /// # Returns
     ///
     /// A [`StyleRule`] containing the selector and style.
-    pub fn new(selector: StyleSelector, style: TuiStyle) -> Self {
-        Self { selector, style }
+    pub fn new(selector: StyleSelector, style: impl Into<StyleDeclarations>) -> Self {
+        Self {
+            selector,
+            style: style.into(),
+        }
     }
 }
 
@@ -72,7 +75,7 @@ impl Stylesheet {
     /// # Returns
     ///
     /// A [`Stylesheet`] containing the appended rule.
-    pub fn rule(mut self, selector: StyleSelector, style: TuiStyle) -> Self {
+    pub fn rule(mut self, selector: StyleSelector, style: impl Into<StyleDeclarations>) -> Self {
         self.push_rule(selector, style);
         self
     }
@@ -83,7 +86,7 @@ impl Stylesheet {
     ///
     /// * `selector` — Selector used to match node style metadata.
     /// * `style` — Style values to overlay when the selector matches.
-    pub fn push_rule(&mut self, selector: StyleSelector, style: TuiStyle) {
+    pub fn push_rule(&mut self, selector: StyleSelector, style: impl Into<StyleDeclarations>) {
         self.rules.push(StyleRule::new(selector, style));
     }
 
@@ -98,6 +101,7 @@ impl Stylesheet {
     /// * `metadata` — Node selector metadata used for rule matching.
     /// * `ancestors` — Ancestor metadata ordered from outermost to innermost.
     /// * `inherited` — Style values inherited from the parent render context.
+    /// * `theme` — Runtime theme variables used to resolve theme-aware values.
     ///
     /// # Returns
     ///
@@ -107,18 +111,19 @@ impl Stylesheet {
         metadata: &StyleMetadata,
         ancestors: &[StyleMetadata],
         inherited: TuiStyle,
+        theme: &ThemeVariables,
     ) -> TuiStyle {
-        let mut resolved = inherited;
+        let mut resolved = StyleDeclarations::from(inherited);
 
         self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Type);
         self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Class);
         self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Id);
 
         if let Some(inline_style) = metadata.inline_style() {
-            resolved.overlay(inline_style);
+            resolved.overlay(&StyleDeclarations::from(inline_style));
         }
 
-        resolved
+        resolved.resolve(theme)
     }
 
     /// Applies matching rules at a single selector specificity.
@@ -131,7 +136,7 @@ impl Stylesheet {
     /// * `specificity` — Specificity group to apply.
     fn apply_matching(
         &self,
-        resolved: &mut TuiStyle,
+        resolved: &mut StyleDeclarations,
         metadata: &StyleMetadata,
         ancestors: &[StyleMetadata],
         specificity: Specificity,
@@ -140,7 +145,7 @@ impl Stylesheet {
             if rule.selector.specificity() == specificity
                 && rule.selector.matches(metadata, ancestors)
             {
-                resolved.overlay(rule.style);
+                resolved.overlay(&rule.style);
             }
         }
     }

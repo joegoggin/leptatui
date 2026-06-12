@@ -3,7 +3,7 @@
 //! This module parses type, class, id, focus, type-focus, and nested `&:focus`
 //! selectors and lowers them into public `StyleSelector` constructor calls.
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::{
     Error, Ident, LitStr, Result, Token,
@@ -15,9 +15,9 @@ pub(super) enum Selector {
     /// Node type selector such as `Text`.
     Type(Ident),
     /// Class selector such as `.primary`.
-    Class(Ident),
+    Class(SelectorName),
     /// Id selector such as `#submit`.
-    Id(Ident),
+    Id(SelectorName),
     /// Pseudo selector such as `:focus`.
     Pseudo(Ident),
     /// Compound type and pseudo selector such as `Button:focus`.
@@ -63,12 +63,12 @@ impl Parse for Selector {
 
         if input.peek(Token![.]) {
             input.parse::<Token![.]>()?;
-            return Ok(Self::Class(input.parse()?));
+            return Ok(Self::Class(SelectorName::parse(input)?));
         }
 
         if input.peek(Token![#]) {
             input.parse::<Token![#]>()?;
-            return Ok(Self::Id(input.parse()?));
+            return Ok(Self::Id(SelectorName::parse(input)?));
         }
 
         if input.peek(Token![:]) {
@@ -114,11 +114,11 @@ impl Selector {
                 Ok(quote! { #leptatui::StyleSelector::node_type(#node_type) })
             }
             Self::Class(class) => {
-                let class = LitStr::new(&class.to_string(), class.span());
+                let class = class.literal();
                 Ok(quote! { #leptatui::StyleSelector::class(#class) })
             }
             Self::Id(id) => {
-                let id = LitStr::new(&id.to_string(), id.span());
+                let id = id.literal();
                 Ok(quote! { #leptatui::StyleSelector::id(#id) })
             }
             Self::Pseudo(pseudo) => Self::expand_pseudo(pseudo),
@@ -261,13 +261,47 @@ impl Selector {
     /// A [`TokenStream`] containing the selector span source.
     fn span_tokens(&self) -> TokenStream {
         match self {
-            Self::Type(ident)
-            | Self::Class(ident)
-            | Self::Id(ident)
-            | Self::Pseudo(ident)
-            | Self::ParentPseudo(ident) => ident.to_token_stream(),
+            Self::Type(ident) | Self::Pseudo(ident) | Self::ParentPseudo(ident) => {
+                ident.to_token_stream()
+            }
+            Self::Class(name) | Self::Id(name) => name.to_token_stream(),
             Self::TypePseudo { node_type, pseudo } => quote! { #node_type : #pseudo },
         }
+    }
+}
+
+/// Parsed class or id selector name.
+pub(super) struct SelectorName {
+    value: String,
+    span: Span,
+}
+
+impl SelectorName {
+    /// Parses an identifier name with optional dash-separated identifier segments.
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let first: Ident = input.parse()?;
+        let span = first.span();
+        let mut value = first.to_string();
+
+        while input.peek(Token![-]) {
+            input.parse::<Token![-]>()?;
+            let segment: Ident = input.parse()?;
+            value.push('-');
+            value.push_str(&segment.to_string());
+        }
+
+        Ok(Self { value, span })
+    }
+
+    /// Returns this selector name as a string literal for generated code.
+    fn literal(&self) -> LitStr {
+        LitStr::new(&self.value, self.span)
+    }
+}
+
+impl ToTokens for SelectorName {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.literal().to_tokens(tokens);
     }
 }
 

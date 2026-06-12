@@ -22,3 +22,14 @@ cargo run --example counter
 
 Use Tab and Shift+Tab to move focus between buttons. Press Enter or Space to
 activate the focused button, and activate Quit to exit.
+
+## Theme Switcher
+
+Run the context-backed light/dark theme example:
+
+```sh
+cargo run --example theme_switcher
+```
+
+Use Tab and Shift+Tab to move focus. Activate Toggle theme with Enter or Space
+to switch the active theme variables at runtime.

@@ -10,11 +10,11 @@
 
 pub use crate::{
     App, AppControl, AppRoot, BorderType, Borders, ButtonAction, Color, Component, Error, Modifier,
-    Node, NodeType, RenderCtx, Result, StyleMetadata, StyleRule, StyleSelector, Stylesheet,
-    TuiSpacing, TuiStyle, block, button, column,
+    Node, NodeType, RenderCtx, Result, StyleDeclarations, StyleMetadata, StyleRule, StyleSelector,
+    Stylesheet, ThemeValue, ThemeVariables, TuiSpacing, TuiStyle, block, button, column,
     context::{expect_context, provide_context, use_context},
     node::{component, dynamic},
-    row, text,
+    row, text, theme_color,
 };
 
 pub use leptatui_macros::{component, stylesheet, view};

@@ -29,8 +29,8 @@ pub use node::{
     text,
 };
 pub use style::{
-    BorderType, Borders, Color, Modifier, StyleRule, StyleSelector, Stylesheet, TuiSpacing,
-    TuiStyle,
+    BorderType, Borders, Color, Modifier, StyleDeclarations, StyleRule, StyleSelector, Stylesheet,
+    ThemeValue, ThemeVariables, TuiSpacing, TuiStyle, theme_color,
 };
 
 #[doc(hidden)]

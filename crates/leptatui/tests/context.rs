@@ -3,8 +3,10 @@
 //! These tests cover public context APIs at runtime boundaries.
 
 use leptatui::{
-    AppControl, AppRoot, Component, RenderCtx, Result, Stylesheet, column, component,
+    AppControl, AppRoot, Color, Component, RenderCtx, Result, StyleDeclarations, StyleSelector,
+    Stylesheet, ThemeVariables, column, component,
     context::{expect_context, provide_context, use_context},
+    text, theme_color,
 };
 use leptos::prelude::{GetUntracked, Owner, ReadSignal, Set, signal};
 use ratatui::{Terminal, backend::TestBackend};
@@ -88,6 +90,29 @@ impl Component for EventLabelConsumer {
     }
 }
 
+/// Component that provides active theme variables before rendering a child.
+struct ThemeRenderRoot {
+    dark: ReadSignal<bool>,
+    child: leptatui::Node,
+}
+
+impl Component for ThemeRenderRoot {
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let theme = if self.dark.get_untracked() {
+            ThemeVariables::new()
+                .color("text", Color::White)
+                .color("surface", Color::Black)
+        } else {
+            ThemeVariables::new()
+                .color("text", Color::Black)
+                .color("surface", Color::White)
+        };
+
+        provide_context(theme);
+        ctx.render_node(&self.child)
+    }
+}
+
 /// Component that records context values observed during rendering.
 struct ContextRoot {
     /// String context observed through Leptatui render-scope storage.
@@ -160,6 +185,58 @@ fn component_render_scope_can_provide_and_read_context() -> Result<()> {
 
     assert_eq!(root.observed_text.as_deref(), Some("from component"));
     assert_eq!(root.observed_count, Some(2));
+
+    Ok(())
+}
+
+#[test]
+fn context_theme_variables_update_rendered_styles() -> Result<()> {
+    let owner = Owner::new();
+    let (dark, set_dark) = owner.with(|| signal(false));
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("themed"),
+        StyleDeclarations::new()
+            .foreground(theme_color("text"))
+            .background(theme_color("surface")),
+    );
+    let mut root = ThemeRenderRoot {
+        dark,
+        child: text("Theme").with_classes("themed"),
+    };
+    let backend = TestBackend::new(12, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        render_result = AppRoot::render(&mut root, frame, &stylesheet);
+    })?;
+    render_result?;
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "T")
+        .expect("rendered themed cell");
+    assert_eq!(cell.fg, Color::Black);
+    assert_eq!(cell.bg, Color::White);
+
+    set_dark.set(true);
+
+    render_result = Ok(());
+    terminal.draw(|frame| {
+        render_result = AppRoot::render(&mut root, frame, &stylesheet);
+    })?;
+    render_result?;
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "T")
+        .expect("rendered themed cell");
+    assert_eq!(cell.fg, Color::White);
+    assert_eq!(cell.bg, Color::Black);
 
     Ok(())
 }

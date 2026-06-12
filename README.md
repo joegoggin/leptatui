@@ -79,6 +79,27 @@ let stylesheet = stylesheet! {
 };
 ```
 
+Stylesheets can also reference runtime theme variables. Provide
+`ThemeVariables` through Leptatui context before rendering descendants, then
+use `theme_color("name")` in stylesheet declarations.
+
+```rust
+let stylesheet = stylesheet! {
+    $text: theme_color("text");
+    $surface: theme_color("surface");
+
+    .panel => { fg: $text, bg: $surface }
+};
+
+provide_context(
+    ThemeVariables::new()
+        .color("text", Color::Black)
+        .color("surface", Color::White),
+);
+```
+
+See `cargo run --example theme_switcher` for a light/dark theme switcher.
+
 ## Examples
 
 Run the smoke example:
