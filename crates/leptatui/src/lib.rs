@@ -22,7 +22,7 @@ pub mod style;
 extern crate self as leptatui;
 
 pub use app::{App, AppControl, AppRoot, Error, Result};
-pub use component::{Component, RenderCtx};
+pub use component::{Component, KeyControl, RenderCtx, use_key_event};
 pub use leptatui_macros::{component, stylesheet, view};
 pub use node::{
     ButtonAction, Node, NodeType, StyleMetadata, block, button, column, component, dynamic, row,
@@ -37,7 +37,8 @@ pub use style::{
 pub mod __private {
     use crate::Node;
 
-    pub use crossterm::event::Event;
+    pub use crate::component::{__with_key_handler_registry, KeyHandlerRegistry};
+    pub use crossterm::event::{Event, KeyEvent};
 
     pub fn __reconcile_node(next: &mut Node, previous: &Node) {
         match (next, previous) {

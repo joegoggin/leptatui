@@ -3,7 +3,7 @@
 //! This module maps [`Node`] variants to Ratatui widgets, layout splits, and
 //! component event propagation.
 
-use crossterm::event::{Event, KeyCode, KeyEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout},
@@ -13,7 +13,7 @@ use ratatui::{
 use crate::{
     ThemeVariables,
     app::{AppControl, Result},
-    component::{Component, RenderCtx},
+    component::{Component, KeyControl, RenderCtx},
     context,
     style::{Borders, TuiStyle},
 };
@@ -134,78 +134,111 @@ impl Node {
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
     /// I/O that fails.
     pub fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        self.handle_event_ref(&event)
-    }
-
-    /// Dispatches an event by reference through this node tree.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` — Crossterm event to dispatch without cloning at every branch.
-    ///
-    /// # Returns
-    ///
-    /// An [`AppControl`] value indicating whether traversal should continue.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
-    fn handle_event_ref(&mut self, event: &Event) -> Result<AppControl> {
-        if let Event::Key(key) = event
-            && key.kind == KeyEventKind::Press
-        {
-            match key.code {
-                KeyCode::Tab | KeyCode::BackTab => {
-                    let count = self.focusable_count();
-                    if count > 0 {
-                        let direction = match key.code {
-                            KeyCode::Tab => FocusDirection::Forward,
-                            KeyCode::BackTab => FocusDirection::Backward,
-                            _ => unreachable!("only tab keys are matched"),
-                        };
-                        self.move_focus(direction, count);
-                        return Ok(AppControl::Continue);
-                    }
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    if let Some(control) = self.activate_focused_button() {
-                        return Ok(control);
-                    }
-                }
-                _ => {}
-            }
+        if let Event::Key(key) = event {
+            return Ok(self.handle_key_event(key)?.into());
         }
 
-        self.dispatch_event_ref(event)
+        self.dispatch_event_ref(&event)
     }
 
-    /// Dispatches an event to child nodes and component boundaries.
+    /// Dispatches a key event through this node tree.
     ///
     /// # Arguments
     ///
-    /// * `event` — Crossterm event to dispatch without cloning at every branch.
+    /// * `key` — Crossterm key event emitted by the terminal.
     ///
     /// # Returns
     ///
-    /// An [`AppControl`] value indicating whether traversal should continue.
+    /// A [`KeyControl`] value indicating whether the key was handled.
     ///
     /// # Errors
     ///
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
     /// I/O that fails.
-    fn dispatch_event_ref(&mut self, event: &Event) -> Result<AppControl> {
+    pub fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        let control = self.__dispatch_key_event(key.clone())?;
+        if control == KeyControl::Pass {
+            return self.__handle_default_key_event(key);
+        }
+
+        Ok(control)
+    }
+
+    /// Dispatches a key event through descendant component boundaries only.
+    #[doc(hidden)]
+    pub fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        self.dispatch_key_event_ref(&key)
+    }
+
+    /// Handles built-in key behavior for this node tree.
+    #[doc(hidden)]
+    pub fn __handle_default_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        Ok(self.handle_default_key_event_ref(&key))
+    }
+
+    /// Dispatches a key event by reference through this node tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Crossterm key event to dispatch without cloning at every
+    ///   branch.
+    ///
+    /// # Returns
+    ///
+    /// A [`KeyControl`] value indicating whether the key was handled.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
+    /// I/O that fails.
+    fn dispatch_key_event_ref(&mut self, key: &KeyEvent) -> Result<KeyControl> {
         match self {
-            Self::Block { child, .. } => child.handle_event_ref(event),
+            Self::Block { child, .. } => child.dispatch_key_event_ref(key),
             Self::Row { children, .. } | Self::Column { children, .. } => {
-                handle_child_events(children, event)
+                handle_child_key_events(children, key)
             }
             Self::Dynamic(child) => {
                 let mut child = child();
-                child.handle_event_ref(event)
+                child.dispatch_key_event_ref(key)
             }
-            Self::Component(component) => component.handle_event(event.clone()),
-            Self::Text { .. } | Self::Button { .. } => Ok(AppControl::Continue),
+            Self::Component(component) => component.handle_key_event(key.clone()),
+            Self::Text { .. } | Self::Button { .. } => Ok(KeyControl::Pass),
+        }
+    }
+
+    /// Handles the built-in key behavior for focus movement and button activation.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to match against built-in button behavior.
+    ///
+    /// # Returns
+    ///
+    /// A [`KeyControl`] value indicating whether the key was handled.
+    fn handle_default_key_event_ref(&mut self, key: &KeyEvent) -> KeyControl {
+        if key.kind != KeyEventKind::Press {
+            return KeyControl::Pass;
+        }
+
+        match key.code {
+            KeyCode::Tab | KeyCode::BackTab => {
+                let count = self.focusable_count();
+                if count == 0 {
+                    return KeyControl::Pass;
+                }
+
+                let direction = match key.code {
+                    KeyCode::Tab => FocusDirection::Forward,
+                    KeyCode::BackTab => FocusDirection::Backward,
+                    _ => unreachable!("only tab keys are matched"),
+                };
+                self.move_focus(direction, count);
+                KeyControl::Handled
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => self
+                .activate_focused_button()
+                .map_or(KeyControl::Pass, KeyControl::from),
+            _ => KeyControl::Pass,
         }
     }
 
@@ -334,6 +367,32 @@ impl Node {
             Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
+
+    /// Dispatches an event to child nodes and component boundaries.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — Crossterm event to dispatch without cloning at every branch.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value indicating whether traversal should continue.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
+    /// I/O that fails.
+    fn dispatch_event_ref(&mut self, event: &Event) -> Result<AppControl> {
+        match self {
+            Self::Block { child, .. } => child.dispatch_event_ref(event),
+            Self::Row { children, .. } | Self::Column { children, .. } => {
+                handle_child_events(children, event)
+            }
+            Self::Dynamic(child) => child().dispatch_event_ref(event),
+            Self::Component(component) => component.handle_event(event.clone()),
+            Self::Text { .. } | Self::Button { .. } => Ok(AppControl::Continue),
+        }
+    }
 }
 
 impl Component for Node {
@@ -371,6 +430,24 @@ impl Component for Node {
     /// I/O that fails.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         Node::handle_event(self, event)
+    }
+
+    /// Dispatches a key event when the node is used as a component.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Crossterm key event emitted by the terminal.
+    ///
+    /// # Returns
+    ///
+    /// A [`KeyControl`] value indicating whether the key was handled.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
+    /// I/O that fails.
+    fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        Node::handle_key_event(self, key)
     }
 }
 
@@ -458,10 +535,37 @@ fn render_children(
 /// I/O that fails.
 fn handle_child_events(children: &mut [Node], event: &Event) -> Result<AppControl> {
     for child in children {
-        if child.handle_event_ref(event)? == AppControl::Exit {
+        if child.dispatch_event_ref(event)? == AppControl::Exit {
             return Ok(AppControl::Exit);
         }
     }
 
     Ok(AppControl::Continue)
+}
+
+/// Dispatches a key event through child nodes until one handles it.
+///
+/// # Arguments
+///
+/// * `children` — Child nodes to visit in order.
+/// * `key` — Key event to dispatch to each child.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value from the first child that handles the key, otherwise
+/// [`KeyControl::Pass`].
+///
+/// # Errors
+///
+/// Returns [`crate::app::Error::Io`] if child event handling performs terminal
+/// I/O that fails.
+fn handle_child_key_events(children: &mut [Node], key: &KeyEvent) -> Result<KeyControl> {
+    for child in children {
+        let control = child.dispatch_key_event_ref(key)?;
+        if control != KeyControl::Pass {
+            return Ok(control);
+        }
+    }
+
+    Ok(KeyControl::Pass)
 }

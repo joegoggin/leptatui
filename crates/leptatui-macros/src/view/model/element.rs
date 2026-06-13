@@ -197,7 +197,7 @@ impl Element {
                     if attr.value.is_literal() {
                         return Err(Error::new_spanned(
                             &attr.name,
-                            "view! on_press attribute must be a braced callback expression",
+                            "view! on_press attribute must be a callback expression",
                         ));
                     }
 

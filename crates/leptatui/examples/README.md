@@ -2,15 +2,15 @@
 
 Runnable examples for the public `leptatui` crate live in this directory.
 
-## Smoke App
+## Hello World
 
-Run the minimal app runner smoke example:
+Run the Hello World example:
 
 ```sh
-cargo run --example app_smoke
+cargo run --example hello_world
 ```
 
-Use Tab and Shift+Tab to focus Quit, then press Enter or Space to exit.
+Press `q` to exit.
 
 ## Counter
 
@@ -20,8 +20,7 @@ Run the styled counter example:
 cargo run --example counter
 ```
 
-Use Tab and Shift+Tab to move focus between buttons. Press Enter or Space to
-activate the focused button, and activate Quit to exit.
+Press `+`/`=` to increment, `-` to decrement, `r` to reset, and `q` to quit.
 
 ## Theme Switcher
 

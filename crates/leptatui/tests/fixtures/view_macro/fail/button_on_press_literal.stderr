@@ -1,4 +1,4 @@
-error: view! on_press attribute must be a braced callback expression
+error: view! on_press attribute must be a callback expression
  --> tests/fixtures/view_macro/fail/button_on_press_literal.rs:7:17
   |
 7 |         <Button on_press="save">"Save"</Button>

@@ -45,17 +45,26 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         #vis struct #ident {
             __leptatui_owner: #leptatui::prelude::Owner,
             __leptatui_node: #leptatui::Node,
+            __leptatui_key_handlers: #leptatui::__private::KeyHandlerRegistry,
         }
 
         impl #ident {
             #[doc = "Creates a component value."]
             #vis fn new() -> Self {
                 let __leptatui_owner = #leptatui::prelude::Owner::new();
-                let __leptatui_node = __leptatui_owner.with(Self::__setup_tree);
+                let __leptatui_key_handlers =
+                    #leptatui::__private::KeyHandlerRegistry::new();
+                let __leptatui_node = __leptatui_owner.with(|| {
+                    #leptatui::__private::__with_key_handler_registry(
+                        &__leptatui_key_handlers,
+                        Self::__setup_tree,
+                    )
+                });
 
                 Self {
                     __leptatui_owner,
                     __leptatui_node,
+                    __leptatui_key_handlers,
                 }
             }
 
@@ -105,11 +114,44 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 &mut self,
                 event: #leptatui::__private::Event,
             ) -> #leptatui::Result<#leptatui::AppControl> {
+                if let #leptatui::__private::Event::Key(__leptatui_key) = event {
+                    return self
+                        .handle_key_event(__leptatui_key)
+                        .map(::core::convert::Into::into);
+                }
+
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_node = &mut self.__leptatui_node;
 
                 __leptatui_owner.with(|| {
                     __leptatui_node.handle_event(event)
+                })
+            }
+
+            #[doc = "Dispatches key events through descendant and local key maps."]
+            fn handle_key_event(
+                &mut self,
+                key: #leptatui::__private::KeyEvent,
+            ) -> #leptatui::Result<#leptatui::KeyControl> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_node = &mut self.__leptatui_node;
+                let __leptatui_key_handlers = &self.__leptatui_key_handlers;
+
+                __leptatui_owner.with(|| {
+                    let __leptatui_control =
+                        __leptatui_node.__dispatch_key_event(key.clone())?;
+
+                    match __leptatui_control {
+                        #leptatui::KeyControl::Pass => {
+                            match __leptatui_key_handlers.handle(key.clone()) {
+                                #leptatui::KeyControl::Pass => {
+                                    __leptatui_node.__handle_default_key_event(key)
+                                }
+                                __leptatui_control => Ok(__leptatui_control),
+                            }
+                        }
+                        __leptatui_control => Ok(__leptatui_control),
+                    }
                 })
             }
         }

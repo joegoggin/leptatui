@@ -316,12 +316,11 @@ fn focused_button_action_can_exit_app_loop() -> Result<()> {
 /// ```text
 /// row([button("One"), button("Two")])
 /// Stylesheet::new().rule(StyleSelector::focus(), black on yellow)
-/// Tab
+/// with_focus(true)
 /// ```
 ///
 /// # Assertions
 ///
-/// - The tab event succeeds and focuses the first button.
 /// - The terminal draw call succeeds.
 /// - The node render call succeeds.
 /// - The rendered focused button label exists.
@@ -335,7 +334,7 @@ fn focused_button_action_can_exit_app_loop() -> Result<()> {
 fn renders_focused_button_with_focus_stylesheet_rule() -> Result<()> {
     let backend = TestBackend::new(24, 5);
     let mut terminal = Terminal::new(backend)?;
-    let mut node = row([button("One"), button("Two")]);
+    let node = row([button("One").with_focus(true), button("Two")]);
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::focus(),
         TuiStyle::new()
@@ -343,8 +342,6 @@ fn renders_focused_button_with_focus_stylesheet_rule() -> Result<()> {
             .background(Color::Yellow),
     );
     let mut render_result = Ok(());
-
-    node.handle_event(key(KeyCode::Tab))?;
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::with_stylesheet(frame, &stylesheet);

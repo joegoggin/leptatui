@@ -1,23 +1,31 @@
-//! Minimal app runner smoke example.
+//! Hello World example.
 //!
-//! This binary renders a small static node tree and exits from the Quit button.
+//! This binary renders a small static node tree and exits when `q` is pressed.
 
 use leptatui::prelude::*;
 
-/// Root component for the smoke example.
+/// Root component for the Hello World example.
 #[component]
 fn Root() -> Node {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') {
+            return KeyControl::Exit;
+        }
+
+        KeyControl::Pass
+    });
+
     view! {
         <Block>
             <Column>
-                <Text>"Leptatui smoke runner. Focus Quit and press Enter or Space."</Text>
-                <Button on_press={|| AppControl::Exit}>"Quit"</Button>
+                <Text>"Hello, world!"</Text>
+                <Text>"Press q to quit."</Text>
             </Column>
         </Block>
     }
 }
 
-/// Runs the smoke example application.
+/// Runs the Hello World example application.
 ///
 /// # Returns
 ///

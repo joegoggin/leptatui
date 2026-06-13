@@ -11,6 +11,15 @@ use ratatui::{Terminal, backend::TestBackend};
 fn PreludeComponent() -> Node {
     provide_context(String::from("from prelude component"));
     let label = expect_context::<String>();
+    let _example_key = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE);
+
+    use_key_event(KeyEventKind::Press, |key: KeyEvent| {
+        if key.code == KeyCode::Char('p') {
+            return KeyControl::Handled;
+        }
+
+        KeyControl::Pass
+    });
 
     view! { <Text>{label}</Text> }
 }

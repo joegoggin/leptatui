@@ -3,8 +3,9 @@
 //! This module parses element attributes and stores the attribute names and
 //! values later validated by element expansion.
 
+use proc_macro2::{TokenStream, TokenTree};
 use syn::{
-    Ident, LitStr, Result, Token,
+    Expr, Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream},
 };
 
@@ -34,7 +35,7 @@ impl Parse for Attr {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the attribute is missing `=` or its value is
-    /// not a string literal or braced expression.
+    /// not a string literal, braced expression, or supported unbraced callback.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let name: Ident = input.parse()?;
         input.parse::<Token![=]>()?;
@@ -43,6 +44,8 @@ impl Parse for Attr {
             AttrValue::Literal(input.parse()?)
         } else if input.peek(syn::token::Brace) {
             AttrValue::Expr(Box::new(parse_braced_expr(input)?))
+        } else if name == "on_press" {
+            AttrValue::Expr(Box::new(parse_unbraced_closure(input)?))
         } else {
             return Err(
                 input.error("view! attribute values must be string literals or braced expressions")
@@ -51,6 +54,36 @@ impl Parse for Attr {
 
         Ok(Self { name, value })
     }
+}
+
+/// Parses an unbraced callback closure without consuming the enclosing tag's
+/// closing `>`.
+fn parse_unbraced_closure(input: ParseStream<'_>) -> Result<Expr> {
+    let mut tokens = TokenStream::new();
+
+    while !input.is_empty() && !input.peek(Token![>]) && !next_is_attr_assignment(input) {
+        let token: TokenTree = input.parse()?;
+        tokens.extend([token]);
+    }
+
+    if tokens.is_empty() {
+        return Err(input.error("view! on_press attribute must be a callback expression"));
+    }
+
+    syn::parse2(tokens).map(Expr::Closure)
+}
+
+/// Returns whether the next tokens look like another supported attribute.
+fn next_is_attr_assignment(input: ParseStream<'_>) -> bool {
+    let fork = input.fork();
+    let Ok(name) = fork.parse::<Ident>() else {
+        return false;
+    };
+
+    matches!(
+        name.to_string().as_str(),
+        "class" | "id" | "style" | "on_press"
+    ) && fork.parse::<Token![=]>().is_ok()
 }
 
 /// Attribute value details owned by the `Attr` model.

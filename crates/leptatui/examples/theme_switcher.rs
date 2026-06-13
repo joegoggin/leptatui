@@ -41,39 +41,40 @@ fn ThemeStatus() -> Node {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
     dynamic(move || {
-        view! {
-            <Text class="theme-status">{format!("Active theme: {:?}", mode.get_untracked())}</Text>
-        }
+        view! { <Text class="theme-status">{format!("Active theme: {:?}", mode.get_untracked())}</Text> }
     })
 }
 
 #[component]
 fn ThemeDemo() -> Node {
-    let (mode, set_mode) = signal(ThemeMode::Light);
-    let (theme, set_theme) = signal(ThemeMode::Light.variables());
+    let mode = RwSignal::new(ThemeMode::Light);
+    let theme = RwSignal::new(ThemeMode::Light.variables());
 
-    provide_context(mode);
-    provide_context(theme);
+    provide_context(mode.read_only());
+    provide_context(theme.read_only());
 
     view! {
         <Block class="app-panel">
             <Column>
                 <Text class="title">"Theme variables"</Text>
                 {ThemeStatus::new()}
-                <Text class="body">"The same stylesheet resolves against the active context theme."</Text>
+                <Text class="body">
+                    "The same stylesheet resolves against the active context theme."
+                </Text>
                 <Row class="controls">
                     <Button
                         class="theme-button"
-                        on_press={move || {
-                            let next = mode.get_untracked().toggle();
-                            set_mode.set(next);
-                            set_theme.set(next.variables());
+                        on_press=move || {
+                            mode.update(|mode| {
+                                *mode = mode.toggle();
+                                theme.set(mode.variables());
+                            });
                             AppControl::Continue
-                        }}
+                        }
                     >
                         "Toggle theme"
                     </Button>
-                    <Button class="theme-button danger" on_press={|| AppControl::Exit}>
+                    <Button class="theme-button danger" on_press=|| AppControl::Exit>
                         "Quit"
                     </Button>
                 </Row>

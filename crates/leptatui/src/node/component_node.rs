@@ -6,11 +6,11 @@
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyEvent};
 
 use crate::{
     app::{AppControl, Result},
-    component::{Component, RenderCtx},
+    component::{Component, KeyControl, RenderCtx},
     context::ContextScope,
 };
 
@@ -76,6 +76,25 @@ impl ComponentNode {
     pub(crate) fn handle_event(&self, event: Event) -> Result<AppControl> {
         self.context
             .with(|| self.inner.borrow_mut().handle_event(event))
+    }
+
+    /// Handles a key event inside this component's existing context scope.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event dispatched through this component boundary.
+    ///
+    /// # Returns
+    ///
+    /// A [`KeyControl`] value returned by the component.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::Io`] if the component event path performs
+    /// terminal I/O that fails.
+    pub(crate) fn handle_key_event(&self, key: KeyEvent) -> Result<KeyControl> {
+        self.context
+            .with(|| self.inner.borrow_mut().handle_key_event(key))
     }
 
     /// Compares two component boundaries by shared storage identity.

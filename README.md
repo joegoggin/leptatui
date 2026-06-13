@@ -22,12 +22,23 @@ component, builds a node tree with either builders or `view!`, and runs it with
 Generated `#[component]` bodies run once when `new()` creates the component,
 under a stored Leptos owner. Create signals directly in the component body, and
 read them from dynamic nodes or event handlers when values need to update.
+Buttons support Tab/Shift+Tab focus movement and Enter/Space activation by
+default. Register handlers with `use_key_event()` inside a component body for
+custom key maps and overrides.
 
 ```rust
 use leptatui::prelude::*;
 
 #[component]
 fn Greeting() -> Node {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') {
+            return KeyControl::Exit;
+        }
+
+        KeyControl::Pass
+    });
+
     view! { <Text>"Hello from Leptatui"</Text> }
 }
 
@@ -106,11 +117,13 @@ See `cargo run --example theme_switcher` for a light/dark theme switcher.
 
 ## Examples
 
-Run the smoke example:
+Run the Hello World example:
 
 ```sh
-cargo run --example app_smoke
+cargo run --example hello_world
 ```
+
+Press `q` to exit.
 
 Run the interactive counter:
 

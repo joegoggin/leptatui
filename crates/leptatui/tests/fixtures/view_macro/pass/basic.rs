@@ -44,4 +44,31 @@ fn main() {
         Node::Button { on_press, .. } => assert!(on_press.is_some()),
         other => panic!("expected button node, got {other:?}"),
     }
+
+    let presses = std::rc::Rc::new(std::cell::Cell::new(0));
+    let presses_for_button = std::rc::Rc::clone(&presses);
+    let move_action_node: Node = view! {
+        <Button
+            on_press=move || {
+                presses_for_button.set(presses_for_button.get() + 1);
+                AppControl::Continue
+            }
+        >
+            "Increment"
+        </Button>
+    };
+
+    match move_action_node {
+        Node::Button { on_press, .. } => assert!(on_press.is_some()),
+        other => panic!("expected button node, got {other:?}"),
+    }
+
+    let shorthand_action_node: Node = view! {
+        <Button on_press=|| AppControl::Exit>"Quit"</Button>
+    };
+
+    match shorthand_action_node {
+        Node::Button { on_press, .. } => assert!(on_press.is_some()),
+        other => panic!("expected button node, got {other:?}"),
+    }
 }
