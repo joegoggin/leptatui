@@ -1,14 +1,14 @@
 //! Code generation for the `component` attribute macro.
 //!
-//! This module emits the component wrapper type, owner-backed setup, node
-//! conversions, default constructor, and render implementation for validated
-//! component functions.
+//! This module emits the component wrapper type, optional props model,
+//! owner-backed setup, node conversions, constructors, and render implementation
+//! for validated component functions.
 
 use proc_macro2::TokenStream;
-use quote::quote;
-use syn::{ItemFn, Stmt};
+use quote::{format_ident, quote};
+use syn::{Ident, ItemFn, Stmt, Visibility};
 
-use super::signature;
+use super::signature::{self, Prop};
 
 /// Builds the generated component type for a parsed function.
 ///
@@ -24,7 +24,7 @@ use super::signature;
 ///
 /// Returns [`syn::Error`] if the function signature is unsupported.
 pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
-    signature::validate(&input_fn.sig)?;
+    let props = signature::analyze(&input_fn.sig)?;
 
     let attrs = input_fn.attrs;
     let vis = input_fn.vis;
@@ -46,14 +46,14 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         }
     }
 
-    let setup_body = quote! {
-        {
-            let node: #leptatui::Node = (|| #body)().into();
-            node
-        }
-    };
+    let props_api = expand_props_api(&vis, &ident, &props);
+    let constructors = expand_constructors(&vis, &ident, &props);
+    let setup_fn = expand_setup_fn(&ident, &props, quote! { #body }, &leptatui);
+    let default_impl = expand_default_impl(&ident, &props);
 
     Ok(quote! {
+        #props_api
+
         #[allow(non_camel_case_types)]
         #(#attrs)*
         #vis struct #ident {
@@ -64,8 +64,9 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         }
 
         impl #ident {
-            #[doc = "Creates a component value."]
-            #vis fn new() -> Self {
+            #constructors
+
+            fn __create(__leptatui_setup: impl FnOnce() -> #leptatui::Node) -> Self {
                 let __leptatui_owner = #leptatui::prelude::Owner::new();
                 let __leptatui_key_handlers =
                     #leptatui::__private::KeyHandlerRegistry::new();
@@ -77,7 +78,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                         || {
                             #leptatui::__private::__with_stylesheet_registry(
                                 &__leptatui_stylesheets,
-                                Self::__setup_tree,
+                                __leptatui_setup,
                             )
                         },
                     )
@@ -92,10 +93,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 }
             }
 
-            #[doc(hidden)]
-            fn __setup_tree() -> #leptatui::Node {
-                #setup_body
-            }
+            #setup_fn
 
             #[doc = "Converts this component into a Leptatui node."]
             #vis fn into_node(self) -> #leptatui::Node {
@@ -103,12 +101,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
         }
 
-        impl ::core::default::Default for #ident {
-            #[doc = "Creates the default component value."]
-            fn default() -> Self {
-                Self::new()
-            }
-        }
+        #default_impl
 
         impl ::core::convert::From<#ident> for #leptatui::Node {
             #[doc = "Converts the component into a Leptatui node."]
@@ -160,6 +153,24 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 &mut self,
                 key: #leptatui::__private::KeyEvent,
             ) -> #leptatui::Result<#leptatui::KeyControl> {
+                let __leptatui_control = self.__dispatch_key_event(key.clone())?;
+                if __leptatui_control != #leptatui::KeyControl::Pass {
+                    return Ok(__leptatui_control);
+                }
+
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_node = &mut self.__leptatui_node;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_node.__handle_default_key_event(key)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __dispatch_key_event(
+                &mut self,
+                key: #leptatui::__private::KeyEvent,
+            ) -> #leptatui::Result<#leptatui::KeyControl> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_node = &mut self.__leptatui_node;
                 let __leptatui_key_handlers = &self.__leptatui_key_handlers;
@@ -170,17 +181,325 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                     match __leptatui_control {
                         #leptatui::KeyControl::Pass => {
-                            match __leptatui_key_handlers.handle(key.clone()) {
-                                #leptatui::KeyControl::Pass => {
-                                    __leptatui_node.__handle_default_key_event(key)
-                                }
-                                __leptatui_control => Ok(__leptatui_control),
-                            }
-                        }
+                            Ok(__leptatui_key_handlers.handle(key.clone()))
+                        },
                         __leptatui_control => Ok(__leptatui_control),
                     }
                 })
             }
+
+            #[doc(hidden)]
+            fn __focusable_count(&self) -> usize {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_node = &self.__leptatui_node;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_node.__focusable_count()
+                })
+            }
+
+            #[doc(hidden)]
+            fn __focused_index_inner(&self, index: &mut usize) -> ::core::option::Option<usize> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_node = &self.__leptatui_node;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_node.__focused_index_inner(index)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_node = &mut self.__leptatui_node;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_node.__set_focus_by_index_inner(target, index);
+                });
+            }
+
+            #[doc(hidden)]
+            fn __activate_focused_button(&self) -> ::core::option::Option<#leptatui::AppControl> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_node = &self.__leptatui_node;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_node.__activate_focused_button()
+                })
+            }
         }
     })
+}
+
+/// Expands the generated props struct and typed builder for prop components.
+fn expand_props_api(vis: &Visibility, component: &Ident, props: &[Prop]) -> TokenStream {
+    if props.is_empty() {
+        return TokenStream::new();
+    }
+
+    let props_ident = props_ident(component);
+    let builder_ident = builder_ident(component);
+    let missing_ident = missing_ident(component);
+    let field_defs = props.iter().map(|prop| {
+        let attrs = &prop.attrs;
+        let ident = &prop.ident;
+        let ty = &prop.ty;
+
+        quote! {
+            #(#attrs)*
+            #vis #ident: #ty
+        }
+    });
+
+    let state_idents = props
+        .iter()
+        .map(|prop| prop.state_ident(component))
+        .collect::<Vec<_>>();
+    let initial_state_types = props.iter().map(|prop| match &prop.default {
+        Some(_) => {
+            let ty = &prop.ty;
+            quote! { #ty }
+        }
+        None => quote! { #missing_ident },
+    });
+    let initial_values = props.iter().map(|prop| {
+        let ident = &prop.ident;
+        let value = match &prop.default {
+            Some(default) => default.initial_value(prop.ty.as_ref()),
+            None => quote! { #missing_ident },
+        };
+
+        quote! { #ident: #value }
+    });
+    let builder_fields = props.iter().zip(&state_idents).map(|(prop, state)| {
+        let ident = &prop.ident;
+        quote! { #ident: #state }
+    });
+    let setters = props
+        .iter()
+        .enumerate()
+        .map(|(index, prop)| expand_prop_setter(vis, component, props, index, prop));
+    let build_args = props.iter().map(|prop| {
+        let ty = &prop.ty;
+        quote! { #ty }
+    });
+    let build_fields = props.iter().map(|prop| {
+        let ident = &prop.ident;
+        quote! { #ident: self.#ident }
+    });
+
+    quote! {
+        #[doc = "Props for the generated component."]
+        #vis struct #props_ident {
+            #(#field_defs,)*
+        }
+
+        #[doc = "Builder for generated component props."]
+        #vis struct #builder_ident<#(#state_idents),*> {
+            #(#builder_fields,)*
+        }
+
+        #[doc(hidden)]
+        #vis struct #missing_ident;
+
+        impl #props_ident {
+            #[doc = "Creates a builder for component props."]
+            #vis fn builder() -> #builder_ident<#(#initial_state_types),*> {
+                #builder_ident {
+                    #(#initial_values,)*
+                }
+            }
+        }
+
+        #(#setters)*
+
+        impl #builder_ident<#(#build_args),*> {
+            #[doc = "Builds component props."]
+            #vis fn build(self) -> #props_ident {
+                #props_ident {
+                    #(#build_fields,)*
+                }
+            }
+        }
+    }
+}
+
+/// Expands one setter method for the generated props builder.
+fn expand_prop_setter(
+    vis: &Visibility,
+    component: &Ident,
+    props: &[Prop],
+    index: usize,
+    prop: &Prop,
+) -> TokenStream {
+    let builder_ident = builder_ident(component);
+    let missing_ident = missing_ident(component);
+    let state_idents = props
+        .iter()
+        .map(|prop| prop.state_ident(component))
+        .collect::<Vec<_>>();
+    let ident = &prop.ident;
+    let ty = &prop.ty;
+    let setter_ty = if prop.into {
+        quote! { impl ::core::convert::Into<#ty> }
+    } else {
+        quote! { #ty }
+    };
+    let setter_value = if prop.into {
+        quote! { ::core::convert::Into::into(#ident) }
+    } else {
+        quote! { #ident }
+    };
+    let impl_generics = state_idents
+        .iter()
+        .enumerate()
+        .filter_map(|(arg_index, state)| {
+            (arg_index != index || prop.default.is_some()).then_some(state)
+        })
+        .collect::<Vec<_>>();
+    let impl_generics = if impl_generics.is_empty() {
+        TokenStream::new()
+    } else {
+        quote! { <#(#impl_generics),*> }
+    };
+    let impl_args = state_idents.iter().enumerate().map(|(arg_index, state)| {
+        if arg_index == index && prop.default.is_none() {
+            quote! { #missing_ident }
+        } else {
+            quote! { #state }
+        }
+    });
+    let return_args = state_idents.iter().enumerate().map(|(arg_index, state)| {
+        if arg_index == index {
+            quote! { #ty }
+        } else {
+            quote! { #state }
+        }
+    });
+    let fields = props.iter().enumerate().map(|(field_index, field)| {
+        let field_ident = &field.ident;
+        if field_index == index {
+            quote! { #field_ident: #setter_value }
+        } else {
+            quote! { #field_ident: self.#field_ident }
+        }
+    });
+
+    quote! {
+        impl #impl_generics #builder_ident<#(#impl_args),*> {
+            #[doc = "Sets a component prop value."]
+            #vis fn #ident(self, #ident: #setter_ty) -> #builder_ident<#(#return_args),*> {
+                #builder_ident {
+                    #(#fields,)*
+                }
+            }
+        }
+    }
+}
+
+/// Expands generated constructors for a component.
+fn expand_constructors(vis: &Visibility, component: &Ident, props: &[Prop]) -> TokenStream {
+    if props.is_empty() {
+        return quote! {
+            #[doc = "Creates a component value."]
+            #vis fn new() -> Self {
+                Self::__create(Self::__setup_tree)
+            }
+        };
+    }
+
+    let props_ident = props_ident(component);
+    let default_new = if props_can_default(props) {
+        quote! {
+            #[doc = "Creates a component value with default props."]
+            #vis fn new() -> Self {
+                Self::with_props(#props_ident::builder().build())
+            }
+        }
+    } else {
+        TokenStream::new()
+    };
+
+    quote! {
+        #default_new
+
+        #[doc = "Creates a component value with explicit props."]
+        #vis fn with_props(__leptatui_props: #props_ident) -> Self {
+            Self::__create(move || Self::__setup_tree(__leptatui_props))
+        }
+    }
+}
+
+/// Expands the hidden setup function that runs the original component body.
+fn expand_setup_fn(
+    component: &Ident,
+    props: &[Prop],
+    body: TokenStream,
+    leptatui: &TokenStream,
+) -> TokenStream {
+    let setup_body = quote! {
+        {
+            let node: #leptatui::Node = (|| #body)().into();
+            node
+        }
+    };
+
+    if props.is_empty() {
+        return quote! {
+            #[doc(hidden)]
+            fn __setup_tree() -> #leptatui::Node {
+                #setup_body
+            }
+        };
+    }
+
+    let props_ident = props_ident(component);
+    let field_names = props.iter().map(|prop| &prop.ident);
+
+    quote! {
+        #[doc(hidden)]
+        fn __setup_tree(__leptatui_props: #props_ident) -> #leptatui::Node {
+            let #props_ident {
+                #(#field_names,)*
+            } = __leptatui_props;
+
+            #setup_body
+        }
+    }
+}
+
+/// Expands `Default` when the generated component can be created without props.
+fn expand_default_impl(component: &Ident, props: &[Prop]) -> TokenStream {
+    if !props_can_default(props) {
+        return TokenStream::new();
+    }
+
+    quote! {
+        impl ::core::default::Default for #component {
+            #[doc = "Creates the default component value."]
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+    }
+}
+
+/// Returns whether every prop can be omitted.
+fn props_can_default(props: &[Prop]) -> bool {
+    props.iter().all(|prop| prop.default.is_some())
+}
+
+/// Returns the generated props struct identifier.
+fn props_ident(component: &Ident) -> Ident {
+    format_ident!("{component}Props")
+}
+
+/// Returns the generated props builder identifier.
+fn builder_ident(component: &Ident) -> Ident {
+    format_ident!("{component}PropsBuilder")
+}
+
+/// Returns the generated missing-prop marker identifier.
+fn missing_ident(component: &Ident) -> Ident {
+    format_ident!("{component}PropsMissing")
 }

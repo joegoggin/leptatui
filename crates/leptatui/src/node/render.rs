@@ -180,6 +180,30 @@ impl Node {
         Ok(self.handle_default_key_event_ref(&key))
     }
 
+    /// Returns the number of focusable buttons in this node tree.
+    #[doc(hidden)]
+    pub fn __focusable_count(&self) -> usize {
+        self.focusable_count()
+    }
+
+    /// Returns the focused button index while tracking traversal position.
+    #[doc(hidden)]
+    pub fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        self.focused_index_inner(index)
+    }
+
+    /// Sets focus by flattened button index while tracking traversal position.
+    #[doc(hidden)]
+    pub fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        self.set_focus_by_index_inner(target, index);
+    }
+
+    /// Activates the focused button if this node tree contains one.
+    #[doc(hidden)]
+    pub fn __activate_focused_button(&self) -> Option<AppControl> {
+        self.activate_focused_button()
+    }
+
     /// Dispatches a key event by reference through this node tree.
     ///
     /// # Arguments
@@ -205,7 +229,7 @@ impl Node {
                 let mut child = child();
                 child.dispatch_key_event_ref(key)
             }
-            Self::Component(component) => component.handle_key_event(key.clone()),
+            Self::Component(component) => component.dispatch_key_event(key.clone()),
             Self::Text { .. } | Self::Button { .. } => Ok(KeyControl::Pass),
         }
     }
@@ -258,7 +282,8 @@ impl Node {
             Self::Row { children, .. } | Self::Column { children, .. } => {
                 children.iter().map(Self::focusable_count).sum()
             }
-            Self::Text { .. } | Self::Dynamic(_) | Self::Component(_) => 0,
+            Self::Component(component) => component.focusable_count(),
+            Self::Text { .. } | Self::Dynamic(_) => 0,
         }
     }
 
@@ -314,7 +339,8 @@ impl Node {
             Self::Row { children, .. } | Self::Column { children, .. } => children
                 .iter()
                 .find_map(|child| child.focused_index_inner(index)),
-            Self::Text { .. } | Self::Dynamic(_) | Self::Component(_) => None,
+            Self::Component(component) => component.focused_index_inner(index),
+            Self::Text { .. } | Self::Dynamic(_) => None,
         }
     }
 
@@ -346,7 +372,8 @@ impl Node {
                     child.set_focus_by_index_inner(target, index);
                 }
             }
-            Self::Text { .. } | Self::Dynamic(_) | Self::Component(_) => {}
+            Self::Component(component) => component.set_focus_by_index_inner(target, index),
+            Self::Text { .. } | Self::Dynamic(_) => {}
         }
     }
 
@@ -368,7 +395,8 @@ impl Node {
             Self::Row { children, .. } | Self::Column { children, .. } => {
                 children.iter().find_map(Self::activate_focused_button)
             }
-            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => None,
+            Self::Component(component) => component.activate_focused_button(),
+            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) => None,
         }
     }
 
@@ -452,6 +480,36 @@ impl Component for Node {
     /// I/O that fails.
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
         Node::handle_key_event(self, key)
+    }
+
+    /// Dispatches custom key behavior through the node tree.
+    #[doc(hidden)]
+    fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        Node::__dispatch_key_event(self, key)
+    }
+
+    /// Returns the number of focusable buttons in the node tree.
+    #[doc(hidden)]
+    fn __focusable_count(&self) -> usize {
+        Node::__focusable_count(self)
+    }
+
+    /// Returns the focused button index while tracking traversal position.
+    #[doc(hidden)]
+    fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        Node::__focused_index_inner(self, index)
+    }
+
+    /// Sets focus by flattened button index while tracking traversal position.
+    #[doc(hidden)]
+    fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        Node::__set_focus_by_index_inner(self, target, index);
+    }
+
+    /// Activates the focused button in the node tree, if any.
+    #[doc(hidden)]
+    fn __activate_focused_button(&self) -> Option<AppControl> {
+        Node::__activate_focused_button(self)
     }
 }
 

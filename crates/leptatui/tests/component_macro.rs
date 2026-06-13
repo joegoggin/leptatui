@@ -14,8 +14,8 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptatui::context::provide_context;
 use leptatui::{
-    AppControl, Color, Component, KeyControl, RenderCtx, Result, ThemeVariables, button, column,
-    component, dynamic, row, stylesheet, text, theme_color, use_key_event,
+    AppControl, Children, Color, Component, KeyControl, RenderCtx, Result, ThemeVariables, button,
+    column, component, dynamic, row, stylesheet, text, theme_color, use_key_event, view,
 };
 use leptos::prelude::{GetUntracked, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
@@ -31,6 +31,10 @@ static MACRO_FIRST_KEY_HANDLER: AtomicUsize = AtomicUsize::new(0);
 static MACRO_SECOND_KEY_HANDLER: AtomicUsize = AtomicUsize::new(0);
 static MACRO_THIRD_KEY_HANDLER: AtomicUsize = AtomicUsize::new(0);
 static MACRO_DEFAULT_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+static MACRO_FIRST_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+static MACRO_SECOND_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+static MACRO_MIXED_BUILTIN_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+static MACRO_MIXED_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
 static MACRO_REPEAT_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
 static MACRO_RELEASE_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
 
@@ -106,6 +110,18 @@ fn MacroThemedStylesheet() -> leptatui::Node {
     text("Theme").with_classes("themed")
 }
 
+/// Component that renders a required prop.
+#[component]
+fn MacroPropLabel(#[prop(into)] label: String) -> leptatui::Node {
+    text(label)
+}
+
+/// Component that renders a prop and nested children.
+#[component]
+fn MacroPropPanel(#[prop(into)] title: String, children: Children) -> leptatui::Node {
+    column([text(title), column(children())])
+}
+
 /// Parent component with styled and plain sibling component subtrees.
 #[component]
 fn MacroSiblingStyleRoot() -> leptatui::Node {
@@ -140,6 +156,34 @@ fn MacroDefaultButtonRoot() -> leptatui::Node {
         MACRO_DEFAULT_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
         AppControl::Continue
     })
+}
+
+/// Component that wraps one built-in button.
+#[component]
+fn MacroWrappedButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> leptatui::Node {
+    button(label).on_press(on_press)
+}
+
+/// Root with sibling custom button components.
+#[component]
+fn MacroWrappedButtonSiblings() -> leptatui::Node {
+    view! {
+        <Row>
+            <MacroWrappedButton label="First" on_press=macro_first_wrapped_button_press />
+            <MacroWrappedButton label="Second" on_press=macro_second_wrapped_button_press />
+        </Row>
+    }
+}
+
+/// Root with a built-in button and a custom button component.
+#[component]
+fn MacroMixedButtonSiblings() -> leptatui::Node {
+    view! {
+        <Row>
+            <Button on_press={macro_mixed_builtin_button_press}>"Built in"</Button>
+            <MacroWrappedButton label="Wrapped" on_press=macro_mixed_wrapped_button_press />
+        </Row>
+    }
 }
 
 /// Component whose key map handles Tab before focus can move.
@@ -358,6 +402,30 @@ fn key_with_kind(code: KeyCode, kind: KeyEventKind) -> Event {
     Event::Key(KeyEvent::new_with_kind(code, KeyModifiers::NONE, kind))
 }
 
+/// Records activation for the first wrapped button.
+fn macro_first_wrapped_button_press() -> AppControl {
+    MACRO_FIRST_WRAPPED_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
+    AppControl::Continue
+}
+
+/// Records activation for the second wrapped button.
+fn macro_second_wrapped_button_press() -> AppControl {
+    MACRO_SECOND_WRAPPED_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
+    AppControl::Continue
+}
+
+/// Records activation for the mixed built-in button.
+fn macro_mixed_builtin_button_press() -> AppControl {
+    MACRO_MIXED_BUILTIN_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
+    AppControl::Continue
+}
+
+/// Records activation for the mixed wrapped button.
+fn macro_mixed_wrapped_button_press() -> AppControl {
+    MACRO_MIXED_WRAPPED_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
+    AppControl::Continue
+}
+
 /// Returns the terminal buffer content as a flat string.
 fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
     terminal
@@ -423,6 +491,36 @@ fn component_macro_compile_cases() {
     let cases = trybuild::TestCases::new();
     cases.pass("tests/fixtures/component_macro/pass/*.rs");
     cases.compile_fail("tests/fixtures/component_macro/fail/*.rs");
+}
+
+/// Verifies generated props are available while the component tree is built.
+///
+/// # Assertions
+///
+/// - A required `into` prop renders as text.
+/// - Nested children passed through a `Children` prop render inside the panel.
+#[test]
+fn generated_component_props_render() -> Result<()> {
+    let mut component = MacroPropPanel::with_props(
+        MacroPropPanelProps::builder()
+            .title("Panel")
+            .children(Box::new(|| {
+                vec![
+                    MacroPropLabel::with_props(
+                        MacroPropLabelProps::builder().label("Child").build(),
+                    )
+                    .into(),
+                ]
+            }))
+            .build(),
+    );
+    let terminal = render_component(&mut component, 24, 6)?;
+    let text = rendered_text(&terminal);
+
+    assert!(text.contains("Panel"), "rendered text: {text:?}");
+    assert!(text.contains("Child"), "rendered text: {text:?}");
+
+    Ok(())
 }
 
 /// Verifies a bare `stylesheet!` statement registers with its component.
@@ -649,6 +747,105 @@ fn generated_components_run_default_button_keys_after_hook_pass() -> Result<()> 
         AppControl::Continue
     );
     assert_eq!(MACRO_DEFAULT_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
+/// Verifies default focus traversal crosses generated component boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Row(<WrappedButton first />, <WrappedButton second />)
+/// Tab, Enter, Tab, Enter, BackTab, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - The first Tab focuses the first wrapped button.
+/// - The second Tab focuses the second wrapped button.
+/// - BackTab returns focus to the first wrapped button.
+#[test]
+fn generated_component_focus_crosses_sibling_component_boundaries() -> Result<()> {
+    MACRO_FIRST_WRAPPED_BUTTON_PRESSES.store(0, Ordering::SeqCst);
+    MACRO_SECOND_WRAPPED_BUTTON_PRESSES.store(0, Ordering::SeqCst);
+
+    let mut component = MacroWrappedButtonSiblings::new();
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(MACRO_FIRST_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        MACRO_SECOND_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst),
+        0
+    );
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(MACRO_FIRST_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        MACRO_SECOND_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst),
+        1
+    );
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::BackTab))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(MACRO_FIRST_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        MACRO_SECOND_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst),
+        1
+    );
+
+    Ok(())
+}
+
+/// Verifies built-in buttons and component-wrapped buttons share focus order.
+#[test]
+fn generated_component_focus_mixes_static_and_component_buttons() -> Result<()> {
+    MACRO_MIXED_BUILTIN_BUTTON_PRESSES.store(0, Ordering::SeqCst);
+    MACRO_MIXED_WRAPPED_BUTTON_PRESSES.store(0, Ordering::SeqCst);
+
+    let mut component = MacroMixedButtonSiblings::new();
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(MACRO_MIXED_BUILTIN_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
+    assert_eq!(MACRO_MIXED_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 0);
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(MACRO_MIXED_BUILTIN_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
+    assert_eq!(MACRO_MIXED_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
 
     Ok(())
 }

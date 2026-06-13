@@ -32,3 +32,14 @@ cargo run --example theme_switcher
 
 Use Tab and Shift+Tab to move focus. Activate Toggle theme with Enter or Space
 to switch the active theme variables at runtime.
+
+## Cascading Components
+
+Run the multi-component stylesheet cascade example:
+
+```sh
+cargo run --example cascading_components
+```
+
+Use Tab and Shift+Tab to move focus. Activate buttons with Enter or Space, and
+press `q` to quit.

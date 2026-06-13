@@ -1,0 +1,5 @@
+error: view! component cannot specify a children prop and child content
+  --> tests/fixtures/view_macro/fail/component_children_conflict.rs:17:16
+   |
+17 |         <Panel children={Box::new(|| vec![text("prop")])}>
+   |                ^^^^^^^^

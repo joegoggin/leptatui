@@ -48,6 +48,36 @@ async fn main() -> Result<()> {
 }
 ```
 
+Component function parameters are props. Use PascalCase component tags in
+`view!`, pass props as attributes, and use nested content with a `children:
+Children` prop. `#[prop(optional)]`, `#[prop(default = ...)]`, and
+`#[prop(into)]` follow the same shape as Leptos component props.
+
+```rust
+#[component]
+fn Label(#[prop(into)] text: String) -> Node {
+    view! { <Text>{text}</Text> }
+}
+
+#[component]
+fn Panel(#[prop(into)] title: String, children: Children) -> Node {
+    view! {
+        <Block>
+            <Column>
+                <Text>{title}</Text>
+                {column(children())}
+            </Column>
+        </Block>
+    }
+}
+
+view! {
+    <Panel title="Theme variables">
+        <Label text="Active theme" />
+    </Panel>
+}
+```
+
 Styles live with components. Put `stylesheet!` inside a `#[component]` body to
 register those rules for that component subtree, including descendant
 components. The same macro still returns a `Stylesheet` value for direct

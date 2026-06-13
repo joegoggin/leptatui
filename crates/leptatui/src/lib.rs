@@ -22,7 +22,9 @@ pub mod style;
 extern crate self as leptatui;
 
 pub use app::{App, AppControl, AppRoot, Error, Result};
-pub use component::{Component, KeyControl, RenderCtx, use_key_event};
+pub use component::{
+    Children, ChildrenFn, ChildrenMut, Component, KeyControl, RenderCtx, use_key_event,
+};
 pub use leptatui_macros::{component, stylesheet, view};
 pub use node::{
     ButtonAction, Node, NodeType, StyleMetadata, block, button, column, component, dynamic, row,

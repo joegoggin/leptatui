@@ -65,4 +65,32 @@ pub trait Component {
     fn handle_key_event(&mut self, _key: KeyEvent) -> Result<KeyControl> {
         Ok(KeyControl::Pass)
     }
+
+    /// Dispatches a key event through custom component handlers only.
+    #[doc(hidden)]
+    fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        self.handle_key_event(key)
+    }
+
+    /// Returns the number of focusable controls inside this component.
+    #[doc(hidden)]
+    fn __focusable_count(&self) -> usize {
+        0
+    }
+
+    /// Returns the focused control index while tracking traversal position.
+    #[doc(hidden)]
+    fn __focused_index_inner(&self, _index: &mut usize) -> Option<usize> {
+        None
+    }
+
+    /// Sets focus by flattened control index while tracking traversal position.
+    #[doc(hidden)]
+    fn __set_focus_by_index_inner(&mut self, _target: usize, _index: &mut usize) {}
+
+    /// Activates the focused control inside this component, if any.
+    #[doc(hidden)]
+    fn __activate_focused_button(&self) -> Option<AppControl> {
+        None
+    }
 }

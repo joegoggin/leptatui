@@ -4,13 +4,13 @@
 //! into Leptatui node builder calls.
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{
     Error, Ident, Result, Token,
     parse::{Parse, ParseStream},
 };
 
-use crate::view::utils::parse::next_is_closing_tag;
+use crate::view::utils::parse::{next_is_closing_tag, next_is_self_closing_tag_end};
 
 use self::attr_validation::{AttrKind, ValidatedAttr};
 
@@ -51,12 +51,22 @@ impl Parse for Element {
         let name: Ident = input.parse()?;
         let mut attrs = Vec::new();
 
-        while !input.peek(Token![>]) {
+        while !input.peek(Token![>]) && !next_is_self_closing_tag_end(input) {
             attrs.push(input.parse()?);
         }
 
-        input.parse::<Token![>]>()?;
+        if next_is_self_closing_tag_end(input) {
+            input.parse::<Token![/]>()?;
+            input.parse::<Token![>]>()?;
 
+            return Ok(Self {
+                name,
+                attrs,
+                children: Vec::new(),
+            });
+        }
+
+        input.parse::<Token![>]>()?;
         let mut children = Vec::new();
         while !input.is_empty() && !next_is_closing_tag(input) {
             children.push(input.parse()?);
@@ -94,32 +104,103 @@ impl Element {
     /// Returns [`syn::Error`] if attributes, children, or the element name are
     /// unsupported.
     pub(super) fn expand(&self) -> Result<TokenStream> {
-        let attrs = self.validate_attrs()?;
-        let leptatui = crate::utils::crate_path::leptatui();
-
-        let node = match self.name.to_string().as_str() {
+        match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
+                let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::block(#child) }
             }),
             "Row" => self.expand_child_list("Row", |children| {
+                let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::row(::std::vec![#(#children),*]) }
             }),
             "Column" => self.expand_child_list("Column", |children| {
+                let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::column(::std::vec![#(#children),*]) }
             }),
             "Text" => self.expand_text_like("Text", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::text(#content) }
             }),
             "Button" => self.expand_text_like("Button", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::button(#content) }
             }),
-            _ => Err(Error::new_spanned(
-                &self.name,
-                "unsupported Leptatui element; expected Block, Text, Row, Column, or Button",
-            )),
-        }?;
+            _ if is_component_name(&self.name) => self.expand_component(),
+            _ => {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    "unsupported Leptatui element; expected Block, Text, Row, Column, Button, or a PascalCase component",
+                ));
+            }
+        }
+        .and_then(|node| {
+            if is_builtin_element(&self.name) {
+                let attrs = self.validate_attrs()?;
+                self.expand_attrs(node, &attrs)
+            } else {
+                Ok(node)
+            }
+        })
+    }
 
-        self.expand_attrs(node, &attrs)
+    /// Expands a PascalCase component tag into a component constructor call.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing a node expression for the component.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if explicit `children` and nested children are
+    /// both supplied.
+    fn expand_component(&self) -> Result<TokenStream> {
+        if let Some(attr) = self
+            .attrs
+            .iter()
+            .find(|attr| attr.name == "children" && !self.children.is_empty())
+        {
+            return Err(Error::new_spanned(
+                &attr.name,
+                "view! component cannot specify a children prop and child content",
+            ));
+        }
+
+        let leptatui = crate::utils::crate_path::leptatui();
+        let name = &self.name;
+        let component = if self.attrs.is_empty() && self.children.is_empty() {
+            quote! { #name::new() }
+        } else {
+            let props = format_ident!("{name}Props");
+            let attr_setters = self.attrs.iter().map(|attr| {
+                let name = &attr.name;
+                let value = attr.value.to_tokens();
+
+                quote! { .#name(#value) }
+            });
+            let children = if self.children.is_empty() {
+                TokenStream::new()
+            } else {
+                let children = self.expand_component_children()?;
+                quote! {
+                    .children(::std::boxed::Box::new(move || {
+                        ::std::vec![#(#children),*]
+                    }))
+                }
+            };
+
+            quote! {
+                #name::with_props(
+                    #props::builder()
+                        #(#attr_setters)*
+                        #children
+                        .build()
+                )
+            }
+        };
+
+        Ok(quote! {
+            ::core::convert::Into::<#leptatui::Node>::into(#component)
+        })
     }
 
     /// Validates and classifies every attribute name accepted by `view!`.
@@ -184,7 +265,7 @@ impl Element {
                 AttrKind::Class => quote! { (#expanded).with_classes(#value) },
                 AttrKind::Id => quote! { (#expanded).with_id(#value) },
                 AttrKind::Style => {
-                    if attr.value.is_literal() {
+                    if attr.value.is_literal() || attr.value.is_unbraced_expr() {
                         return Err(Error::new_spanned(
                             &attr.name,
                             "view! style attribute must be a braced TuiStyle expression",
@@ -204,6 +285,15 @@ impl Element {
                     quote! { (#expanded).on_press(#value) }
                 }
             };
+
+            if !matches!(*kind, AttrKind::OnPress | AttrKind::Style)
+                && attr.value.is_unbraced_expr()
+            {
+                return Err(Error::new_spanned(
+                    &attr.name,
+                    "view! attribute values must be string literals or braced expressions",
+                ));
+            }
         }
 
         Ok(expanded)
@@ -312,6 +402,42 @@ impl Element {
         }
     }
 
+    /// Expands all children passed through a component `children` prop.
+    ///
+    /// # Returns
+    ///
+    /// A list of child node expressions.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if any nested element is malformed.
+    fn expand_component_children(&self) -> Result<Vec<TokenStream>> {
+        self.children
+            .iter()
+            .map(|child| self.expand_component_child(child))
+            .collect()
+    }
+
+    /// Expands a child position that is passed through component children.
+    fn expand_component_child(&self, child: &Child) -> Result<TokenStream> {
+        let leptatui = crate::utils::crate_path::leptatui();
+
+        match child {
+            Child::Element(child) => child.expand(),
+            Child::Text(TextContent::Expr(expr))
+                if matches!(expr.as_ref(), syn::Expr::Closure(_)) =>
+            {
+                Ok(quote! { #leptatui::dynamic(#expr) })
+            }
+            Child::Text(TextContent::Expr(expr)) => {
+                Ok(quote! { ::core::convert::Into::<#leptatui::Node>::into(#expr) })
+            }
+            Child::Text(TextContent::Literal(value)) => {
+                Ok(quote! { ::core::convert::Into::<#leptatui::Node>::into(#value) })
+            }
+        }
+    }
+
     /// Expands an element that must contain exactly one text child.
     ///
     /// # Arguments
@@ -349,6 +475,22 @@ impl Element {
 
         Ok(wrap(content.expand()))
     }
+}
+
+/// Returns whether an identifier is one of the built-in `view!` elements.
+fn is_builtin_element(name: &Ident) -> bool {
+    matches!(
+        name.to_string().as_str(),
+        "Block" | "Row" | "Column" | "Text" | "Button"
+    )
+}
+
+/// Returns whether an identifier should be treated as a component tag.
+fn is_component_name(name: &Ident) -> bool {
+    name.to_string()
+        .chars()
+        .next()
+        .is_some_and(char::is_uppercase)
 }
 
 /// Internal attribute validation output for `Element` expansion.

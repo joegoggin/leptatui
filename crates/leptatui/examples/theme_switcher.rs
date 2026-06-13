@@ -88,7 +88,7 @@ fn ThemeDemo() -> Node {
         <Block class="app-panel">
             <Column>
                 <Text class="title">"Theme variables"</Text>
-                {ThemeStatus::new()}
+                <ThemeStatus />
                 <Text class="body">
                     "The same stylesheet resolves against the active context theme."
                 </Text>

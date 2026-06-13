@@ -78,23 +78,42 @@ impl ComponentNode {
             .with(|| self.inner.borrow_mut().handle_event(event))
     }
 
-    /// Handles a key event inside this component's existing context scope.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Key event dispatched through this component boundary.
-    ///
-    /// # Returns
-    ///
-    /// A [`KeyControl`] value returned by the component.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if the component event path performs
-    /// terminal I/O that fails.
-    pub(crate) fn handle_key_event(&self, key: KeyEvent) -> Result<KeyControl> {
+    /// Dispatches a key event through custom handlers only.
+    #[doc(hidden)]
+    pub(crate) fn dispatch_key_event(&self, key: KeyEvent) -> Result<KeyControl> {
         self.context
-            .with(|| self.inner.borrow_mut().handle_key_event(key))
+            .with(|| self.inner.borrow_mut().__dispatch_key_event(key))
+    }
+
+    /// Returns the number of focusable controls inside the component boundary.
+    #[doc(hidden)]
+    pub(crate) fn focusable_count(&self) -> usize {
+        self.context
+            .with(|| self.inner.borrow().__focusable_count())
+    }
+
+    /// Returns the focused control index while tracking traversal position.
+    #[doc(hidden)]
+    pub(crate) fn focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        self.context
+            .with(|| self.inner.borrow().__focused_index_inner(index))
+    }
+
+    /// Sets focus by flattened control index while tracking traversal position.
+    #[doc(hidden)]
+    pub(crate) fn set_focus_by_index_inner(&self, target: usize, index: &mut usize) {
+        self.context.with(|| {
+            self.inner
+                .borrow_mut()
+                .__set_focus_by_index_inner(target, index)
+        });
+    }
+
+    /// Activates the focused control inside the component boundary, if any.
+    #[doc(hidden)]
+    pub(crate) fn activate_focused_button(&self) -> Option<AppControl> {
+        self.context
+            .with(|| self.inner.borrow().__activate_focused_button())
     }
 
     /// Compares two component boundaries by shared storage identity.

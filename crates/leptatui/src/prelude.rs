@@ -9,10 +9,10 @@
 // - issue #12: TuiStyle and related style helpers
 
 pub use crate::{
-    App, AppControl, AppRoot, BorderType, Borders, ButtonAction, Color, Component, Error,
-    KeyControl, Modifier, Node, NodeType, RenderCtx, Result, StyleDeclarations, StyleMetadata,
-    StyleRule, StyleSelector, Stylesheet, ThemeValue, ThemeVariables, TuiSpacing, TuiStyle, block,
-    button, column,
+    App, AppControl, AppRoot, BorderType, Borders, ButtonAction, Children, ChildrenFn, ChildrenMut,
+    Color, Component, Error, KeyControl, Modifier, Node, NodeType, RenderCtx, Result,
+    StyleDeclarations, StyleMetadata, StyleRule, StyleSelector, Stylesheet, ThemeValue,
+    ThemeVariables, TuiSpacing, TuiStyle, block, button, column,
     context::{expect_context, provide_context, use_context},
     node::{component, dynamic},
     row, text, theme_color, use_key_event,

@@ -1,17 +1,14 @@
-//! Fail fixture for component functions with parameters.
+//! Fail fixture for component functions with unsupported prop patterns.
 //!
-//! This binary triggers the diagnostic for annotated functions that accept
-//! parameters before props are supported.
+//! This binary triggers the diagnostic for annotated functions that use
+//! destructuring parameters as props.
 
 use leptatui::prelude::*;
 
-/// Defines an unsupported component function with a parameter.
+/// Defines an unsupported component function with a destructuring prop.
 ///
-/// # Arguments
-///
-/// * `label` — Text that would be rendered if parameters were supported.
 #[component]
-fn WithProps(label: String) -> leptatui::Node {
+fn WithProps((label,): (String,)) -> leptatui::Node {
     leptatui::text(label)
 }
 
