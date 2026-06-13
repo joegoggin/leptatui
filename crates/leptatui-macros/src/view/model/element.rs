@@ -265,10 +265,10 @@ impl Element {
                 AttrKind::Class => quote! { (#expanded).with_classes(#value) },
                 AttrKind::Id => quote! { (#expanded).with_id(#value) },
                 AttrKind::Style => {
-                    if attr.value.is_literal() || attr.value.is_unbraced_expr() {
+                    if attr.value.is_literal() {
                         return Err(Error::new_spanned(
                             &attr.name,
-                            "view! style attribute must be a braced TuiStyle expression",
+                            "view! style attribute must be a TuiStyle expression",
                         ));
                     }
 

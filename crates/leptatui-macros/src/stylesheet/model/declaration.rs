@@ -4,7 +4,7 @@
 //! expands each accepted declaration value into a `StyleDeclarations` builder
 //! call.
 
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream, TokenTree};
 use quote::quote;
 use syn::{
     Error, Ident, Result, Token,
@@ -13,9 +13,14 @@ use syn::{
 
 use crate::stylesheet::model::{
     import::StylesheetImports,
+    selector::Selector,
     value::{StyleValue, StyleValueKind},
     variable::StylesheetVariables,
 };
+
+mod kw {
+    syn::custom_keyword!(important);
+}
 
 /// Parsed style declaration such as `fg: Color::White`.
 pub(super) struct Declaration {
@@ -23,6 +28,8 @@ pub(super) struct Declaration {
     name: Ident,
     /// Value assigned to the declaration.
     value: StyleValue,
+    /// Whether this declaration is marked with `!important`.
+    important: bool,
 }
 
 impl Parse for Declaration {
@@ -42,10 +49,49 @@ impl Parse for Declaration {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let name = input.parse()?;
         input.parse::<Token![:]>()?;
-        let value = input.parse()?;
+        let value = parse_value(input)?;
+        let important = if input.peek(Token![!]) {
+            input.parse::<Token![!]>()?;
+            input.parse::<kw::important>()?;
+            true
+        } else {
+            false
+        };
 
-        Ok(Self { name, value })
+        Ok(Self {
+            name,
+            value,
+            important,
+        })
     }
+}
+
+fn parse_value(input: ParseStream<'_>) -> Result<StyleValue> {
+    let mut tokens = TokenStream::new();
+
+    while !input.is_empty()
+        && !input.peek(Token![,])
+        && !starts_important(input)
+        && !starts_nested_rule(input)
+    {
+        tokens.extend(::std::iter::once(input.parse::<TokenTree>()?));
+    }
+
+    if tokens.is_empty() {
+        return Err(input.error("stylesheet! declaration requires a value"));
+    }
+
+    syn::parse2(tokens)
+}
+
+fn starts_important(input: ParseStream<'_>) -> bool {
+    let fork = input.fork();
+    fork.parse::<Token![!]>().is_ok() && fork.parse::<kw::important>().is_ok()
+}
+
+fn starts_nested_rule(input: ParseStream<'_>) -> bool {
+    let fork = input.fork();
+    fork.parse::<Selector>().is_ok() && fork.peek(Token![=>])
 }
 
 impl Declaration {
@@ -76,37 +122,61 @@ impl Declaration {
                 let value = self
                     .value
                     .expand(variables, imports, StyleValueKind::Color)?;
-                Ok(quote! { (#style).foreground(#value) })
+                if self.important {
+                    Ok(quote! { (#style).foreground_important(#value) })
+                } else {
+                    Ok(quote! { (#style).foreground(#value) })
+                }
             }
             "bg" | "background" => {
                 let value = self
                     .value
                     .expand(variables, imports, StyleValueKind::Color)?;
-                Ok(quote! { (#style).background(#value) })
+                if self.important {
+                    Ok(quote! { (#style).background_important(#value) })
+                } else {
+                    Ok(quote! { (#style).background(#value) })
+                }
             }
             "modifier" => {
                 let value = self
                     .value
                     .expand(variables, imports, StyleValueKind::Modifier)?;
-                Ok(quote! { (#style).modifier(#value) })
+                if self.important {
+                    Ok(quote! { (#style).modifier_important(#value) })
+                } else {
+                    Ok(quote! { (#style).modifier(#value) })
+                }
             }
             "borders" => {
                 let value = self
                     .value
                     .expand(variables, imports, StyleValueKind::Borders)?;
-                Ok(quote! { (#style).borders(#value) })
+                if self.important {
+                    Ok(quote! { (#style).borders_important(#value) })
+                } else {
+                    Ok(quote! { (#style).borders(#value) })
+                }
             }
             "border_type" => {
                 let value = self
                     .value
                     .expand(variables, imports, StyleValueKind::BorderType)?;
-                Ok(quote! { (#style).border_type(#value) })
+                if self.important {
+                    Ok(quote! { (#style).border_type_important(#value) })
+                } else {
+                    Ok(quote! { (#style).border_type(#value) })
+                }
             }
             "padding" => {
                 let value = self
                     .value
                     .expand(variables, imports, StyleValueKind::Spacing)?;
-                Ok(quote! { (#style).padding(#value) })
+                if self.important {
+                    Ok(quote! { (#style).padding_important(#value) })
+                } else {
+                    Ok(quote! { (#style).padding(#value) })
+                }
             }
             _ => Err(Error::new_spanned(
                 &self.name,

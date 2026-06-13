@@ -83,7 +83,10 @@ register those rules for that component subtree, including descendant
 components. The same macro still returns a `Stylesheet` value for direct
 construction and tests. It supports flat terminal selectors and nested rules
 that lower into explicit descendant selectors. Use `&:focus` inside a nested
-rule to combine focus with the current terminal selector.
+rule to combine focus with the current terminal selector. Matching rules use
+CSS-style specificity and source order; inline styles override normal
+stylesheet declarations, and stylesheet declarations marked `!important`
+override normal inline styles.
 
 ```rust
 #[component]
@@ -95,7 +98,7 @@ fn Panel() -> View {
             Text => { fg: Color::White }
 
             Button => {
-                &:focus => { bg: Color::Yellow }
+                &:focus => { bg: Color::Yellow !important }
             }
         }
     }

@@ -174,7 +174,97 @@ fn stylesheet_id_overrides_class_style() {
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
 
-/// Verifies inline styles override stylesheet rules.
+#[test]
+fn selector_css_specificity_sums_compound_and_descendant_parts() {
+    let selector = StyleSelector::descendant(
+        vec![StyleSelector::class("panel")],
+        StyleSelector::compound(vec![
+            StyleSelector::view_type(ViewType::Button),
+            StyleSelector::focus(),
+        ]),
+    );
+
+    assert_eq!(selector.css_specificity(), (0, 2, 1));
+}
+
+#[test]
+fn stylesheet_descendant_specificity_overrides_later_class_rule() {
+    let mut panel = StyleMetadata::new(ViewType::Block);
+    panel.set_classes("panel");
+    let view = text("Save").with_classes("label");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::descendant(
+                vec![StyleSelector::class("panel")],
+                StyleSelector::view_type(ViewType::Text),
+            ),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .rule(
+            StyleSelector::class("label"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[panel],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+}
+
+#[test]
+fn stylesheet_compound_specificity_overrides_later_pseudo_rule() {
+    let view = button("Save").with_focus(true);
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::compound(vec![
+                StyleSelector::view_type(ViewType::Button),
+                StyleSelector::focus(),
+            ]),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .rule(
+            StyleSelector::focus(),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+}
+
+#[test]
+fn stylesheet_equal_specificity_uses_source_order() {
+    let view = text("Save").with_classes("primary warning");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("primary"),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .rule(
+            StyleSelector::class("warning"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Yellow));
+}
+
+/// Verifies inline styles override normal stylesheet rules.
 ///
 /// # Example Under Test
 ///
@@ -190,7 +280,7 @@ fn stylesheet_id_overrides_class_style() {
 ///
 /// # Why
 ///
-/// Inline styles are the final override in style resolution.
+/// Normal inline styles override normal stylesheet declarations.
 #[test]
 fn inline_style_overrides_stylesheet_rules() {
     let view = text("Save")
@@ -211,30 +301,30 @@ fn inline_style_overrides_stylesheet_rules() {
     assert_eq!(resolved.foreground, Some(Color::Black));
 }
 
-/// Verifies inherited colors remain unless the view overrides them.
+/// Verifies inherited text styles remain unless the view overrides them.
 ///
 /// # Example Under Test
 ///
 /// ```text
 /// text("Child").with_inline_style(foreground: yellow)
-/// inherited = foreground: green, background: blue
+/// inherited = foreground: green, modifier: bold
 /// ```
 ///
 /// # Assertions
 ///
 /// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is yellow.
-/// - The resolved background color is blue.
+/// - The resolved modifier is bold.
 ///
 /// # Why
 ///
 /// Child styles should preserve inherited fields that are not locally set.
 #[test]
-fn inherited_colors_flow_to_children_unless_overridden() {
+fn inherited_text_styles_flow_to_children_unless_overridden() {
     let view = text("Child").with_inline_style(TuiStyle::new().foreground(Color::Yellow));
     let inherited = TuiStyle::new()
         .foreground(Color::Green)
-        .background(Color::Blue);
+        .modifier(Modifier::BOLD);
 
     let resolved = Stylesheet::new().resolve(
         view.style_metadata().unwrap(),
@@ -244,7 +334,88 @@ fn inherited_colors_flow_to_children_unless_overridden() {
     );
 
     assert_eq!(resolved.foreground, Some(Color::Yellow));
-    assert_eq!(resolved.background, Some(Color::Blue));
+    assert_eq!(resolved.modifiers, Some(Modifier::BOLD));
+}
+
+#[test]
+fn stylesheet_important_overrides_normal_inline_style() {
+    let view = text("Alert")
+        .with_classes("alert")
+        .with_inline_style(TuiStyle::new().foreground(Color::Black));
+    let stylesheet = stylesheet! {
+        .alert => { fg: Color::Red !important }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Red));
+}
+
+#[test]
+fn stylesheet_important_overrides_normal_higher_specificity_rule() {
+    let view = text("Alert").with_classes("alert");
+    let stylesheet = stylesheet! {
+        Text => { fg: Color::Red !important }
+        .alert => { fg: Color::Blue }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Red));
+}
+
+#[test]
+fn stylesheet_important_rules_use_specificity_then_source_order() {
+    let view = button("Save")
+        .with_classes("primary danger")
+        .with_focus(true);
+    let stylesheet = stylesheet! {
+        Button:focus => { fg: Color::Green !important }
+        :focus => { fg: Color::Yellow !important }
+        .primary => { bg: Color::Blue !important }
+        .danger => { bg: Color::Red !important }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+    assert_eq!(resolved.background, Some(Color::Red));
+}
+
+#[test]
+fn stylesheet_normal_declaration_does_not_override_important_mixin_value() {
+    let view = text("Alert").with_classes("alert");
+    let stylesheet = stylesheet! {
+        @mixin urgent {
+            fg: Color::Red !important
+        }
+
+        .alert => { @include urgent, fg: Color::Blue }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Red));
 }
 
 #[test]
@@ -616,6 +787,20 @@ fn style_declarations_merge_overlays_values() {
             .foreground(Color::Yellow)
             .background(Color::Black)
             .padding(TuiSpacing::uniform(1))
+    );
+}
+
+#[test]
+fn style_declarations_important_values_ignore_later_normal_values() {
+    assert_eq!(
+        StyleDeclarations::new()
+            .foreground_important(Color::Red)
+            .foreground(Color::Blue)
+            .padding_important(TuiSpacing::uniform(1))
+            .padding(TuiSpacing::uniform(2)),
+        StyleDeclarations::new()
+            .foreground_important(Color::Red)
+            .padding_important(TuiSpacing::uniform(1))
     );
 }
 

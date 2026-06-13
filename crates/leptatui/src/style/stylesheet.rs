@@ -1,8 +1,8 @@
 //! Stylesheet rule storage and resolution.
 //!
 //! This module stores ordered style rules and resolves them against view
-//! selector metadata, ancestor metadata, inherited styles, and inline style
-//! overrides.
+//! selector metadata, ancestor metadata, inherited styles, inline style
+//! overrides, and CSS-like declaration importance.
 
 use crate::{StyleDeclarations, ThemeVariables, view::StyleMetadata};
 
@@ -38,8 +38,7 @@ impl StyleRule {
 
 /// Ordered collection of style rules.
 ///
-/// Rules are resolved by selector specificity, then by insertion order within
-/// each specificity group.
+/// Rules are resolved by CSS selector specificity, then by insertion order.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Stylesheet {
     /// Rules registered for style resolution.
@@ -97,9 +96,9 @@ impl Stylesheet {
 
     /// Resolves the style for a view.
     ///
-    /// Starts with inherited style values, overlays matching type, class, and id
-    /// rules using the current view and ancestor chain, then overlays any
-    /// inline style stored in the view metadata.
+    /// Starts with inherited style values, overlays matching normal rules using
+    /// CSS selector specificity and source order, overlays any inline style
+    /// stored in the view metadata, then overlays matching important rules.
     ///
     /// # Arguments
     ///
@@ -118,50 +117,73 @@ impl Stylesheet {
         inherited: TuiStyle,
         theme: &ThemeVariables,
     ) -> TuiStyle {
+        Self::resolve_stylesheets(
+            ::std::slice::from_ref(self),
+            metadata,
+            ancestors,
+            inherited,
+            metadata.inline_style(),
+            theme,
+        )
+    }
+
+    /// Resolves styles from an ordered stack of active component stylesheets.
+    pub(crate) fn resolve_stylesheets(
+        stylesheets: &[Self],
+        metadata: &StyleMetadata,
+        ancestors: &[StyleMetadata],
+        inherited: TuiStyle,
+        inline_style: Option<TuiStyle>,
+        theme: &ThemeVariables,
+    ) -> TuiStyle {
         let mut resolved = StyleDeclarations::from(inherited);
+        let rules = Self::matching_rules(stylesheets, metadata, ancestors);
 
-        self.apply_matching_rules(&mut resolved, metadata, ancestors);
+        for rule in &rules {
+            resolved.overlay_normal(rule.style);
+        }
 
-        if let Some(inline_style) = metadata.inline_style() {
-            resolved.overlay(&StyleDeclarations::from(inline_style));
+        if let Some(inline_style) = inline_style {
+            resolved.overlay_normal(&StyleDeclarations::from(inline_style));
+        }
+
+        for rule in &rules {
+            resolved.overlay_important(rule.style);
         }
 
         resolved.resolve(theme)
     }
 
-    /// Applies matching rules without resolving theme variables or inline styles.
-    pub(crate) fn apply_matching_rules(
-        &self,
-        resolved: &mut StyleDeclarations,
+    /// Returns matching rules in CSS cascade order.
+    fn matching_rules<'a>(
+        stylesheets: &'a [Self],
         metadata: &StyleMetadata,
         ancestors: &[StyleMetadata],
-    ) {
-        self.apply_matching(resolved, metadata, ancestors, Specificity::Type);
-        self.apply_matching(resolved, metadata, ancestors, Specificity::Class);
-        self.apply_matching(resolved, metadata, ancestors, Specificity::Id);
-    }
+    ) -> Vec<MatchingRule<'a>> {
+        let mut rules = Vec::new();
+        let mut source_order = 0;
 
-    /// Applies matching rules at a single selector specificity.
-    ///
-    /// # Arguments
-    ///
-    /// * `resolved` — Style being accumulated for the target view.
-    /// * `metadata` — View selector metadata used for rule matching.
-    /// * `ancestors` — Ancestor metadata ordered from outermost to innermost.
-    /// * `specificity` — Specificity group to apply.
-    fn apply_matching(
-        &self,
-        resolved: &mut StyleDeclarations,
-        metadata: &StyleMetadata,
-        ancestors: &[StyleMetadata],
-        specificity: Specificity,
-    ) {
-        for rule in &self.rules {
-            if rule.selector.specificity() == specificity
-                && rule.selector.matches(metadata, ancestors)
-            {
-                resolved.overlay(&rule.style);
+        for stylesheet in stylesheets {
+            for rule in &stylesheet.rules {
+                if rule.selector.matches(metadata, ancestors) {
+                    rules.push(MatchingRule {
+                        specificity: rule.selector.specificity(),
+                        source_order,
+                        style: &rule.style,
+                    });
+                }
+
+                source_order += 1;
             }
         }
+
+        rules.sort_by_key(|rule| (rule.specificity, rule.source_order));
+        rules
     }
+}
+
+struct MatchingRule<'a> {
+    specificity: Specificity,
+    source_order: usize,
+    style: &'a StyleDeclarations,
 }

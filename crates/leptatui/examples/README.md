@@ -33,16 +33,18 @@ cargo run --example theme_switcher
 Use Tab and Shift+Tab to move focus. Activate Toggle theme with Enter or Space
 to switch the active theme variables at runtime.
 
-## Cascading Components
+## Style Cascade Showcase
 
-Run the multi-component stylesheet cascade example:
+Run the style cascade mechanics showcase:
 
 ```sh
-cargo run --example cascading_components
+cargo run --example style_cascade_showcase
 ```
 
-Use Tab and Shift+Tab to move focus. Activate buttons with Enter or Space, and
-press `q` to quit.
+This demonstrates CSS-like specificity, source order, descendant selectors,
+component boundaries, inline styles, `!important`, inheritance, and focus
+styling. Use Tab and Shift+Tab to move focus. Activate buttons with Enter or
+Space, and press `q` to quit.
 
 ## Stylesheet Imports
 

@@ -36,6 +36,18 @@ fn main() {
         other => panic!("expected block view, got {other:?}"),
     }
 
+    let unbraced_style_view: View = view! {
+        <Text style=TuiStyle::new().foreground(Color::LightCyan)>"inline"</Text>
+    };
+
+    match unbraced_style_view {
+        View::Text { metadata, .. } => assert_eq!(
+            metadata.inline_style(),
+            Some(TuiStyle::new().foreground(Color::LightCyan))
+        ),
+        other => panic!("expected text view, got {other:?}"),
+    }
+
     let action_view: View = view! {
         <Button on_press={|| AppControl::Continue}>"Save"</Button>
     };

@@ -78,7 +78,7 @@ fn MacroParentStylesChild() -> leptatui::View {
     component(MacroPlainSibling::new())
 }
 
-/// Parent and child components that both style text.
+/// Parent and child components with equal-specificity text rules.
 #[component]
 fn MacroParentWithChildOverride() -> leptatui::View {
     stylesheet! {
@@ -88,7 +88,7 @@ fn MacroParentWithChildOverride() -> leptatui::View {
     component(MacroChildStyleOverride::new())
 }
 
-/// Child component whose stylesheet should override parent component styles.
+/// Child component whose equal-specificity stylesheet should be later in source order.
 #[component]
 fn MacroChildStyleOverride() -> leptatui::View {
     stylesheet! {
@@ -96,6 +96,26 @@ fn MacroChildStyleOverride() -> leptatui::View {
     }
 
     text("Override")
+}
+
+/// Parent component with a class rule that should beat a child type rule.
+#[component]
+fn MacroParentSpecificityBeatsChild() -> leptatui::View {
+    stylesheet! {
+        .specific => { fg: Color::Green }
+    }
+
+    component(MacroChildLowerSpecificity::new())
+}
+
+/// Child component with a lower-specificity type rule.
+#[component]
+fn MacroChildLowerSpecificity() -> leptatui::View {
+    stylesheet! {
+        Text => { fg: Color::Yellow }
+    }
+
+    text("Specific").with_classes("specific")
 }
 
 /// Component whose stylesheet resolves against theme context it provides.
@@ -574,17 +594,32 @@ fn generated_component_stylesheets_apply_to_child_component_subtrees() -> Result
     Ok(())
 }
 
-/// Verifies child component styles are layered above parent component styles.
+/// Verifies equal-specificity child component styles win by source order.
 ///
 /// # Assertions
 ///
-/// - A child text rule overrides the parent text rule for the child subtree.
+/// - A child text rule overrides an equal-specificity parent text rule.
 #[test]
-fn generated_child_component_stylesheet_overrides_parent_stylesheet() -> Result<()> {
+fn generated_equal_specificity_child_stylesheet_wins_by_source_order() -> Result<()> {
     let mut component = MacroParentWithChildOverride::new();
     let terminal = render_component(&mut component, 16, 3)?;
 
     assert_eq!(rendered_cell_colors(&terminal, "O").0, Color::Yellow);
+
+    Ok(())
+}
+
+/// Verifies parent component specificity participates in the CSS cascade.
+///
+/// # Assertions
+///
+/// - A parent class rule overrides a lower-specificity child text rule.
+#[test]
+fn generated_higher_specificity_parent_stylesheet_overrides_child_stylesheet() -> Result<()> {
+    let mut component = MacroParentSpecificityBeatsChild::new();
+    let terminal = render_component(&mut component, 16, 3)?;
+
+    assert_eq!(rendered_cell_colors(&terminal, "S").0, Color::Green);
 
     Ok(())
 }

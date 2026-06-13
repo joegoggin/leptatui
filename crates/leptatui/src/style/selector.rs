@@ -1,8 +1,8 @@
 //! Selectors for matching view style metadata.
 //!
 //! This module defines the selectors used by [`Stylesheet`](super::Stylesheet)
-//! resolution, including descendant selector paths, and maps selectors to
-//! cascade specificity groups.
+//! resolution, including descendant selector paths, and maps selectors to CSS
+//! cascade specificity.
 
 use crate::view::{StyleMetadata, ViewType};
 
@@ -157,6 +157,17 @@ impl StyleSelector {
         }
     }
 
+    /// Returns this selector's CSS specificity tuple.
+    ///
+    /// The tuple is ordered as `(ids, classes_and_pseudos, types)`.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing this selector's CSS-style specificity.
+    pub fn css_specificity(&self) -> (u16, u16, u16) {
+        self.specificity().as_tuple()
+    }
+
     /// Returns the cascade specificity for this selector.
     ///
     /// # Returns
@@ -164,20 +175,19 @@ impl StyleSelector {
     /// A [`Specificity`] value used to order rule application.
     pub(crate) fn specificity(&self) -> Specificity {
         match self {
-            Self::Type(_) => Specificity::Type,
-            Self::Class(_) | Self::Focus => Specificity::Class,
-            Self::Id(_) => Specificity::Id,
+            Self::Type(_) => Specificity::TYPE,
+            Self::Class(_) | Self::Focus => Specificity::CLASS,
+            Self::Id(_) => Specificity::ID,
             Self::Compound(selectors) => selectors
                 .iter()
-                .map(Self::specificity)
-                .max()
-                .unwrap_or(Specificity::Type),
+                .fold(Specificity::ZERO, |specificity, selector| {
+                    specificity + selector.specificity()
+                }),
             Self::Descendant { ancestors, target } => ancestors
                 .iter()
-                .map(Self::specificity)
-                .chain(::std::iter::once(target.specificity()))
-                .max()
-                .unwrap_or(Specificity::Type),
+                .fold(target.specificity(), |specificity, selector| {
+                    specificity + selector.specificity()
+                }),
         }
     }
 }
@@ -215,13 +225,51 @@ fn matches_ancestor_chain(
     false
 }
 
-/// Cascade specificity group for stylesheet rule application.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) enum Specificity {
-    /// Type selector specificity.
-    Type,
-    /// Class and focus selector specificity.
-    Class,
-    /// Id selector specificity.
-    Id,
+/// CSS cascade specificity for stylesheet rule application.
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct Specificity {
+    ids: u16,
+    classes_and_pseudos: u16,
+    types: u16,
+}
+
+impl Specificity {
+    pub(crate) const ZERO: Self = Self {
+        ids: 0,
+        classes_and_pseudos: 0,
+        types: 0,
+    };
+    const ID: Self = Self {
+        ids: 1,
+        classes_and_pseudos: 0,
+        types: 0,
+    };
+    const CLASS: Self = Self {
+        ids: 0,
+        classes_and_pseudos: 1,
+        types: 0,
+    };
+    const TYPE: Self = Self {
+        ids: 0,
+        classes_and_pseudos: 0,
+        types: 1,
+    };
+
+    const fn as_tuple(self) -> (u16, u16, u16) {
+        (self.ids, self.classes_and_pseudos, self.types)
+    }
+}
+
+impl ::core::ops::Add for Specificity {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            ids: self.ids.saturating_add(rhs.ids),
+            classes_and_pseudos: self
+                .classes_and_pseudos
+                .saturating_add(rhs.classes_and_pseudos),
+            types: self.types.saturating_add(rhs.types),
+        }
+    }
 }

@@ -15,7 +15,7 @@ use crate::{
     app::{AppControl, Result},
     component::{Component, KeyControl, RenderCtx},
     context,
-    style::{Borders, StyleDeclarations, TuiStyle},
+    style::{Borders, TuiStyle},
 };
 
 use super::{metadata::StyleMetadata, model::View};
@@ -38,16 +38,14 @@ fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle 
         })
         .unwrap_or_default();
 
-    let mut resolved = StyleDeclarations::from(ctx.inherited_style());
-    for stylesheet in ctx.stylesheets() {
-        stylesheet.apply_matching_rules(&mut resolved, metadata, ctx.selector_ancestors());
-    }
-
-    if let Some(inline_style) = metadata.inline_style() {
-        resolved.overlay(&StyleDeclarations::from(inline_style));
-    }
-
-    resolved.resolve(&theme)
+    crate::Stylesheet::resolve_stylesheets(
+        ctx.stylesheets(),
+        metadata,
+        ctx.selector_ancestors(),
+        ctx.inherited_style(),
+        metadata.inline_style(),
+        &theme,
+    )
 }
 
 impl View {

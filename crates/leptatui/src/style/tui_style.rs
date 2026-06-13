@@ -138,8 +138,7 @@ impl TuiStyle {
 
     /// Returns the style values inherited by descendant views.
     ///
-    /// Only foreground and background colors currently inherit across view
-    /// boundaries.
+    /// Foreground color and text modifiers inherit across view boundaries.
     ///
     /// # Returns
     ///
@@ -147,8 +146,8 @@ impl TuiStyle {
     pub(crate) const fn inherited_values(self) -> Self {
         Self {
             foreground: self.foreground,
-            background: self.background,
-            modifiers: None,
+            background: None,
+            modifiers: self.modifiers,
             borders: None,
             border_type: None,
             padding: None,
@@ -220,5 +219,29 @@ impl From<TuiStyle> for Style {
     /// A [`Style`] value containing configured colors and modifiers.
     fn from(style: TuiStyle) -> Self {
         style.to_ratatui_style()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inherited_values_keep_text_style_and_drop_surface_style() {
+        let inherited = TuiStyle::new()
+            .foreground(Color::Green)
+            .background(Color::Blue)
+            .modifier(Modifier::BOLD)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .padding(TuiSpacing::uniform(1))
+            .inherited_values();
+
+        assert_eq!(inherited.foreground, Some(Color::Green));
+        assert_eq!(inherited.modifiers, Some(Modifier::BOLD));
+        assert_eq!(inherited.background, None);
+        assert_eq!(inherited.borders, None);
+        assert_eq!(inherited.border_type, None);
+        assert_eq!(inherited.padding, None);
     }
 }
