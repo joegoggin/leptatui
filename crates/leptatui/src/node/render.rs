@@ -4,6 +4,7 @@
 //! component event propagation.
 
 use crossterm::event::{Event, KeyCode, KeyEventKind};
+use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Block, Paragraph},
@@ -31,7 +32,11 @@ use super::{metadata::StyleMetadata, model::Node};
 ///
 /// A [`TuiStyle`] containing the resolved node style.
 fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle {
-    let theme = context::use_context::<ThemeVariables>().unwrap_or_default();
+    let theme = context::use_context::<ThemeVariables>()
+        .or_else(|| {
+            context::use_context::<ReadSignal<ThemeVariables>>().map(|theme| theme.get_untracked())
+        })
+        .unwrap_or_default();
 
     ctx.stylesheet().resolve(
         metadata,

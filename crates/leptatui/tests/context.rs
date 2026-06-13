@@ -113,6 +113,19 @@ impl Component for ThemeRenderRoot {
     }
 }
 
+/// Component that provides active theme variables through a signal context.
+struct ThemeSignalRoot {
+    theme: ReadSignal<ThemeVariables>,
+    child: leptatui::Node,
+}
+
+impl Component for ThemeSignalRoot {
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        provide_context(self.theme);
+        ctx.render_node(&self.child)
+    }
+}
+
 /// Component that records context values observed during rendering.
 struct ContextRoot {
     /// String context observed through Leptatui render-scope storage.
@@ -222,6 +235,64 @@ fn context_theme_variables_update_rendered_styles() -> Result<()> {
     assert_eq!(cell.bg, Color::White);
 
     set_dark.set(true);
+
+    render_result = Ok(());
+    terminal.draw(|frame| {
+        render_result = AppRoot::render(&mut root, frame, &stylesheet);
+    })?;
+    render_result?;
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "T")
+        .expect("rendered themed cell");
+    assert_eq!(cell.fg, Color::White);
+    assert_eq!(cell.bg, Color::Black);
+
+    Ok(())
+}
+
+#[test]
+fn context_theme_signal_updates_rendered_styles() -> Result<()> {
+    let owner = Owner::new();
+    let light = ThemeVariables::new()
+        .color("text", Color::Black)
+        .color("surface", Color::White);
+    let dark = ThemeVariables::new()
+        .color("text", Color::White)
+        .color("surface", Color::Black);
+    let (theme, set_theme) = owner.with(|| signal(light));
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("themed"),
+        StyleDeclarations::new()
+            .foreground(theme_color("text"))
+            .background(theme_color("surface")),
+    );
+    let mut root = ThemeSignalRoot {
+        theme,
+        child: text("Theme").with_classes("themed"),
+    };
+    let backend = TestBackend::new(12, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        render_result = AppRoot::render(&mut root, frame, &stylesheet);
+    })?;
+    render_result?;
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "T")
+        .expect("rendered themed cell");
+    assert_eq!(cell.fg, Color::Black);
+    assert_eq!(cell.bg, Color::White);
+
+    set_theme.set(dark);
 
     render_result = Ok(());
     terminal.draw(|frame| {

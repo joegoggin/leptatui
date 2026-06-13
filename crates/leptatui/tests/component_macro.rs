@@ -12,10 +12,14 @@ use std::{
 };
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use leptatui::{AppControl, Component, RenderCtx, Result, button, component};
+use leptatui::{
+    AppControl, Component, RenderCtx, Result, button, column, component, dynamic, text,
+};
+use leptos::prelude::{GetUntracked, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
 
 static MACRO_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+static MACRO_SIGNAL_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
 static MACRO_CONTEXT_OBSERVED: Mutex<Option<MacroLabel>> = Mutex::new(None);
 
 /// Context value used by generated component provider tests.
@@ -29,6 +33,21 @@ fn MacroButtonRoot() -> leptatui::Node {
         MACRO_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
         AppControl::Continue
     })
+}
+
+/// Component with local signal state created during generated setup.
+#[component]
+fn MacroSignalRoot() -> leptatui::Node {
+    MACRO_SIGNAL_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
+    let (count, set_count) = signal(0);
+
+    column([
+        dynamic(move || text(format!("Count: {}", count.get_untracked()))),
+        button("Increment").on_press(move || {
+            set_count.update(|count| *count += 1);
+            AppControl::Continue
+        }),
+    ])
 }
 
 /// Component that records the label visible from its render context.
@@ -55,6 +74,17 @@ fn MacroContextProvider() -> leptatui::Node {
 /// Creates a key-press event for a key code.
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+}
+
+/// Returns the terminal buffer content as a flat string.
+fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect()
 }
 
 /// Verifies component macro pass and fail fixtures compile as expected.
@@ -139,6 +169,64 @@ fn generated_components_dispatch_events_after_redraw() -> Result<()> {
     Ok(())
 }
 
+/// Verifies generated component setup owns persistent Leptos signal state.
+///
+/// # Example Under Test
+///
+/// ```text
+/// #[component]
+/// fn MacroSignalRoot() -> Node {
+///     let (count, set_count) = signal(0);
+///     column([dynamic(... count ...), button(... set_count ...)])
+/// }
+/// ```
+///
+/// # Assertions
+///
+/// - Component setup runs exactly once.
+/// - The first render shows the initial signal value.
+/// - A button event updates the signal.
+/// - A redraw shows the updated signal without rerunning setup.
+#[test]
+fn generated_component_setup_runs_once_and_signals_persist() -> Result<()> {
+    MACRO_SIGNAL_SETUP_RUNS.store(0, Ordering::SeqCst);
+
+    let backend = TestBackend::new(24, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let mut component = MacroSignalRoot::new();
+
+    assert_eq!(MACRO_SIGNAL_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    let mut render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = Component::render(&mut component, &mut ctx);
+    })?;
+    render_result?;
+    assert!(rendered_text(&terminal).contains("Count: 0"));
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+
+    render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = Component::render(&mut component, &mut ctx);
+    })?;
+    render_result?;
+
+    assert!(rendered_text(&terminal).contains("Count: 1"));
+    assert_eq!(MACRO_SIGNAL_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
 /// Verifies generated component providers remain visible to descendants.
 ///
 /// # Example Under Test
@@ -154,12 +242,12 @@ fn generated_components_dispatch_events_after_redraw() -> Result<()> {
 /// # Assertions
 ///
 /// - The generated provider renders successfully.
-/// - The descendant component reads the macro-provided context value.
+/// - The descendant component reads the context value provided during setup.
 ///
 /// # Why
 ///
-/// Generated component bodies must provide context into the same render scope
-/// used while rendering their returned node tree.
+/// Generated component bodies run once under a stored Leptos owner whose
+/// context remains active while rendering the returned node tree.
 #[test]
 fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
     let backend = TestBackend::new(16, 3);

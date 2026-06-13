@@ -1,55 +1,19 @@
 //! Minimal app runner smoke example.
 //!
-//! This binary renders a small static node tree and exits when the user presses
-//! `q` or `Esc`.
+//! This binary renders a small static node tree and exits from the Quit button.
 
-use crossterm::event::{Event, KeyCode, KeyEventKind};
 use leptatui::prelude::*;
 
 /// Root component for the smoke example.
-struct Root;
-
-impl Component for Root {
-    /// Renders the smoke example UI.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` — Rendering context for the current frame.
-    ///
-    /// # Returns
-    ///
-    /// An empty [`Result`] on success.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Io`] if node rendering performs terminal I/O that fails.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        ctx.render_node(&block(column([
-            text("Leptatui smoke runner. Press q or Esc to quit."),
-            button("Quit"),
-        ])))
-    }
-
-    /// Handles quit keys for the smoke example.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` — Terminal event emitted by Crossterm.
-    ///
-    /// # Returns
-    ///
-    /// An [`AppControl`] value indicating whether to continue or exit.
-    fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        if matches!(
-            event,
-            Event::Key(key)
-                if key.kind == KeyEventKind::Press
-                    && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc)
-        ) {
-            return Ok(AppControl::Exit);
-        }
-
-        Ok(AppControl::Continue)
+#[component]
+fn Root() -> Node {
+    view! {
+        <Block>
+            <Column>
+                <Text>"Leptatui smoke runner. Focus Quit and press Enter or Space."</Text>
+                <Button on_press={|| AppControl::Exit}>"Quit"</Button>
+            </Column>
+        </Block>
     }
 }
 
@@ -65,5 +29,5 @@ impl Component for Root {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(Root).run().await
+    App::new(Root::new()).run().await
 }

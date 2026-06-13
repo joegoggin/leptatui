@@ -1,6 +1,5 @@
 //! Context-backed light/dark theme switching example.
 
-use crossterm::event::Event;
 use leptatui::prelude::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -37,64 +36,49 @@ impl ThemeMode {
     }
 }
 
-struct ThemeStatus;
+#[component]
+fn ThemeStatus() -> Node {
+    let mode = expect_context::<ReadSignal<ThemeMode>>();
 
-impl Component for ThemeStatus {
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let mode = expect_context::<ReadSignal<ThemeMode>>().get_untracked();
-        ctx.render_node(&text(format!("Active theme: {mode:?}")).with_classes("theme-status"))
-    }
-}
-
-struct ThemeDemo {
-    _owner: Owner,
-    mode: ReadSignal<ThemeMode>,
-    root: Node,
-}
-
-impl ThemeDemo {
-    fn new() -> Self {
-        let owner = Owner::new();
-        let (mode, set_mode) = owner.with(|| signal(ThemeMode::Light));
-        let toggle = set_mode;
-        let root = block(column([
-            text("Theme variables").with_classes("title"),
-            component(ThemeStatus),
-            text("The same stylesheet resolves against the active context theme.")
-                .with_classes("body"),
-            row([
-                button("Toggle theme")
-                    .with_classes("theme-button")
-                    .on_press(move || {
-                        toggle.update(|mode| *mode = mode.toggle());
-                        AppControl::Continue
-                    }),
-                button("Quit")
-                    .with_classes("theme-button danger")
-                    .on_press(|| AppControl::Exit),
-            ])
-            .with_classes("controls"),
-        ]))
-        .with_classes("app-panel");
-
-        Self {
-            _owner: owner,
-            mode,
-            root,
+    dynamic(move || {
+        view! {
+            <Text class="theme-status">{format!("Active theme: {:?}", mode.get_untracked())}</Text>
         }
-    }
+    })
 }
 
-impl Component for ThemeDemo {
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let mode = self.mode.get_untracked();
-        provide_context(mode.variables());
-        provide_context(self.mode);
-        ctx.render_node(&self.root)
-    }
+#[component]
+fn ThemeDemo() -> Node {
+    let (mode, set_mode) = signal(ThemeMode::Light);
+    let (theme, set_theme) = signal(ThemeMode::Light.variables());
 
-    fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        self.root.handle_event(event)
+    provide_context(mode);
+    provide_context(theme);
+
+    view! {
+        <Block class="app-panel">
+            <Column>
+                <Text class="title">"Theme variables"</Text>
+                {ThemeStatus::new()}
+                <Text class="body">"The same stylesheet resolves against the active context theme."</Text>
+                <Row class="controls">
+                    <Button
+                        class="theme-button"
+                        on_press={move || {
+                            let next = mode.get_untracked().toggle();
+                            set_mode.set(next);
+                            set_theme.set(next.variables());
+                            AppControl::Continue
+                        }}
+                    >
+                        "Toggle theme"
+                    </Button>
+                    <Button class="theme-button danger" on_press={|| AppControl::Exit}>
+                        "Quit"
+                    </Button>
+                </Row>
+            </Column>
+        </Block>
     }
 }
 

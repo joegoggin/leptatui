@@ -19,6 +19,10 @@ Application code normally imports `leptatui::prelude::*`, defines a root
 component, builds a node tree with either builders or `view!`, and runs it with
 `App::new(root).run().await`.
 
+Generated `#[component]` bodies run once when `new()` creates the component,
+under a stored Leptos owner. Create signals directly in the component body, and
+read them from dynamic nodes or event handlers when values need to update.
+
 ```rust
 use leptatui::prelude::*;
 

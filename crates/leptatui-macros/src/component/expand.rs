@@ -1,7 +1,8 @@
 //! Code generation for the `component` attribute macro.
 //!
-//! This module emits the component wrapper type, node conversions, default
-//! constructor, and render implementation for validated component functions.
+//! This module emits the component wrapper type, owner-backed setup, node
+//! conversions, default constructor, and render implementation for validated
+//! component functions.
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -31,7 +32,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
     let body = input_fn.block;
     let leptatui = crate::utils::crate_path::leptatui();
 
-    let render_body = quote! {
+    let setup_body = quote! {
         {
             let node: #leptatui::Node = (|| #body)().into();
             node
@@ -42,38 +43,25 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         #[allow(non_camel_case_types)]
         #(#attrs)*
         #vis struct #ident {
-            __leptatui_node: ::core::option::Option<#leptatui::Node>,
+            __leptatui_owner: #leptatui::prelude::Owner,
+            __leptatui_node: #leptatui::Node,
         }
 
         impl #ident {
             #[doc = "Creates a component value."]
-            #vis const fn new() -> Self {
+            #vis fn new() -> Self {
+                let __leptatui_owner = #leptatui::prelude::Owner::new();
+                let __leptatui_node = __leptatui_owner.with(Self::__setup_tree);
+
                 Self {
-                    __leptatui_node: ::core::option::Option::None,
+                    __leptatui_owner,
+                    __leptatui_node,
                 }
             }
 
             #[doc(hidden)]
-            fn __render_tree() -> #leptatui::Node {
-                #render_body
-            }
-
-            #[doc(hidden)]
-            fn __rerendered_node(&mut self) -> &mut #leptatui::Node {
-                let mut node = Self::__render_tree();
-                if let ::core::option::Option::Some(previous) = &self.__leptatui_node {
-                    #leptatui::__private::__reconcile_node(&mut node, previous);
-                }
-
-                self.__leptatui_node = ::core::option::Option::Some(node);
-                self.__leptatui_node
-                    .as_mut()
-                    .expect("generated component render tree should be initialized")
-            }
-
-            #[doc(hidden)]
-            fn __event_node(&mut self) -> &mut #leptatui::Node {
-                self.__leptatui_node.get_or_insert_with(Self::__render_tree)
+            fn __setup_tree() -> #leptatui::Node {
+                #setup_body
             }
 
             #[doc = "Converts this component into a Leptatui node."]
@@ -102,8 +90,13 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 &mut self,
                 ctx: &mut #leptatui::RenderCtx<'_, '_>,
             ) -> #leptatui::Result<()> {
-                #leptatui::context::__with_context_scope_if_missing(|| {
-                    ctx.render_node(self.__rerendered_node())
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_node = &self.__leptatui_node;
+
+                __leptatui_owner.with(|| {
+                    #leptatui::context::__with_context_scope_if_missing(|| {
+                        ctx.render_node(__leptatui_node)
+                    })
                 })
             }
 
@@ -112,7 +105,12 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 &mut self,
                 event: #leptatui::__private::Event,
             ) -> #leptatui::Result<#leptatui::AppControl> {
-                self.__event_node().handle_event(event)
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_node = &mut self.__leptatui_node;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_node.handle_event(event)
+                })
             }
         }
     })

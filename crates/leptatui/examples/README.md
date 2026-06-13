@@ -10,7 +10,7 @@ Run the minimal app runner smoke example:
 cargo run --example app_smoke
 ```
 
-Press `q` or Esc to quit.
+Use Tab and Shift+Tab to focus Quit, then press Enter or Space to exit.
 
 ## Counter
 
