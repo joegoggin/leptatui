@@ -11,8 +11,8 @@
 pub use crate::{
     App, AppControl, AppRoot, BorderType, Borders, ButtonAction, Children, ChildrenFn, ChildrenMut,
     Color, Component, Error, KeyControl, Modifier, RenderCtx, Result, StyleDeclarations,
-    StyleMetadata, StyleRule, StyleSelector, Stylesheet, ThemeValue, ThemeVariables, TuiSpacing,
-    TuiStyle, View, ViewType, block, button, column,
+    StyleMetadata, StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue,
+    ThemeVariables, TuiSpacing, TuiStyle, View, ViewType, block, button, column,
     context::{expect_context, provide_context, use_context},
     row, text, theme_color, use_key_event,
     view::{component, dynamic},

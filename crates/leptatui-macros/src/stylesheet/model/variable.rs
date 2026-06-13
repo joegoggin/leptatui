@@ -20,6 +20,18 @@ pub(super) struct Variable {
     value: Expr,
 }
 
+impl Variable {
+    /// Returns this variable's identifier without the `$` prefix.
+    pub(super) fn name(&self) -> &Ident {
+        &self.name
+    }
+
+    /// Returns the Rust expression assigned to this variable.
+    pub(super) fn value(&self) -> &Expr {
+        &self.value
+    }
+}
+
 impl Parse for Variable {
     /// Parses a stylesheet variable definition.
     ///
@@ -74,6 +86,38 @@ impl Parse for VariableRef {
     }
 }
 
+/// Parsed imported variable reference such as `colors.$fg`.
+pub(super) struct ImportedVariableRef {
+    /// Imported module alias.
+    alias: Ident,
+    /// Referenced variable identifier without the `$` prefix.
+    name: Ident,
+}
+
+impl Parse for ImportedVariableRef {
+    /// Parses an imported stylesheet variable reference.
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let alias = input.parse()?;
+        input.parse::<Token![.]>()?;
+        input.parse::<Token![$]>()?;
+        let name = input.parse()?;
+
+        Ok(Self { alias, name })
+    }
+}
+
+impl ImportedVariableRef {
+    /// Returns the imported module alias.
+    pub(super) fn alias(&self) -> &Ident {
+        &self.alias
+    }
+
+    /// Returns the referenced variable identifier.
+    pub(super) fn name(&self) -> &Ident {
+        &self.name
+    }
+}
+
 impl VariableRef {
     /// Expands this reference to the variable's stored Rust expression.
     ///
@@ -99,6 +143,15 @@ impl VariableRef {
 
         Ok(quote! { #value })
     }
+}
+
+/// Returns whether the stream starts with an imported variable reference.
+pub(super) fn starts_imported_variable(input: ParseStream<'_>) -> bool {
+    let fork = input.fork();
+
+    fork.parse::<Ident>().is_ok()
+        && fork.parse::<Token![.]>().is_ok()
+        && fork.parse::<Token![$]>().is_ok()
 }
 
 /// Compile-time stylesheet variable lookup.

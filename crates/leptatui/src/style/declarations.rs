@@ -58,6 +58,12 @@ impl StyleDeclarations {
         self
     }
 
+    /// Overlays another declaration set and returns the updated declarations.
+    pub fn merge(mut self, style: &Self) -> Self {
+        self.overlay(style);
+        self
+    }
+
     pub(crate) fn overlay(&mut self, style: &Self) {
         self.foreground = style.foreground.clone().or_else(|| self.foreground.clone());
         self.background = style.background.clone().or_else(|| self.background.clone());

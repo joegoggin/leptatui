@@ -43,3 +43,15 @@ cargo run --example cascading_components
 
 Use Tab and Shift+Tab to move focus. Activate buttons with Enter or Space, and
 press `q` to quit.
+
+## Stylesheet Imports
+
+Run the imported variables and mixins example:
+
+```sh
+cargo run --example stylesheet_imports
+```
+
+This demonstrates `@use`, namespaced variables, imported mixins, and local
+mixin composition. Use Tab and Shift+Tab to move focus. Activate buttons with
+Enter or Space, and press `q` to quit.

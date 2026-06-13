@@ -7,12 +7,15 @@
 use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{
     Error, Ident, Result, Token, braced,
     parse::{Parse, ParseStream},
 };
 
-use crate::stylesheet::model::{declaration::Declaration, variable::StylesheetVariables};
+use crate::stylesheet::model::{
+    declaration::Declaration, import::StylesheetImports, variable::StylesheetVariables,
+};
 
 mod kw {
     syn::custom_keyword!(mixin);
@@ -23,8 +26,35 @@ mod kw {
 pub(super) struct Mixin {
     /// Mixin identifier used by `@include`.
     name: Ident,
-    /// Declarations expanded wherever the mixin is included.
-    declarations: Vec<Declaration>,
+    /// Declarations and includes expanded wherever the mixin is included.
+    items: Vec<MixinItem>,
+}
+
+/// Ordered style item inside a mixin body.
+enum MixinItem {
+    /// Ordinary style declaration.
+    Declaration(Declaration),
+    /// Reusable declaration mixin include.
+    MixinInclude(MixinInclude),
+}
+
+impl MixinItem {
+    /// Applies this mixin item to an in-progress declaration expression.
+    fn expand(
+        &self,
+        style: TokenStream,
+        variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
+        mixins: &StylesheetMixins<'_>,
+        stack: &mut Vec<String>,
+    ) -> Result<TokenStream> {
+        match self {
+            Self::Declaration(declaration) => declaration.expand(style, variables, imports),
+            Self::MixinInclude(include) => {
+                include.expand_with_stack(style, variables, imports, mixins, stack)
+            }
+        }
+    }
 }
 
 impl Parse for Mixin {
@@ -51,9 +81,13 @@ impl Parse for Mixin {
         let content;
         braced!(content in input);
 
-        let mut declarations = Vec::new();
+        let mut items = Vec::new();
         while !content.is_empty() {
-            declarations.push(content.parse()?);
+            if content.peek(Token![@]) {
+                items.push(MixinItem::MixinInclude(content.parse()?));
+            } else {
+                items.push(MixinItem::Declaration(content.parse()?));
+            }
 
             if content.peek(Token![,]) {
                 content.parse::<Token![,]>()?;
@@ -64,11 +98,13 @@ impl Parse for Mixin {
             }
         }
 
-        if declarations.is_empty() {
-            return Err(content.error("stylesheet! mixin requires at least one declaration"));
+        if items.is_empty() {
+            return Err(
+                content.error("stylesheet! mixin requires at least one declaration or include")
+            );
         }
 
-        Ok(Self { name, declarations })
+        Ok(Self { name, items })
     }
 }
 
@@ -82,7 +118,7 @@ impl Mixin {
         &self.name
     }
 
-    /// Applies this mixin's declarations to an in-progress style expression.
+    /// Applies this mixin's items to an in-progress style expression.
     ///
     /// # Arguments
     ///
@@ -100,21 +136,58 @@ impl Mixin {
     /// referenced stylesheet variable is unknown.
     pub(super) fn expand(
         &self,
+        style: TokenStream,
+        variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
+        mixins: &StylesheetMixins<'_>,
+    ) -> Result<TokenStream> {
+        self.expand_with_stack(style, variables, imports, mixins, &mut Vec::new())
+    }
+
+    /// Applies this mixin while tracking local include recursion.
+    fn expand_with_stack(
+        &self,
         mut style: TokenStream,
         variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
+        mixins: &StylesheetMixins<'_>,
+        stack: &mut Vec<String>,
     ) -> Result<TokenStream> {
-        for declaration in &self.declarations {
-            style = declaration.expand(style, variables)?;
+        let name = self.name.to_string();
+
+        if let Some(position) = stack.iter().position(|value| value == &name) {
+            let mut cycle = stack[position..].to_vec();
+            cycle.push(name);
+
+            return Err(Error::new_spanned(
+                &self.name,
+                format!("cyclic stylesheet mixin include `{}`", cycle.join(" -> ")),
+            ));
         }
 
+        stack.push(name);
+
+        for item in &self.items {
+            style = item.expand(style, variables, imports, mixins, stack)?;
+        }
+
+        stack.pop();
         Ok(style)
     }
 }
 
 /// Parsed mixin include such as `@include panel`.
 pub(super) struct MixinInclude {
-    /// Referenced mixin identifier.
-    name: Ident,
+    /// Referenced local or imported mixin.
+    reference: MixinReference,
+}
+
+/// Local or imported mixin reference.
+enum MixinReference {
+    /// Mixin defined in the current `stylesheet!` invocation.
+    Local(Ident),
+    /// Mixin exported by an imported style module.
+    Imported { alias: Ident, name: Ident },
 }
 
 impl Parse for MixinInclude {
@@ -136,9 +209,19 @@ impl Parse for MixinInclude {
         input.parse::<Token![@]>()?;
         input.parse::<kw::include>()?;
 
-        Ok(Self {
-            name: input.parse()?,
-        })
+        let first = input.parse()?;
+        let reference = if input.peek(Token![.]) {
+            input.parse::<Token![.]>()?;
+
+            MixinReference::Imported {
+                alias: first,
+                name: input.parse()?,
+            }
+        } else {
+            MixinReference::Local(first)
+        };
+
+        Ok(Self { reference })
     }
 }
 
@@ -165,16 +248,39 @@ impl MixinInclude {
         &self,
         style: TokenStream,
         variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
         mixins: &StylesheetMixins<'_>,
     ) -> Result<TokenStream> {
-        let Some(mixin) = mixins.get(&self.name) else {
-            return Err(Error::new_spanned(
-                &self.name,
-                format!("unknown stylesheet mixin `{}`", self.name),
-            ));
-        };
+        self.expand_with_stack(style, variables, imports, mixins, &mut Vec::new())
+    }
 
-        mixin.expand(style, variables)
+    /// Expands this include while preserving the active local include stack.
+    fn expand_with_stack(
+        &self,
+        style: TokenStream,
+        variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
+        mixins: &StylesheetMixins<'_>,
+        stack: &mut Vec<String>,
+    ) -> Result<TokenStream> {
+        match &self.reference {
+            MixinReference::Local(name) => {
+                let Some(mixin) = mixins.get(name) else {
+                    return Err(Error::new_spanned(
+                        name,
+                        format!("unknown stylesheet mixin `{name}`"),
+                    ));
+                };
+
+                mixin.expand_with_stack(style, variables, imports, mixins, stack)
+            }
+            MixinReference::Imported { alias, name } => {
+                let module = imports.get(alias)?;
+                let name = name.to_string();
+
+                Ok(quote! { (#style).merge(#module.expect_mixin(#name)) })
+            }
+        }
     }
 }
 

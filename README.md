@@ -136,6 +136,57 @@ fn MixedPanel() -> View {
 }
 ```
 
+Variables and mixins can also live in helper functions and be imported with
+`@use`. Imports use the helper function name as their namespace by default, or
+can be renamed with `as`. A `stylesheet!` invocation with variables or mixins
+but no rules returns a `StyleModule`.
+
+```rust
+fn color_variables() -> StyleModule {
+    stylesheet! {
+        $fg: Color::Black;
+        $bg: Color::White;
+    }
+}
+
+fn button_mixins() -> StyleModule {
+    stylesheet! {
+        @use color_variables;
+
+        @mixin primary {
+            fg: color_variables.$fg,
+            bg: color_variables.$bg,
+            borders: Borders::ALL,
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::uniform(1)
+        }
+
+        @mixin inverted {
+            @include primary,
+            fg: color_variables.$bg,
+            bg: color_variables.$fg
+        }
+    }
+}
+
+#[component]
+fn Actions() -> View {
+    stylesheet! {
+        @use button_mixins as button;
+
+        .submit => { @include button.primary }
+        .quit => { @include button.inverted }
+    }
+
+    view! {
+        <Row>
+            <Button class="submit">"Submit"</Button>
+            <Button class="quit">"Quit"</Button>
+        </Row>
+    }
+}
+```
+
 Stylesheets can also reference runtime theme variables. Provide
 `ThemeVariables` through Leptatui context before rendering descendants, then
 use `theme_color("name")` in stylesheet declarations.

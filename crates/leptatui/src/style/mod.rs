@@ -11,6 +11,7 @@ pub use ratatui::{
 mod declarations;
 mod selector;
 mod spacing;
+mod style_module;
 mod stylesheet;
 mod theme;
 mod tui_style;
@@ -18,6 +19,7 @@ mod tui_style;
 pub use declarations::StyleDeclarations;
 pub use selector::StyleSelector;
 pub use spacing::TuiSpacing;
+pub use style_module::{StyleModule, StyleValue};
 pub use stylesheet::{StyleRule, Stylesheet};
 pub use theme::{ThemeValue, ThemeVariables, theme_color};
 pub use tui_style::TuiStyle;

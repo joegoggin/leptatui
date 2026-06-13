@@ -6,6 +6,7 @@
 //! # Modules
 //!
 //! - [`declaration`] — Style property declaration parsing and expansion.
+//! - [`import`] — Imported style module parsing and lookup support.
 //! - [`mixin`] — Reusable declaration mixin parsing and lookup support.
 //! - [`rule`] — Selector plus declaration-block parsing and expansion.
 //! - [`selector`] — Stylesheet selector parsing and expansion.
@@ -14,6 +15,7 @@
 //! - [`variable`] — Stylesheet variable definition and lookup support.
 
 mod declaration;
+mod import;
 mod mixin;
 mod rule;
 mod selector;

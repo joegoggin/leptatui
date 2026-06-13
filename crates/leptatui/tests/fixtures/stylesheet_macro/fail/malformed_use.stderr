@@ -1,0 +1,5 @@
+error: expected identifier
+  --> tests/fixtures/stylesheet_macro/fail/malformed_use.rs:13:23
+   |
+13 |         @use colors as;
+   |                       ^

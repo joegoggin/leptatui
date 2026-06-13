@@ -1,0 +1,5 @@
+error: cyclic stylesheet mixin include `first -> second -> first`
+ --> tests/fixtures/stylesheet_macro/fail/mixin_cycle.rs:8:16
+  |
+8 |         @mixin first {
+  |                ^^^^^

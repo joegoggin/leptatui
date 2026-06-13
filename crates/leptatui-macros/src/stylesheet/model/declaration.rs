@@ -11,7 +11,11 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
-use crate::stylesheet::model::{value::StyleValue, variable::StylesheetVariables};
+use crate::stylesheet::model::{
+    import::StylesheetImports,
+    value::{StyleValue, StyleValueKind},
+    variable::StylesheetVariables,
+};
 
 /// Parsed style declaration such as `fg: Color::White`.
 pub(super) struct Declaration {
@@ -65,16 +69,45 @@ impl Declaration {
         &self,
         style: TokenStream,
         variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
     ) -> Result<TokenStream> {
-        let value = self.value.expand(variables)?;
-
         match self.name.to_string().as_str() {
-            "fg" | "foreground" => Ok(quote! { (#style).foreground(#value) }),
-            "bg" | "background" => Ok(quote! { (#style).background(#value) }),
-            "modifier" => Ok(quote! { (#style).modifier(#value) }),
-            "borders" => Ok(quote! { (#style).borders(#value) }),
-            "border_type" => Ok(quote! { (#style).border_type(#value) }),
-            "padding" => Ok(quote! { (#style).padding(#value) }),
+            "fg" | "foreground" => {
+                let value = self
+                    .value
+                    .expand(variables, imports, StyleValueKind::Color)?;
+                Ok(quote! { (#style).foreground(#value) })
+            }
+            "bg" | "background" => {
+                let value = self
+                    .value
+                    .expand(variables, imports, StyleValueKind::Color)?;
+                Ok(quote! { (#style).background(#value) })
+            }
+            "modifier" => {
+                let value = self
+                    .value
+                    .expand(variables, imports, StyleValueKind::Modifier)?;
+                Ok(quote! { (#style).modifier(#value) })
+            }
+            "borders" => {
+                let value = self
+                    .value
+                    .expand(variables, imports, StyleValueKind::Borders)?;
+                Ok(quote! { (#style).borders(#value) })
+            }
+            "border_type" => {
+                let value = self
+                    .value
+                    .expand(variables, imports, StyleValueKind::BorderType)?;
+                Ok(quote! { (#style).border_type(#value) })
+            }
+            "padding" => {
+                let value = self
+                    .value
+                    .expand(variables, imports, StyleValueKind::Spacing)?;
+                Ok(quote! { (#style).padding(#value) })
+            }
             _ => Err(Error::new_spanned(
                 &self.name,
                 "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, or padding",

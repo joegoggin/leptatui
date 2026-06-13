@@ -12,6 +12,7 @@ use syn::{
 };
 
 use crate::stylesheet::model::{
+    import::StylesheetImports,
     mixin::{MixinInclude, StylesheetMixins},
     variable::StylesheetVariables,
 };
@@ -57,11 +58,12 @@ impl StyleItem {
         &self,
         style: TokenStream,
         variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
         mixins: &StylesheetMixins<'_>,
     ) -> Result<TokenStream> {
         match self {
-            Self::Declaration(declaration) => declaration.expand(style, variables),
-            Self::MixinInclude(include) => include.expand(style, variables, mixins),
+            Self::Declaration(declaration) => declaration.expand(style, variables, imports),
+            Self::MixinInclude(include) => include.expand(style, variables, imports, mixins),
         }
     }
 }
@@ -163,9 +165,10 @@ impl Rule {
         &self,
         stylesheet: TokenStream,
         variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
         mixins: &StylesheetMixins<'_>,
     ) -> Result<TokenStream> {
-        self.expand_with_parent_path(stylesheet, variables, mixins, &[])
+        self.expand_with_parent_path(stylesheet, variables, imports, mixins, &[])
     }
 
     /// Appends this rule and any nested rules using an accumulated selector path.
@@ -190,6 +193,7 @@ impl Rule {
         &self,
         mut stylesheet: TokenStream,
         variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
         mixins: &StylesheetMixins<'_>,
         parent_path: &[&Selector],
     ) -> Result<TokenStream> {
@@ -202,15 +206,15 @@ impl Rule {
             let mut style = quote! { #leptatui::StyleDeclarations::new() };
 
             for item in &self.style_items {
-                style = item.expand(style, variables, mixins)?;
+                style = item.expand(style, variables, imports, mixins)?;
             }
 
             stylesheet = quote! { (#stylesheet).rule(#selector, #style) };
         }
 
         for nested_rule in &self.nested_rules {
-            stylesheet =
-                nested_rule.expand_with_parent_path(stylesheet, variables, mixins, &path)?;
+            stylesheet = nested_rule
+                .expand_with_parent_path(stylesheet, variables, imports, mixins, &path)?;
         }
 
         Ok(stylesheet)
