@@ -20,7 +20,7 @@ use super::{declaration::Declaration, selector::Selector};
 
 /// Parsed stylesheet rule.
 pub(super) struct Rule {
-    /// Selector that determines which nodes receive the style.
+    /// Selector that determines which views receive the style.
     selector: Selector,
     /// Style declarations and mixin includes applied when the selector matches.
     style_items: Vec<StyleItem>,

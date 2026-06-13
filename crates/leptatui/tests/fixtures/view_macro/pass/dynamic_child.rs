@@ -1,6 +1,6 @@
 //! Pass fixture for dynamic children in `view!`.
 //!
-//! This binary verifies closure child expressions become deferred dynamic nodes
+//! This binary verifies closure child expressions become deferred dynamic views
 //! while static sibling elements still expand normally.
 
 use leptatui::prelude::*;
@@ -9,7 +9,7 @@ use leptatui::prelude::*;
 fn main() {
     let count = 7;
 
-    let node: Node = view! {
+    let view: View = view! {
         <Column>
             {move || text(count.to_string())}
             <Text>"Static"</Text>
@@ -17,9 +17,9 @@ fn main() {
     };
 
     assert!(matches!(
-        node,
-        Node::Column { children, .. }
-            if matches!(children.first(), Some(Node::Dynamic(_)))
+        view,
+        View::Column { children, .. }
+            if matches!(children.first(), Some(View::Dynamic(_)))
                 && children.get(1) == Some(&text("Static"))
     ));
 }

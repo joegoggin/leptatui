@@ -1,7 +1,7 @@
 //! Component trait contract for terminal rendering.
 //!
 //! This module defines the render and event-handling interface implemented by
-//! root components, child components, and node trees.
+//! root components, child components, and view trees.
 
 use crossterm::event::{Event, KeyEvent};
 

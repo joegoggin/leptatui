@@ -22,14 +22,14 @@ type ObservedLabels = Rc<RefCell<Vec<Option<ScopeLabel>>>>;
 /// Component that provides a label to its child subtree.
 struct LabelProvider {
     value: ScopeLabel,
-    child: leptatui::Node,
+    child: leptatui::View,
 }
 
 impl Component for LabelProvider {
     /// Provides a label, then renders the child subtree.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.value.clone());
-        ctx.render_node(&self.child)
+        ctx.render_view(&self.child)
     }
 }
 
@@ -56,14 +56,14 @@ impl Component for LabelConsumer {
 /// Component that provides a label during render and forwards events to a child.
 struct EventLabelProvider {
     value: ScopeLabel,
-    child: leptatui::Node,
+    child: leptatui::View,
 }
 
 impl Component for EventLabelProvider {
     /// Provides a label while rendering the provider subtree.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.value.clone());
-        ctx.render_node(&self.child)
+        ctx.render_view(&self.child)
     }
 
     /// Forwards events to the child while this provider's scope is active.
@@ -93,7 +93,7 @@ impl Component for EventLabelConsumer {
 /// Component that provides active theme variables before rendering a child.
 struct ThemeRenderRoot {
     dark: ReadSignal<bool>,
-    child: leptatui::Node,
+    child: leptatui::View,
     stylesheet: Stylesheet,
 }
 
@@ -110,21 +110,21 @@ impl Component for ThemeRenderRoot {
         };
 
         provide_context(theme);
-        ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_node(&self.child))
+        ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_view(&self.child))
     }
 }
 
 /// Component that provides active theme variables through a signal context.
 struct ThemeSignalRoot {
     theme: ReadSignal<ThemeVariables>,
-    child: leptatui::Node,
+    child: leptatui::View,
     stylesheet: Stylesheet,
 }
 
 impl Component for ThemeSignalRoot {
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.theme);
-        ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_node(&self.child))
+        ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_view(&self.child))
     }
 }
 
@@ -367,7 +367,7 @@ fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
     let observed = Rc::new(RefCell::new(Vec::new()));
     let backend = TestBackend::new(24, 6);
     let mut terminal = Terminal::new(backend)?;
-    let node = component(LabelProvider {
+    let view = component(LabelProvider {
         value: ScopeLabel("outer"),
         child: column([
             component(LabelConsumer::new(Rc::clone(&observed))),
@@ -382,7 +382,7 @@ fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = node.render(&mut ctx);
+        render_result = view.render(&mut ctx);
     })?;
     render_result?;
 
@@ -418,7 +418,7 @@ fn component_context_is_available_during_descendant_events() -> Result<()> {
     let observed = Rc::new(RefCell::new(None));
     let backend = TestBackend::new(24, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut node = component(EventLabelProvider {
+    let mut view = component(EventLabelProvider {
         value: ScopeLabel("event"),
         child: component(EventLabelConsumer {
             observed: Rc::clone(&observed),
@@ -428,12 +428,12 @@ fn component_context_is_available_during_descendant_events() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = node.render(&mut ctx);
+        render_result = view.render(&mut ctx);
     })?;
     render_result?;
 
     assert_eq!(
-        node.handle_event(crossterm::event::Event::Resize(24, 4))?,
+        view.handle_event(crossterm::event::Event::Resize(24, 4))?,
         AppControl::Continue
     );
     assert_eq!(*observed.borrow(), Some(ScopeLabel("event")));

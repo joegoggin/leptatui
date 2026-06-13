@@ -37,7 +37,7 @@ impl ThemeMode {
 }
 
 #[component]
-fn ThemeStatus() -> Node {
+fn ThemeStatus() -> View {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
     dynamic(move || {
@@ -46,7 +46,7 @@ fn ThemeStatus() -> Node {
 }
 
 #[component]
-fn ThemeDemo() -> Node {
+fn ThemeDemo() -> View {
     let mode = RwSignal::new(ThemeMode::Light);
     let theme = RwSignal::new(ThemeMode::Light.variables());
 

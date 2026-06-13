@@ -136,9 +136,9 @@ impl TuiStyle {
         self
     }
 
-    /// Returns the style values inherited by descendant nodes.
+    /// Returns the style values inherited by descendant views.
     ///
-    /// Only foreground and background colors currently inherit across node
+    /// Only foreground and background colors currently inherit across view
     /// boundaries.
     ///
     /// # Returns

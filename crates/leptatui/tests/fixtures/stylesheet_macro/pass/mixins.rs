@@ -28,7 +28,7 @@ fn main() {
                 .padding(TuiSpacing::uniform(1)),
         )
         .rule(
-            StyleSelector::node_type(NodeType::Button),
+            StyleSelector::view_type(ViewType::Button),
             TuiStyle::new()
                 .foreground(Color::White)
                 .background(Color::Blue)

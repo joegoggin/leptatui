@@ -1,6 +1,6 @@
-//! Rendering and event traversal for Leptatui nodes.
+//! Rendering and event traversal for Leptatui views.
 //!
-//! This module maps [`Node`] variants to Ratatui widgets, layout splits, and
+//! This module maps [`View`] variants to Ratatui widgets, layout splits, and
 //! component event propagation.
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
@@ -18,19 +18,19 @@ use crate::{
     style::{Borders, StyleDeclarations, TuiStyle},
 };
 
-use super::{metadata::StyleMetadata, model::Node};
+use super::{metadata::StyleMetadata, model::View};
 
-/// Resolves a node style from context stylesheets, ancestors, and inherited style values.
+/// Resolves a view style from context stylesheets, ancestors, and inherited style values.
 ///
 /// # Arguments
 ///
-/// * `metadata` — Node selector metadata used by stylesheet resolution.
+/// * `metadata` — View selector metadata used by stylesheet resolution.
 /// * `ctx` — Rendering context containing stylesheets, ancestor metadata,
 ///   and inherited style.
 ///
 /// # Returns
 ///
-/// A [`TuiStyle`] containing the resolved node style.
+/// A [`TuiStyle`] containing the resolved view style.
 fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle {
     let theme = context::use_context::<ThemeVariables>()
         .or_else(|| {
@@ -50,12 +50,12 @@ fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle 
     resolved.resolve(&theme)
 }
 
-impl Node {
-    /// Renders this node into a context.
+impl View {
+    /// Renders this view into a context.
     ///
     /// # Arguments
     ///
-    /// * `ctx` — Rendering context for the node's target area.
+    /// * `ctx` — Rendering context for the view's target area.
     ///
     /// # Returns
     ///
@@ -123,7 +123,7 @@ impl Node {
         }
     }
 
-    /// Dispatches an event through this node tree.
+    /// Dispatches an event through this view tree.
     ///
     /// # Arguments
     ///
@@ -145,7 +145,7 @@ impl Node {
         self.dispatch_event_ref(&event)
     }
 
-    /// Dispatches a key event through this node tree.
+    /// Dispatches a key event through this view tree.
     ///
     /// # Arguments
     ///
@@ -174,13 +174,13 @@ impl Node {
         self.dispatch_key_event_ref(&key)
     }
 
-    /// Handles built-in key behavior for this node tree.
+    /// Handles built-in key behavior for this view tree.
     #[doc(hidden)]
     pub fn __handle_default_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
         Ok(self.handle_default_key_event_ref(&key))
     }
 
-    /// Returns the number of focusable buttons in this node tree.
+    /// Returns the number of focusable buttons in this view tree.
     #[doc(hidden)]
     pub fn __focusable_count(&self) -> usize {
         self.focusable_count()
@@ -198,13 +198,13 @@ impl Node {
         self.set_focus_by_index_inner(target, index);
     }
 
-    /// Activates the focused button if this node tree contains one.
+    /// Activates the focused button if this view tree contains one.
     #[doc(hidden)]
     pub fn __activate_focused_button(&self) -> Option<AppControl> {
         self.activate_focused_button()
     }
 
-    /// Dispatches a key event by reference through this node tree.
+    /// Dispatches a key event by reference through this view tree.
     ///
     /// # Arguments
     ///
@@ -270,11 +270,11 @@ impl Node {
         }
     }
 
-    /// Returns the number of focusable buttons in this node tree.
+    /// Returns the number of focusable buttons in this view tree.
     ///
     /// # Returns
     ///
-    /// A [`usize`] count of focusable button nodes.
+    /// A [`usize`] count of focusable button views.
     fn focusable_count(&self) -> usize {
         match self {
             Self::Button { .. } => 1,
@@ -292,7 +292,7 @@ impl Node {
     /// # Arguments
     ///
     /// * `direction` — Direction to move through focusable buttons.
-    /// * `count` — Number of focusable buttons in the node tree.
+    /// * `count` — Number of focusable buttons in the view tree.
     fn move_focus(&mut self, direction: FocusDirection, count: usize) {
         if count == 0 {
             return;
@@ -377,7 +377,7 @@ impl Node {
         }
     }
 
-    /// Activates the focused button if this node tree contains one.
+    /// Activates the focused button if this view tree contains one.
     ///
     /// # Returns
     ///
@@ -400,7 +400,7 @@ impl Node {
         }
     }
 
-    /// Dispatches an event to child nodes and component boundaries.
+    /// Dispatches an event to child views and component boundaries.
     ///
     /// # Arguments
     ///
@@ -427,12 +427,12 @@ impl Node {
     }
 }
 
-impl Component for Node {
-    /// Renders the node when it is used as a component.
+impl Component for View {
+    /// Renders the view when it is used as a component.
     ///
     /// # Arguments
     ///
-    /// * `ctx` — Rendering context for the node's target area.
+    /// * `ctx` — Rendering context for the view's target area.
     ///
     /// # Returns
     ///
@@ -443,10 +443,10 @@ impl Component for Node {
     /// Returns [`crate::app::Error::Io`] if rendering performs terminal I/O
     /// that fails.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        Node::render(self, ctx)
+        View::render(self, ctx)
     }
 
-    /// Dispatches an event when the node is used as a component.
+    /// Dispatches an event when the view is used as a component.
     ///
     /// # Arguments
     ///
@@ -461,10 +461,10 @@ impl Component for Node {
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
     /// I/O that fails.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        Node::handle_event(self, event)
+        View::handle_event(self, event)
     }
 
-    /// Dispatches a key event when the node is used as a component.
+    /// Dispatches a key event when the view is used as a component.
     ///
     /// # Arguments
     ///
@@ -479,41 +479,41 @@ impl Component for Node {
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
     /// I/O that fails.
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        Node::handle_key_event(self, key)
+        View::handle_key_event(self, key)
     }
 
-    /// Dispatches custom key behavior through the node tree.
+    /// Dispatches custom key behavior through the view tree.
     #[doc(hidden)]
     fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        Node::__dispatch_key_event(self, key)
+        View::__dispatch_key_event(self, key)
     }
 
-    /// Returns the number of focusable buttons in the node tree.
+    /// Returns the number of focusable buttons in the view tree.
     #[doc(hidden)]
     fn __focusable_count(&self) -> usize {
-        Node::__focusable_count(self)
+        View::__focusable_count(self)
     }
 
     /// Returns the focused button index while tracking traversal position.
     #[doc(hidden)]
     fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
-        Node::__focused_index_inner(self, index)
+        View::__focused_index_inner(self, index)
     }
 
     /// Sets focus by flattened button index while tracking traversal position.
     #[doc(hidden)]
     fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
-        Node::__set_focus_by_index_inner(self, target, index);
+        View::__set_focus_by_index_inner(self, target, index);
     }
 
-    /// Activates the focused button in the node tree, if any.
+    /// Activates the focused button in the view tree, if any.
     #[doc(hidden)]
     fn __activate_focused_button(&self) -> Option<AppControl> {
-        Node::__activate_focused_button(self)
+        View::__activate_focused_button(self)
     }
 }
 
-/// Axis used to split child node layout areas.
+/// Axis used to split child view layout areas.
 #[derive(Clone, Copy)]
 enum Direction {
     /// Split the available area horizontally.
@@ -522,22 +522,22 @@ enum Direction {
     Column,
 }
 
-/// Direction used to move focus through focusable nodes.
+/// Direction used to move focus through focusable views.
 #[derive(Clone, Copy)]
 enum FocusDirection {
-    /// Move focus to the next focusable node.
+    /// Move focus to the next focusable view.
     Forward,
-    /// Move focus to the previous focusable node.
+    /// Move focus to the previous focusable view.
     Backward,
 }
 
-/// Renders child nodes into equally sized row or column areas.
+/// Renders child views into equally sized row or column areas.
 ///
 /// # Arguments
 ///
-/// * `children` — Nodes to render into equal areas.
+/// * `children` — Views to render into equal areas.
 /// * `direction` — Axis used to split the current context area.
-/// * `inherited_style` — Style values inherited by child nodes.
+/// * `inherited_style` — Style values inherited by child views.
 /// * `parent_metadata` — Metadata to append to each child's selector ancestor
 ///   path.
 /// * `ctx` — Rendering context for the parent area.
@@ -551,7 +551,7 @@ enum FocusDirection {
 /// Returns [`crate::app::Error::Io`] if child rendering performs terminal I/O
 /// that fails.
 fn render_children(
-    children: &[Node],
+    children: &[View],
     direction: Direction,
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
@@ -579,11 +579,11 @@ fn render_children(
     Ok(())
 }
 
-/// Dispatches an event through child nodes until one requests exit.
+/// Dispatches an event through child views until one requests exit.
 ///
 /// # Arguments
 ///
-/// * `children` — Child nodes to visit in order.
+/// * `children` — Child views to visit in order.
 /// * `event` — Event to dispatch to each child.
 ///
 /// # Returns
@@ -595,7 +595,7 @@ fn render_children(
 ///
 /// Returns [`crate::app::Error::Io`] if child event handling performs terminal
 /// I/O that fails.
-fn handle_child_events(children: &mut [Node], event: &Event) -> Result<AppControl> {
+fn handle_child_events(children: &mut [View], event: &Event) -> Result<AppControl> {
     for child in children {
         if child.dispatch_event_ref(event)? == AppControl::Exit {
             return Ok(AppControl::Exit);
@@ -605,11 +605,11 @@ fn handle_child_events(children: &mut [Node], event: &Event) -> Result<AppContro
     Ok(AppControl::Continue)
 }
 
-/// Dispatches a key event through child nodes until one handles it.
+/// Dispatches a key event through child views until one handles it.
 ///
 /// # Arguments
 ///
-/// * `children` — Child nodes to visit in order.
+/// * `children` — Child views to visit in order.
 /// * `key` — Key event to dispatch to each child.
 ///
 /// # Returns
@@ -621,7 +621,7 @@ fn handle_child_events(children: &mut [Node], event: &Event) -> Result<AppContro
 ///
 /// Returns [`crate::app::Error::Io`] if child event handling performs terminal
 /// I/O that fails.
-fn handle_child_key_events(children: &mut [Node], key: &KeyEvent) -> Result<KeyControl> {
+fn handle_child_key_events(children: &mut [View], key: &KeyEvent) -> Result<KeyControl> {
     for child in children {
         let control = child.dispatch_key_event_ref(key)?;
         if control != KeyControl::Pass {

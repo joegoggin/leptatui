@@ -1,29 +1,29 @@
-//! Selector metadata attached to render-tree nodes.
+//! Selector metadata attached to render-tree views.
 //!
 //! This module stores the type, id, class, inline-style, and focus metadata
-//! used by stylesheet selectors during node rendering.
+//! used by stylesheet selectors during view rendering.
 
 use crate::style::TuiStyle;
 
 /// Static terminal element type used by style selectors.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NodeType {
-    /// Bordered container node.
+pub enum ViewType {
+    /// Bordered container view.
     Block,
-    /// Plain text node.
+    /// Plain text view.
     Text,
-    /// Horizontal layout node.
+    /// Horizontal layout view.
     Row,
-    /// Vertical layout node.
+    /// Vertical layout view.
     Column,
-    /// Basic button node.
+    /// Basic button view.
     Button,
 }
 
-/// Selector metadata stored with styleable render-tree nodes.
+/// Selector metadata stored with styleable render-tree views.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StyleMetadata {
-    node_type: NodeType,
+    view_type: ViewType,
     id: Option<String>,
     classes: Vec<String>,
     inline_style: Option<TuiStyle>,
@@ -31,18 +31,18 @@ pub struct StyleMetadata {
 }
 
 impl StyleMetadata {
-    /// Creates empty selector metadata for a node type.
+    /// Creates empty selector metadata for a view type.
     ///
     /// # Arguments
     ///
-    /// * `node_type` — Static node type represented by the metadata.
+    /// * `view_type` — Static view type represented by the metadata.
     ///
     /// # Returns
     ///
     /// A [`StyleMetadata`] value with no id, classes, inline style, or focus.
-    pub fn new(node_type: NodeType) -> Self {
+    pub fn new(view_type: ViewType) -> Self {
         Self {
-            node_type,
+            view_type,
             id: None,
             classes: Vec::new(),
             inline_style: None,
@@ -50,20 +50,20 @@ impl StyleMetadata {
         }
     }
 
-    /// Returns the style selector node type.
+    /// Returns the style selector view type.
     ///
     /// # Returns
     ///
-    /// A [`NodeType`] value used by type selectors.
-    pub const fn node_type(&self) -> NodeType {
-        self.node_type
+    /// A [`ViewType`] value used by type selectors.
+    pub const fn view_type(&self) -> ViewType {
+        self.view_type
     }
 
     /// Returns the optional id selector value.
     ///
     /// # Returns
     ///
-    /// An [`Option<&str>`] containing the node id.
+    /// An [`Option<&str>`] containing the view id.
     pub fn id(&self) -> Option<&str> {
         self.id.as_deref()
     }
@@ -86,11 +86,11 @@ impl StyleMetadata {
         self.inline_style
     }
 
-    /// Returns whether this node currently matches `:focus`.
+    /// Returns whether this view currently matches `:focus`.
     ///
     /// # Returns
     ///
-    /// A [`bool`] indicating whether this node is focused.
+    /// A [`bool`] indicating whether this view is focused.
     pub const fn is_focused(&self) -> bool {
         self.focused
     }
@@ -130,7 +130,7 @@ impl StyleMetadata {
     ///
     /// # Arguments
     ///
-    /// * `focused` — Whether this node should match `:focus`.
+    /// * `focused` — Whether this view should match `:focus`.
     pub fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
     }

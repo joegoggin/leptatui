@@ -5,21 +5,21 @@
 
 use leptatui::prelude::*;
 
-/// Builds a text node from a prop.
+/// Builds a text view from a prop.
 #[component]
-fn Label(#[prop(into)] text: String) -> Node {
+fn Label(#[prop(into)] text: String) -> View {
     view! { <Text>{text}</Text> }
 }
 
 /// Builds a button from an unbraced callback prop.
 #[component]
-fn ActionLabel(on_press: fn() -> AppControl) -> Node {
+fn ActionLabel(on_press: fn() -> AppControl) -> View {
     view! { <Button on_press={on_press}>"Run"</Button> }
 }
 
 /// Builds a panel around nested children.
 #[component]
-fn Panel(#[prop(into)] title: String, children: Children) -> Node {
+fn Panel(#[prop(into)] title: String, children: Children) -> View {
     view! {
         <Column>
             <Text>{title}</Text>
@@ -30,10 +30,10 @@ fn Panel(#[prop(into)] title: String, children: Children) -> Node {
 
 /// Exercises component tags at root and child positions.
 fn main() {
-    let root: Node = view! { <Label text="Count" /> };
-    assert!(matches!(root, Node::Component(_)));
+    let root: View = view! { <Label text="Count" /> };
+    assert!(matches!(root, View::Component(_)));
 
-    let node: Node = view! {
+    let view: View = view! {
         <Panel title="Theme variables">
             <Label text="Active theme" />
             <ActionLabel on_press=|| AppControl::Continue />
@@ -41,5 +41,5 @@ fn main() {
         </Panel>
     };
 
-    assert!(matches!(node, Node::Component(_)));
+    assert!(matches!(view, View::Component(_)));
 }

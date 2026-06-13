@@ -1,22 +1,22 @@
 //! Pass fixture for basic `view!` expansion.
 //!
 //! This binary verifies supported element attributes populate selector metadata
-//! while nested elements lower into the expected node tree.
+//! while nested elements lower into the expected view tree.
 
 use leptatui::prelude::*;
 
 /// Exercises basic element expansion and accepted attributes.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
-    let node: Node = view! {
+    let view: View = view! {
         <Block class="card active" id="main" style={style}>
             <Text class={"label"}>"hello"</Text>
         </Block>
     };
 
-    match node {
-        Node::Block { child, metadata } => {
-            assert_eq!(metadata.node_type(), NodeType::Block);
+    match view {
+        View::Block { child, metadata } => {
+            assert_eq!(metadata.view_type(), ViewType::Block);
             assert_eq!(metadata.id(), Some("main"));
             assert_eq!(
                 metadata.classes(),
@@ -25,29 +25,29 @@ fn main() {
             assert_eq!(metadata.inline_style(), Some(style));
 
             match *child {
-                Node::Text { content, metadata } => {
+                View::Text { content, metadata } => {
                     assert_eq!(content, "hello");
-                    assert_eq!(metadata.node_type(), NodeType::Text);
+                    assert_eq!(metadata.view_type(), ViewType::Text);
                     assert_eq!(metadata.classes(), &[String::from("label")]);
                 }
                 other => panic!("expected text child, got {other:?}"),
             }
         }
-        other => panic!("expected block node, got {other:?}"),
+        other => panic!("expected block view, got {other:?}"),
     }
 
-    let action_node: Node = view! {
+    let action_view: View = view! {
         <Button on_press={|| AppControl::Continue}>"Save"</Button>
     };
 
-    match action_node {
-        Node::Button { on_press, .. } => assert!(on_press.is_some()),
-        other => panic!("expected button node, got {other:?}"),
+    match action_view {
+        View::Button { on_press, .. } => assert!(on_press.is_some()),
+        other => panic!("expected button view, got {other:?}"),
     }
 
     let presses = std::rc::Rc::new(std::cell::Cell::new(0));
     let presses_for_button = std::rc::Rc::clone(&presses);
-    let move_action_node: Node = view! {
+    let move_action_view: View = view! {
         <Button
             on_press=move || {
                 presses_for_button.set(presses_for_button.get() + 1);
@@ -58,17 +58,17 @@ fn main() {
         </Button>
     };
 
-    match move_action_node {
-        Node::Button { on_press, .. } => assert!(on_press.is_some()),
-        other => panic!("expected button node, got {other:?}"),
+    match move_action_view {
+        View::Button { on_press, .. } => assert!(on_press.is_some()),
+        other => panic!("expected button view, got {other:?}"),
     }
 
-    let shorthand_action_node: Node = view! {
+    let shorthand_action_view: View = view! {
         <Button on_press=|| AppControl::Exit>"Quit"</Button>
     };
 
-    match shorthand_action_node {
-        Node::Button { on_press, .. } => assert!(on_press.is_some()),
-        other => panic!("expected button node, got {other:?}"),
+    match shorthand_action_view {
+        View::Button { on_press, .. } => assert!(on_press.is_some()),
+        other => panic!("expected button view, got {other:?}"),
     }
 }

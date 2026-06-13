@@ -1,6 +1,6 @@
-//! Component-boundary storage for render-tree nodes.
+//! Component-boundary storage for render-tree views.
 //!
-//! This module wraps component values so they can live inside a cloneable node
+//! This module wraps component values so they can live inside a cloneable view
 //! tree while preserving component state and render-scope context between
 //! events.
 
@@ -16,14 +16,14 @@ use crate::{
 
 /// Shared component boundary stored inside a render tree.
 #[derive(Clone)]
-pub struct ComponentNode {
-    /// Shared mutable component stored behind the node boundary.
+pub struct ComponentView {
+    /// Shared mutable component stored behind the view boundary.
     inner: Rc<RefCell<dyn Component>>,
     /// Persistent context scope owned by this component subtree.
     context: ContextScope,
 }
 
-impl ComponentNode {
+impl ComponentView {
     /// Creates a component boundary from a component value.
     ///
     /// # Arguments
@@ -32,7 +32,7 @@ impl ComponentNode {
     ///
     /// # Returns
     ///
-    /// A [`ComponentNode`] containing the provided component.
+    /// A [`ComponentView`] containing the provided component.
     pub(crate) fn new(component: impl Component + 'static) -> Self {
         Self {
             inner: Rc::new(RefCell::new(component)),
@@ -44,7 +44,7 @@ impl ComponentNode {
     ///
     /// # Arguments
     ///
-    /// * `ctx` — Rendering context supplied by the node boundary.
+    /// * `ctx` — Rendering context supplied by the view boundary.
     ///
     /// # Returns
     ///
@@ -131,7 +131,7 @@ impl ComponentNode {
     }
 }
 
-impl fmt::Debug for ComponentNode {
+impl fmt::Debug for ComponentView {
     /// Formats the component boundary without borrowing the stored component.
     ///
     /// # Arguments
@@ -142,6 +142,6 @@ impl fmt::Debug for ComponentNode {
     ///
     /// A [`fmt::Result`] indicating whether formatting succeeded.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ComponentNode").finish()
+        f.debug_struct("ComponentView").finish()
     }
 }

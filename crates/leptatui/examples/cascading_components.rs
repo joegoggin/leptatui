@@ -11,7 +11,7 @@ fn StatusRow(
     #[prop(into)] label: String,
     #[prop(into)] value: String,
     #[prop(into)] tone: String,
-) -> Node {
+) -> View {
     view! {
         <Row class={format!("status-row {tone}")}>
             <Text class="status-label">{label}</Text>
@@ -22,7 +22,7 @@ fn StatusRow(
 
 /// Metric row with local styles that override the parent cascade.
 #[component]
-fn MetricBadge(#[prop(into)] label: String, #[prop(into)] value: String) -> Node {
+fn MetricBadge(#[prop(into)] label: String, #[prop(into)] value: String) -> View {
     stylesheet! {
         .metric-badge => {
             Text => { fg: Color::DarkGray }
@@ -40,15 +40,15 @@ fn MetricBadge(#[prop(into)] label: String, #[prop(into)] value: String) -> Node
 
 /// Reusable action button component.
 #[component]
-fn CommandButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> Node {
+fn CommandButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> View {
     view! {
         <Button class="command-button" on_press={on_press}>{label}</Button>
     }
 }
 
-/// Panel component that receives nested child nodes.
+/// Panel component that receives nested child views.
 #[component]
-fn Panel(#[prop(into)] title: String, children: Children) -> Node {
+fn Panel(#[prop(into)] title: String, children: Children) -> View {
     view! {
         <Block class="panel">
             <Column>
@@ -61,7 +61,7 @@ fn Panel(#[prop(into)] title: String, children: Children) -> Node {
 
 /// Root component for the cascading styles example.
 #[component]
-fn CascadeDemo() -> Node {
+fn CascadeDemo() -> View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;

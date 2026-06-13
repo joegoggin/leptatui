@@ -1,12 +1,12 @@
 //! Hello World example.
 //!
-//! This binary renders a small static node tree and exits when `q` is pressed.
+//! This binary renders a small static view tree and exits when `q` is pressed.
 
 use leptatui::prelude::*;
 
 /// Root component for the Hello World example.
 #[component]
-fn Root() -> Node {
+fn Root() -> View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;

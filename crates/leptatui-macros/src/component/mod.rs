@@ -1,7 +1,7 @@
 //! Expansion support for the `component` attribute macro.
 //!
 //! This module validates component function signatures and emits the component
-//! type, node conversion, and render implementation used by the runtime crate.
+//! type, view conversion, and render implementation used by the runtime crate.
 
 mod expand;
 mod signature;

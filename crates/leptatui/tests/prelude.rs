@@ -1,6 +1,6 @@
 //! Prelude export tests.
 //!
-//! These tests ensure common runtime, node, style, context, and Leptos
+//! These tests ensure common runtime, view, style, context, and Leptos
 //! reactivity APIs are available through [`leptatui::prelude`].
 
 use leptatui::prelude::*;
@@ -8,7 +8,7 @@ use ratatui::{Terminal, backend::TestBackend};
 
 /// Component used to prove prelude macro and context exports work together.
 #[component]
-fn PreludeComponent() -> Node {
+fn PreludeComponent() -> View {
     provide_context(String::from("from prelude component"));
     let label = expect_context::<String>();
     let _example_key = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE);
@@ -30,7 +30,7 @@ fn PreludeComponent() -> Node {
 ///
 /// ```text
 /// #[component]
-/// fn PreludeComponent() -> Node {
+/// fn PreludeComponent() -> View {
 ///     provide_context(String::from("from prelude component"));
 ///     view! { <Text>{expect_context::<String>()}</Text> }
 /// }
@@ -44,7 +44,7 @@ fn PreludeComponent() -> Node {
 ///
 /// # Why
 ///
-/// The prelude should expose enough macro, node, component, and context APIs for
+/// The prelude should expose enough macro, view, component, and context APIs for
 /// a small component to render without extra imports.
 #[test]
 fn prelude_exposes_macros_and_required_context() -> Result<()> {
@@ -72,7 +72,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
     Ok(())
 }
 
-/// Verifies the prelude exposes reactivity, context, nodes, and styles.
+/// Verifies the prelude exposes reactivity, context, views, and styles.
 ///
 /// # Example Under Test
 ///
@@ -88,7 +88,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// - Signals can be read, set, and updated from the prelude.
 /// - A memo can derive from a prelude signal.
 /// - Context values can be provided and read from the prelude.
-/// - Node and style helpers type-check from the prelude.
+/// - View and style helpers type-check from the prelude.
 /// - The stylesheet macro builds the expected stylesheet from prelude exports.
 #[test]
 fn prelude_exposes_reactivity_and_context() {
@@ -113,8 +113,8 @@ fn prelude_exposes_reactivity_and_context() {
             assert_eq!(expect_context::<String>(), "from prelude");
         });
 
-        let node: Node = block(column([text("from prelude"), button("OK")]));
-        let _ = node;
+        let view: View = block(column([text("from prelude"), button("OK")]));
+        let _ = view;
 
         let style = TuiStyle::new()
             .foreground(Color::LightCyan)
@@ -131,7 +131,7 @@ fn prelude_exposes_reactivity_and_context() {
         assert_eq!(
             stylesheet,
             Stylesheet::new().rule(
-                StyleSelector::node_type(NodeType::Text),
+                StyleSelector::view_type(ViewType::Text),
                 TuiStyle::new().foreground(Color::LightCyan),
             )
         );

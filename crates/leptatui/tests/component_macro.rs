@@ -42,9 +42,9 @@ static MACRO_RELEASE_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct MacroLabel(&'static str);
 
-/// Component with a local stylesheet applied to its own text node.
+/// Component with a local stylesheet applied to its own text view.
 #[component]
-fn MacroStyledText() -> leptatui::Node {
+fn MacroStyledText() -> leptatui::View {
     stylesheet! {
         .scoped => { fg: Color::Yellow, bg: Color::Blue }
     }
@@ -54,7 +54,7 @@ fn MacroStyledText() -> leptatui::Node {
 
 /// Component whose stylesheet targets a shared class name.
 #[component]
-fn MacroStyledSibling() -> leptatui::Node {
+fn MacroStyledSibling() -> leptatui::View {
     stylesheet! {
         .shared => { fg: Color::Yellow }
     }
@@ -64,13 +64,13 @@ fn MacroStyledSibling() -> leptatui::Node {
 
 /// Component with a class that should not receive sibling styles.
 #[component]
-fn MacroPlainSibling() -> leptatui::Node {
+fn MacroPlainSibling() -> leptatui::View {
     text("Plain").with_classes("shared")
 }
 
 /// Parent component whose stylesheet should apply to child component internals.
 #[component]
-fn MacroParentStylesChild() -> leptatui::Node {
+fn MacroParentStylesChild() -> leptatui::View {
     stylesheet! {
         Text => { fg: Color::Green }
     }
@@ -80,7 +80,7 @@ fn MacroParentStylesChild() -> leptatui::Node {
 
 /// Parent and child components that both style text.
 #[component]
-fn MacroParentWithChildOverride() -> leptatui::Node {
+fn MacroParentWithChildOverride() -> leptatui::View {
     stylesheet! {
         Text => { fg: Color::Green }
     }
@@ -90,7 +90,7 @@ fn MacroParentWithChildOverride() -> leptatui::Node {
 
 /// Child component whose stylesheet should override parent component styles.
 #[component]
-fn MacroChildStyleOverride() -> leptatui::Node {
+fn MacroChildStyleOverride() -> leptatui::View {
     stylesheet! {
         Text => { fg: Color::Yellow }
     }
@@ -100,7 +100,7 @@ fn MacroChildStyleOverride() -> leptatui::Node {
 
 /// Component whose stylesheet resolves against theme context it provides.
 #[component]
-fn MacroThemedStylesheet() -> leptatui::Node {
+fn MacroThemedStylesheet() -> leptatui::View {
     provide_context(ThemeVariables::new().color("text", Color::LightCyan));
 
     stylesheet! {
@@ -112,19 +112,19 @@ fn MacroThemedStylesheet() -> leptatui::Node {
 
 /// Component that renders a required prop.
 #[component]
-fn MacroPropLabel(#[prop(into)] label: String) -> leptatui::Node {
+fn MacroPropLabel(#[prop(into)] label: String) -> leptatui::View {
     text(label)
 }
 
 /// Component that renders a prop and nested children.
 #[component]
-fn MacroPropPanel(#[prop(into)] title: String, children: Children) -> leptatui::Node {
+fn MacroPropPanel(#[prop(into)] title: String, children: Children) -> leptatui::View {
     column([text(title), column(children())])
 }
 
 /// Parent component with styled and plain sibling component subtrees.
 #[component]
-fn MacroSiblingStyleRoot() -> leptatui::Node {
+fn MacroSiblingStyleRoot() -> leptatui::View {
     row([
         component(MacroStyledSibling::new()),
         component(MacroPlainSibling::new()),
@@ -133,7 +133,7 @@ fn MacroSiblingStyleRoot() -> leptatui::Node {
 
 /// Component with an interactive button used by macro runtime tests.
 #[component]
-fn MacroButtonRoot() -> leptatui::Node {
+fn MacroButtonRoot() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('s') {
             MACRO_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -151,7 +151,7 @@ fn MacroButtonRoot() -> leptatui::Node {
 
 /// Component with no matching hook for default button key tests.
 #[component]
-fn MacroDefaultButtonRoot() -> leptatui::Node {
+fn MacroDefaultButtonRoot() -> leptatui::View {
     button("Default").on_press(|| {
         MACRO_DEFAULT_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
         AppControl::Continue
@@ -160,13 +160,13 @@ fn MacroDefaultButtonRoot() -> leptatui::Node {
 
 /// Component that wraps one built-in button.
 #[component]
-fn MacroWrappedButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> leptatui::Node {
+fn MacroWrappedButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> leptatui::View {
     button(label).on_press(on_press)
 }
 
 /// Root with sibling custom button components.
 #[component]
-fn MacroWrappedButtonSiblings() -> leptatui::Node {
+fn MacroWrappedButtonSiblings() -> leptatui::View {
     view! {
         <Row>
             <MacroWrappedButton label="First" on_press=macro_first_wrapped_button_press />
@@ -177,7 +177,7 @@ fn MacroWrappedButtonSiblings() -> leptatui::Node {
 
 /// Root with a built-in button and a custom button component.
 #[component]
-fn MacroMixedButtonSiblings() -> leptatui::Node {
+fn MacroMixedButtonSiblings() -> leptatui::View {
     view! {
         <Row>
             <Button on_press={macro_mixed_builtin_button_press}>"Built in"</Button>
@@ -188,7 +188,7 @@ fn MacroMixedButtonSiblings() -> leptatui::Node {
 
 /// Component whose key map handles Tab before focus can move.
 #[component]
-fn MacroTabOverrideButtonRoot() -> leptatui::Node {
+fn MacroTabOverrideButtonRoot() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Tab {
             return KeyControl::Handled;
@@ -205,7 +205,7 @@ fn MacroTabOverrideButtonRoot() -> leptatui::Node {
 
 /// Component whose key map handles Enter before a focused button activates.
 #[component]
-fn MacroEnterOverrideButtonRoot() -> leptatui::Node {
+fn MacroEnterOverrideButtonRoot() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Enter {
             return KeyControl::Handled;
@@ -222,7 +222,7 @@ fn MacroEnterOverrideButtonRoot() -> leptatui::Node {
 
 /// Component with local signal state created during generated setup.
 #[component]
-fn MacroSignalRoot() -> leptatui::Node {
+fn MacroSignalRoot() -> leptatui::View {
     MACRO_SIGNAL_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
     let (count, set_count) = signal(0);
     let increment = set_count;
@@ -261,14 +261,14 @@ impl Component for MacroContextConsumer {
 
 /// Component that provides context to a descendant component boundary.
 #[component]
-fn MacroContextProvider() -> leptatui::Node {
+fn MacroContextProvider() -> leptatui::View {
     leptatui::context::provide_context(MacroLabel("macro"));
     component(MacroContextConsumer)
 }
 
 /// Component that exits when `q` is pressed.
 #[component]
-fn MacroKeyExitRoot() -> leptatui::Node {
+fn MacroKeyExitRoot() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;
@@ -282,7 +282,7 @@ fn MacroKeyExitRoot() -> leptatui::Node {
 
 /// Parent key map used to prove child handlers get priority.
 #[component]
-fn MacroParentKeyRoot() -> leptatui::Node {
+fn MacroParentKeyRoot() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('x') {
             MACRO_PARENT_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -297,7 +297,7 @@ fn MacroParentKeyRoot() -> leptatui::Node {
 
 /// Child key map that handles the same key as its parent.
 #[component]
-fn MacroChildKeyHandler() -> leptatui::Node {
+fn MacroChildKeyHandler() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('x') {
             MACRO_CHILD_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -312,7 +312,7 @@ fn MacroChildKeyHandler() -> leptatui::Node {
 
 /// Parent key map used to prove child pass-through reaches ancestors.
 #[component]
-fn MacroParentAfterPassRoot() -> leptatui::Node {
+fn MacroParentAfterPassRoot() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('p') {
             MACRO_PASS_PARENT_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -327,7 +327,7 @@ fn MacroParentAfterPassRoot() -> leptatui::Node {
 
 /// Child key map that observes a key but passes it to its parent.
 #[component]
-fn MacroPassingChildKeyHandler() -> leptatui::Node {
+fn MacroPassingChildKeyHandler() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('p') {
             MACRO_PASS_CHILD_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -341,7 +341,7 @@ fn MacroPassingChildKeyHandler() -> leptatui::Node {
 
 /// Component with several handlers used to prove source-order short-circuiting.
 #[component]
-fn MacroMultipleKeyHandlers() -> leptatui::Node {
+fn MacroMultipleKeyHandlers() -> leptatui::View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('m') {
             MACRO_FIRST_KEY_HANDLER.fetch_add(1, Ordering::SeqCst);
@@ -371,7 +371,7 @@ fn MacroMultipleKeyHandlers() -> leptatui::Node {
 
 /// Component with explicit repeat and release key handlers.
 #[component]
-fn MacroKindSpecificKeyHandlers() -> leptatui::Node {
+fn MacroKindSpecificKeyHandlers() -> leptatui::View {
     use_key_event(KeyEventKind::Repeat, |key| {
         if key.code == KeyCode::Char('k') {
             MACRO_REPEAT_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -530,7 +530,7 @@ fn generated_component_props_render() -> Result<()> {
 /// - The component's text receives the foreground and background from the
 ///   local stylesheet.
 #[test]
-fn generated_component_stylesheet_styles_own_nodes() -> Result<()> {
+fn generated_component_stylesheet_styles_own_views() -> Result<()> {
     let mut component = MacroStyledText::new();
     let terminal = render_component(&mut component, 16, 3)?;
 
@@ -610,13 +610,13 @@ fn generated_component_stylesheet_resolves_theme_context() -> Result<()> {
 ///
 /// ```text
 /// #[component]
-/// fn MacroButtonRoot() -> Node { use_key_event(Press, ...); button("Save").on_press(...) }
+/// fn MacroButtonRoot() -> View { use_key_event(Press, ...); button("Save").on_press(...) }
 /// render, Repeat(s), Press(s)
 /// ```
 ///
 /// # Assertions
 ///
-/// - The first render initializes the generated component's node tree.
+/// - The first render initializes the generated component's view tree.
 /// - A repeat event does not invoke the press-only handler.
 /// - A press event invokes the component key handler.
 /// - Unhandled keys continue without invoking the handler.
@@ -724,13 +724,13 @@ fn generated_key_event_handlers_filter_by_event_kind() -> Result<()> {
 ///
 /// ```text
 /// #[component]
-/// fn MacroDefaultButtonRoot() -> Node { button("Default").on_press(...) }
+/// fn MacroDefaultButtonRoot() -> View { button("Default").on_press(...) }
 /// Tab, Enter
 /// ```
 ///
 /// # Assertions
 ///
-/// - Tab focuses the generated button node.
+/// - Tab focuses the generated button view.
 /// - Enter activates the focused button.
 #[test]
 fn generated_components_run_default_button_keys_after_hook_pass() -> Result<()> {
@@ -922,7 +922,7 @@ fn generated_component_hook_can_override_default_enter_activation() -> Result<()
 ///
 /// ```text
 /// #[component]
-/// fn MacroSignalRoot() -> Node {
+/// fn MacroSignalRoot() -> View {
 ///     let (count, set_count) = signal(0);
 ///     column([dynamic(... count ...), button(... set_count ...)])
 /// }
@@ -1098,7 +1098,7 @@ fn component_key_handlers_short_circuit_in_registration_order() -> Result<()> {
 ///
 /// ```text
 /// #[component]
-/// fn MacroContextProvider() -> Node {
+/// fn MacroContextProvider() -> View {
 ///     provide_context(MacroLabel("macro"));
 ///     component(MacroContextConsumer)
 /// }
@@ -1112,7 +1112,7 @@ fn component_key_handlers_short_circuit_in_registration_order() -> Result<()> {
 /// # Why
 ///
 /// Generated component bodies run once under a stored Leptos owner whose
-/// context remains active while rendering the returned node tree.
+/// context remains active while rendering the returned view tree.
 #[test]
 fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
     let backend = TestBackend::new(16, 3);
@@ -1150,7 +1150,7 @@ fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
 /// ui = { package = "leptatui", path = "..." }
 /// use ui::prelude::*;
 /// #[component]
-/// fn Greeting() -> Node { view! { <Text>"hi"</Text> } }
+/// fn Greeting() -> View { view! { <Text>"hi"</Text> } }
 /// ```
 ///
 /// # Assertions
@@ -1218,13 +1218,13 @@ ui = {{ package = "leptatui", path = "{}" }}
         r#"use ui::prelude::*;
 
 #[component]
-fn Greeting() -> Node {
+fn Greeting() -> View {
     view! { <Text>"hi"</Text> }
 }
 
 fn main() {
-    let node: Node = Greeting::new().into();
-    assert!(matches!(node, Node::Component(_)));
+    let view: View = Greeting::new().into();
+    assert!(matches!(view, View::Component(_)));
 }
 "#,
     )

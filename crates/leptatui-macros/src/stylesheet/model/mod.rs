@@ -1,6 +1,6 @@
 //! Syntax tree for parsed `stylesheet!` macro input.
 //!
-//! This module is split into parser nodes for selectors, declarations, rules,
+//! This module is split into parser views for selectors, declarations, rules,
 //! reusable mixins, variables, and the top-level stylesheet root.
 //!
 //! # Modules

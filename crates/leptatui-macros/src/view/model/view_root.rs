@@ -10,7 +10,7 @@ use syn::{
 
 use super::element::Element;
 
-/// Root node for a `view!` invocation.
+/// Root view for a `view!` invocation.
 pub(in crate::view) struct ViewRoot {
     /// Single root element required by the macro.
     pub(super) element: Element,
@@ -43,11 +43,11 @@ impl Parse for ViewRoot {
 }
 
 impl ViewRoot {
-    /// Expands the root element into generated node code.
+    /// Expands the root element into generated view code.
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing the expanded root node.
+    /// A [`TokenStream`] containing the expanded root view.
     ///
     /// # Errors
     ///

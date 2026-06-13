@@ -18,7 +18,7 @@ use crate::stylesheet::model::{
 
 use super::rule::Rule;
 
-/// Root node for a `stylesheet!` invocation.
+/// Root view for a `stylesheet!` invocation.
 pub(in crate::stylesheet) struct StylesheetRoot {
     /// Parsed variable definitions in source order.
     variables: Vec<Variable>,

@@ -1,13 +1,13 @@
-//! Pass fixture for nested layout nodes in `view!`.
+//! Pass fixture for nested layout views in `view!`.
 //!
-//! This binary verifies columns, rows, text nodes, and buttons compose into the
+//! This binary verifies columns, rows, text views, and buttons compose into the
 //! expected render-tree shape.
 
 use leptatui::prelude::*;
 
 /// Exercises nested row and column expansion.
 fn main() {
-    let node: Node = view! {
+    let view: View = view! {
         <Column>
             <Text>{"Counter"}</Text>
             <Row>
@@ -18,7 +18,7 @@ fn main() {
     };
 
     assert_eq!(
-        node,
+        view,
         column([text("Counter"), row([button("Increment"), button("Reset")]),])
     );
 }

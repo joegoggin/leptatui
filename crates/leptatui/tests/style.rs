@@ -4,8 +4,8 @@
 //! padding, and block values.
 
 use leptatui::{
-    BorderType, Borders, Color, Modifier, NodeType, StyleDeclarations, StyleMetadata,
-    StyleSelector, Stylesheet, ThemeVariables, TuiSpacing, TuiStyle, button, stylesheet, text,
+    BorderType, Borders, Color, Modifier, StyleDeclarations, StyleMetadata, StyleSelector,
+    Stylesheet, ThemeVariables, TuiSpacing, TuiStyle, ViewType, button, stylesheet, text,
     theme_color,
 };
 use ratatui::{style::Style, widgets::Padding};
@@ -97,13 +97,13 @@ fn tui_style_builds_a_block_with_border_configuration() {
 /// ```text
 /// text("Save").with_classes("primary")
 /// Stylesheet::new()
-///     .rule(StyleSelector::node_type(NodeType::Text), white)
+///     .rule(StyleSelector::view_type(ViewType::Text), white)
 ///     .rule(StyleSelector::class("primary"), yellow)
 /// ```
 ///
 /// # Assertions
 ///
-/// - Node metadata is available for stylesheet resolution.
+/// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is yellow.
 ///
 /// # Why
@@ -111,10 +111,10 @@ fn tui_style_builds_a_block_with_border_configuration() {
 /// Class selectors should have higher specificity than type selectors.
 #[test]
 fn stylesheet_class_overrides_type_style() {
-    let node = text("Save").with_classes("primary");
+    let view = text("Save").with_classes("primary");
     let stylesheet = Stylesheet::new()
         .rule(
-            StyleSelector::node_type(NodeType::Text),
+            StyleSelector::view_type(ViewType::Text),
             TuiStyle::new().foreground(Color::White),
         )
         .rule(
@@ -123,7 +123,7 @@ fn stylesheet_class_overrides_type_style() {
         );
 
     let resolved = stylesheet.resolve(
-        node.style_metadata().unwrap(),
+        view.style_metadata().unwrap(),
         &[],
         TuiStyle::new(),
         &ThemeVariables::new(),
@@ -145,7 +145,7 @@ fn stylesheet_class_overrides_type_style() {
 ///
 /// # Assertions
 ///
-/// - Node metadata is available for stylesheet resolution.
+/// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is green.
 ///
 /// # Why
@@ -153,7 +153,7 @@ fn stylesheet_class_overrides_type_style() {
 /// Id selectors should have higher specificity than class selectors.
 #[test]
 fn stylesheet_id_overrides_class_style() {
-    let node = text("Save").with_classes("primary").with_id("save");
+    let view = text("Save").with_classes("primary").with_id("save");
     let stylesheet = Stylesheet::new()
         .rule(
             StyleSelector::class("primary"),
@@ -165,7 +165,7 @@ fn stylesheet_id_overrides_class_style() {
         );
 
     let resolved = stylesheet.resolve(
-        node.style_metadata().unwrap(),
+        view.style_metadata().unwrap(),
         &[],
         TuiStyle::new(),
         &ThemeVariables::new(),
@@ -185,7 +185,7 @@ fn stylesheet_id_overrides_class_style() {
 ///
 /// # Assertions
 ///
-/// - Node metadata is available for stylesheet resolution.
+/// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is black.
 ///
 /// # Why
@@ -193,7 +193,7 @@ fn stylesheet_id_overrides_class_style() {
 /// Inline styles are the final override in style resolution.
 #[test]
 fn inline_style_overrides_stylesheet_rules() {
-    let node = text("Save")
+    let view = text("Save")
         .with_id("save")
         .with_inline_style(TuiStyle::new().foreground(Color::Black));
     let stylesheet = Stylesheet::new().rule(
@@ -202,7 +202,7 @@ fn inline_style_overrides_stylesheet_rules() {
     );
 
     let resolved = stylesheet.resolve(
-        node.style_metadata().unwrap(),
+        view.style_metadata().unwrap(),
         &[],
         TuiStyle::new(),
         &ThemeVariables::new(),
@@ -211,7 +211,7 @@ fn inline_style_overrides_stylesheet_rules() {
     assert_eq!(resolved.foreground, Some(Color::Black));
 }
 
-/// Verifies inherited colors remain unless the node overrides them.
+/// Verifies inherited colors remain unless the view overrides them.
 ///
 /// # Example Under Test
 ///
@@ -222,7 +222,7 @@ fn inline_style_overrides_stylesheet_rules() {
 ///
 /// # Assertions
 ///
-/// - Node metadata is available for stylesheet resolution.
+/// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is yellow.
 /// - The resolved background color is blue.
 ///
@@ -231,13 +231,13 @@ fn inline_style_overrides_stylesheet_rules() {
 /// Child styles should preserve inherited fields that are not locally set.
 #[test]
 fn inherited_colors_flow_to_children_unless_overridden() {
-    let node = text("Child").with_inline_style(TuiStyle::new().foreground(Color::Yellow));
+    let view = text("Child").with_inline_style(TuiStyle::new().foreground(Color::Yellow));
     let inherited = TuiStyle::new()
         .foreground(Color::Green)
         .background(Color::Blue);
 
     let resolved = Stylesheet::new().resolve(
-        node.style_metadata().unwrap(),
+        view.style_metadata().unwrap(),
         &[],
         inherited,
         &ThemeVariables::new(),
@@ -249,7 +249,7 @@ fn inherited_colors_flow_to_children_unless_overridden() {
 
 #[test]
 fn stylesheet_theme_variables_resolve_against_active_theme() {
-    let node = text("Status").with_classes("status");
+    let view = text("Status").with_classes("status");
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::class("status"),
         StyleDeclarations::new()
@@ -264,9 +264,9 @@ fn stylesheet_theme_variables_resolve_against_active_theme() {
         .color("surface", Color::Black);
 
     let light_style =
-        stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new(), &light);
+        stylesheet.resolve(view.style_metadata().unwrap(), &[], TuiStyle::new(), &light);
     let dark_style =
-        stylesheet.resolve(node.style_metadata().unwrap(), &[], TuiStyle::new(), &dark);
+        stylesheet.resolve(view.style_metadata().unwrap(), &[], TuiStyle::new(), &dark);
 
     assert_eq!(light_style.foreground, Some(Color::Black));
     assert_eq!(light_style.background, Some(Color::White));
@@ -274,7 +274,7 @@ fn stylesheet_theme_variables_resolve_against_active_theme() {
     assert_eq!(dark_style.background, Some(Color::Black));
 }
 
-/// Verifies focus selectors match only focused nodes.
+/// Verifies focus selectors match only focused views.
 ///
 /// # Example Under Test
 ///
@@ -293,9 +293,9 @@ fn stylesheet_theme_variables_resolve_against_active_theme() {
 ///
 /// # Why
 ///
-/// Focus styling should depend on node focus state, not just node type.
+/// Focus styling should depend on view focus state, not just view type.
 #[test]
-fn stylesheet_focus_selector_matches_only_focused_nodes() {
+fn stylesheet_focus_selector_matches_only_focused_views() {
     let focused = button("Save").with_focus(true);
     let blurred = button("Cancel");
     let stylesheet = Stylesheet::new().rule(
@@ -342,15 +342,15 @@ fn stylesheet_focus_selector_matches_only_focused_nodes() {
 /// requiring direct parent-child adjacency.
 #[test]
 fn descendant_selector_matches_ordered_ancestors() {
-    let mut app = StyleMetadata::new(NodeType::Column);
+    let mut app = StyleMetadata::new(ViewType::Column);
     app.set_classes("app");
-    let mut panel = StyleMetadata::new(NodeType::Block);
+    let mut panel = StyleMetadata::new(ViewType::Block);
     panel.set_classes("panel");
     let button = button("Save");
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::descendant(
             vec![StyleSelector::class("app"), StyleSelector::class("panel")],
-            StyleSelector::node_type(NodeType::Button),
+            StyleSelector::view_type(ViewType::Button),
         ),
         TuiStyle::new().foreground(Color::Yellow),
     );
@@ -393,7 +393,7 @@ fn descendant_selector_matches_ordered_ancestors() {
 /// # Why
 ///
 /// Nested macro selectors should lower into descendant selectors that preserve
-/// terminal-node focus matching.
+/// terminal-view focus matching.
 #[test]
 fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
     let styles = stylesheet! {
@@ -403,7 +403,7 @@ fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
             }
         }
     };
-    let mut panel = StyleMetadata::new(NodeType::Block);
+    let mut panel = StyleMetadata::new(ViewType::Block);
     panel.set_classes("panel");
     let focused = button("Save").with_focus(true);
     let blurred = button("Cancel");
@@ -461,7 +461,7 @@ fn stylesheet_macro_variables_reuse_values() {
 
     let expected = Stylesheet::new()
         .rule(
-            StyleSelector::node_type(NodeType::Text),
+            StyleSelector::view_type(ViewType::Text),
             TuiStyle::new()
                 .foreground(Color::LightCyan)
                 .background(Color::Black),
@@ -510,7 +510,7 @@ fn stylesheet_macro_mixins_expand_in_source_order() {
 
     let expected = Stylesheet::new()
         .rule(
-            StyleSelector::node_type(NodeType::Button),
+            StyleSelector::view_type(ViewType::Button),
             TuiStyle::new()
                 .foreground(Color::White)
                 .background(Color::Blue)

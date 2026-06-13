@@ -1,45 +1,45 @@
-//! Selectors for matching node style metadata.
+//! Selectors for matching view style metadata.
 //!
 //! This module defines the selectors used by [`Stylesheet`](super::Stylesheet)
 //! resolution, including descendant selector paths, and maps selectors to
 //! cascade specificity groups.
 
-use crate::node::{NodeType, StyleMetadata};
+use crate::view::{StyleMetadata, ViewType};
 
-/// Selector used to match a style rule against a node.
+/// Selector used to match a style rule against a view.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StyleSelector {
-    /// Matches nodes by their [`NodeType`].
-    Type(NodeType),
-    /// Matches nodes containing the provided class name.
+    /// Matches views by their [`ViewType`].
+    Type(ViewType),
+    /// Matches views containing the provided class name.
     Class(String),
-    /// Matches nodes with the provided id.
+    /// Matches views with the provided id.
     Id(String),
-    /// Matches nodes currently marked as focused.
+    /// Matches views currently marked as focused.
     Focus,
-    /// Matches nodes that satisfy every nested selector.
+    /// Matches views that satisfy every nested selector.
     Compound(Vec<StyleSelector>),
     /// Matches a target selector when its ordered ancestor chain matches.
     Descendant {
         /// Ancestor selectors ordered from outermost to innermost.
         ancestors: Vec<StyleSelector>,
-        /// Selector matched against the current node.
+        /// Selector matched against the current view.
         target: Box<StyleSelector>,
     },
 }
 
 impl StyleSelector {
-    /// Creates a selector that matches a node type.
+    /// Creates a selector that matches a view type.
     ///
     /// # Arguments
     ///
-    /// * `node_type` — Node type to match.
+    /// * `view_type` — View type to match.
     ///
     /// # Returns
     ///
     /// A [`StyleSelector::Type`] selector.
-    pub const fn node_type(node_type: NodeType) -> Self {
-        Self::Type(node_type)
+    pub const fn view_type(view_type: ViewType) -> Self {
+        Self::Type(view_type)
     }
 
     /// Creates a selector that matches a class name.
@@ -68,7 +68,7 @@ impl StyleSelector {
         Self::Id(id.into())
     }
 
-    /// Creates a selector that matches focused nodes.
+    /// Creates a selector that matches focused views.
     ///
     /// # Returns
     ///
@@ -106,7 +106,7 @@ impl StyleSelector {
     ///
     /// * `ancestors` — Selector chain ordered from outermost ancestor to
     ///   innermost ancestor.
-    /// * `target` — Selector matched against the current node.
+    /// * `target` — Selector matched against the current view.
     ///
     /// # Returns
     ///
@@ -128,11 +128,11 @@ impl StyleSelector {
         }
     }
 
-    /// Returns whether this selector matches node style metadata and ancestors.
+    /// Returns whether this selector matches view style metadata and ancestors.
     ///
     /// # Arguments
     ///
-    /// * `metadata` — Node selector metadata to inspect.
+    /// * `metadata` — View selector metadata to inspect.
     /// * `ancestors` — Ancestor metadata ordered from outermost to innermost.
     ///
     /// # Returns
@@ -140,7 +140,7 @@ impl StyleSelector {
     /// A [`bool`] indicating whether the selector matches.
     pub(crate) fn matches(&self, metadata: &StyleMetadata, ancestors: &[StyleMetadata]) -> bool {
         match self {
-            Self::Type(node_type) => metadata.node_type() == *node_type,
+            Self::Type(view_type) => metadata.view_type() == *view_type,
             Self::Class(class) => metadata.classes().iter().any(|value| value == class),
             Self::Id(id) => metadata.id() == Some(id.as_str()),
             Self::Focus => metadata.is_focused(),

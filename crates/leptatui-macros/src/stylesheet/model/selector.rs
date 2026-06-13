@@ -12,7 +12,7 @@ use syn::{
 
 /// Parsed terminal stylesheet selector.
 pub(super) enum Selector {
-    /// Node type selector such as `Text`.
+    /// View type selector such as `Text`.
     Type(Ident),
     /// Class selector such as `.primary`.
     Class(SelectorName),
@@ -22,8 +22,8 @@ pub(super) enum Selector {
     Pseudo(Ident),
     /// Compound type and pseudo selector such as `Button:focus`.
     TypePseudo {
-        /// Node type part of the compound selector.
-        node_type: Ident,
+        /// View type part of the compound selector.
+        view_type: Ident,
         /// Pseudo-selector part of the compound selector.
         pseudo: Ident,
     },
@@ -77,14 +77,14 @@ impl Parse for Selector {
         }
 
         if input.peek(Ident) {
-            let node_type = input.parse()?;
+            let view_type = input.parse()?;
             if input.peek(Token![:]) {
                 input.parse::<Token![:]>()?;
                 let pseudo = input.parse()?;
-                return Ok(Self::TypePseudo { node_type, pseudo });
+                return Ok(Self::TypePseudo { view_type, pseudo });
             }
 
-            return Ok(Self::Type(node_type));
+            return Ok(Self::Type(view_type));
         }
 
         Err(input.error(
@@ -102,16 +102,16 @@ impl Selector {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if the selector uses an unsupported node type or
+    /// Returns [`syn::Error`] if the selector uses an unsupported view type or
     /// pseudo-selector, or if a parent-reference selector is expanded without a
     /// selector path.
     pub(super) fn expand(&self) -> Result<TokenStream> {
         let leptatui = crate::utils::crate_path::leptatui();
 
         match self {
-            Self::Type(node_type) => {
-                let node_type = Self::expand_node_type(node_type)?;
-                Ok(quote! { #leptatui::StyleSelector::node_type(#node_type) })
+            Self::Type(view_type) => {
+                let view_type = Self::expand_view_type(view_type)?;
+                Ok(quote! { #leptatui::StyleSelector::view_type(#view_type) })
             }
             Self::Class(class) => {
                 let class = class.literal();
@@ -122,13 +122,13 @@ impl Selector {
                 Ok(quote! { #leptatui::StyleSelector::id(#id) })
             }
             Self::Pseudo(pseudo) => Self::expand_pseudo(pseudo),
-            Self::TypePseudo { node_type, pseudo } => {
-                let node_type = Self::expand_node_type(node_type)?;
+            Self::TypePseudo { view_type, pseudo } => {
+                let view_type = Self::expand_view_type(view_type)?;
                 let pseudo = Self::expand_pseudo(pseudo)?;
 
                 Ok(quote! {
                     #leptatui::StyleSelector::compound(::std::vec![
-                        #leptatui::StyleSelector::node_type(#node_type),
+                        #leptatui::StyleSelector::view_type(#view_type),
                         #pseudo,
                     ])
                 })
@@ -199,31 +199,31 @@ impl Selector {
         })
     }
 
-    /// Expands a supported node type selector identifier.
+    /// Expands a supported view type selector identifier.
     ///
     /// # Arguments
     ///
-    /// * `node_type` — Parsed node type identifier to lower.
+    /// * `view_type` — Parsed view type identifier to lower.
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing a public `NodeType` variant.
+    /// A [`TokenStream`] containing a public `ViewType` variant.
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if `node_type` is not a supported terminal node
+    /// Returns [`syn::Error`] if `view_type` is not a supported terminal view
     /// type.
-    fn expand_node_type(node_type: &Ident) -> Result<TokenStream> {
+    fn expand_view_type(view_type: &Ident) -> Result<TokenStream> {
         let leptatui = crate::utils::crate_path::leptatui();
 
-        match node_type.to_string().as_str() {
-            "Block" => Ok(quote! { #leptatui::NodeType::Block }),
-            "Text" => Ok(quote! { #leptatui::NodeType::Text }),
-            "Row" => Ok(quote! { #leptatui::NodeType::Row }),
-            "Column" => Ok(quote! { #leptatui::NodeType::Column }),
-            "Button" => Ok(quote! { #leptatui::NodeType::Button }),
+        match view_type.to_string().as_str() {
+            "Block" => Ok(quote! { #leptatui::ViewType::Block }),
+            "Text" => Ok(quote! { #leptatui::ViewType::Text }),
+            "Row" => Ok(quote! { #leptatui::ViewType::Row }),
+            "Column" => Ok(quote! { #leptatui::ViewType::Column }),
+            "Button" => Ok(quote! { #leptatui::ViewType::Button }),
             _ => Err(Error::new_spanned(
-                node_type,
+                view_type,
                 "unsupported stylesheet type selector; expected Block, Text, Row, Column, or Button",
             )),
         }
@@ -265,7 +265,7 @@ impl Selector {
                 ident.to_token_stream()
             }
             Self::Class(name) | Self::Id(name) => name.to_token_stream(),
-            Self::TypePseudo { node_type, pseudo } => quote! { #node_type : #pseudo },
+            Self::TypePseudo { view_type, pseudo } => quote! { #view_type : #pseudo },
         }
     }
 }

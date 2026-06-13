@@ -1,7 +1,7 @@
 //! Element model for `view!` syntax.
 //!
 //! This module parses supported XML-like terminal elements and expands them
-//! into Leptatui node builder calls.
+//! into Leptatui view builder calls.
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -97,7 +97,7 @@ impl Element {
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing node builder calls for this element.
+    /// A [`TokenStream`] containing view builder calls for this element.
     ///
     /// # Errors
     ///
@@ -133,12 +133,12 @@ impl Element {
                 ));
             }
         }
-        .and_then(|node| {
+        .and_then(|view| {
             if is_builtin_element(&self.name) {
                 let attrs = self.validate_attrs()?;
-                self.expand_attrs(node, &attrs)
+                self.expand_attrs(view, &attrs)
             } else {
-                Ok(node)
+                Ok(view)
             }
         })
     }
@@ -147,7 +147,7 @@ impl Element {
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing a node expression for the component.
+    /// A [`TokenStream`] containing a view expression for the component.
     ///
     /// # Errors
     ///
@@ -199,7 +199,7 @@ impl Element {
         };
 
         Ok(quote! {
-            ::core::convert::Into::<#leptatui::Node>::into(#component)
+            ::core::convert::Into::<#leptatui::View>::into(#component)
         })
     }
 
@@ -246,18 +246,18 @@ impl Element {
     ///
     /// # Arguments
     ///
-    /// * `node` — Already-expanded node builder expression.
+    /// * `view` — Already-expanded view builder expression.
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing the node expression wrapped with metadata
+    /// A [`TokenStream`] containing the view expression wrapped with metadata
     /// setters.
     ///
     /// # Errors
     ///
     /// Returns [`syn::Error`] if `style` or `on_press` receives a literal.
-    fn expand_attrs(&self, node: TokenStream, attrs: &[ValidatedAttr<'_>]) -> Result<TokenStream> {
-        let mut expanded = node;
+    fn expand_attrs(&self, view: TokenStream, attrs: &[ValidatedAttr<'_>]) -> Result<TokenStream> {
+        let mut expanded = view;
 
         for ValidatedAttr { attr, kind } in attrs {
             let value = attr.value.to_tokens();
@@ -299,7 +299,7 @@ impl Element {
         Ok(expanded)
     }
 
-    /// Expands an element that must contain exactly one node child.
+    /// Expands an element that must contain exactly one view child.
     ///
     /// # Arguments
     ///
@@ -309,12 +309,12 @@ impl Element {
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing the wrapped child node.
+    /// A [`TokenStream`] containing the wrapped child view.
     ///
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the element does not have exactly one valid
-    /// node child.
+    /// view child.
     fn expand_single_child(
         &self,
         element_name: &str,
@@ -327,11 +327,11 @@ impl Element {
             ));
         }
 
-        let child = self.expand_node_child(&self.children[0], element_name)?;
+        let child = self.expand_view_child(&self.children[0], element_name)?;
         Ok(wrap(child))
     }
 
-    /// Expands an element that must contain one or more node children.
+    /// Expands an element that must contain one or more view children.
     ///
     /// # Arguments
     ///
@@ -346,7 +346,7 @@ impl Element {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the element has no children or contains an
-    /// invalid node child.
+    /// invalid view child.
     fn expand_child_list(
         &self,
         element_name: &str,
@@ -361,13 +361,13 @@ impl Element {
 
         let mut expanded = Vec::new();
         for child in &self.children {
-            expanded.push(self.expand_node_child(child, element_name)?);
+            expanded.push(self.expand_view_child(child, element_name)?);
         }
 
         Ok(wrap(expanded))
     }
 
-    /// Expands a child position that expects a node-compatible value.
+    /// Expands a child position that expects a view-compatible value.
     ///
     /// # Arguments
     ///
@@ -376,13 +376,13 @@ impl Element {
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing a node expression.
+    /// A [`TokenStream`] containing a view expression.
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if the child is a string literal where a node is
+    /// Returns [`syn::Error`] if the child is a string literal where a view is
     /// required.
-    fn expand_node_child(&self, child: &Child, element_name: &str) -> Result<TokenStream> {
+    fn expand_view_child(&self, child: &Child, element_name: &str) -> Result<TokenStream> {
         match child {
             Child::Element(child) => child.expand(),
             Child::Text(TextContent::Expr(expr))
@@ -393,11 +393,11 @@ impl Element {
             }
             Child::Text(TextContent::Expr(expr)) => {
                 let leptatui = crate::utils::crate_path::leptatui();
-                Ok(quote! { ::core::convert::Into::<#leptatui::Node>::into(#expr) })
+                Ok(quote! { ::core::convert::Into::<#leptatui::View>::into(#expr) })
             }
             Child::Text(TextContent::Literal(_)) => Err(Error::new_spanned(
                 &self.name,
-                format!("{element_name} expects element children or braced node expressions"),
+                format!("{element_name} expects element children or braced view expressions"),
             )),
         }
     }
@@ -406,7 +406,7 @@ impl Element {
     ///
     /// # Returns
     ///
-    /// A list of child node expressions.
+    /// A list of child view expressions.
     ///
     /// # Errors
     ///
@@ -430,10 +430,10 @@ impl Element {
                 Ok(quote! { #leptatui::dynamic(#expr) })
             }
             Child::Text(TextContent::Expr(expr)) => {
-                Ok(quote! { ::core::convert::Into::<#leptatui::Node>::into(#expr) })
+                Ok(quote! { ::core::convert::Into::<#leptatui::View>::into(#expr) })
             }
             Child::Text(TextContent::Literal(value)) => {
-                Ok(quote! { ::core::convert::Into::<#leptatui::Node>::into(#value) })
+                Ok(quote! { ::core::convert::Into::<#leptatui::View>::into(#value) })
             }
         }
     }

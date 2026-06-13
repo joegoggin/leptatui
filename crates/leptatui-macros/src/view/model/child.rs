@@ -10,7 +10,7 @@ use syn::{
 
 use super::{element::Element, text_content::TextContent};
 
-/// Parsed child node inside an element.
+/// Parsed child view inside an element.
 pub(super) enum Child {
     /// Nested element child.
     Element(Element),

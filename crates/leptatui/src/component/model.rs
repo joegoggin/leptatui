@@ -2,15 +2,15 @@
 //!
 //! This module wraps a Ratatui frame with the currently assigned render area,
 //! scoped stylesheets, inherited style values, selector ancestor metadata, and
-//! helper methods for drawing widgets or child nodes.
+//! helper methods for drawing widgets or child views.
 
 use ratatui::{Frame, layout::Rect, widgets::Widget};
 
 use crate::{
     StyleMetadata,
     app::Result,
-    node::Node,
     style::{Stylesheet, TuiStyle},
+    view::View,
 };
 
 /// Rendering context for a single frame and target area.
@@ -19,9 +19,9 @@ pub struct RenderCtx<'frame, 'buffer> {
     frame: &'frame mut Frame<'buffer>,
     /// Area inside the frame currently targeted by rendering calls.
     area: Rect,
-    /// Scoped stylesheets used to resolve node styles during rendering.
+    /// Scoped stylesheets used to resolve view styles during rendering.
     stylesheets: Vec<Stylesheet>,
-    /// Inherited style declarations available to the current node.
+    /// Inherited style declarations available to the current view.
     inherited_style: TuiStyle,
     /// Ancestor metadata used by descendant selector resolution.
     selector_ancestors: Vec<StyleMetadata>,
@@ -61,7 +61,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// # Returns
     ///
-    /// A stylesheet slice used for node style resolution.
+    /// A stylesheet slice used for view style resolution.
     pub(crate) fn stylesheets(&self) -> &[Stylesheet] {
         &self.stylesheets
     }
@@ -87,7 +87,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         render(&mut child)
     }
 
-    /// Returns the style declarations inherited by the current node.
+    /// Returns the style declarations inherited by the current view.
     ///
     /// # Returns
     ///
@@ -96,7 +96,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.inherited_style
     }
 
-    /// Returns selector metadata for ancestor nodes in render order.
+    /// Returns selector metadata for ancestor views in render order.
     ///
     /// # Returns
     ///
@@ -118,11 +118,11 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.frame.render_widget(widget, self.area);
     }
 
-    /// Renders a Leptatui node into the current target area.
+    /// Renders a Leptatui view into the current target area.
     ///
     /// # Arguments
     ///
-    /// * `node` — Node tree to render.
+    /// * `view` — View tree to render.
     ///
     /// # Returns
     ///
@@ -130,10 +130,10 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::app::Error::Io`] if node rendering performs terminal
+    /// Returns [`crate::app::Error::Io`] if view rendering performs terminal
     /// I/O that fails.
-    pub fn render_node(&mut self, node: &Node) -> Result<()> {
-        node.render(self)
+    pub fn render_view(&mut self, view: &View) -> Result<()> {
+        view.render(self)
     }
 
     /// Renders into a temporary child area with explicit inherited style.
@@ -172,7 +172,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// * `area` — Child area to use while invoking `render`.
     /// * `inherited_style` — Inherited style declarations for the child area.
-    /// * `selector_ancestor` — Parent node metadata to append to the selector
+    /// * `selector_ancestor` — Parent view metadata to append to the selector
     ///   ancestor path.
     /// * `render` — Closure that renders into the child context.
     ///

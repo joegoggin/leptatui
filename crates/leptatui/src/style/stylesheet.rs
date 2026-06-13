@@ -1,17 +1,17 @@
 //! Stylesheet rule storage and resolution.
 //!
-//! This module stores ordered style rules and resolves them against node
+//! This module stores ordered style rules and resolves them against view
 //! selector metadata, ancestor metadata, inherited styles, and inline style
 //! overrides.
 
-use crate::{StyleDeclarations, ThemeVariables, node::StyleMetadata};
+use crate::{StyleDeclarations, ThemeVariables, view::StyleMetadata};
 
 use super::{StyleSelector, TuiStyle, selector::Specificity};
 
 /// Style rule pairing a selector with a style overlay.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StyleRule {
-    /// Selector used to decide whether the rule applies to a node.
+    /// Selector used to decide whether the rule applies to a view.
     selector: StyleSelector,
     /// Style overlay applied when the selector matches.
     style: StyleDeclarations,
@@ -22,7 +22,7 @@ impl StyleRule {
     ///
     /// # Arguments
     ///
-    /// * `selector` — Selector used to match node style metadata.
+    /// * `selector` — Selector used to match view style metadata.
     /// * `style` — Style values to overlay when the selector matches.
     ///
     /// # Returns
@@ -69,7 +69,7 @@ impl Stylesheet {
     ///
     /// # Arguments
     ///
-    /// * `selector` — Selector used to match node style metadata.
+    /// * `selector` — Selector used to match view style metadata.
     /// * `style` — Style values to overlay when the selector matches.
     ///
     /// # Returns
@@ -84,7 +84,7 @@ impl Stylesheet {
     ///
     /// # Arguments
     ///
-    /// * `selector` — Selector used to match node style metadata.
+    /// * `selector` — Selector used to match view style metadata.
     /// * `style` — Style values to overlay when the selector matches.
     pub fn push_rule(&mut self, selector: StyleSelector, style: impl Into<StyleDeclarations>) {
         self.rules.push(StyleRule::new(selector, style));
@@ -95,15 +95,15 @@ impl Stylesheet {
         self.rules.extend(stylesheet.rules.iter().cloned());
     }
 
-    /// Resolves the style for a node.
+    /// Resolves the style for a view.
     ///
     /// Starts with inherited style values, overlays matching type, class, and id
-    /// rules using the current node and ancestor chain, then overlays any
-    /// inline style stored in the node metadata.
+    /// rules using the current view and ancestor chain, then overlays any
+    /// inline style stored in the view metadata.
     ///
     /// # Arguments
     ///
-    /// * `metadata` — Node selector metadata used for rule matching.
+    /// * `metadata` — View selector metadata used for rule matching.
     /// * `ancestors` — Ancestor metadata ordered from outermost to innermost.
     /// * `inherited` — Style values inherited from the parent render context.
     /// * `theme` — Runtime theme variables used to resolve theme-aware values.
@@ -145,8 +145,8 @@ impl Stylesheet {
     ///
     /// # Arguments
     ///
-    /// * `resolved` — Style being accumulated for the target node.
-    /// * `metadata` — Node selector metadata used for rule matching.
+    /// * `resolved` — Style being accumulated for the target view.
+    /// * `metadata` — View selector metadata used for rule matching.
     /// * `ancestors` — Ancestor metadata ordered from outermost to innermost.
     /// * `specificity` — Specificity group to apply.
     fn apply_matching(

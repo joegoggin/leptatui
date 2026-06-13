@@ -16,7 +16,7 @@ fn main() {
 
     let expected = Stylesheet::new()
         .rule(
-            StyleSelector::node_type(NodeType::Text),
+            StyleSelector::view_type(ViewType::Text),
             TuiStyle::new().foreground(Color::White),
         )
         .rule(
@@ -43,7 +43,7 @@ fn main() {
         )
         .rule(
             StyleSelector::compound(vec![
-                StyleSelector::node_type(NodeType::Button),
+                StyleSelector::view_type(ViewType::Button),
                 StyleSelector::focus(),
             ]),
             TuiStyle::new().background(Color::Yellow),

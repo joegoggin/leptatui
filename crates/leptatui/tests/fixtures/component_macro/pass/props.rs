@@ -5,24 +5,24 @@
 
 use leptatui::prelude::*;
 
-/// Builds a text node from a required prop.
+/// Builds a text view from a required prop.
 #[component]
-fn RequiredLabel(#[prop(into)] label: String) -> Node {
+fn RequiredLabel(#[prop(into)] label: String) -> View {
     text(label)
 }
 
-/// Builds a text node from optional and defaulted props.
+/// Builds a text view from optional and defaulted props.
 #[component]
 fn DefaultedLabel(
     #[prop(optional, into)] prefix: String,
     #[prop(default = "fallback".to_string(), into)] label: String,
-) -> Node {
+) -> View {
     text(format!("{prefix}{label}"))
 }
 
 /// Builds a column from nested children.
 #[component]
-fn ChildPanel(#[prop(into)] title: String, children: Children) -> Node {
+fn ChildPanel(#[prop(into)] title: String, children: Children) -> View {
     column([text(title), column(children())])
 }
 

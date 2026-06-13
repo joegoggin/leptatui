@@ -88,7 +88,7 @@ fn app_control_is_comparable() {
     assert_ne!(AppControl::Continue, AppControl::Exit);
 }
 
-/// Verifies node roots with button actions satisfy the app root contract.
+/// Verifies view roots with button actions satisfy the app root contract.
 ///
 /// # Example Under Test
 ///
@@ -98,15 +98,15 @@ fn app_control_is_comparable() {
 ///
 /// # Assertions
 ///
-/// - A button node with an action type-checks as an [`AppRoot`].
-/// - An [`App`] can be constructed with the node root.
+/// - A button view with an action type-checks as an [`AppRoot`].
+/// - An [`App`] can be constructed with the view root.
 ///
 /// # Why
 ///
-/// Button action callbacks should not prevent node trees from being used as
+/// Button action callbacks should not prevent view trees from being used as
 /// app roots.
 #[test]
-fn app_accepts_node_root_with_button_action() {
+fn app_accepts_view_root_with_button_action() {
     /// Accepts any root type that implements [`AppRoot`].
     ///
     /// # Arguments

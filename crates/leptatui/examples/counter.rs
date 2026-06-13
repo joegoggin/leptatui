@@ -1,13 +1,13 @@
 //! Interactive counter example.
 //!
-//! This binary demonstrates Leptos signals, Leptatui node rendering, stylesheet
+//! This binary demonstrates Leptos signals, Leptatui view rendering, stylesheet
 //! rules, and explicit key maps through the application runner.
 
 use leptatui::prelude::*;
 
 /// Root component for the interactive counter example.
 #[component]
-fn Counter() -> Node {
+fn Counter() -> View {
     let count = RwSignal::new(0);
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {

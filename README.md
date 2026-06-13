@@ -2,12 +2,12 @@
 
 Leptatui is an experimental Rust terminal UI runtime that combines Leptos
 reactive primitives with Ratatui rendering and Crossterm event handling. It
-provides a small node tree, component contract, styling helpers, and procedural
+provides a small view tree, component contract, styling helpers, and procedural
 macros for building interactive terminal applications.
 
 ## Workspace Layout
 
-- `crates/leptatui`: Public runtime crate with app, component, node, context,
+- `crates/leptatui`: Public runtime crate with app, component, view, context,
   style, and prelude APIs.
 - `crates/leptatui-macros`: Internal proc-macro crate that implements
   `#[component]`, `view!`, and `stylesheet!`.
@@ -16,12 +16,12 @@ macros for building interactive terminal applications.
 ## Usage Shape
 
 Application code normally imports `leptatui::prelude::*`, defines a root
-component, builds a node tree with either builders or `view!`, and runs it with
+component, builds a view tree with either builders or `view!`, and runs it with
 `App::new(root).run().await`.
 
 Generated `#[component]` bodies run once when `new()` creates the component,
 under a stored Leptos owner. Create signals directly in the component body, and
-read them from dynamic nodes or event handlers when values need to update.
+read them from dynamic views or event handlers when values need to update.
 Buttons support Tab/Shift+Tab focus movement and Enter/Space activation by
 default. Register handlers with `use_key_event()` inside a component body for
 custom key maps and overrides.
@@ -30,7 +30,7 @@ custom key maps and overrides.
 use leptatui::prelude::*;
 
 #[component]
-fn Greeting() -> Node {
+fn Greeting() -> View {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;
@@ -55,12 +55,12 @@ Children` prop. `#[prop(optional)]`, `#[prop(default = ...)]`, and
 
 ```rust
 #[component]
-fn Label(#[prop(into)] text: String) -> Node {
+fn Label(#[prop(into)] text: String) -> View {
     view! { <Text>{text}</Text> }
 }
 
 #[component]
-fn Panel(#[prop(into)] title: String, children: Children) -> Node {
+fn Panel(#[prop(into)] title: String, children: Children) -> View {
     view! {
         <Block>
             <Column>
@@ -87,7 +87,7 @@ rule to combine focus with the current terminal selector.
 
 ```rust
 #[component]
-fn Panel() -> Node {
+fn Panel() -> View {
     stylesheet! {
         .panel => {
             bg: Color::Black
@@ -109,7 +109,7 @@ bodies with `@include`.
 
 ```rust
 #[component]
-fn MixedPanel() -> Node {
+fn MixedPanel() -> View {
     stylesheet! {
         @mixin panel_chrome {
             bg: Color::Black,
@@ -142,7 +142,7 @@ use `theme_color("name")` in stylesheet declarations.
 
 ```rust
 #[component]
-fn ThemedPanel() -> Node {
+fn ThemedPanel() -> View {
     provide_context(
         ThemeVariables::new()
             .color("text", Color::Black)
