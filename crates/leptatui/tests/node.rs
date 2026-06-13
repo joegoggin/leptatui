@@ -116,8 +116,8 @@ fn renders_text_with_resolved_stylesheet_style() -> Result<()> {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
-        let mut ctx = RenderCtx::with_stylesheet(frame, &stylesheet);
-        render_result = node.render(&mut ctx);
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| node.render(ctx));
     })?;
     render_result?;
 
@@ -344,8 +344,8 @@ fn renders_focused_button_with_focus_stylesheet_rule() -> Result<()> {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
-        let mut ctx = RenderCtx::with_stylesheet(frame, &stylesheet);
-        render_result = node.render(&mut ctx);
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| node.render(ctx));
     })?;
     render_result?;
 

@@ -15,7 +15,7 @@ use crate::{
     app::{AppControl, Result},
     component::{Component, KeyControl, RenderCtx},
     context,
-    style::{Borders, TuiStyle},
+    style::{Borders, StyleDeclarations, TuiStyle},
 };
 
 use super::{metadata::StyleMetadata, model::Node};
@@ -25,7 +25,7 @@ use super::{metadata::StyleMetadata, model::Node};
 /// # Arguments
 ///
 /// * `metadata` — Node selector metadata used by stylesheet resolution.
-/// * `ctx` — Rendering context containing the stylesheet, ancestor metadata,
+/// * `ctx` — Rendering context containing stylesheets, ancestor metadata,
 ///   and inherited style.
 ///
 /// # Returns
@@ -38,12 +38,16 @@ fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle 
         })
         .unwrap_or_default();
 
-    ctx.stylesheet().resolve(
-        metadata,
-        ctx.selector_ancestors(),
-        ctx.inherited_style(),
-        &theme,
-    )
+    let mut resolved = StyleDeclarations::from(ctx.inherited_style());
+    for stylesheet in ctx.stylesheets() {
+        stylesheet.apply_matching_rules(&mut resolved, metadata, ctx.selector_ancestors());
+    }
+
+    if let Some(inline_style) = metadata.inline_style() {
+        resolved.overlay(&StyleDeclarations::from(inline_style));
+    }
+
+    resolved.resolve(&theme)
 }
 
 impl Node {

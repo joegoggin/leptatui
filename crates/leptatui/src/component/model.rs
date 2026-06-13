@@ -1,8 +1,8 @@
 //! Frame rendering context model.
 //!
 //! This module wraps a Ratatui frame with the currently assigned render area,
-//! inherited style values, selector ancestor metadata, and helper methods for
-//! drawing widgets or child nodes.
+//! scoped stylesheets, inherited style values, selector ancestor metadata, and
+//! helper methods for drawing widgets or child nodes.
 
 use ratatui::{Frame, layout::Rect, widgets::Widget};
 
@@ -13,17 +13,14 @@ use crate::{
     style::{Stylesheet, TuiStyle},
 };
 
-/// Shared empty stylesheet used by render contexts created without app styles.
-static EMPTY_STYLESHEET: Stylesheet = Stylesheet::empty();
-
 /// Rendering context for a single frame and target area.
 pub struct RenderCtx<'frame, 'buffer> {
     /// Ratatui frame being rendered during the current draw pass.
     frame: &'frame mut Frame<'buffer>,
     /// Area inside the frame currently targeted by rendering calls.
     area: Rect,
-    /// Stylesheet used to resolve node styles during rendering.
-    stylesheet: &'frame Stylesheet,
+    /// Scoped stylesheets used to resolve node styles during rendering.
+    stylesheets: Vec<Stylesheet>,
     /// Inherited style declarations available to the current node.
     inherited_style: TuiStyle,
     /// Ancestor metadata used by descendant selector resolution.
@@ -41,28 +38,11 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// A [`RenderCtx`] covering the full frame.
     pub fn new(frame: &'frame mut Frame<'buffer>) -> Self {
-        Self::with_stylesheet(frame, &EMPTY_STYLESHEET)
-    }
-
-    /// Creates a render context with an application stylesheet.
-    ///
-    /// # Arguments
-    ///
-    /// * `frame` — Ratatui frame for the current draw pass.
-    /// * `stylesheet` — Stylesheet used when resolving node styles.
-    ///
-    /// # Returns
-    ///
-    /// A [`RenderCtx`] covering the full frame.
-    pub fn with_stylesheet(
-        frame: &'frame mut Frame<'buffer>,
-        stylesheet: &'frame Stylesheet,
-    ) -> Self {
         let area = frame.area();
         Self {
             frame,
             area,
-            stylesheet,
+            stylesheets: Vec::new(),
             inherited_style: TuiStyle::new(),
             selector_ancestors: Vec::new(),
         }
@@ -77,13 +57,34 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.area
     }
 
-    /// Returns the stylesheet used by this render context.
+    /// Returns the stylesheets used by this render context.
     ///
     /// # Returns
     ///
-    /// A [`Stylesheet`] reference used for node style resolution.
-    pub(crate) fn stylesheet(&self) -> &Stylesheet {
-        self.stylesheet
+    /// A stylesheet slice used for node style resolution.
+    pub(crate) fn stylesheets(&self) -> &[Stylesheet] {
+        &self.stylesheets
+    }
+
+    /// Renders with an additional component-scoped stylesheet.
+    #[doc(hidden)]
+    pub fn __with_stylesheet<R>(
+        &mut self,
+        stylesheet: &Stylesheet,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let mut stylesheets = self.stylesheets.clone();
+        stylesheets.push(stylesheet.clone());
+
+        let mut child = RenderCtx {
+            frame: &mut *self.frame,
+            area: self.area,
+            stylesheets,
+            inherited_style: self.inherited_style,
+            selector_ancestors: self.selector_ancestors.clone(),
+        };
+
+        render(&mut child)
     }
 
     /// Returns the style declarations inherited by the current node.
@@ -157,7 +158,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         let mut child = RenderCtx {
             frame: &mut *self.frame,
             area,
-            stylesheet: self.stylesheet,
+            stylesheets: self.stylesheets.clone(),
             inherited_style,
             selector_ancestors: self.selector_ancestors.clone(),
         };
@@ -191,7 +192,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         let mut child = RenderCtx {
             frame: &mut *self.frame,
             area,
-            stylesheet: self.stylesheet,
+            stylesheets: self.stylesheets.clone(),
             inherited_style,
             selector_ancestors,
         };

@@ -48,50 +48,62 @@ async fn main() -> Result<()> {
 }
 ```
 
-Styles can be built directly with `Stylesheet::new().rule(...)` or with the
-`stylesheet!` macro. The macro supports flat terminal selectors and nested
-rules that lower into explicit descendant selectors. Use `&:focus` inside a
-nested rule to combine focus with the current terminal selector.
+Styles live with components. Put `stylesheet!` inside a `#[component]` body to
+register those rules for that component subtree, including descendant
+components. The same macro still returns a `Stylesheet` value for direct
+construction and tests. It supports flat terminal selectors and nested rules
+that lower into explicit descendant selectors. Use `&:focus` inside a nested
+rule to combine focus with the current terminal selector.
 
 ```rust
-let stylesheet = stylesheet! {
-    .panel => {
-        bg: Color::Black
+#[component]
+fn Panel() -> Node {
+    stylesheet! {
+        .panel => {
+            bg: Color::Black
 
-        Text => { fg: Color::White }
+            Text => { fg: Color::White }
 
-        Button => {
-            &:focus => { bg: Color::Yellow }
+            Button => {
+                &:focus => { bg: Color::Yellow }
+            }
         }
     }
-};
+
+    view! { <Block class="panel"><Button>"Save"</Button></Block> }
+}
 ```
 
 Reusable declaration groups can be declared with `@mixin` and expanded in rule
 bodies with `@include`.
 
 ```rust
-let stylesheet = stylesheet! {
-    @mixin panel_chrome {
-        bg: Color::Black,
-        padding: TuiSpacing::uniform(1)
-    }
+#[component]
+fn MixedPanel() -> Node {
+    stylesheet! {
+        @mixin panel_chrome {
+            bg: Color::Black,
+            padding: TuiSpacing::uniform(1)
+        }
 
-    @mixin focused_control {
-        fg: Color::Black,
-        bg: Color::Yellow
-    }
+        @mixin focused_control {
+            fg: Color::Black,
+            bg: Color::Yellow
+        }
 
-    .panel => {
-        @include panel_chrome
+        .panel => {
+            @include panel_chrome
 
-        Text => { fg: Color::White }
+            Text => { fg: Color::White }
 
-        Button => {
-            &:focus => { @include focused_control }
+            Button => {
+                &:focus => { @include focused_control }
+            }
         }
     }
-};
+
+    view! { <Block class="panel"><Button>"Save"</Button></Block> }
+}
 ```
 
 Stylesheets can also reference runtime theme variables. Provide
@@ -99,18 +111,23 @@ Stylesheets can also reference runtime theme variables. Provide
 use `theme_color("name")` in stylesheet declarations.
 
 ```rust
-let stylesheet = stylesheet! {
-    $text: theme_color("text");
-    $surface: theme_color("surface");
+#[component]
+fn ThemedPanel() -> Node {
+    provide_context(
+        ThemeVariables::new()
+            .color("text", Color::Black)
+            .color("surface", Color::White),
+    );
 
-    .panel => { fg: $text, bg: $surface }
-};
+    stylesheet! {
+        $text: theme_color("text");
+        $surface: theme_color("surface");
 
-provide_context(
-    ThemeVariables::new()
-        .color("text", Color::Black)
-        .color("surface", Color::White),
-);
+        .panel => { fg: $text, bg: $surface }
+    }
+
+    view! { <Block class="panel"><Text>"Theme-aware"</Text></Block> }
+}
 ```
 
 See `cargo run --example theme_switcher` for a light/dark theme switcher.

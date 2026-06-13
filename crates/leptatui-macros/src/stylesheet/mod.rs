@@ -1,7 +1,8 @@
 //! Parser and expander for the `stylesheet!` macro.
 //!
-//! The stylesheet macro accepts flat terminal selector rules and lowers them
-//! into Leptatui stylesheet builder calls.
+//! The stylesheet macro accepts flat terminal selector rules, lowers them into
+//! Leptatui stylesheet builder calls, and registers them when invoked during
+//! generated component setup.
 
 mod model;
 
@@ -10,7 +11,8 @@ use proc_macro::TokenStream;
 use model::StylesheetRoot;
 use syn::Error;
 
-/// Expands `stylesheet!` input into a Leptatui [`Stylesheet`] builder chain.
+/// Expands `stylesheet!` input into a registered Leptatui [`Stylesheet`]
+/// expression.
 ///
 /// # Arguments
 ///

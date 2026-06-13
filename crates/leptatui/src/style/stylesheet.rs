@@ -90,6 +90,11 @@ impl Stylesheet {
         self.rules.push(StyleRule::new(selector, style));
     }
 
+    /// Appends all rules from another stylesheet.
+    pub(crate) fn extend(&mut self, stylesheet: &Self) {
+        self.rules.extend(stylesheet.rules.iter().cloned());
+    }
+
     /// Resolves the style for a node.
     ///
     /// Starts with inherited style values, overlays matching type, class, and id
@@ -115,15 +120,25 @@ impl Stylesheet {
     ) -> TuiStyle {
         let mut resolved = StyleDeclarations::from(inherited);
 
-        self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Type);
-        self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Class);
-        self.apply_matching(&mut resolved, metadata, ancestors, Specificity::Id);
+        self.apply_matching_rules(&mut resolved, metadata, ancestors);
 
         if let Some(inline_style) = metadata.inline_style() {
             resolved.overlay(&StyleDeclarations::from(inline_style));
         }
 
         resolved.resolve(theme)
+    }
+
+    /// Applies matching rules without resolving theme variables or inline styles.
+    pub(crate) fn apply_matching_rules(
+        &self,
+        resolved: &mut StyleDeclarations,
+        metadata: &StyleMetadata,
+        ancestors: &[StyleMetadata],
+    ) {
+        self.apply_matching(resolved, metadata, ancestors, Specificity::Type);
+        self.apply_matching(resolved, metadata, ancestors, Specificity::Class);
+        self.apply_matching(resolved, metadata, ancestors, Specificity::Id);
     }
 
     /// Applies matching rules at a single selector specificity.

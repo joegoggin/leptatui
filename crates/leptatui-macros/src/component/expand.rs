@@ -6,7 +6,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::ItemFn;
+use syn::{ItemFn, Stmt};
 
 use super::signature;
 
@@ -29,8 +29,22 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
     let attrs = input_fn.attrs;
     let vis = input_fn.vis;
     let ident = input_fn.sig.ident;
-    let body = input_fn.block;
+    let mut body = input_fn.block;
     let leptatui = crate::utils::crate_path::leptatui();
+
+    for statement in &mut body.stmts {
+        if let Stmt::Macro(statement) = statement
+            && statement.semi_token.is_none()
+            && statement
+                .mac
+                .path
+                .segments
+                .last()
+                .is_some_and(|segment| segment.ident == "stylesheet")
+        {
+            statement.semi_token = Some(Default::default());
+        }
+    }
 
     let setup_body = quote! {
         {
@@ -46,6 +60,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             __leptatui_owner: #leptatui::prelude::Owner,
             __leptatui_node: #leptatui::Node,
             __leptatui_key_handlers: #leptatui::__private::KeyHandlerRegistry,
+            __leptatui_stylesheet: #leptatui::Stylesheet,
         }
 
         impl #ident {
@@ -54,17 +69,26 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 let __leptatui_owner = #leptatui::prelude::Owner::new();
                 let __leptatui_key_handlers =
                     #leptatui::__private::KeyHandlerRegistry::new();
+                let __leptatui_stylesheets =
+                    #leptatui::__private::StylesheetRegistry::new();
                 let __leptatui_node = __leptatui_owner.with(|| {
                     #leptatui::__private::__with_key_handler_registry(
                         &__leptatui_key_handlers,
-                        Self::__setup_tree,
+                        || {
+                            #leptatui::__private::__with_stylesheet_registry(
+                                &__leptatui_stylesheets,
+                                Self::__setup_tree,
+                            )
+                        },
                     )
                 });
+                let __leptatui_stylesheet = __leptatui_stylesheets.stylesheet();
 
                 Self {
                     __leptatui_owner,
                     __leptatui_node,
                     __leptatui_key_handlers,
+                    __leptatui_stylesheet,
                 }
             }
 
@@ -101,10 +125,13 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             ) -> #leptatui::Result<()> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_node = &self.__leptatui_node;
+                let __leptatui_stylesheet = &self.__leptatui_stylesheet;
 
-                __leptatui_owner.with(|| {
-                    #leptatui::context::__with_context_scope_if_missing(|| {
-                        ctx.render_node(__leptatui_node)
+                ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
+                    __leptatui_owner.with(|| {
+                        #leptatui::context::__with_context_scope_if_missing(|| {
+                            ctx.render_node(__leptatui_node)
+                        })
                     })
                 })
             }

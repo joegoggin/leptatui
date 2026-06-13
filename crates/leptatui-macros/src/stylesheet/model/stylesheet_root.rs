@@ -83,7 +83,7 @@ impl StylesheetRoot {
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing a `Stylesheet::new()` builder chain.
+    /// A [`TokenStream`] containing a registered `Stylesheet` expression.
     ///
     /// # Errors
     ///
@@ -107,6 +107,12 @@ impl StylesheetRoot {
             stylesheet = rule.expand(stylesheet, &variables, &mixins)?;
         }
 
-        Ok(stylesheet)
+        Ok(quote! {
+            {
+                let __leptatui_stylesheet = #stylesheet;
+                #leptatui::__private::__register_stylesheet(&__leptatui_stylesheet);
+                __leptatui_stylesheet
+            }
+        })
     }
 }

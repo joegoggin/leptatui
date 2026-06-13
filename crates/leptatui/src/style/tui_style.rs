@@ -136,23 +136,6 @@ impl TuiStyle {
         self
     }
 
-    /// Overlays explicitly configured style values onto this style.
-    ///
-    /// Values present in `style` replace values already present on `self`;
-    /// values absent from `style` leave the current value unchanged.
-    ///
-    /// # Arguments
-    ///
-    /// * `style` — Style values to overlay onto the current style.
-    pub(crate) fn overlay(&mut self, style: Self) {
-        self.foreground = style.foreground.or(self.foreground);
-        self.background = style.background.or(self.background);
-        self.modifiers = style.modifiers.or(self.modifiers);
-        self.borders = style.borders.or(self.borders);
-        self.border_type = style.border_type.or(self.border_type);
-        self.padding = style.padding.or(self.padding);
-    }
-
     /// Returns the style values inherited by descendant nodes.
     ///
     /// Only foreground and background colors currently inherit across node

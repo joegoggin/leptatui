@@ -53,37 +53,6 @@ fn ThemeDemo() -> Node {
     provide_context(mode.read_only());
     provide_context(theme.read_only());
 
-    view! {
-        <Block class="app-panel">
-            <Column>
-                <Text class="title">"Theme variables"</Text>
-                {ThemeStatus::new()}
-                <Text class="body">
-                    "The same stylesheet resolves against the active context theme."
-                </Text>
-                <Row class="controls">
-                    <Button
-                        class="theme-button"
-                        on_press=move || {
-                            mode.update(|mode| {
-                                *mode = mode.toggle();
-                                theme.set(mode.variables());
-                            });
-                            AppControl::Continue
-                        }
-                    >
-                        "Toggle theme"
-                    </Button>
-                    <Button class="theme-button danger" on_press=|| AppControl::Exit>
-                        "Quit"
-                    </Button>
-                </Row>
-            </Column>
-        </Block>
-    }
-}
-
-fn theme_stylesheet() -> Stylesheet {
     stylesheet! {
         $text: theme_color("text");
         $muted: theme_color("muted");
@@ -114,12 +83,38 @@ fn theme_stylesheet() -> Stylesheet {
             }
         }
     }
+
+    view! {
+        <Block class="app-panel">
+            <Column>
+                <Text class="title">"Theme variables"</Text>
+                {ThemeStatus::new()}
+                <Text class="body">
+                    "The same stylesheet resolves against the active context theme."
+                </Text>
+                <Row class="controls">
+                    <Button
+                        class="theme-button"
+                        on_press=move || {
+                            mode.update(|mode| {
+                                *mode = mode.toggle();
+                                theme.set(mode.variables());
+                            });
+                            AppControl::Continue
+                        }
+                    >
+                        "Toggle theme"
+                    </Button>
+                    <Button class="theme-button danger" on_press=|| AppControl::Exit>
+                        "Quit"
+                    </Button>
+                </Row>
+            </Column>
+        </Block>
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(ThemeDemo::new())
-        .with_stylesheet(theme_stylesheet())
-        .run()
-        .await
+    App::new(ThemeDemo::new()).run().await
 }

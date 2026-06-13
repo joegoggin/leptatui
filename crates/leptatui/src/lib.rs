@@ -37,7 +37,10 @@ pub use style::{
 pub mod __private {
     use crate::Node;
 
-    pub use crate::component::{__with_key_handler_registry, KeyHandlerRegistry};
+    pub use crate::component::{
+        __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
+        KeyHandlerRegistry, StylesheetRegistry,
+    };
     pub use crossterm::event::{Event, KeyEvent};
 
     pub fn __reconcile_node(next: &mut Node, previous: &Node) {

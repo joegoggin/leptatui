@@ -12,9 +12,10 @@ use std::{
 };
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use leptatui::context::provide_context;
 use leptatui::{
-    AppControl, Component, KeyControl, RenderCtx, Result, button, column, component, dynamic, text,
-    use_key_event,
+    AppControl, Color, Component, KeyControl, RenderCtx, Result, ThemeVariables, button, column,
+    component, dynamic, row, stylesheet, text, theme_color, use_key_event,
 };
 use leptos::prelude::{GetUntracked, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
@@ -36,6 +37,83 @@ static MACRO_RELEASE_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
 /// Context value used by generated component provider tests.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct MacroLabel(&'static str);
+
+/// Component with a local stylesheet applied to its own text node.
+#[component]
+fn MacroStyledText() -> leptatui::Node {
+    stylesheet! {
+        .scoped => { fg: Color::Yellow, bg: Color::Blue }
+    }
+
+    text("Scoped").with_classes("scoped")
+}
+
+/// Component whose stylesheet targets a shared class name.
+#[component]
+fn MacroStyledSibling() -> leptatui::Node {
+    stylesheet! {
+        .shared => { fg: Color::Yellow }
+    }
+
+    text("Styled").with_classes("shared")
+}
+
+/// Component with a class that should not receive sibling styles.
+#[component]
+fn MacroPlainSibling() -> leptatui::Node {
+    text("Plain").with_classes("shared")
+}
+
+/// Parent component whose stylesheet should apply to child component internals.
+#[component]
+fn MacroParentStylesChild() -> leptatui::Node {
+    stylesheet! {
+        Text => { fg: Color::Green }
+    }
+
+    component(MacroPlainSibling::new())
+}
+
+/// Parent and child components that both style text.
+#[component]
+fn MacroParentWithChildOverride() -> leptatui::Node {
+    stylesheet! {
+        Text => { fg: Color::Green }
+    }
+
+    component(MacroChildStyleOverride::new())
+}
+
+/// Child component whose stylesheet should override parent component styles.
+#[component]
+fn MacroChildStyleOverride() -> leptatui::Node {
+    stylesheet! {
+        Text => { fg: Color::Yellow }
+    }
+
+    text("Override")
+}
+
+/// Component whose stylesheet resolves against theme context it provides.
+#[component]
+fn MacroThemedStylesheet() -> leptatui::Node {
+    provide_context(ThemeVariables::new().color("text", Color::LightCyan));
+
+    stylesheet! {
+        .themed => { fg: theme_color("text") }
+    }
+
+    text("Theme").with_classes("themed")
+}
+
+/// Parent component with styled and plain sibling component subtrees.
+#[component]
+fn MacroSiblingStyleRoot() -> leptatui::Node {
+    row([
+        component(MacroStyledSibling::new()),
+        component(MacroPlainSibling::new()),
+    ])
+}
 
 /// Component with an interactive button used by macro runtime tests.
 #[component]
@@ -291,6 +369,37 @@ fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
         .collect()
 }
 
+/// Returns the foreground and background colors for the first matching symbol.
+fn rendered_cell_colors(terminal: &Terminal<TestBackend>, symbol: &str) -> (Color, Color) {
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == symbol)
+        .unwrap_or_else(|| panic!("rendered `{symbol}` cell"));
+
+    (cell.fg, cell.bg)
+}
+
+/// Renders a component into a test backend.
+fn render_component<C>(component: &mut C, width: u16, height: u16) -> Result<Terminal<TestBackend>>
+where
+    C: Component,
+{
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend)?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = Component::render(component, &mut ctx);
+    })?;
+    render_result?;
+
+    Ok(terminal)
+}
+
 /// Verifies component macro pass and fail fixtures compile as expected.
 ///
 /// # Example Under Test
@@ -314,6 +423,87 @@ fn component_macro_compile_cases() {
     let cases = trybuild::TestCases::new();
     cases.pass("tests/fixtures/component_macro/pass/*.rs");
     cases.compile_fail("tests/fixtures/component_macro/fail/*.rs");
+}
+
+/// Verifies a bare `stylesheet!` statement registers with its component.
+///
+/// # Assertions
+///
+/// - The component's text receives the foreground and background from the
+///   local stylesheet.
+#[test]
+fn generated_component_stylesheet_styles_own_nodes() -> Result<()> {
+    let mut component = MacroStyledText::new();
+    let terminal = render_component(&mut component, 16, 3)?;
+
+    assert_eq!(
+        rendered_cell_colors(&terminal, "S"),
+        (Color::Yellow, Color::Blue)
+    );
+
+    Ok(())
+}
+
+/// Verifies component styles do not leak into sibling component subtrees.
+///
+/// # Assertions
+///
+/// - The styled sibling receives the shared class style.
+/// - The plain sibling has the same class but keeps default colors.
+#[test]
+fn generated_component_stylesheets_do_not_leak_to_siblings() -> Result<()> {
+    let mut component = MacroSiblingStyleRoot::new();
+    let terminal = render_component(&mut component, 24, 3)?;
+
+    assert_eq!(rendered_cell_colors(&terminal, "S").0, Color::Yellow);
+    assert_eq!(rendered_cell_colors(&terminal, "P").0, Color::Reset);
+
+    Ok(())
+}
+
+/// Verifies parent component styles apply through child component boundaries.
+///
+/// # Assertions
+///
+/// - A child component's text receives the parent component stylesheet.
+#[test]
+fn generated_component_stylesheets_apply_to_child_component_subtrees() -> Result<()> {
+    let mut component = MacroParentStylesChild::new();
+    let terminal = render_component(&mut component, 16, 3)?;
+
+    assert_eq!(rendered_cell_colors(&terminal, "P").0, Color::Green);
+
+    Ok(())
+}
+
+/// Verifies child component styles are layered above parent component styles.
+///
+/// # Assertions
+///
+/// - A child text rule overrides the parent text rule for the child subtree.
+#[test]
+fn generated_child_component_stylesheet_overrides_parent_stylesheet() -> Result<()> {
+    let mut component = MacroParentWithChildOverride::new();
+    let terminal = render_component(&mut component, 16, 3)?;
+
+    assert_eq!(rendered_cell_colors(&terminal, "O").0, Color::Yellow);
+
+    Ok(())
+}
+
+/// Verifies component stylesheets resolve against component-provided themes.
+///
+/// # Assertions
+///
+/// - A `theme_color(...)` declaration resolves from context during render.
+#[test]
+fn generated_component_stylesheet_resolves_theme_context() -> Result<()> {
+    let mut component = MacroThemedStylesheet::new();
+    let terminal = render_component(&mut component, 16, 3)?;
+
+    assert_eq!(rendered_cell_colors(&terminal, "T").0, Color::LightCyan);
+
+    Ok(())
 }
 
 /// Verifies generated components dispatch key events through registered hooks.

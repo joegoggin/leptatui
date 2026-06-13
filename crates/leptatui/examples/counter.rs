@@ -27,6 +27,15 @@ fn Counter() -> Node {
         _ => KeyControl::Pass,
     });
 
+    stylesheet! {
+        Button => {
+            fg: Color::White,
+            borders: Borders::ALL,
+            border_type: BorderType::Rounded
+        }
+        .danger => { fg: Color::LightRed }
+    }
+
     view! {
         <Column>
             <Block class="counter-panel">
@@ -52,17 +61,5 @@ fn Counter() -> Node {
 /// Runs the counter example application.
 #[tokio::main]
 async fn main() -> Result<()> {
-    let stylesheet = stylesheet! {
-        Button => {
-            fg: Color::White,
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded
-        }
-        .danger => { fg: Color::LightRed }
-    };
-
-    App::new(Counter::new())
-        .with_stylesheet(stylesheet)
-        .run()
-        .await
+    App::new(Counter::new()).run().await
 }

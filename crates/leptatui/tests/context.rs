@@ -94,6 +94,7 @@ impl Component for EventLabelConsumer {
 struct ThemeRenderRoot {
     dark: ReadSignal<bool>,
     child: leptatui::Node,
+    stylesheet: Stylesheet,
 }
 
 impl Component for ThemeRenderRoot {
@@ -109,7 +110,7 @@ impl Component for ThemeRenderRoot {
         };
 
         provide_context(theme);
-        ctx.render_node(&self.child)
+        ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_node(&self.child))
     }
 }
 
@@ -117,12 +118,13 @@ impl Component for ThemeRenderRoot {
 struct ThemeSignalRoot {
     theme: ReadSignal<ThemeVariables>,
     child: leptatui::Node,
+    stylesheet: Stylesheet,
 }
 
 impl Component for ThemeSignalRoot {
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.theme);
-        ctx.render_node(&self.child)
+        ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_node(&self.child))
     }
 }
 
@@ -166,7 +168,7 @@ impl Component for ContextRoot {
 /// # Example Under Test
 ///
 /// ```text
-/// AppRoot::render(&mut ContextRoot, frame, &Stylesheet::empty())
+/// AppRoot::render(&mut ContextRoot, frame)
 /// provide_context(String::from("from component"))
 /// leptos::context::provide_context(ReadSignal<i32>)
 /// ```
@@ -192,7 +194,7 @@ fn component_render_scope_can_provide_and_read_context() -> Result<()> {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
-        render_result = AppRoot::render(&mut root, frame, &Stylesheet::empty());
+        render_result = AppRoot::render(&mut root, frame);
     })?;
     render_result?;
 
@@ -215,13 +217,14 @@ fn context_theme_variables_update_rendered_styles() -> Result<()> {
     let mut root = ThemeRenderRoot {
         dark,
         child: text("Theme").with_classes("themed"),
+        stylesheet,
     };
     let backend = TestBackend::new(12, 1);
     let mut terminal = Terminal::new(backend)?;
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
-        render_result = AppRoot::render(&mut root, frame, &stylesheet);
+        render_result = AppRoot::render(&mut root, frame);
     })?;
     render_result?;
     let cell = terminal
@@ -238,7 +241,7 @@ fn context_theme_variables_update_rendered_styles() -> Result<()> {
 
     render_result = Ok(());
     terminal.draw(|frame| {
-        render_result = AppRoot::render(&mut root, frame, &stylesheet);
+        render_result = AppRoot::render(&mut root, frame);
     })?;
     render_result?;
     let cell = terminal
@@ -273,13 +276,14 @@ fn context_theme_signal_updates_rendered_styles() -> Result<()> {
     let mut root = ThemeSignalRoot {
         theme,
         child: text("Theme").with_classes("themed"),
+        stylesheet,
     };
     let backend = TestBackend::new(12, 1);
     let mut terminal = Terminal::new(backend)?;
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
-        render_result = AppRoot::render(&mut root, frame, &stylesheet);
+        render_result = AppRoot::render(&mut root, frame);
     })?;
     render_result?;
     let cell = terminal
@@ -296,7 +300,7 @@ fn context_theme_signal_updates_rendered_styles() -> Result<()> {
 
     render_result = Ok(());
     terminal.draw(|frame| {
-        render_result = AppRoot::render(&mut root, frame, &stylesheet);
+        render_result = AppRoot::render(&mut root, frame);
     })?;
     render_result?;
     let cell = terminal
