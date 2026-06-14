@@ -84,8 +84,13 @@ where
     ///
     /// The `source` closure is tracked with a Leptos effect. Whenever the source
     /// key changes, the resource enters [`ResourceState::Pending`] and runs
-    /// `fetcher` for the new key. Only the latest in-flight fetch may update the
-    /// state, so slower stale fetches cannot overwrite newer results.
+    /// `fetcher` for the new key. Each fetch receives a monotonically
+    /// increasing request id, and only the latest in-flight fetch may update the
+    /// state.
+    ///
+    /// Older fetch tasks are not cancelled. They may still finish, but their
+    /// ready or error results are ignored when a newer request has started, so
+    /// slower stale fetches cannot overwrite newer results.
     ///
     /// # Panics
     ///
@@ -197,6 +202,9 @@ where
 }
 
 /// Creates a resource from a tracked source key and async fetcher.
+///
+/// Older in-flight fetch tasks are not cancelled when the source key changes.
+/// Their results are ignored if a newer request has started.
 pub fn create_resource<K, T, E, F, Fut>(
     source: impl Fn() -> K + Send + Sync + 'static,
     fetcher: F,
