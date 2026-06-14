@@ -225,9 +225,16 @@ fn Actions() -> View {
 }
 ```
 
-Stylesheets can also reference runtime theme variables. Provide
-`ThemeVariables` through Leptatui context before rendering descendants, then
-use `theme_color("name")` in stylesheet declarations.
+Stylesheets can also reference runtime theme variables. Define each theme as a
+`ThemeVariables` value, provide either that value or a
+`ReadSignal<ThemeVariables>` through context, then use `theme_color("name")` in
+stylesheet declarations. Theme values are resolved during rendering, so a root
+component can switch the active theme signal and descendants repaint with the
+new values on the next draw without hardcoding per-theme colors in component
+view code.
+
+Keep literal colors in the theme model and keep component stylesheets written
+against variable names:
 
 ```rust
 #[component]
@@ -249,7 +256,83 @@ fn ThemedPanel() -> View {
 }
 ```
 
-See `cargo run --example theme_switcher` for a light/dark theme switcher.
+For runtime switching, provide the active mode and active variables as context
+signals near the root. Descendant components can consume the mode for labels or
+controls, while stylesheet resolution consumes `ReadSignal<ThemeVariables>` for
+colors:
+
+```rust
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ThemeMode {
+    Light,
+    Dark,
+}
+
+impl ThemeMode {
+    fn toggle(self) -> Self {
+        match self {
+            Self::Light => Self::Dark,
+            Self::Dark => Self::Light,
+        }
+    }
+
+    fn variables(self) -> ThemeVariables {
+        match self {
+            Self::Light => ThemeVariables::new()
+                .color("text", Color::Black)
+                .color("surface", Color::White),
+            Self::Dark => ThemeVariables::new()
+                .color("text", Color::White)
+                .color("surface", Color::Black),
+        }
+    }
+}
+
+#[component]
+fn ThemeLabel() -> View {
+    let mode = expect_context::<ReadSignal<ThemeMode>>();
+
+    dynamic(move || {
+        view! { <Text>{format!("Theme: {:?}", mode.get_untracked())}</Text> }
+    })
+}
+
+#[component]
+fn ThemeRoot() -> View {
+    let mode = RwSignal::new(ThemeMode::Light);
+    let theme = RwSignal::new(ThemeMode::Light.variables());
+
+    provide_context(mode.read_only());
+    provide_context(theme.read_only());
+
+    stylesheet! {
+        $text: theme_color("text");
+        $surface: theme_color("surface");
+
+        .panel => { fg: $text, bg: $surface }
+    }
+
+    view! {
+        <Block class="panel">
+            <Column>
+                <ThemeLabel />
+                <Button on_press=move || {
+                    mode.update(|mode| {
+                        *mode = mode.toggle();
+                        theme.set(mode.variables());
+                    });
+                    AppControl::Continue
+                }>
+                    "Toggle theme"
+                </Button>
+            </Column>
+        </Block>
+    }
+}
+```
+
+See `cargo run --example theme_switcher` for the complete light/dark theme
+switcher.
 
 ## Examples
 
