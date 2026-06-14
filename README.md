@@ -404,6 +404,12 @@ Run the interactive counter:
 cargo run --example counter
 ```
 
+Run the multi-page routing demo:
+
+```sh
+cargo run --example multi_page_demo
+```
+
 See `crates/leptatui/examples/README.md` for controls.
 
 ## Commands

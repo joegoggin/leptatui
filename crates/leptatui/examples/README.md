@@ -35,6 +35,17 @@ cargo run --example theme_switcher
 Use Tab and Shift+Tab to move focus. Activate Toggle theme with Enter or Space
 to switch the active theme variables at runtime.
 
+## Multi-Page Demo
+
+Run the route-driven Home, Counter, and Settings demo:
+
+```sh
+cargo run --example multi_page_demo
+```
+
+Use `h`, `c`, and `s` to switch pages. The Counter page supports `+`, `-`, and
+`r`; the Settings page supports `t` for theme switching. Press `q` to quit.
+
 ## Style Cascade Showcase
 
 Run the style cascade mechanics showcase:
