@@ -383,23 +383,12 @@ impl Element {
     /// Returns [`syn::Error`] if the child is a string literal where a view is
     /// required.
     fn expand_view_child(&self, child: &Child, element_name: &str) -> Result<TokenStream> {
-        match child {
-            Child::Element(child) => child.expand(),
-            Child::Text(TextContent::Expr(expr))
-                if matches!(expr.as_ref(), syn::Expr::Closure(_)) =>
-            {
-                let leptatui = crate::utils::crate_path::leptatui();
-                Ok(quote! { #leptatui::dynamic(#expr) })
-            }
-            Child::Text(TextContent::Expr(expr)) => {
-                let leptatui = crate::utils::crate_path::leptatui();
-                Ok(quote! { ::core::convert::Into::<#leptatui::View>::into(#expr) })
-            }
-            Child::Text(TextContent::Literal(_)) => Err(Error::new_spanned(
+        self.expand_view_child_value(child)?.ok_or_else(|| {
+            Error::new_spanned(
                 &self.name,
                 format!("{element_name} expects element children or braced view expressions"),
-            )),
-        }
+            )
+        })
     }
 
     /// Expands all children passed through a component `children` prop.
@@ -420,21 +409,33 @@ impl Element {
 
     /// Expands a child position that is passed through component children.
     fn expand_component_child(&self, child: &Child) -> Result<TokenStream> {
+        if let Some(child) = self.expand_view_child_value(child)? {
+            return Ok(child);
+        }
+
+        let Child::Text(TextContent::Literal(value)) = child else {
+            unreachable!("only text literals return None from expand_view_child_value")
+        };
+        let leptatui = crate::utils::crate_path::leptatui();
+
+        Ok(quote! { ::core::convert::Into::<#leptatui::View>::into(#value) })
+    }
+
+    /// Expands a child element or braced expression into a view expression.
+    fn expand_view_child_value(&self, child: &Child) -> Result<Option<TokenStream>> {
         let leptatui = crate::utils::crate_path::leptatui();
 
         match child {
-            Child::Element(child) => child.expand(),
+            Child::Element(child) => child.expand().map(Some),
             Child::Text(TextContent::Expr(expr))
                 if matches!(expr.as_ref(), syn::Expr::Closure(_)) =>
             {
-                Ok(quote! { #leptatui::dynamic(#expr) })
+                Ok(Some(quote! { #leptatui::dynamic(#expr) }))
             }
-            Child::Text(TextContent::Expr(expr)) => {
-                Ok(quote! { ::core::convert::Into::<#leptatui::View>::into(#expr) })
-            }
-            Child::Text(TextContent::Literal(value)) => {
-                Ok(quote! { ::core::convert::Into::<#leptatui::View>::into(#value) })
-            }
+            Child::Text(TextContent::Expr(expr)) => Ok(Some(
+                quote! { ::core::convert::Into::<#leptatui::View>::into(#expr) },
+            )),
+            Child::Text(TextContent::Literal(_)) => Ok(None),
         }
     }
 

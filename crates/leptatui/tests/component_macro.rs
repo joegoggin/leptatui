@@ -21,6 +21,10 @@ use leptatui::{
 use leptos::prelude::{GetUntracked, ReadSignal, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
 
+mod support;
+
+use support::{key, render_component, rendered_text};
+
 static MACRO_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
 static MACRO_SIGNAL_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
 static MACRO_CONTEXT_OBSERVED: Mutex<Option<MacroLabel>> = Mutex::new(None);
@@ -565,11 +569,6 @@ fn MacroKindSpecificKeyHandlers() -> leptatui::View {
     text("Kinds")
 }
 
-/// Creates a key-press event for a key code.
-fn key(code: KeyCode) -> Event {
-    Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
-}
-
 /// Creates a key event for a key code and kind.
 fn key_with_kind(code: KeyCode, kind: KeyEventKind) -> Event {
     Event::Key(KeyEvent::new_with_kind(code, KeyModifiers::NONE, kind))
@@ -599,17 +598,6 @@ fn macro_mixed_wrapped_button_press() -> AppControl {
     AppControl::Continue
 }
 
-/// Returns the terminal buffer content as a flat string.
-fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
-    terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect()
-}
-
 /// Returns the foreground and background colors for the first matching symbol.
 fn rendered_cell_colors(terminal: &Terminal<TestBackend>, symbol: &str) -> (Color, Color) {
     let cell = terminal
@@ -621,24 +609,6 @@ fn rendered_cell_colors(terminal: &Terminal<TestBackend>, symbol: &str) -> (Colo
         .unwrap_or_else(|| panic!("rendered `{symbol}` cell"));
 
     (cell.fg, cell.bg)
-}
-
-/// Renders a component into a test backend.
-fn render_component<C>(component: &mut C, width: u16, height: u16) -> Result<Terminal<TestBackend>>
-where
-    C: Component,
-{
-    let backend = TestBackend::new(width, height);
-    let mut terminal = Terminal::new(backend)?;
-    let mut render_result = Ok(());
-
-    terminal.draw(|frame| {
-        let mut ctx = RenderCtx::new(frame);
-        render_result = Component::render(component, &mut ctx);
-    })?;
-    render_result?;
-
-    Ok(terminal)
 }
 
 /// Verifies component macro pass and fail fixtures compile as expected.

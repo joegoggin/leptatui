@@ -86,20 +86,12 @@ impl ComponentView {
     /// Returns [`crate::app::Error::Io`] if the component render path performs
     /// terminal I/O that fails.
     pub(crate) fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with_reset(|| component.borrow_mut().render(ctx))
+        self.with_reset_component_mut(|component| component.render(ctx))
     }
 
     /// Returns the minimum useful render height inside this component boundary.
     pub(crate) fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with_reset(|| component.borrow().__min_height(ctx))
+        self.with_reset_component(|component| component.__min_height(ctx))
     }
 
     /// Handles an event inside this component's existing context scope.
@@ -117,115 +109,67 @@ impl ComponentView {
     /// Returns [`crate::app::Error::Io`] if the component event path performs
     /// terminal I/O that fails.
     pub(crate) fn handle_event(&self, event: Event) -> Result<AppControl> {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow_mut().handle_event(event))
+        self.with_component_mut(|component| component.handle_event(event))
     }
 
     /// Dispatches a key event through custom handlers only.
     #[doc(hidden)]
     pub(crate) fn dispatch_key_event(&self, key: KeyEvent) -> Result<KeyControl> {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow_mut().__dispatch_key_event(key))
+        self.with_component_mut(|component| component.__dispatch_key_event(key))
     }
 
     /// Returns the number of focusable controls inside the component boundary.
     #[doc(hidden)]
     pub(crate) fn focusable_count(&self) -> usize {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow().__focusable_count())
+        self.with_component(|component| component.__focusable_count())
     }
 
     /// Returns the focused control index while tracking traversal position.
     #[doc(hidden)]
     pub(crate) fn focused_index_inner(&self, index: &mut usize) -> Option<usize> {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow().__focused_index_inner(index))
+        self.with_component(|component| component.__focused_index_inner(index))
     }
 
     /// Sets focus by flattened control index while tracking traversal position.
     #[doc(hidden)]
     pub(crate) fn set_focus_by_index_inner(&self, target: usize, index: &mut usize) {
-        let component = self.component();
-
-        self.inner.context.with(|| {
-            component
-                .borrow_mut()
-                .__set_focus_by_index_inner(target, index)
-        });
+        self.with_component_mut(|component| component.__set_focus_by_index_inner(target, index));
     }
 
     /// Returns the focused control's vertical span inside this component boundary.
     #[doc(hidden)]
     pub(crate) fn focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow().__focused_button_span(ctx))
+        self.with_component(|component| component.__focused_button_span(ctx))
     }
 
     /// Activates the focused control inside the component boundary, if any.
     #[doc(hidden)]
     pub(crate) fn activate_focused_button(&self) -> Option<AppControl> {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow().__activate_focused_button())
+        self.with_component(|component| component.__activate_focused_button())
     }
 
     /// Scrolls the first overflowing layout inside this component boundary.
     #[doc(hidden)]
     pub(crate) fn scroll_first_overflowing(&self, delta: i16) -> bool {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow_mut().__scroll_first_overflowing(delta))
+        self.with_component_mut(|component| component.__scroll_first_overflowing(delta))
     }
 
     /// Scrolls the first overflowing layout inside this component boundary to the top.
     #[doc(hidden)]
     pub(crate) fn scroll_first_overflowing_to_top(&self) -> bool {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow_mut().__scroll_first_overflowing_to_top())
+        self.with_component_mut(|component| component.__scroll_first_overflowing_to_top())
     }
 
     /// Scrolls the first overflowing layout inside this component boundary to the bottom.
     #[doc(hidden)]
     pub(crate) fn scroll_first_overflowing_to_bottom(&self) -> bool {
-        let component = self.component();
-
-        self.inner.context.with(|| {
-            component
-                .borrow_mut()
-                .__scroll_first_overflowing_to_bottom()
-        })
+        self.with_component_mut(|component| component.__scroll_first_overflowing_to_bottom())
     }
 
     /// Returns whether this component boundary contains an overflowing scroll target.
     #[doc(hidden)]
     pub(crate) fn has_overflowing_scroll_target(&self) -> bool {
-        let component = self.component();
-
-        self.inner
-            .context
-            .with(|| component.borrow().__has_overflowing_scroll_target())
+        self.with_component(|component| component.__has_overflowing_scroll_target())
     }
 
     /// Compares two component boundaries by shared storage identity.
@@ -245,6 +189,46 @@ impl ComponentView {
     /// Returns whether two boundaries represent the same concrete component type.
     pub(crate) fn is_same_component_type(&self, other: &Self) -> bool {
         self.inner.component_type == other.inner.component_type
+    }
+
+    /// Reads the materialized component inside its persistent context scope.
+    fn with_component<R>(&self, read: impl FnOnce(&dyn Component) -> R) -> R {
+        let component = self.component();
+
+        self.inner.context.with(|| {
+            let component = component.borrow();
+            read(&*component)
+        })
+    }
+
+    /// Mutates the materialized component inside its persistent context scope.
+    fn with_component_mut<R>(&self, write: impl FnOnce(&mut dyn Component) -> R) -> R {
+        let component = self.component();
+
+        self.inner.context.with(|| {
+            let mut component = component.borrow_mut();
+            write(&mut *component)
+        })
+    }
+
+    /// Reads the materialized component inside a reset context scope.
+    fn with_reset_component<R>(&self, read: impl FnOnce(&dyn Component) -> R) -> R {
+        let component = self.component();
+
+        self.inner.context.with_reset(|| {
+            let component = component.borrow();
+            read(&*component)
+        })
+    }
+
+    /// Mutates the materialized component inside a reset context scope.
+    fn with_reset_component_mut<R>(&self, write: impl FnOnce(&mut dyn Component) -> R) -> R {
+        let component = self.component();
+
+        self.inner.context.with_reset(|| {
+            let mut component = component.borrow_mut();
+            write(&mut *component)
+        })
     }
 
     /// Returns the shared mutable component, materializing lazy boundaries once.

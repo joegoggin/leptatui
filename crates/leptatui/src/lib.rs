@@ -57,15 +57,7 @@ pub mod __private {
     }
 
     pub fn __reconcile_view(next: &mut View, previous: &View) {
-        let should_preserve_component = matches!(
-            (&*next, previous),
-            (View::Component(next), View::Component(previous))
-                if next.is_same_component_type(previous)
-        );
-
-        if should_preserve_component
-            || matches!((&*next, previous), (View::Dynamic(_), View::Dynamic(_)))
-        {
+        if should_preserve_deferred_boundary(next, previous) {
             *next = previous.clone();
             return;
         }
@@ -117,6 +109,16 @@ pub mod __private {
                 },
             ) => next_metadata.set_focused(previous_metadata.is_focused()),
             _ => {}
+        }
+    }
+
+    fn should_preserve_deferred_boundary(next: &View, previous: &View) -> bool {
+        match (next, previous) {
+            (View::Component(next), View::Component(previous)) => {
+                next.is_same_component_type(previous)
+            }
+            (View::Dynamic(_), View::Dynamic(_)) => true,
+            _ => false,
         }
     }
 }

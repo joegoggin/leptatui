@@ -6,9 +6,12 @@
 
 use std::process::Command;
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyCode;
 use leptatui::prelude::*;
-use ratatui::{Terminal, backend::TestBackend};
+
+mod support;
+
+use support::{key, render_component, rendered_text};
 
 /// Test routes matching the demo page shape.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -192,40 +195,6 @@ fn DemoWorkflowSettings() -> View {
             {move || view! { <Text>{format!("Theme: {:?}", mode.get_untracked())}</Text> }}
         </Column>
     }
-}
-
-/// Creates a key press event.
-fn key(code: KeyCode) -> Event {
-    Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
-}
-
-/// Renders a component into a test backend.
-fn render_component<C>(component: &mut C, width: u16, height: u16) -> Result<Terminal<TestBackend>>
-where
-    C: Component,
-{
-    let backend = TestBackend::new(width, height);
-    let mut terminal = Terminal::new(backend)?;
-    let mut render_result = Ok(());
-
-    terminal.draw(|frame| {
-        let mut ctx = RenderCtx::new(frame);
-        render_result = Component::render(component, &mut ctx);
-    })?;
-    render_result?;
-
-    Ok(terminal)
-}
-
-/// Returns rendered terminal text as a flat string.
-fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
-    terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect()
 }
 
 /// Verifies the demo workflow routes between pages while preserving shared state.
