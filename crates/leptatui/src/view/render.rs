@@ -7,7 +7,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    widgets::{Block, Paragraph, Wrap},
+    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use crate::{
@@ -628,22 +628,36 @@ fn render_children(
     if direction == LayoutDirection::Column {
         let min_heights = child_min_heights(children, inherited_style, parent_metadata, ctx);
         let content_height: u32 = min_heights.iter().map(|height| u32::from(*height)).sum();
-        let area_height = ctx.area().height;
+        let area = ctx.area();
+        let area_height = area.height;
 
         if content_height > u32::from(area_height) && area_height > 0 {
+            let content_area = scrolled_content_area(area);
+            let min_heights = ctx.with_area(content_area, |ctx| {
+                child_min_heights(children, inherited_style, parent_metadata, ctx)
+            });
+            let scrolled_content_height: u32 =
+                min_heights.iter().map(|height| u32::from(*height)).sum();
+            let content_height = scrolled_content_height.max(content_height);
             let max_scroll_offset =
-                u16::try_from(content_height - u32::from(area_height)).unwrap_or(u16::MAX);
+                u16::try_from(content_height.saturating_sub(u32::from(area_height)))
+                    .unwrap_or(u16::MAX);
             parent_metadata.set_max_scroll_offset(max_scroll_offset);
 
             let row_offset = parent_metadata.scroll_offset().min(max_scroll_offset);
-            return render_scrolled_column_children(
-                children,
-                &min_heights,
-                row_offset,
-                inherited_style,
-                parent_metadata,
-                ctx,
-            );
+            ctx.with_area(content_area, |ctx| {
+                render_scrolled_column_children(
+                    children,
+                    &min_heights,
+                    row_offset,
+                    inherited_style,
+                    parent_metadata,
+                    ctx,
+                )
+            })?;
+            render_column_scrollbar(row_offset, max_scroll_offset, area_height, ctx);
+
+            return Ok(());
         }
     }
 
@@ -665,6 +679,38 @@ fn render_children(
     }
 
     Ok(())
+}
+
+/// Returns the content area used when a right-side scrollbar is visible.
+fn scrolled_content_area(area: Rect) -> Rect {
+    Rect {
+        width: area.width.saturating_sub(1),
+        ..area
+    }
+}
+
+/// Renders the right-side scrollbar for an overflowing column.
+fn render_column_scrollbar(
+    row_offset: u16,
+    max_scroll_offset: u16,
+    viewport_height: u16,
+    ctx: &mut RenderCtx<'_, '_>,
+) {
+    if ctx.area().width == 0 || viewport_height == 0 {
+        return;
+    }
+
+    let content_length = usize::from(max_scroll_offset).saturating_add(1);
+    let mut state = ScrollbarState::new(content_length)
+        .position(usize::from(row_offset))
+        .viewport_content_length(usize::from(viewport_height));
+
+    ctx.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None),
+        &mut state,
+    );
 }
 
 /// Renders a vertically overflowing column from a child scroll offset.

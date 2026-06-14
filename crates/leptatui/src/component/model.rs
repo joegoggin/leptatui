@@ -4,7 +4,12 @@
 //! scoped stylesheets, inherited style values, selector ancestor metadata, and
 //! helper methods for drawing widgets or child views.
 
-use ratatui::{Frame, buffer::Buffer, layout::Rect, widgets::Widget};
+use ratatui::{
+    Frame,
+    buffer::Buffer,
+    layout::Rect,
+    widgets::{StatefulWidget, Widget},
+};
 
 use crate::{
     StyleMetadata,
@@ -129,6 +134,14 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         W: Widget,
     {
         self.target.render_widget(widget, self.area);
+    }
+
+    /// Renders a Ratatui stateful widget into the current target area.
+    pub(crate) fn render_stateful_widget<W>(&mut self, widget: W, state: &mut W::State)
+    where
+        W: StatefulWidget,
+    {
+        self.target.render_stateful_widget(widget, self.area, state);
     }
 
     /// Renders a Leptatui view into the current target area.
@@ -306,6 +319,17 @@ impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
         match self {
             Self::Frame(frame) => frame.render_widget(widget, area),
             Self::Buffer(buffer) => widget.render(area, buffer),
+        }
+    }
+
+    /// Renders a stateful widget into the target area.
+    fn render_stateful_widget<W>(&mut self, widget: W, area: Rect, state: &mut W::State)
+    where
+        W: StatefulWidget,
+    {
+        match self {
+            Self::Frame(frame) => frame.render_stateful_widget(widget, area, state),
+            Self::Buffer(buffer) => widget.render(area, buffer, state),
         }
     }
 

@@ -14,7 +14,11 @@ use leptatui::{
     StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View, ViewType, block, button, column,
     component, dynamic, row, text,
 };
-use ratatui::{Terminal, backend::TestBackend};
+use ratatui::{
+    Terminal,
+    backend::TestBackend,
+    symbols::{block as symbol_block, line as symbol_line},
+};
 
 /// Creates a key-press event for a key code.
 ///
@@ -71,6 +75,11 @@ fn symbol_position_opt(
                 (index % width, index / width)
             })
         })
+}
+
+fn cell_symbol<'a>(terminal: &'a Terminal<TestBackend>, x: u16, y: u16, width: u16) -> &'a str {
+    let index = usize::from(y) * usize::from(width) + usize::from(x);
+    terminal.backend().buffer().content()[index].symbol()
 }
 
 /// Verifies a block view renders its child text.
@@ -199,6 +208,131 @@ fn column_reserves_height_for_wrapped_text() -> Result<()> {
 }
 
 #[test]
+fn fitting_column_does_not_render_scrollbar() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = column([text("12345678")]);
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(cell_symbol(&terminal, 7, 0, 8), "8");
+
+    Ok(())
+}
+
+#[test]
+fn overflowing_column_renders_right_scrollbar() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = column(vec![text("One"), text("Two"), text("Three")]);
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(cell_symbol(&terminal, 7, 0, 8), symbol_block::FULL);
+    assert_eq!(
+        cell_symbol(&terminal, 7, 1, 8),
+        symbol_line::DOUBLE_VERTICAL
+    );
+
+    Ok(())
+}
+
+#[test]
+fn overflowing_column_reserves_width_for_scrollbar() -> Result<()> {
+    let backend = TestBackend::new(6, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = column(vec![text("123456"), text("more"), text("tail")]);
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(cell_symbol(&terminal, 4, 0, 6), "5");
+    assert_eq!(cell_symbol(&terminal, 5, 0, 6), symbol_block::FULL);
+    assert_eq!(cell_symbol(&terminal, 0, 1, 6), "6");
+
+    Ok(())
+}
+
+#[test]
+fn overflowing_column_updates_scrollbar_position() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = column(vec![text("One"), text("Two"), text("Three")]);
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let mut render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(
+        cell_symbol(&terminal, 7, 0, 8),
+        symbol_line::DOUBLE_VERTICAL
+    );
+    assert_eq!(cell_symbol(&terminal, 7, 1, 8), symbol_block::FULL);
+
+    Ok(())
+}
+
+#[test]
+fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> Result<()> {
+    let backend = TestBackend::new(8, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let children = (0..10).map(|index| text(format!("Line {index}")));
+    let mut view = column(children.collect::<Vec<_>>());
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let mut render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(cell_symbol(&terminal, 7, 4, 8), symbol_block::FULL);
+
+    Ok(())
+}
+
+#[test]
 fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
@@ -217,7 +351,7 @@ fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
 
 #[test]
 fn overflowing_column_scrolls_wrapped_text_rows() -> Result<()> {
-    let backend = TestBackend::new(6, 2);
+    let backend = TestBackend::new(7, 2);
     let mut terminal = Terminal::new(backend)?;
     let mut view = column(vec![text("Hello World"), text("Bottom")]);
     let mut render_result = Ok(());
@@ -228,7 +362,7 @@ fn overflowing_column_scrolls_wrapped_text_rows() -> Result<()> {
     })?;
     render_result?;
 
-    assert!(symbol_position_opt(&terminal, "B", 6).is_none());
+    assert!(symbol_position_opt(&terminal, "B", 7).is_none());
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
@@ -242,8 +376,8 @@ fn overflowing_column_scrolls_wrapped_text_rows() -> Result<()> {
     })?;
     render_result?;
 
-    assert_eq!(symbol_position(&terminal, "W", 6).1, 0);
-    assert_eq!(symbol_position(&terminal, "B", 6).1, 1);
+    assert_eq!(symbol_position(&terminal, "W", 7).1, 0);
+    assert_eq!(symbol_position(&terminal, "B", 7).1, 1);
 
     Ok(())
 }
