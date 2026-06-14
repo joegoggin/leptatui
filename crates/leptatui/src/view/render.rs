@@ -274,6 +274,7 @@ impl View {
 
         match key.code {
             KeyCode::Down | KeyCode::Char('j') => {
+                self.clear_scroll_to_top_key_pending();
                 if self.scroll_first_overflowing(1) {
                     KeyControl::Handled
                 } else {
@@ -281,6 +282,7 @@ impl View {
                 }
             }
             KeyCode::Up | KeyCode::Char('k') => {
+                self.clear_scroll_to_top_key_pending();
                 if self.scroll_first_overflowing(-1) {
                     KeyControl::Handled
                 } else {
@@ -288,6 +290,7 @@ impl View {
                 }
             }
             KeyCode::PageDown => {
+                self.clear_scroll_to_top_key_pending();
                 if self.scroll_first_overflowing(5) {
                     KeyControl::Handled
                 } else {
@@ -295,13 +298,24 @@ impl View {
                 }
             }
             KeyCode::PageUp => {
+                self.clear_scroll_to_top_key_pending();
                 if self.scroll_first_overflowing(-5) {
                     KeyControl::Handled
                 } else {
                     KeyControl::Pass
                 }
             }
+            KeyCode::Char('g') => self.handle_scroll_to_top_key(),
+            KeyCode::Char('G') => {
+                self.clear_scroll_to_top_key_pending();
+                if self.scroll_first_overflowing_to(ScrollBoundary::Bottom) {
+                    KeyControl::Handled
+                } else {
+                    KeyControl::Pass
+                }
+            }
             KeyCode::Tab | KeyCode::BackTab => {
+                self.clear_scroll_to_top_key_pending();
                 let count = self.focusable_count();
                 if count == 0 {
                     return KeyControl::Pass;
@@ -315,10 +329,31 @@ impl View {
                 self.move_focus(direction, count);
                 KeyControl::Handled
             }
-            KeyCode::Enter | KeyCode::Char(' ') => self
-                .activate_focused_button()
-                .map_or(KeyControl::Pass, KeyControl::from),
-            _ => KeyControl::Pass,
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                self.clear_scroll_to_top_key_pending();
+                self.activate_focused_button()
+                    .map_or(KeyControl::Pass, KeyControl::from)
+            }
+            _ => {
+                self.clear_scroll_to_top_key_pending();
+                KeyControl::Pass
+            }
+        }
+    }
+
+    /// Handles the two-key `gg` scroll-to-top sequence.
+    fn handle_scroll_to_top_key(&mut self) -> KeyControl {
+        if self.take_scroll_to_top_key_pending() {
+            if self.scroll_first_overflowing_to(ScrollBoundary::Top) {
+                KeyControl::Handled
+            } else {
+                KeyControl::Pass
+            }
+        } else if self.has_overflowing_scroll_target() {
+            self.set_scroll_to_top_key_pending(true);
+            KeyControl::Handled
+        } else {
+            KeyControl::Pass
         }
     }
 
@@ -347,6 +382,77 @@ impl View {
                 false
             }
         }
+    }
+
+    /// Scrolls the first overflowing vertical layout to an absolute boundary.
+    fn scroll_first_overflowing_to(&mut self, boundary: ScrollBoundary) -> bool {
+        match self {
+            Self::Block { child, .. } => child.scroll_first_overflowing_to(boundary),
+            Self::Row { children, metadata } | Self::Column { children, metadata } => {
+                if metadata.max_scroll_offset() > 0 {
+                    let target = match boundary {
+                        ScrollBoundary::Top => 0,
+                        ScrollBoundary::Bottom => metadata.max_scroll_offset(),
+                    };
+
+                    if metadata.scroll_offset() != target {
+                        metadata.set_scroll_offset(target);
+                        return true;
+                    }
+                }
+
+                children
+                    .iter_mut()
+                    .any(|child| child.scroll_first_overflowing_to(boundary))
+            }
+            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => {
+                false
+            }
+        }
+    }
+
+    /// Returns whether this tree contains a layout with scrollable overflow.
+    fn has_overflowing_scroll_target(&self) -> bool {
+        match self {
+            Self::Block { child, .. } => child.has_overflowing_scroll_target(),
+            Self::Row { children, metadata } | Self::Column { children, metadata } => {
+                metadata.max_scroll_offset() > 0
+                    || children.iter().any(Self::has_overflowing_scroll_target)
+            }
+            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => {
+                false
+            }
+        }
+    }
+
+    /// Returns metadata used to store default key-sequence state.
+    fn key_sequence_metadata(&self) -> Option<&StyleMetadata> {
+        match self {
+            Self::Block { metadata, .. }
+            | Self::Text { metadata, .. }
+            | Self::Row { metadata, .. }
+            | Self::Column { metadata, .. }
+            | Self::Button { metadata, .. } => Some(metadata),
+            Self::Dynamic(_) | Self::Component(_) => None,
+        }
+    }
+
+    /// Stores whether the first `g` in `gg` has been pressed.
+    fn set_scroll_to_top_key_pending(&self, pending: bool) {
+        if let Some(metadata) = self.key_sequence_metadata() {
+            metadata.set_scroll_to_top_key_pending(pending);
+        }
+    }
+
+    /// Clears and returns whether the first `g` in `gg` was pressed.
+    fn take_scroll_to_top_key_pending(&self) -> bool {
+        self.key_sequence_metadata()
+            .is_some_and(StyleMetadata::take_scroll_to_top_key_pending)
+    }
+
+    /// Clears any pending first `g` key.
+    fn clear_scroll_to_top_key_pending(&self) {
+        self.set_scroll_to_top_key_pending(false);
     }
 
     /// Returns the number of focusable buttons in this view tree.
@@ -611,6 +717,15 @@ enum FocusDirection {
     Forward,
     /// Move focus to the previous focusable view.
     Backward,
+}
+
+/// Absolute scroll boundary for overflowing layouts.
+#[derive(Clone, Copy)]
+enum ScrollBoundary {
+    /// First row of scrollable content.
+    Top,
+    /// Last valid scroll offset for the content.
+    Bottom,
 }
 
 /// Vertical content span, with an exclusive bottom row.

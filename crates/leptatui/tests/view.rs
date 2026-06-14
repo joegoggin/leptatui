@@ -357,6 +357,72 @@ fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> Result<()> {
 }
 
 #[test]
+fn overflowing_column_scrolls_to_bottom_with_vim_g() -> Result<()> {
+    let backend = TestBackend::new(8, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let children = (0..10).map(|index| text(format!("Line {index}")));
+    let mut view = column(children.collect::<Vec<_>>());
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(scroll_offset(&view), 0);
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    assert_eq!(scroll_offset(&view), 5);
+
+    Ok(())
+}
+
+#[test]
+fn overflowing_column_scrolls_to_top_with_vim_gg() -> Result<()> {
+    let backend = TestBackend::new(8, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let children = (0..10).map(|index| text(format!("Line {index}")));
+    let mut view = column(children.collect::<Vec<_>>());
+
+    draw_view(&mut terminal, &view)?;
+    view.handle_key_event(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))?;
+    assert_eq!(scroll_offset(&view), 5);
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    assert_eq!(scroll_offset(&view), 5);
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    assert_eq!(scroll_offset(&view), 0);
+
+    Ok(())
+}
+
+#[test]
+fn vim_scroll_to_top_prefix_resets_on_unrelated_key() -> Result<()> {
+    let backend = TestBackend::new(8, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let children = (0..10).map(|index| text(format!("Line {index}")));
+    let mut view = column(children.collect::<Vec<_>>());
+
+    draw_view(&mut terminal, &view)?;
+    view.handle_key_event(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))?;
+    assert_eq!(scroll_offset(&view), 5);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))?;
+    view.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))?;
+    view.handle_key_event(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))?;
+    assert_eq!(scroll_offset(&view), 5);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))?;
+    assert_eq!(scroll_offset(&view), 0);
+
+    Ok(())
+}
+
+#[test]
 fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down() -> Result<()> {
     let backend = TestBackend::new(12, 2);
     let mut terminal = Terminal::new(backend)?;

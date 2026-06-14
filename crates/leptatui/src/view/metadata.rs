@@ -31,6 +31,7 @@ pub struct StyleMetadata {
     inline_style: Option<TuiStyle>,
     focused: bool,
     scroll_into_view_requested: Cell<bool>,
+    scroll_to_top_key_pending: Cell<bool>,
     scroll_offset: Cell<u16>,
     max_scroll_offset: Cell<u16>,
 }
@@ -53,6 +54,7 @@ impl StyleMetadata {
             inline_style: None,
             focused: false,
             scroll_into_view_requested: Cell::new(false),
+            scroll_to_top_key_pending: Cell::new(false),
             scroll_offset: Cell::new(0),
             max_scroll_offset: Cell::new(0),
         }
@@ -169,6 +171,16 @@ impl StyleMetadata {
     /// Clears a pending focus visibility scroll request.
     pub(crate) fn clear_scroll_into_view_request(&self) {
         self.scroll_into_view_requested.set(false);
+    }
+
+    /// Stores whether a `g` key is waiting for a second `g`.
+    pub(crate) fn set_scroll_to_top_key_pending(&self, pending: bool) {
+        self.scroll_to_top_key_pending.set(pending);
+    }
+
+    /// Clears and returns whether a `g` key was waiting for a second `g`.
+    pub(crate) fn take_scroll_to_top_key_pending(&self) -> bool {
+        self.scroll_to_top_key_pending.replace(false)
     }
 
     /// Updates the maximum scroll offset and clamps the current offset.
