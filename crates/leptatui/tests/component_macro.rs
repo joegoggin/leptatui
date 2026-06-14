@@ -171,6 +171,25 @@ fn MacroResponsiveCaseRoot() -> leptatui::View {
     }
 }
 
+/// Component with an overflowing internal layout.
+#[component]
+fn MacroScrollableList() -> leptatui::View {
+    column([
+        text("One"),
+        text("Two"),
+        text("Three"),
+        text("Four"),
+        text("Five"),
+        text("Six"),
+    ])
+}
+
+/// Parent component whose default scroll keys must reach a child component.
+#[component]
+fn MacroScrollableBoundaryRoot() -> leptatui::View {
+    row([component(MacroScrollableList::new())])
+}
+
 /// Parent component with styled and plain sibling component subtrees.
 #[component]
 fn MacroSiblingStyleRoot() -> leptatui::View {
@@ -582,6 +601,61 @@ fn generated_component_min_height_tracks_responsive_internal_layout() -> Result<
     assert!(text.contains("Intro"), "rendered text: {text:?}");
     assert!(text.contains("type < class"), "rendered text: {text:?}");
     assert!(text.contains("Sample"), "rendered text: {text:?}");
+
+    Ok(())
+}
+
+/// Verifies default scroll keys cross generated component boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Row(<MacroScrollableList />)
+/// PageDown, gg, G
+/// ```
+///
+/// # Assertions
+///
+/// - The initial render shows the top of the child component list.
+/// - PageDown scrolls the child component's overflowing column.
+/// - `gg` returns the child component's overflowing column to the top.
+/// - `G` scrolls the child component's overflowing column to the bottom.
+#[test]
+fn generated_component_scroll_keys_cross_component_boundaries() -> Result<()> {
+    let mut component = MacroScrollableBoundaryRoot::new();
+    let terminal = render_component(&mut component, 12, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("One"), "rendered text: {text:?}");
+    assert!(!text.contains("Six"), "rendered text: {text:?}");
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::PageDown))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 12, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Six"), "rendered text: {text:?}");
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Char('g')))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Char('g')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 12, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("One"), "rendered text: {text:?}");
+    assert!(!text.contains("Six"), "rendered text: {text:?}");
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Char('G')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 12, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Six"), "rendered text: {text:?}");
 
     Ok(())
 }

@@ -33,7 +33,7 @@ pub(super) struct Mixin {
 /// Ordered style item inside a mixin body.
 enum MixinItem {
     /// Ordinary style declaration.
-    Declaration(Declaration),
+    Declaration(Box<Declaration>),
     /// Reusable declaration mixin include.
     MixinInclude(MixinInclude),
 }
@@ -86,7 +86,7 @@ impl Parse for Mixin {
             if content.peek(Token![@]) {
                 items.push(MixinItem::MixinInclude(content.parse()?));
             } else {
-                items.push(MixinItem::Declaration(content.parse()?));
+                items.push(MixinItem::Declaration(Box::new(content.parse()?)));
             }
 
             if content.peek(Token![,]) {

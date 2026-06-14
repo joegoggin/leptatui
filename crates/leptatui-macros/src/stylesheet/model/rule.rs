@@ -32,7 +32,7 @@ pub(super) struct Rule {
 /// Ordered style item inside a rule body.
 enum StyleItem {
     /// Ordinary style declaration.
-    Declaration(Declaration),
+    Declaration(Box<Declaration>),
     /// Reusable declaration mixin include.
     MixinInclude(MixinInclude),
 }
@@ -100,7 +100,7 @@ impl Parse for Rule {
             } else if content.peek(Token![@]) {
                 style_items.push(StyleItem::MixinInclude(content.parse()?));
             } else {
-                style_items.push(StyleItem::Declaration(content.parse()?));
+                style_items.push(StyleItem::Declaration(Box::new(content.parse()?)));
             }
 
             if content.peek(Token![,]) {

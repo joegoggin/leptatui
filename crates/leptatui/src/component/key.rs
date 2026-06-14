@@ -49,7 +49,7 @@ struct KeyHandler {
 
 thread_local! {
     /// Stack of active generated-component key registries.
-    static KEY_HANDLER_STACK: RefCell<Vec<KeyHandlerRegistry>> = RefCell::new(Vec::new());
+    static KEY_HANDLER_STACK: RefCell<Vec<KeyHandlerRegistry>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Shared key-handler registry owned by a generated component instance.

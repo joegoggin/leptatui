@@ -328,8 +328,8 @@ impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
     /// Returns a shorter mutable borrow of this render target.
     fn reborrow(&mut self) -> RenderTarget<'_, 'buffer> {
         match self {
-            Self::Frame(frame) => RenderTarget::Frame(&mut **frame),
-            Self::Buffer(buffer) => RenderTarget::Buffer(&mut **buffer),
+            Self::Frame(frame) => RenderTarget::Frame(frame),
+            Self::Buffer(buffer) => RenderTarget::Buffer(buffer),
         }
     }
 

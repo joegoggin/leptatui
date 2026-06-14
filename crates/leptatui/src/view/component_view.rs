@@ -129,6 +129,37 @@ impl ComponentView {
             .with(|| self.inner.borrow().__activate_focused_button())
     }
 
+    /// Scrolls the first overflowing layout inside this component boundary.
+    #[doc(hidden)]
+    pub(crate) fn scroll_first_overflowing(&self, delta: i16) -> bool {
+        self.context
+            .with(|| self.inner.borrow_mut().__scroll_first_overflowing(delta))
+    }
+
+    /// Scrolls the first overflowing layout inside this component boundary to the top.
+    #[doc(hidden)]
+    pub(crate) fn scroll_first_overflowing_to_top(&self) -> bool {
+        self.context
+            .with(|| self.inner.borrow_mut().__scroll_first_overflowing_to_top())
+    }
+
+    /// Scrolls the first overflowing layout inside this component boundary to the bottom.
+    #[doc(hidden)]
+    pub(crate) fn scroll_first_overflowing_to_bottom(&self) -> bool {
+        self.context.with(|| {
+            self.inner
+                .borrow_mut()
+                .__scroll_first_overflowing_to_bottom()
+        })
+    }
+
+    /// Returns whether this component boundary contains an overflowing scroll target.
+    #[doc(hidden)]
+    pub(crate) fn has_overflowing_scroll_target(&self) -> bool {
+        self.context
+            .with(|| self.inner.borrow().__has_overflowing_scroll_target())
+    }
+
     /// Compares two component boundaries by shared storage identity.
     ///
     /// # Arguments

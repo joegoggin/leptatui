@@ -172,7 +172,7 @@ impl View {
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
     /// I/O that fails.
     pub fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        let control = self.__dispatch_key_event(key.clone())?;
+        let control = self.__dispatch_key_event(key)?;
         if control == KeyControl::Pass {
             return self.__handle_default_key_event(key);
         }
@@ -228,6 +228,30 @@ impl View {
         self.activate_focused_button()
     }
 
+    /// Scrolls the first overflowing vertical layout in this view tree.
+    #[doc(hidden)]
+    pub fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+        self.scroll_first_overflowing(delta)
+    }
+
+    /// Scrolls the first overflowing vertical layout in this view tree to the top.
+    #[doc(hidden)]
+    pub fn __scroll_first_overflowing_to_top(&mut self) -> bool {
+        self.scroll_first_overflowing_to(ScrollBoundary::Top)
+    }
+
+    /// Scrolls the first overflowing vertical layout in this view tree to the bottom.
+    #[doc(hidden)]
+    pub fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
+        self.scroll_first_overflowing_to(ScrollBoundary::Bottom)
+    }
+
+    /// Returns whether this view tree contains an overflowing scroll target.
+    #[doc(hidden)]
+    pub fn __has_overflowing_scroll_target(&self) -> bool {
+        self.has_overflowing_scroll_target()
+    }
+
     /// Dispatches a key event by reference through this view tree.
     ///
     /// # Arguments
@@ -253,7 +277,7 @@ impl View {
                 let mut child = child();
                 child.dispatch_key_event_ref(key)
             }
-            Self::Component(component) => component.dispatch_key_event(key.clone()),
+            Self::Component(component) => component.dispatch_key_event(*key),
             Self::Text { .. } | Self::Button { .. } => Ok(KeyControl::Pass),
         }
     }
@@ -350,9 +374,8 @@ impl View {
                     .iter_mut()
                     .any(|child| child.scroll_first_overflowing(delta))
             }
-            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => {
-                false
-            }
+            Self::Component(component) => component.scroll_first_overflowing(delta),
+            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) => false,
         }
     }
 
@@ -377,9 +400,11 @@ impl View {
                     .iter_mut()
                     .any(|child| child.scroll_first_overflowing_to(boundary))
             }
-            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => {
-                false
-            }
+            Self::Component(component) => match boundary {
+                ScrollBoundary::Top => component.scroll_first_overflowing_to_top(),
+                ScrollBoundary::Bottom => component.scroll_first_overflowing_to_bottom(),
+            },
+            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) => false,
         }
     }
 
@@ -391,9 +416,8 @@ impl View {
                 metadata.max_scroll_offset() > 0
                     || children.iter().any(Self::has_overflowing_scroll_target)
             }
-            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => {
-                false
-            }
+            Self::Component(component) => component.has_overflowing_scroll_target(),
+            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) => false,
         }
     }
 
@@ -609,6 +633,12 @@ impl Component for View {
         View::render(self, ctx)
     }
 
+    /// Returns the minimum useful render height for the view tree.
+    #[doc(hidden)]
+    fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        View::__min_height(self, ctx)
+    }
+
     /// Dispatches an event when the view is used as a component.
     ///
     /// # Arguments
@@ -679,6 +709,30 @@ impl Component for View {
     #[doc(hidden)]
     fn __activate_focused_button(&self) -> Option<AppControl> {
         View::__activate_focused_button(self)
+    }
+
+    /// Scrolls the first overflowing vertical layout in the view tree.
+    #[doc(hidden)]
+    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+        View::__scroll_first_overflowing(self, delta)
+    }
+
+    /// Scrolls the first overflowing vertical layout in the view tree to the top.
+    #[doc(hidden)]
+    fn __scroll_first_overflowing_to_top(&mut self) -> bool {
+        View::__scroll_first_overflowing_to_top(self)
+    }
+
+    /// Scrolls the first overflowing vertical layout in the view tree to the bottom.
+    #[doc(hidden)]
+    fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
+        View::__scroll_first_overflowing_to_bottom(self)
+    }
+
+    /// Returns whether the view tree contains an overflowing scroll target.
+    #[doc(hidden)]
+    fn __has_overflowing_scroll_target(&self) -> bool {
+        View::__has_overflowing_scroll_target(self)
     }
 }
 

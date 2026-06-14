@@ -260,6 +260,46 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                     __leptatui_view.__activate_focused_button()
                 })
             }
+
+            #[doc(hidden)]
+            fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__scroll_first_overflowing(delta)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __scroll_first_overflowing_to_top(&mut self) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__scroll_first_overflowing_to_top()
+                })
+            }
+
+            #[doc(hidden)]
+            fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__scroll_first_overflowing_to_bottom()
+                })
+            }
+
+            #[doc(hidden)]
+            fn __has_overflowing_scroll_target(&self) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__has_overflowing_scroll_target()
+                })
+            }
         }
     })
 }

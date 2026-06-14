@@ -9,7 +9,7 @@ use crate::style::Stylesheet;
 
 thread_local! {
     /// Stack of active generated-component stylesheet registries.
-    static STYLESHEET_STACK: RefCell<Vec<StylesheetRegistry>> = RefCell::new(Vec::new());
+    static STYLESHEET_STACK: RefCell<Vec<StylesheetRegistry>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Shared stylesheet registry owned during generated component setup.

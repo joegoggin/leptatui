@@ -37,7 +37,7 @@ pub(super) enum PropDefault {
     /// `#[prop(optional)]`.
     Optional,
     /// `#[prop(default = expr)]`.
-    Expr(Expr),
+    Expr(Box<Expr>),
 }
 
 impl PropDefault {
@@ -182,7 +182,11 @@ fn parse_prop_attrs(attrs: &[Attribute]) -> syn::Result<PropOptions> {
 
             if meta.path.is_ident("default") {
                 let value = meta.value()?;
-                set_default(&mut options, PropDefault::Expr(value.parse()?), value)?;
+                set_default(
+                    &mut options,
+                    PropDefault::Expr(Box::new(value.parse()?)),
+                    value,
+                )?;
                 return Ok(());
             }
 

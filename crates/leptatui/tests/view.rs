@@ -84,7 +84,7 @@ fn symbol_position_opt(
         })
 }
 
-fn cell_symbol<'a>(terminal: &'a Terminal<TestBackend>, x: u16, y: u16, width: u16) -> &'a str {
+fn cell_symbol(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> &str {
     let index = usize::from(y) * usize::from(width) + usize::from(x);
     terminal.backend().buffer().content()[index].symbol()
 }
@@ -511,6 +511,40 @@ fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
     })?;
 
     assert_eq!(min_height, 2);
+
+    Ok(())
+}
+
+/// Verifies component boundaries backed by [`View`] report wrapped view height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// component(column([text("One"), text("Two"), text("Three")])).__min_height(ctx)
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The component boundary reports the wrapped column's three-row height.
+///
+/// # Why
+///
+/// Parent layouts use component minimum heights to decide whether children need
+/// fixed height or overflow scrolling.
+#[test]
+fn component_view_min_height_uses_wrapped_view_height() -> Result<()> {
+    let backend = TestBackend::new(12, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let view = component(column([text("One"), text("Two"), text("Three")]));
+    let mut min_height = 0;
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = view.__min_height(&mut ctx);
+    })?;
+
+    assert_eq!(min_height, 3);
 
     Ok(())
 }

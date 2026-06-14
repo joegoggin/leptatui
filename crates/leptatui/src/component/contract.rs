@@ -105,4 +105,28 @@ pub trait Component {
     fn __activate_focused_button(&self) -> Option<AppControl> {
         None
     }
+
+    /// Scrolls the first overflowing vertical layout inside this component.
+    #[doc(hidden)]
+    fn __scroll_first_overflowing(&mut self, _delta: i16) -> bool {
+        false
+    }
+
+    /// Scrolls the first overflowing vertical layout inside this component to the top.
+    #[doc(hidden)]
+    fn __scroll_first_overflowing_to_top(&mut self) -> bool {
+        false
+    }
+
+    /// Scrolls the first overflowing vertical layout inside this component to the bottom.
+    #[doc(hidden)]
+    fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
+        false
+    }
+
+    /// Returns whether this component contains an overflowing scroll target.
+    #[doc(hidden)]
+    fn __has_overflowing_scroll_target(&self) -> bool {
+        false
+    }
 }
