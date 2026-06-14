@@ -225,9 +225,16 @@ fn Actions() -> View {
 }
 ```
 
-Stylesheets can also reference runtime theme variables. Provide
-`ThemeVariables` through Leptatui context before rendering descendants, then
-use `theme_color("name")` in stylesheet declarations.
+Stylesheets can also reference runtime theme variables. Define each theme as a
+`ThemeVariables` value, provide either that value or a
+`ReadSignal<ThemeVariables>` through context, then use `theme_color("name")` in
+stylesheet declarations. Theme values are resolved during rendering, so a root
+component can switch the active theme signal and descendants repaint with the
+new values on the next draw without hardcoding per-theme colors in component
+view code.
+
+Keep literal colors in the theme model and keep component stylesheets written
+against variable names:
 
 ```rust
 #[component]
@@ -249,7 +256,208 @@ fn ThemedPanel() -> View {
 }
 ```
 
-See `cargo run --example theme_switcher` for a light/dark theme switcher.
+For runtime switching, provide the active mode and active variables as context
+signals near the root. Descendant components can consume the mode for labels or
+controls, while stylesheet resolution consumes `ReadSignal<ThemeVariables>` for
+colors:
+
+```rust
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ThemeMode {
+    Light,
+    Dark,
+}
+
+impl ThemeMode {
+    fn toggle(self) -> Self {
+        match self {
+            Self::Light => Self::Dark,
+            Self::Dark => Self::Light,
+        }
+    }
+
+    fn variables(self) -> ThemeVariables {
+        match self {
+            Self::Light => ThemeVariables::new()
+                .color("text", Color::Black)
+                .color("surface", Color::White),
+            Self::Dark => ThemeVariables::new()
+                .color("text", Color::White)
+                .color("surface", Color::Black),
+        }
+    }
+}
+
+#[component]
+fn ThemeLabel() -> View {
+    let mode = expect_context::<ReadSignal<ThemeMode>>();
+
+    dynamic(move || {
+        view! { <Text>{format!("Theme: {:?}", mode.get_untracked())}</Text> }
+    })
+}
+
+#[component]
+fn ThemeRoot() -> View {
+    let mode = RwSignal::new(ThemeMode::Light);
+    let theme = RwSignal::new(ThemeMode::Light.variables());
+
+    provide_context(mode.read_only());
+    provide_context(theme.read_only());
+
+    stylesheet! {
+        $text: theme_color("text");
+        $surface: theme_color("surface");
+
+        .panel => { fg: $text, bg: $surface }
+    }
+
+    view! {
+        <Block class="panel">
+            <Column>
+                <ThemeLabel />
+                <Button on_press=move || {
+                    mode.update(|mode| {
+                        *mode = mode.toggle();
+                        theme.set(mode.variables());
+                    });
+                    AppControl::Continue
+                }>
+                    "Toggle theme"
+                </Button>
+            </Column>
+        </Block>
+    }
+}
+```
+
+See `cargo run --example theme_switcher` for the complete light/dark theme
+switcher.
+
+Multi-page apps use ordinary Leptatui components with route state stored in
+typed context. Keep `main` focused on startup, build shared state in the root
+component, provide route and app-wide context there, and let page components
+consume the values they need. The active page is usually a small enum, updated
+through the route write signal returned by `provide_route()` or by
+`use_navigate()` in descendants. The root then switches pages from a dynamic
+`view!` child.
+
+Use props for required parent-to-child inputs and local component
+configuration. Use context for app-wide state that many routes or deeply nested
+descendants need to read or update, such as the active route, theme variables,
+or persisted settings. Keep shared state owned by the root when navigation
+should not reset it; add explicit reset behavior when a route change should
+clear shared state. Descendant pages can read required context with
+`expect_context()` or optional context with `use_context()`.
+
+```rust
+use leptatui::prelude::*;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Page {
+    Home,
+    Counter,
+    Settings,
+}
+
+#[component]
+fn Nav() -> View {
+    let navigate = use_navigate::<Page>();
+
+    view! {
+        <Row>
+            <Button on_press=move || {
+                navigate.update(|route| *route = Page::Home);
+                AppControl::Continue
+            }>"Home"</Button>
+            <Button on_press=move || {
+                navigate.update(|route| *route = Page::Counter);
+                AppControl::Continue
+            }>"Counter"</Button>
+            <Button on_press=move || {
+                navigate.update(|route| *route = Page::Settings);
+                AppControl::Continue
+            }>"Settings"</Button>
+        </Row>
+    }
+}
+
+#[component]
+fn HomePage() -> View {
+    let counter = expect_context::<RwSignal<i32>>();
+
+    view! {
+        <Column>
+            <Text>"Home"</Text>
+            {move || {
+                view! {
+                    <Text>{format!("Count: {}", counter.get_untracked())}</Text>
+                }
+            }}
+        </Column>
+    }
+}
+
+#[component]
+fn CounterPage() -> View {
+    let counter = expect_context::<RwSignal<i32>>();
+
+    view! {
+        <Column>
+            <Text>"Counter"</Text>
+            <Button on_press=move || {
+                counter.update(|count| *count += 1);
+                AppControl::Continue
+            }>
+                "Increment"
+            </Button>
+        </Column>
+    }
+}
+
+#[component]
+fn SettingsPage() -> View {
+    let route = use_route::<Page>();
+
+    view! {
+        {move || {
+            view! {
+                <Text>{format!("Current page: {:?}", route.get_untracked())}</Text>
+            }
+        }}
+    }
+}
+
+#[component]
+fn Root() -> View {
+    let counter = RwSignal::new(0);
+    let route_state = provide_route(Page::Home);
+    let route = route_state.route();
+
+    provide_context(counter);
+
+    view! {
+        <Column>
+            <Nav />
+            {move || match route.get_untracked() {
+                Page::Home => view! { <HomePage /> },
+                Page::Counter => view! { <CounterPage /> },
+                Page::Settings => view! { <SettingsPage /> },
+            }}
+        </Column>
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let root = Root::new();
+    App::new(root).run().await
+}
+```
+
+See `crates/leptatui/examples/multi_page_demo.rs` or run
+`cargo run --example multi_page_demo` for a complete routing and context
+example with shared counter and theme state.
 
 ## Examples
 
@@ -265,6 +473,12 @@ Run the interactive counter:
 
 ```sh
 cargo run --example counter
+```
+
+Run the multi-page routing demo:
+
+```sh
+cargo run --example multi_page_demo
 ```
 
 See `crates/leptatui/examples/README.md` for controls.

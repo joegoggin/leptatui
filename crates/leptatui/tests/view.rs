@@ -1491,3 +1491,49 @@ fn compares_dynamic_views_by_identity() {
     assert_eq!(first, first_clone);
     assert_ne!(first, second);
 }
+
+/// Verifies dynamic reconciliation replaces newly produced nested dynamic boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// dynamic(|| dynamic(|| text(route_label)))
+/// ```
+///
+/// # Assertions
+///
+/// - The first render shows the initial inner dynamic closure output.
+/// - Updating the outer dynamic state replaces the previous inner dynamic closure.
+#[test]
+fn dynamic_reconciliation_replaces_new_nested_dynamic_boundaries() -> Result<()> {
+    let label = Rc::new(Cell::new("Home"));
+    let dynamic_label = Rc::clone(&label);
+    let view = dynamic(move || {
+        let current = dynamic_label.get();
+        dynamic(move || text(current))
+    });
+    let mut terminal = Terminal::new(TestBackend::new(16, 1))?;
+
+    draw_view(&mut terminal, &view)?;
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Home"), "rendered text: {rendered:?}");
+
+    label.set("Counter");
+    draw_view(&mut terminal, &view)?;
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Counter"), "rendered text: {rendered:?}");
+
+    Ok(())
+}

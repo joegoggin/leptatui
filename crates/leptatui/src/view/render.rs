@@ -130,7 +130,7 @@ impl View {
                 metadata.clear_scroll_into_view_request();
                 Ok(())
             }
-            Self::Dynamic(child) => child().render(ctx),
+            Self::Dynamic(child) => child.with_view(|child| child.render(ctx)),
             Self::Component(component) => component.render(ctx),
         }
     }
@@ -273,10 +273,7 @@ impl View {
             Self::Row { children, .. } | Self::Column { children, .. } => {
                 handle_child_key_events(children, key)
             }
-            Self::Dynamic(child) => {
-                let mut child = child();
-                child.dispatch_key_event_ref(key)
-            }
+            Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_key_event_ref(key)),
             Self::Component(component) => component.dispatch_key_event(*key),
             Self::Text { .. } | Self::Button { .. } => Ok(KeyControl::Pass),
         }
@@ -374,8 +371,11 @@ impl View {
                     .iter_mut()
                     .any(|child| child.scroll_first_overflowing(delta))
             }
+            Self::Dynamic(child) => {
+                child.with_view_mut(|child| child.scroll_first_overflowing(delta))
+            }
             Self::Component(component) => component.scroll_first_overflowing(delta),
-            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) => false,
+            Self::Text { .. } | Self::Button { .. } => false,
         }
     }
 
@@ -404,7 +404,10 @@ impl View {
                 ScrollBoundary::Top => component.scroll_first_overflowing_to_top(),
                 ScrollBoundary::Bottom => component.scroll_first_overflowing_to_bottom(),
             },
-            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) => false,
+            Self::Dynamic(child) => {
+                child.with_view_mut(|child| child.scroll_first_overflowing_to(boundary))
+            }
+            Self::Text { .. } | Self::Button { .. } => false,
         }
     }
 
@@ -416,8 +419,9 @@ impl View {
                 metadata.max_scroll_offset() > 0
                     || children.iter().any(Self::has_overflowing_scroll_target)
             }
+            Self::Dynamic(child) => child.with_view(Self::has_overflowing_scroll_target),
             Self::Component(component) => component.has_overflowing_scroll_target(),
-            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) => false,
+            Self::Text { .. } | Self::Button { .. } => false,
         }
     }
 
@@ -463,8 +467,9 @@ impl View {
             Self::Row { children, .. } | Self::Column { children, .. } => {
                 children.iter().map(Self::focusable_count).sum()
             }
+            Self::Dynamic(child) => child.with_view(Self::focusable_count),
             Self::Component(component) => component.focusable_count(),
-            Self::Text { .. } | Self::Dynamic(_) => 0,
+            Self::Text { .. } => 0,
         }
     }
 
@@ -520,8 +525,9 @@ impl View {
             Self::Row { children, .. } | Self::Column { children, .. } => children
                 .iter()
                 .find_map(|child| child.focused_index_inner(index)),
+            Self::Dynamic(child) => child.with_view(|child| child.focused_index_inner(index)),
             Self::Component(component) => component.focused_index_inner(index),
-            Self::Text { .. } | Self::Dynamic(_) => None,
+            Self::Text { .. } => None,
         }
     }
 
@@ -559,8 +565,11 @@ impl View {
                     child.set_focus_by_index_inner(target, index);
                 }
             }
+            Self::Dynamic(child) => {
+                child.with_view_mut(|child| child.set_focus_by_index_inner(target, index));
+            }
             Self::Component(component) => component.set_focus_by_index_inner(target, index),
-            Self::Text { .. } | Self::Dynamic(_) => {}
+            Self::Text { .. } => {}
         }
     }
 
@@ -582,8 +591,9 @@ impl View {
             Self::Row { children, .. } | Self::Column { children, .. } => {
                 children.iter().find_map(Self::activate_focused_button)
             }
+            Self::Dynamic(child) => child.with_view(Self::activate_focused_button),
             Self::Component(component) => component.activate_focused_button(),
-            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) => None,
+            Self::Text { .. } | Self::Button { .. } => None,
         }
     }
 
@@ -607,7 +617,7 @@ impl View {
             Self::Row { children, .. } | Self::Column { children, .. } => {
                 handle_child_events(children, event)
             }
-            Self::Dynamic(child) => child().dispatch_event_ref(event),
+            Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_event_ref(event)),
             Self::Component(component) => component.handle_event(event.clone()),
             Self::Text { .. } | Self::Button { .. } => Ok(AppControl::Continue),
         }
@@ -859,10 +869,11 @@ fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Opt
         View::Column { children, metadata } => {
             focused_button_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
         }
+        View::Dynamic(child) => child.with_view(|child| focused_button_span_for_view(child, ctx)),
         View::Component(component) => component
             .focused_button_span(ctx)
             .map(|(top, bottom)| VerticalSpan { top, bottom }),
-        View::Text { .. } | View::Button { .. } | View::Dynamic(_) => None,
+        View::Text { .. } | View::Button { .. } => None,
     }
 }
 
@@ -1239,7 +1250,7 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             let style = resolve_style(metadata, ctx);
             line_count_height(text_paragraph(content.as_str(), style).line_count(ctx.area().width))
         }
-        View::Dynamic(_) => 1,
+        View::Dynamic(child) => child.with_view(|child| min_height_for_view(child, ctx)),
         View::Button { metadata, .. } => {
             let style = resolve_style(metadata, ctx);
             1 + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))

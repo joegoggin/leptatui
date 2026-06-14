@@ -3,8 +3,6 @@
 //! This module provides the public helper functions re-exported by
 //! [`crate::view`] and [`crate::prelude`].
 
-use std::rc::Rc;
-
 use crate::component::Component;
 
 use super::{
@@ -104,7 +102,7 @@ pub fn button(label: impl Into<String>) -> View {
 ///
 /// A [`View::Dynamic`] containing the provided child closure.
 pub fn dynamic(child: impl Fn() -> View + 'static) -> View {
-    View::Dynamic(Rc::new(child))
+    View::Dynamic(super::dynamic::DynamicView::new(child))
 }
 
 /// Creates a component-boundary view.
@@ -118,4 +116,16 @@ pub fn dynamic(child: impl Fn() -> View + 'static) -> View {
 /// A [`View::Component`] containing the provided component.
 pub fn component(component: impl Component + 'static) -> View {
     View::Component(ComponentView::new(component))
+}
+
+/// Creates a lazy component-boundary view from a component constructor.
+#[doc(hidden)]
+pub fn component_factory<C>(
+    preserve_on_reconcile: bool,
+    factory: impl FnOnce() -> C + 'static,
+) -> View
+where
+    C: Component + 'static,
+{
+    View::Component(ComponentView::new_factory(preserve_on_reconcile, factory))
 }
