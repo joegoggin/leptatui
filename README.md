@@ -389,7 +389,11 @@ fn HomePage() -> View {
     view! {
         <Column>
             <Text>"Home"</Text>
-            <Text>{move || format!("Count: {}", counter.get_untracked())}</Text>
+            {move || {
+                view! {
+                    <Text>{format!("Count: {}", counter.get_untracked())}</Text>
+                }
+            }}
         </Column>
     }
 }
@@ -416,7 +420,11 @@ fn SettingsPage() -> View {
     let route = use_route::<Page>();
 
     view! {
-        <Text>{move || format!("Current page: {:?}", route.get_untracked())}</Text>
+        {move || {
+            view! {
+                <Text>{format!("Current page: {:?}", route.get_untracked())}</Text>
+            }
+        }}
     }
 }
 

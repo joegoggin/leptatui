@@ -422,6 +422,41 @@ fn MacroRouteSettingsPage() -> leptatui::View {
     }
 }
 
+/// Root component that switches between branches using the same component type.
+#[component]
+fn MacroRoutePropSwitchRoot() -> leptatui::View {
+    let route_state = leptatui::provide_route(MacroRoutePage::Home);
+    let route = route_state.route();
+    let navigate = route_state.navigate();
+
+    use_key_event(KeyEventKind::Press, move |key| {
+        match key.code {
+            KeyCode::Char('h') => navigate.update(|route| *route = MacroRoutePage::Home),
+            KeyCode::Char('c') => navigate.update(|route| *route = MacroRoutePage::Counter),
+            KeyCode::Char('s') => navigate.update(|route| *route = MacroRoutePage::Settings),
+            _ => return KeyControl::Pass,
+        }
+
+        KeyControl::Handled
+    });
+
+    view! {
+        <Column>
+            {move || match route.get_untracked() {
+                MacroRoutePage::Home => view! { <MacroRouteNamedPage label="Home" /> },
+                MacroRoutePage::Counter => view! { <MacroRouteNamedPage label="Counter" /> },
+                MacroRoutePage::Settings => view! { <MacroRouteNamedPage label="Settings" /> },
+            }}
+        </Column>
+    }
+}
+
+/// Route page whose prop must update when branches share this component type.
+#[component]
+fn MacroRouteNamedPage(#[prop(into)] label: String) -> leptatui::View {
+    view! { <Text>{label}</Text> }
+}
+
 /// Component that records the label visible from its render context.
 struct MacroContextConsumer;
 
@@ -1263,6 +1298,41 @@ fn generated_view_route_switches_pages_and_preserves_shared_state() -> Result<()
     let text = rendered_text(&terminal);
     assert!(text.contains("Settings 1"), "rendered text: {text:?}");
     assert_eq!(MACRO_ROUTE_SETTINGS_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
+/// Verifies route branches using the same component type do not keep stale props.
+///
+/// # Example Under Test
+///
+/// ```text
+/// match route {
+///   Home => <NamedPage label="Home" />,
+///   Counter => <NamedPage label="Counter" />,
+/// }
+/// ```
+///
+/// # Assertions
+///
+/// - The initial route renders the first prop value.
+/// - Navigating to another branch with the same component type renders the new prop value.
+#[test]
+fn generated_view_route_switch_rebuilds_same_type_component_with_new_props() -> Result<()> {
+    let mut component = MacroRoutePropSwitchRoot::new();
+
+    let terminal = render_component(&mut component, 32, 4)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Home"), "rendered text: {text:?}");
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Char('c')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 32, 4)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Counter"), "rendered text: {text:?}");
+    assert!(!text.contains("Home"), "rendered text: {text:?}");
 
     Ok(())
 }

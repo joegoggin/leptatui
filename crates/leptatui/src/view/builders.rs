@@ -120,9 +120,12 @@ pub fn component(component: impl Component + 'static) -> View {
 
 /// Creates a lazy component-boundary view from a component constructor.
 #[doc(hidden)]
-pub fn component_factory<C>(factory: impl FnOnce() -> C + 'static) -> View
+pub fn component_factory<C>(
+    preserve_on_reconcile: bool,
+    factory: impl FnOnce() -> C + 'static,
+) -> View
 where
     C: Component + 'static,
 {
-    View::Component(ComponentView::new_factory(factory))
+    View::Component(ComponentView::new_factory(preserve_on_reconcile, factory))
 }

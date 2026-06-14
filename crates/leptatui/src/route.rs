@@ -17,8 +17,8 @@ impl<R> Clone for RouteState<R> {
     /// Clones the route signal handles.
     fn clone(&self) -> Self {
         Self {
-            route: self.route.clone(),
-            navigate: self.navigate.clone(),
+            route: self.route,
+            navigate: self.navigate,
         }
     }
 }
@@ -31,12 +31,12 @@ impl<R> RouteState<R> {
 
     /// Returns the read signal for the active route.
     pub fn route(&self) -> ReadSignal<R> {
-        self.route.clone()
+        self.route
     }
 
     /// Returns the write signal used to navigate to another route.
     pub fn navigate(&self) -> WriteSignal<R> {
-        self.navigate.clone()
+        self.navigate
     }
 }
 

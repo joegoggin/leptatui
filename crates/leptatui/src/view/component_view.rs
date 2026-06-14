@@ -14,6 +14,9 @@ use crate::{
     context::ContextScope,
 };
 
+type SharedComponent = Rc<RefCell<dyn Component>>;
+type ComponentFactory = Box<dyn FnOnce() -> SharedComponent>;
+
 /// Shared component boundary stored inside a render tree.
 #[derive(Clone)]
 pub struct ComponentView {
@@ -24,10 +27,12 @@ pub struct ComponentView {
 struct ComponentViewInner {
     /// Concrete component type represented by this boundary.
     component_type: TypeId,
+    /// Whether reconciliation may preserve this boundary by component type.
+    preserve_on_reconcile: bool,
     /// Shared mutable component storage, populated lazily for `view!` tags.
-    component: RefCell<Option<Rc<RefCell<dyn Component>>>>,
+    component: RefCell<Option<SharedComponent>>,
     /// Deferred constructor for lazy component tags.
-    factory: RefCell<Option<Box<dyn FnOnce() -> Rc<RefCell<dyn Component>>>>>,
+    factory: RefCell<Option<ComponentFactory>>,
     /// Persistent context scope owned by this component subtree.
     context: ContextScope,
 }
@@ -49,6 +54,7 @@ impl ComponentView {
         Self {
             inner: Rc::new(ComponentViewInner {
                 component_type: TypeId::of::<C>(),
+                preserve_on_reconcile: false,
                 component: RefCell::new(Some(Rc::new(RefCell::new(component)))),
                 factory: RefCell::new(None),
                 context: ContextScope::new(),
@@ -57,13 +63,17 @@ impl ComponentView {
     }
 
     /// Creates a lazy component boundary from a component constructor.
-    pub(crate) fn new_factory<C>(factory: impl FnOnce() -> C + 'static) -> Self
+    pub(crate) fn new_factory<C>(
+        preserve_on_reconcile: bool,
+        factory: impl FnOnce() -> C + 'static,
+    ) -> Self
     where
         C: Component + 'static,
     {
         Self {
             inner: Rc::new(ComponentViewInner {
                 component_type: TypeId::of::<C>(),
+                preserve_on_reconcile,
                 component: RefCell::new(None),
                 factory: RefCell::new(Some(Box::new(move || Rc::new(RefCell::new(factory()))))),
                 context: ContextScope::new(),
@@ -186,9 +196,11 @@ impl ComponentView {
         Rc::ptr_eq(&self.inner, &other.inner)
     }
 
-    /// Returns whether two boundaries represent the same concrete component type.
-    pub(crate) fn is_same_component_type(&self, other: &Self) -> bool {
-        self.inner.component_type == other.inner.component_type
+    /// Returns whether reconciliation may preserve these component boundaries.
+    pub(crate) fn can_reconcile_from(&self, other: &Self) -> bool {
+        self.inner.preserve_on_reconcile
+            && other.inner.preserve_on_reconcile
+            && self.inner.component_type == other.inner.component_type
     }
 
     /// Reads the materialized component inside its persistent context scope.
@@ -232,7 +244,7 @@ impl ComponentView {
     }
 
     /// Returns the shared mutable component, materializing lazy boundaries once.
-    fn component(&self) -> Rc<RefCell<dyn Component>> {
+    fn component(&self) -> SharedComponent {
         if let Some(component) = self.inner.component.borrow().as_ref() {
             return Rc::clone(component);
         }

@@ -167,6 +167,11 @@ impl Element {
 
         let leptatui = crate::utils::crate_path::leptatui();
         let name = &self.name;
+        let preserve_on_reconcile = if self.attrs.is_empty() && self.children.is_empty() {
+            quote! { true }
+        } else {
+            quote! { false }
+        };
         let component = if self.attrs.is_empty() && self.children.is_empty() {
             quote! { #name::new() }
         } else {
@@ -199,7 +204,7 @@ impl Element {
         };
 
         Ok(quote! {
-            #leptatui::__private::__component_factory(move || #component)
+            #leptatui::__private::__component_factory(#preserve_on_reconcile, move || #component)
         })
     }
 

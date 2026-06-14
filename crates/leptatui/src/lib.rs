@@ -49,11 +49,14 @@ pub mod __private {
     };
     pub use crossterm::event::{Event, KeyEvent};
 
-    pub fn __component_factory<C>(factory: impl FnOnce() -> C + 'static) -> View
+    pub fn __component_factory<C>(
+        preserve_on_reconcile: bool,
+        factory: impl FnOnce() -> C + 'static,
+    ) -> View
     where
         C: crate::Component + 'static,
     {
-        crate::view::component_factory(factory)
+        crate::view::component_factory(preserve_on_reconcile, factory)
     }
 
     pub fn __reconcile_view(next: &mut View, previous: &View) {
@@ -114,10 +117,8 @@ pub mod __private {
 
     fn should_preserve_deferred_boundary(next: &View, previous: &View) -> bool {
         match (next, previous) {
-            (View::Component(next), View::Component(previous)) => {
-                next.is_same_component_type(previous)
-            }
-            (View::Dynamic(_), View::Dynamic(_)) => true,
+            (View::Component(next), View::Component(previous)) => next.can_reconcile_from(previous),
+            (View::Dynamic(next), View::Dynamic(previous)) => next.ptr_eq(previous),
             _ => false,
         }
     }
