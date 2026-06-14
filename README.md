@@ -334,6 +334,60 @@ fn ThemeRoot() -> View {
 See `cargo run --example theme_switcher` for the complete light/dark theme
 switcher.
 
+Route state can live in context the same way shared app state does. Provide a
+small route enum near the root, navigate with the returned write signal or
+`use_navigate()` in descendants, and branch inside a dynamic `view!` child.
+Root-owned signals and context remain owned by the root component while the
+visible page branch changes.
+
+```rust
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Page {
+    Home,
+    Counter,
+    Settings,
+}
+
+#[component]
+fn Nav() -> View {
+    let navigate = use_navigate::<Page>();
+
+    view! {
+        <Row>
+            <Button on_press=move || {
+                navigate.update(|route| *route = Page::Home);
+                AppControl::Continue
+            }>"Home"</Button>
+            <Button on_press=move || {
+                navigate.update(|route| *route = Page::Counter);
+                AppControl::Continue
+            }>"Counter"</Button>
+            <Button on_press=move || {
+                navigate.update(|route| *route = Page::Settings);
+                AppControl::Continue
+            }>"Settings"</Button>
+        </Row>
+    }
+}
+
+#[component]
+fn Root() -> View {
+    let route_state = provide_route(Page::Home);
+    let route = route_state.route();
+
+    view! {
+        <Column>
+            <Nav />
+            {move || match route.get_untracked() {
+                Page::Home => view! { <HomePage /> },
+                Page::Counter => view! { <CounterPage /> },
+                Page::Settings => view! { <SettingsPage /> },
+            }}
+        </Column>
+    }
+}
+```
+
 ## Examples
 
 Run the Hello World example:

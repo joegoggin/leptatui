@@ -18,7 +18,7 @@ use leptatui::{
     ThemeVariables, button, column, component, dynamic, row, stylesheet, text, theme_color,
     use_key_event, view,
 };
-use leptos::prelude::{GetUntracked, Update, signal};
+use leptos::prelude::{GetUntracked, ReadSignal, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
 
 static MACRO_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
@@ -38,10 +38,26 @@ static MACRO_MIXED_BUILTIN_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
 static MACRO_MIXED_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
 static MACRO_REPEAT_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
 static MACRO_RELEASE_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
+static MACRO_ROUTE_ROOT_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
+static MACRO_ROUTE_HOME_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
+static MACRO_ROUTE_COUNTER_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
+static MACRO_ROUTE_SETTINGS_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
 
 /// Context value used by generated component provider tests.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct MacroLabel(&'static str);
+
+/// Shared root-owned state exposed to route page branches.
+#[derive(Clone, Copy)]
+struct MacroSharedCount(ReadSignal<usize>);
+
+/// Route values used by route-driven page switching tests.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MacroRoutePage {
+    Home,
+    Counter,
+    Settings,
+}
 
 /// Component with a local stylesheet applied to its own text view.
 #[component]
@@ -311,6 +327,95 @@ fn MacroSignalRoot() -> leptatui::View {
             AppControl::Continue
         }),
     ])
+}
+
+/// Root component that renders page branches from route state.
+#[component]
+fn MacroRouteSwitchRoot() -> leptatui::View {
+    MACRO_ROUTE_ROOT_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
+
+    let (shared_count, set_shared_count) = signal(0);
+    provide_context(MacroSharedCount(shared_count));
+    let route_state = leptatui::provide_route(MacroRoutePage::Home);
+    let route = route_state.route();
+
+    use_key_event(KeyEventKind::Press, move |key| {
+        if key.code == KeyCode::Char('i') {
+            set_shared_count.update(|count| *count += 1);
+            return KeyControl::Handled;
+        }
+
+        KeyControl::Pass
+    });
+
+    view! {
+        <Column>
+            <MacroRouteKeyNav />
+            {move || match route.get_untracked() {
+                MacroRoutePage::Home => view! { <MacroRouteHomePage /> },
+                MacroRoutePage::Counter => view! { <MacroRouteCounterPage /> },
+                MacroRoutePage::Settings => view! { <MacroRouteSettingsPage /> },
+            }}
+        </Column>
+    }
+}
+
+/// Descendant component that navigates by updating route context.
+#[component]
+fn MacroRouteKeyNav() -> leptatui::View {
+    let navigate = leptatui::use_navigate::<MacroRoutePage>();
+
+    use_key_event(KeyEventKind::Press, move |key| {
+        match key.code {
+            KeyCode::Char('h') => navigate.update(|route| *route = MacroRoutePage::Home),
+            KeyCode::Char('c') => navigate.update(|route| *route = MacroRoutePage::Counter),
+            KeyCode::Char('s') => navigate.update(|route| *route = MacroRoutePage::Settings),
+            _ => return KeyControl::Pass,
+        }
+
+        KeyControl::Handled
+    });
+
+    text("Route keys")
+}
+
+/// Home page branch for route switching tests.
+#[component]
+fn MacroRouteHomePage() -> leptatui::View {
+    MACRO_ROUTE_HOME_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
+    let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
+
+    view! {
+        <Column>
+            {move || text(format!("Home {}", shared.get_untracked()))}
+        </Column>
+    }
+}
+
+/// Counter page branch for route switching tests.
+#[component]
+fn MacroRouteCounterPage() -> leptatui::View {
+    MACRO_ROUTE_COUNTER_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
+    let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
+
+    view! {
+        <Column>
+            {move || text(format!("Counter {}", shared.get_untracked()))}
+        </Column>
+    }
+}
+
+/// Settings page branch for route switching tests.
+#[component]
+fn MacroRouteSettingsPage() -> leptatui::View {
+    MACRO_ROUTE_SETTINGS_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
+    let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
+
+    view! {
+        <Column>
+            {move || text(format!("Settings {}", shared.get_untracked()))}
+        </Column>
+    }
 }
 
 /// Component that records the label visible from its render context.
@@ -1118,6 +1223,76 @@ fn generated_component_setup_runs_once_and_signals_persist() -> Result<()> {
 
     assert!(rendered_text(&terminal).contains("Count: 1"));
     assert_eq!(MACRO_SIGNAL_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
+/// Verifies route state can drive dynamic `view!` page branches.
+///
+/// # Example Under Test
+///
+/// ```text
+/// provide_route(Home)
+/// <Column>
+///   <RouteKeyNav />
+///   {move || match route.get_untracked() { Home => <HomePage />, ... }}
+/// </Column>
+/// ```
+///
+/// # Assertions
+///
+/// - The initial render shows the home page branch.
+/// - Re-rendering the same route does not rebuild the active page component.
+/// - Updating root-owned shared state repaints the active page without rerunning root setup.
+/// - A descendant component can navigate to counter and settings routes.
+#[test]
+fn generated_view_route_switches_pages_and_preserves_shared_state() -> Result<()> {
+    MACRO_ROUTE_ROOT_SETUP_RUNS.store(0, Ordering::SeqCst);
+    MACRO_ROUTE_HOME_SETUP_RUNS.store(0, Ordering::SeqCst);
+    MACRO_ROUTE_COUNTER_SETUP_RUNS.store(0, Ordering::SeqCst);
+    MACRO_ROUTE_SETTINGS_SETUP_RUNS.store(0, Ordering::SeqCst);
+
+    let mut component = MacroRouteSwitchRoot::new();
+
+    assert_eq!(MACRO_ROUTE_ROOT_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    let terminal = render_component(&mut component, 32, 4)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Home 0"), "rendered text: {text:?}");
+    assert_eq!(MACRO_ROUTE_HOME_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    let terminal = render_component(&mut component, 32, 4)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Home 0"), "rendered text: {text:?}");
+    assert_eq!(MACRO_ROUTE_HOME_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Char('i')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 32, 4)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Home 1"), "rendered text: {text:?}");
+    assert_eq!(MACRO_ROUTE_ROOT_SETUP_RUNS.load(Ordering::SeqCst), 1);
+    assert_eq!(MACRO_ROUTE_HOME_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Char('c')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 32, 4)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Counter 1"), "rendered text: {text:?}");
+    assert_eq!(MACRO_ROUTE_COUNTER_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Char('s')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 32, 4)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Settings 1"), "rendered text: {text:?}");
+    assert_eq!(MACRO_ROUTE_SETTINGS_SETUP_RUNS.load(Ordering::SeqCst), 1);
 
     Ok(())
 }

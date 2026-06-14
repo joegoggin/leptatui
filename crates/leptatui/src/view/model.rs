@@ -321,7 +321,7 @@ impl PartialEq for View {
                     && left_metadata == right_metadata
                     && button_actions_equal(left_on_press, right_on_press)
             }
-            (Self::Dynamic(left), Self::Dynamic(right)) => Rc::ptr_eq(left, right),
+            (Self::Dynamic(left), Self::Dynamic(right)) => left.ptr_eq(right),
             (Self::Component(left), Self::Component(right)) => left.ptr_eq(right),
             _ => false,
         }

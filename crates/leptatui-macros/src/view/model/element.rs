@@ -199,7 +199,7 @@ impl Element {
         };
 
         Ok(quote! {
-            ::core::convert::Into::<#leptatui::View>::into(#component)
+            #leptatui::__private::__component_factory(move || #component)
         })
     }
 

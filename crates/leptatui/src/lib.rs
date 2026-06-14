@@ -8,6 +8,7 @@
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
 //! - [`mod@component`] — Component rendering contracts and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
+//! - [`route`] — Signal-backed route state helpers for page switches.
 //! - [`view`] — Basic renderable view builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
@@ -16,6 +17,7 @@ pub mod app;
 pub mod component;
 pub mod context;
 pub mod prelude;
+pub mod route;
 pub mod style;
 pub mod view;
 
@@ -26,6 +28,7 @@ pub use component::{
     Children, ChildrenFn, ChildrenMut, Component, KeyControl, RenderCtx, use_key_event,
 };
 pub use leptatui_macros::{component, stylesheet, view};
+pub use route::{RouteState, provide_route, use_navigate, use_route};
 pub use style::{
     BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
     StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
@@ -46,7 +49,27 @@ pub mod __private {
     };
     pub use crossterm::event::{Event, KeyEvent};
 
+    pub fn __component_factory<C>(factory: impl FnOnce() -> C + 'static) -> View
+    where
+        C: crate::Component + 'static,
+    {
+        crate::view::component_factory(factory)
+    }
+
     pub fn __reconcile_view(next: &mut View, previous: &View) {
+        let should_preserve_component = matches!(
+            (&*next, previous),
+            (View::Component(next), View::Component(previous))
+                if next.is_same_component_type(previous)
+        );
+
+        if should_preserve_component
+            || matches!((&*next, previous), (View::Dynamic(_), View::Dynamic(_)))
+        {
+            *next = previous.clone();
+            return;
+        }
+
         match (next, previous) {
             (
                 View::Block {
@@ -93,9 +116,6 @@ pub mod __private {
                     ..
                 },
             ) => next_metadata.set_focused(previous_metadata.is_focused()),
-            (next_view @ View::Component(_), View::Component(_)) => {
-                *next_view = previous.clone();
-            }
             _ => {}
         }
     }
