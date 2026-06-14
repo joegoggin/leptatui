@@ -92,17 +92,30 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ) -> R {
         let mut stylesheets = self.stylesheets.clone();
         stylesheets.push(stylesheet.clone());
+        let area = self.area;
+        let inherited_style = self.inherited_style;
+        let selector_ancestors = self.selector_ancestors.clone();
 
-        let mut child = RenderCtx {
-            target: self.target.reborrow(),
-            area: self.area,
-            viewport_size: self.viewport_size,
-            stylesheets,
-            inherited_style: self.inherited_style,
-            selector_ancestors: self.selector_ancestors.clone(),
-        };
+        let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
 
         render(&mut child)
+    }
+
+    fn child_context(
+        &mut self,
+        area: Rect,
+        inherited_style: TuiStyle,
+        stylesheets: Vec<Stylesheet>,
+        selector_ancestors: Vec<StyleMetadata>,
+    ) -> RenderCtx<'_, 'buffer> {
+        RenderCtx {
+            target: self.target.reborrow(),
+            area,
+            viewport_size: self.viewport_size,
+            stylesheets,
+            inherited_style,
+            selector_ancestors,
+        }
     }
 
     /// Returns the style declarations inherited by the current view.
@@ -248,14 +261,9 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         inherited_style: TuiStyle,
         render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
     ) -> R {
-        let mut child = RenderCtx {
-            target: self.target.reborrow(),
-            area,
-            viewport_size: self.viewport_size,
-            stylesheets: self.stylesheets.clone(),
-            inherited_style,
-            selector_ancestors: self.selector_ancestors.clone(),
-        };
+        let stylesheets = self.stylesheets.clone();
+        let selector_ancestors = self.selector_ancestors.clone();
+        let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
 
         render(&mut child)
     }
@@ -282,15 +290,9 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ) -> R {
         let mut selector_ancestors = self.selector_ancestors.clone();
         selector_ancestors.push(selector_ancestor);
+        let stylesheets = self.stylesheets.clone();
 
-        let mut child = RenderCtx {
-            target: self.target.reborrow(),
-            area,
-            viewport_size: self.viewport_size,
-            stylesheets: self.stylesheets.clone(),
-            inherited_style,
-            selector_ancestors,
-        };
+        let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
 
         render(&mut child)
     }

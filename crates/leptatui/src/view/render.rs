@@ -274,46 +274,16 @@ impl View {
 
         match key.code {
             KeyCode::Down | KeyCode::Char('j') => {
-                self.clear_scroll_to_top_key_pending();
-                if self.scroll_first_overflowing(1) {
-                    KeyControl::Handled
-                } else {
-                    KeyControl::Pass
-                }
+                self.handle_scroll_key(|view| view.scroll_first_overflowing(1))
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                self.clear_scroll_to_top_key_pending();
-                if self.scroll_first_overflowing(-1) {
-                    KeyControl::Handled
-                } else {
-                    KeyControl::Pass
-                }
+                self.handle_scroll_key(|view| view.scroll_first_overflowing(-1))
             }
-            KeyCode::PageDown => {
-                self.clear_scroll_to_top_key_pending();
-                if self.scroll_first_overflowing(5) {
-                    KeyControl::Handled
-                } else {
-                    KeyControl::Pass
-                }
-            }
-            KeyCode::PageUp => {
-                self.clear_scroll_to_top_key_pending();
-                if self.scroll_first_overflowing(-5) {
-                    KeyControl::Handled
-                } else {
-                    KeyControl::Pass
-                }
-            }
+            KeyCode::PageDown => self.handle_scroll_key(|view| view.scroll_first_overflowing(5)),
+            KeyCode::PageUp => self.handle_scroll_key(|view| view.scroll_first_overflowing(-5)),
             KeyCode::Char('g') => self.handle_scroll_to_top_key(),
-            KeyCode::Char('G') => {
-                self.clear_scroll_to_top_key_pending();
-                if self.scroll_first_overflowing_to(ScrollBoundary::Bottom) {
-                    KeyControl::Handled
-                } else {
-                    KeyControl::Pass
-                }
-            }
+            KeyCode::Char('G') => self
+                .handle_scroll_key(|view| view.scroll_first_overflowing_to(ScrollBoundary::Bottom)),
             KeyCode::Tab | KeyCode::BackTab => {
                 self.clear_scroll_to_top_key_pending();
                 let count = self.focusable_count();
@@ -341,14 +311,16 @@ impl View {
         }
     }
 
+    /// Handles a single-key scroll command and clears pending multi-key scroll state.
+    fn handle_scroll_key(&mut self, scroll: impl FnOnce(&mut Self) -> bool) -> KeyControl {
+        self.clear_scroll_to_top_key_pending();
+        key_control_from_bool(scroll(self))
+    }
+
     /// Handles the two-key `gg` scroll-to-top sequence.
     fn handle_scroll_to_top_key(&mut self) -> KeyControl {
         if self.take_scroll_to_top_key_pending() {
-            if self.scroll_first_overflowing_to(ScrollBoundary::Top) {
-                KeyControl::Handled
-            } else {
-                KeyControl::Pass
-            }
+            key_control_from_bool(self.scroll_first_overflowing_to(ScrollBoundary::Top))
         } else if self.has_overflowing_scroll_target() {
             self.set_scroll_to_top_key_pending(true);
             KeyControl::Handled
@@ -728,6 +700,15 @@ enum ScrollBoundary {
     Bottom,
 }
 
+/// Converts a handled flag into the matching key traversal control.
+fn key_control_from_bool(handled: bool) -> KeyControl {
+    if handled {
+        KeyControl::Handled
+    } else {
+        KeyControl::Pass
+    }
+}
+
 /// Vertical content span, with an exclusive bottom row.
 #[derive(Clone, Copy)]
 struct VerticalSpan {
@@ -953,52 +934,10 @@ fn render_children(
         return Ok(());
     }
 
-    if direction == LayoutDirection::Column {
-        let min_heights = child_min_heights(children, inherited_style, parent_metadata, ctx);
-        let content_height: u32 = min_heights.iter().map(|height| u32::from(*height)).sum();
-        let area = ctx.area();
-        let area_height = area.height;
-
-        if content_height > u32::from(area_height) && area_height > 0 {
-            let content_area = scrolled_content_area(area);
-            let min_heights = ctx.with_area(content_area, |ctx| {
-                child_min_heights(children, inherited_style, parent_metadata, ctx)
-            });
-            let scrolled_content_height: u32 =
-                min_heights.iter().map(|height| u32::from(*height)).sum();
-            let content_height = scrolled_content_height.max(content_height);
-            let max_scroll_offset =
-                u16::try_from(content_height.saturating_sub(u32::from(area_height)))
-                    .unwrap_or(u16::MAX);
-            parent_metadata.set_max_scroll_offset(max_scroll_offset);
-
-            if let Some(span) = ctx.with_area(content_area, |ctx| {
-                focused_button_span_in_column_children(
-                    children,
-                    &min_heights,
-                    inherited_style,
-                    parent_metadata,
-                    ctx,
-                )
-            }) {
-                scroll_span_into_view(parent_metadata, span, area_height, max_scroll_offset);
-            }
-
-            let row_offset = parent_metadata.scroll_offset().min(max_scroll_offset);
-            ctx.with_area(content_area, |ctx| {
-                render_scrolled_column_children(
-                    children,
-                    &min_heights,
-                    row_offset,
-                    inherited_style,
-                    parent_metadata,
-                    ctx,
-                )
-            })?;
-            render_column_scrollbar(row_offset, max_scroll_offset, area_height, ctx);
-
-            return Ok(());
-        }
+    if direction == LayoutDirection::Column
+        && try_render_overflowing_column_children(children, inherited_style, parent_metadata, ctx)?
+    {
+        return Ok(());
     }
 
     parent_metadata.set_max_scroll_offset(0);
@@ -1019,6 +958,60 @@ fn render_children(
     }
 
     Ok(())
+}
+
+/// Renders a vertically overflowing column when the children exceed the viewport.
+fn try_render_overflowing_column_children(
+    children: &[View],
+    inherited_style: TuiStyle,
+    parent_metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Result<bool> {
+    let min_heights = child_min_heights(children, inherited_style, parent_metadata, ctx);
+    let content_height: u32 = min_heights.iter().map(|height| u32::from(*height)).sum();
+    let area = ctx.area();
+    let area_height = area.height;
+
+    if content_height <= u32::from(area_height) || area_height == 0 {
+        return Ok(false);
+    }
+
+    let content_area = scrolled_content_area(area);
+    let min_heights = ctx.with_area(content_area, |ctx| {
+        child_min_heights(children, inherited_style, parent_metadata, ctx)
+    });
+    let scrolled_content_height: u32 = min_heights.iter().map(|height| u32::from(*height)).sum();
+    let content_height = scrolled_content_height.max(content_height);
+    let max_scroll_offset =
+        u16::try_from(content_height.saturating_sub(u32::from(area_height))).unwrap_or(u16::MAX);
+    parent_metadata.set_max_scroll_offset(max_scroll_offset);
+
+    if let Some(span) = ctx.with_area(content_area, |ctx| {
+        focused_button_span_in_column_children(
+            children,
+            &min_heights,
+            inherited_style,
+            parent_metadata,
+            ctx,
+        )
+    }) {
+        scroll_span_into_view(parent_metadata, span, area_height, max_scroll_offset);
+    }
+
+    let row_offset = parent_metadata.scroll_offset().min(max_scroll_offset);
+    ctx.with_area(content_area, |ctx| {
+        render_scrolled_column_children(
+            children,
+            &min_heights,
+            row_offset,
+            inherited_style,
+            parent_metadata,
+            ctx,
+        )
+    })?;
+    render_column_scrollbar(row_offset, max_scroll_offset, area_height, ctx);
+
+    Ok(true)
 }
 
 /// Returns the content area used when a right-side scrollbar is visible.

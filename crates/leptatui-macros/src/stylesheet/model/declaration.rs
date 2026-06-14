@@ -117,81 +117,39 @@ impl Declaration {
         variables: &StylesheetVariables<'_>,
         imports: &StylesheetImports,
     ) -> Result<TokenStream> {
-        match self.name.to_string().as_str() {
-            "fg" | "foreground" => {
-                let value = self
-                    .value
-                    .expand(variables, imports, StyleValueKind::Color)?;
-                if self.important {
-                    Ok(quote! { (#style).foreground_important(#value) })
-                } else {
-                    Ok(quote! { (#style).foreground(#value) })
-                }
-            }
-            "bg" | "background" => {
-                let value = self
-                    .value
-                    .expand(variables, imports, StyleValueKind::Color)?;
-                if self.important {
-                    Ok(quote! { (#style).background_important(#value) })
-                } else {
-                    Ok(quote! { (#style).background(#value) })
-                }
-            }
-            "modifier" => {
-                let value = self
-                    .value
-                    .expand(variables, imports, StyleValueKind::Modifier)?;
-                if self.important {
-                    Ok(quote! { (#style).modifier_important(#value) })
-                } else {
-                    Ok(quote! { (#style).modifier(#value) })
-                }
-            }
-            "borders" => {
-                let value = self
-                    .value
-                    .expand(variables, imports, StyleValueKind::Borders)?;
-                if self.important {
-                    Ok(quote! { (#style).borders_important(#value) })
-                } else {
-                    Ok(quote! { (#style).borders(#value) })
-                }
-            }
-            "border_type" => {
-                let value = self
-                    .value
-                    .expand(variables, imports, StyleValueKind::BorderType)?;
-                if self.important {
-                    Ok(quote! { (#style).border_type_important(#value) })
-                } else {
-                    Ok(quote! { (#style).border_type(#value) })
-                }
-            }
-            "padding" => {
-                let value = self
-                    .value
-                    .expand(variables, imports, StyleValueKind::Spacing)?;
-                if self.important {
-                    Ok(quote! { (#style).padding_important(#value) })
-                } else {
-                    Ok(quote! { (#style).padding(#value) })
-                }
-            }
-            "direction" => {
-                let value =
-                    self.value
-                        .expand(variables, imports, StyleValueKind::LayoutDirection)?;
-                if self.important {
-                    Ok(quote! { (#style).direction_important(#value) })
-                } else {
-                    Ok(quote! { (#style).direction(#value) })
-                }
-            }
-            _ => Err(Error::new_spanned(
-                &self.name,
-                "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, or direction",
-            )),
-        }
+        let (kind, normal_method, important_method) = declaration_target(&self.name)?;
+        let value = self.value.expand(variables, imports, kind)?;
+        let method = if self.important {
+            important_method
+        } else {
+            normal_method
+        };
+        let method = Ident::new(method, self.name.span());
+
+        Ok(quote! { (#style).#method(#value) })
+    }
+}
+
+fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'static str)> {
+    match name.to_string().as_str() {
+        "fg" | "foreground" => Ok((StyleValueKind::Color, "foreground", "foreground_important")),
+        "bg" | "background" => Ok((StyleValueKind::Color, "background", "background_important")),
+        "modifier" => Ok((StyleValueKind::Modifier, "modifier", "modifier_important")),
+        "borders" => Ok((StyleValueKind::Borders, "borders", "borders_important")),
+        "border_type" => Ok((
+            StyleValueKind::BorderType,
+            "border_type",
+            "border_type_important",
+        )),
+        "padding" => Ok((StyleValueKind::Spacing, "padding", "padding_important")),
+        "direction" => Ok((
+            StyleValueKind::LayoutDirection,
+            "direction",
+            "direction_important",
+        )),
+        _ => Err(Error::new_spanned(
+            name,
+            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, or direction",
+        )),
     }
 }
