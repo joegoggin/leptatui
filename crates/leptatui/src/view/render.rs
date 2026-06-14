@@ -6,8 +6,8 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
-    layout::{Constraint, Layout},
-    widgets::{Block, Paragraph},
+    layout::{Constraint, Layout, Rect},
+    widgets::{Block, Paragraph, Wrap},
 };
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
     app::{AppControl, Result},
     component::{Component, KeyControl, RenderCtx},
     context,
-    style::{Borders, TuiStyle},
+    style::{Borders, LayoutDirection, TuiStyle},
 };
 
 use super::{metadata::StyleMetadata, model::View};
@@ -44,8 +44,21 @@ fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle 
         ctx.selector_ancestors(),
         ctx.inherited_style(),
         metadata.inline_style(),
+        Some(ctx.viewport_size()),
         &theme,
     )
+}
+
+/// Returns a paragraph configured for Leptatui text rendering.
+fn text_paragraph<'a>(content: &'a str, style: TuiStyle) -> Paragraph<'a> {
+    Paragraph::new(content)
+        .style(style.to_ratatui_style())
+        .wrap(Wrap { trim: false })
+}
+
+/// Converts a rendered line count into a saturated terminal height.
+fn line_count_height(line_count: usize) -> u16 {
+    u16::try_from(line_count).unwrap_or(u16::MAX)
 }
 
 impl View {
@@ -79,7 +92,7 @@ impl View {
             }
             Self::Text { content, metadata } => {
                 let style = resolve_style(metadata, ctx);
-                ctx.render_widget(Paragraph::new(content.as_str()).style(style.to_ratatui_style()));
+                ctx.render_widget(text_paragraph(content.as_str(), style));
                 Ok(())
             }
             Self::Row { children, metadata } => {
@@ -87,7 +100,7 @@ impl View {
                 ctx.render_widget(Block::new().style(style.to_ratatui_style()));
                 render_children(
                     children,
-                    Direction::Row,
+                    style.direction.unwrap_or(LayoutDirection::Row),
                     style.inherited_values(),
                     metadata,
                     ctx,
@@ -98,7 +111,7 @@ impl View {
                 ctx.render_widget(Block::new().style(style.to_ratatui_style()));
                 render_children(
                     children,
-                    Direction::Column,
+                    style.direction.unwrap_or(LayoutDirection::Column),
                     style.inherited_values(),
                     metadata,
                     ctx,
@@ -184,6 +197,12 @@ impl View {
         self.focusable_count()
     }
 
+    /// Returns the minimum useful render height for this view tree.
+    #[doc(hidden)]
+    pub fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        min_height_for_view(self, ctx)
+    }
+
     /// Returns the focused button index while tracking traversal position.
     #[doc(hidden)]
     pub fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
@@ -232,11 +251,11 @@ impl View {
         }
     }
 
-    /// Handles the built-in key behavior for focus movement and button activation.
+    /// Handles built-in key behavior for scrolling, focus movement, and button activation.
     ///
     /// # Arguments
     ///
-    /// * `key` — Key event to match against built-in button behavior.
+    /// * `key` — Key event to match against built-in view behavior.
     ///
     /// # Returns
     ///
@@ -247,6 +266,34 @@ impl View {
         }
 
         match key.code {
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.scroll_first_overflowing(1) {
+                    KeyControl::Handled
+                } else {
+                    KeyControl::Pass
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.scroll_first_overflowing(-1) {
+                    KeyControl::Handled
+                } else {
+                    KeyControl::Pass
+                }
+            }
+            KeyCode::PageDown => {
+                if self.scroll_first_overflowing(5) {
+                    KeyControl::Handled
+                } else {
+                    KeyControl::Pass
+                }
+            }
+            KeyCode::PageUp => {
+                if self.scroll_first_overflowing(-5) {
+                    KeyControl::Handled
+                } else {
+                    KeyControl::Pass
+                }
+            }
             KeyCode::Tab | KeyCode::BackTab => {
                 let count = self.focusable_count();
                 if count == 0 {
@@ -265,6 +312,33 @@ impl View {
                 .activate_focused_button()
                 .map_or(KeyControl::Pass, KeyControl::from),
             _ => KeyControl::Pass,
+        }
+    }
+
+    /// Scrolls the first overflowing vertical layout found in render order.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` — Signed number of terminal rows to move through the overflow.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether any scroll offset changed.
+    fn scroll_first_overflowing(&mut self, delta: i16) -> bool {
+        match self {
+            Self::Block { child, .. } => child.scroll_first_overflowing(delta),
+            Self::Row { children, metadata } | Self::Column { children, metadata } => {
+                if metadata.max_scroll_offset() > 0 && metadata.scroll_by(delta) {
+                    return true;
+                }
+
+                children
+                    .iter_mut()
+                    .any(|child| child.scroll_first_overflowing(delta))
+            }
+            Self::Text { .. } | Self::Button { .. } | Self::Dynamic(_) | Self::Component(_) => {
+                false
+            }
         }
     }
 
@@ -511,15 +585,6 @@ impl Component for View {
     }
 }
 
-/// Axis used to split child view layout areas.
-#[derive(Clone, Copy)]
-enum Direction {
-    /// Split the available area horizontally.
-    Row,
-    /// Split the available area vertically.
-    Column,
-}
-
 /// Direction used to move focus through focusable views.
 #[derive(Clone, Copy)]
 enum FocusDirection {
@@ -529,11 +594,11 @@ enum FocusDirection {
     Backward,
 }
 
-/// Renders child views into equally sized row or column areas.
+/// Renders child views into row or column areas.
 ///
 /// # Arguments
 ///
-/// * `children` — Views to render into equal areas.
+/// * `children` — Views to render into split areas.
 /// * `direction` — Axis used to split the current context area.
 /// * `inherited_style` — Style values inherited by child views.
 /// * `parent_metadata` — Metadata to append to each child's selector ancestor
@@ -550,19 +615,44 @@ enum FocusDirection {
 /// that fails.
 fn render_children(
     children: &[View],
-    direction: Direction,
+    direction: LayoutDirection,
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     if children.is_empty() {
+        parent_metadata.set_max_scroll_offset(0);
         return Ok(());
     }
 
-    let constraints = vec![Constraint::Fill(1); children.len()];
+    if direction == LayoutDirection::Column {
+        let min_heights = child_min_heights(children, inherited_style, parent_metadata, ctx);
+        let content_height: u32 = min_heights.iter().map(|height| u32::from(*height)).sum();
+        let area_height = ctx.area().height;
+
+        if content_height > u32::from(area_height) && area_height > 0 {
+            let max_scroll_offset =
+                u16::try_from(content_height - u32::from(area_height)).unwrap_or(u16::MAX);
+            parent_metadata.set_max_scroll_offset(max_scroll_offset);
+
+            let row_offset = parent_metadata.scroll_offset().min(max_scroll_offset);
+            return render_scrolled_column_children(
+                children,
+                &min_heights,
+                row_offset,
+                inherited_style,
+                parent_metadata,
+                ctx,
+            );
+        }
+    }
+
+    parent_metadata.set_max_scroll_offset(0);
+
+    let constraints = child_constraints(children, direction, inherited_style, parent_metadata, ctx);
     let areas = match direction {
-        Direction::Row => Layout::horizontal(constraints).split(ctx.area()),
-        Direction::Column => Layout::vertical(constraints).split(ctx.area()),
+        LayoutDirection::Row => Layout::horizontal(constraints).split(ctx.area()),
+        LayoutDirection::Column => Layout::vertical(constraints).split(ctx.area()),
     };
 
     for (child, area) in children.iter().zip(areas.iter()) {
@@ -575,6 +665,213 @@ fn render_children(
     }
 
     Ok(())
+}
+
+/// Renders a vertically overflowing column from a child scroll offset.
+fn render_scrolled_column_children(
+    children: &[View],
+    min_heights: &[u16],
+    row_offset: u16,
+    inherited_style: TuiStyle,
+    parent_metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Result<()> {
+    let area = ctx.area();
+    let bottom = area.y.saturating_add(area.height);
+    let mut y = area.y;
+    let mut skipped_rows = row_offset;
+
+    for (child, min_height) in children.iter().zip(min_heights.iter()) {
+        if skipped_rows >= *min_height {
+            skipped_rows -= *min_height;
+            continue;
+        }
+
+        let remaining = bottom.saturating_sub(y);
+        if remaining == 0 {
+            break;
+        }
+
+        let source_y = skipped_rows;
+        skipped_rows = 0;
+        let height = min_height.saturating_sub(source_y).min(remaining);
+        if height == 0 {
+            continue;
+        }
+
+        let child_area = Rect {
+            x: area.x,
+            y,
+            width: area.width,
+            height,
+        };
+
+        if source_y == 0 && height == *min_height {
+            ctx.with_area_inherited_style_and_selector_ancestor(
+                child_area,
+                inherited_style,
+                parent_metadata.clone(),
+                |ctx| child.render(ctx),
+            )?;
+        } else {
+            ctx.render_view_clipped(
+                child,
+                Rect {
+                    x: area.x,
+                    y,
+                    width: area.width,
+                    height: *min_height,
+                },
+                source_y,
+                child_area,
+                inherited_style,
+                parent_metadata.clone(),
+            )?;
+        }
+
+        y = y.saturating_add(height);
+    }
+
+    Ok(())
+}
+
+/// Returns constraints for child layout.
+fn child_constraints(
+    children: &[View],
+    direction: LayoutDirection,
+    inherited_style: TuiStyle,
+    parent_metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Vec<Constraint> {
+    if direction == LayoutDirection::Column {
+        let min_heights = child_min_heights(children, inherited_style, parent_metadata, ctx);
+        if min_heights.iter().any(|height| *height > 1) {
+            return min_heights.into_iter().map(Constraint::Min).collect();
+        }
+    }
+
+    vec![Constraint::Fill(1); children.len()]
+}
+
+/// Returns minimum render heights for child views in a parent selector scope.
+fn child_min_heights(
+    children: &[View],
+    inherited_style: TuiStyle,
+    parent_metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Vec<u16> {
+    let area = ctx.area();
+    ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        inherited_style,
+        parent_metadata.clone(),
+        |ctx| {
+            children
+                .iter()
+                .map(|child| min_height_for_view(child, ctx))
+                .collect()
+        },
+    )
+}
+
+/// Returns child minimum heights after applying row split widths.
+fn row_child_min_heights(
+    children: &[View],
+    inherited_style: TuiStyle,
+    parent_metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Vec<u16> {
+    let area = ctx.area();
+    let constraints = vec![Constraint::Fill(1); children.len()];
+    let areas = Layout::horizontal(constraints).split(area);
+
+    ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        inherited_style,
+        parent_metadata.clone(),
+        |ctx| {
+            children
+                .iter()
+                .zip(areas.iter())
+                .map(|(child, area)| ctx.with_area(*area, |ctx| min_height_for_view(child, ctx)))
+                .collect()
+        },
+    )
+}
+
+/// Returns the minimum useful render height for a view.
+fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    match view {
+        View::Text { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            line_count_height(text_paragraph(content.as_str(), style).line_count(ctx.area().width))
+        }
+        View::Dynamic(_) => 1,
+        View::Button { metadata, .. } => {
+            let style = resolve_style(metadata, ctx);
+            1 + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
+                + vertical_padding_rows(style.padding)
+        }
+        View::Block { child, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            let area = ctx.area();
+            let child_height = ctx.with_area_inherited_style_and_selector_ancestor(
+                area,
+                style.inherited_values(),
+                metadata.clone(),
+                |ctx| min_height_for_view(child, ctx),
+            );
+
+            child_height
+                + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
+                + vertical_padding_rows(style.padding)
+        }
+        View::Row { children, metadata } => {
+            min_height_for_layout_view(children, metadata, LayoutDirection::Row, ctx)
+        }
+        View::Column { children, metadata } => {
+            min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
+        }
+        View::Component(component) => component.min_height(ctx),
+    }
+}
+
+/// Returns minimum height for a layout view after resolving its direction.
+fn min_height_for_layout_view(
+    children: &[View],
+    metadata: &StyleMetadata,
+    default_direction: LayoutDirection,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> u16 {
+    if children.is_empty() {
+        return 0;
+    }
+
+    let style = resolve_style(metadata, ctx);
+    let direction = style.direction.unwrap_or(default_direction);
+    let min_heights = match direction {
+        LayoutDirection::Row => {
+            row_child_min_heights(children, style.inherited_values(), metadata, ctx)
+        }
+        LayoutDirection::Column => {
+            child_min_heights(children, style.inherited_values(), metadata, ctx)
+        }
+    };
+
+    match direction {
+        LayoutDirection::Row => min_heights.into_iter().max().unwrap_or(0),
+        LayoutDirection::Column => min_heights.into_iter().fold(0, u16::saturating_add),
+    }
+}
+
+/// Returns how many vertical rows the configured borders consume.
+fn vertical_border_rows(borders: Borders) -> u16 {
+    u16::from(borders.contains(Borders::TOP)) + u16::from(borders.contains(Borders::BOTTOM))
+}
+
+/// Returns how many vertical rows the configured padding consumes.
+fn vertical_padding_rows(padding: Option<crate::TuiSpacing>) -> u16 {
+    padding.map_or(0, |padding| padding.top.saturating_add(padding.bottom))
 }
 
 /// Dispatches an event through child views until one requests exit.

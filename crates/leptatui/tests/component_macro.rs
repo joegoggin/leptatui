@@ -14,8 +14,9 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptatui::context::provide_context;
 use leptatui::{
-    AppControl, Children, Color, Component, KeyControl, RenderCtx, Result, ThemeVariables, button,
-    column, component, dynamic, row, stylesheet, text, theme_color, use_key_event, view,
+    AppControl, Children, Color, Component, KeyControl, LayoutDirection, RenderCtx, Result,
+    ThemeVariables, button, column, component, dynamic, row, stylesheet, text, theme_color,
+    use_key_event, view,
 };
 use leptos::prelude::{GetUntracked, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
@@ -140,6 +141,34 @@ fn MacroPropLabel(#[prop(into)] label: String) -> leptatui::View {
 #[component]
 fn MacroPropPanel(#[prop(into)] title: String, children: Children) -> leptatui::View {
     column([text(title), column(children())])
+}
+
+/// Component whose internal layout changes height under a media rule.
+#[component]
+fn MacroResponsiveCaseRow() -> leptatui::View {
+    view! {
+        <Row class="case-row">
+            <Text>"type < class"</Text>
+            <Text>"Sample"</Text>
+        </Row>
+    }
+}
+
+/// Parent component that must reserve the responsive child component height.
+#[component]
+fn MacroResponsiveCaseRoot() -> leptatui::View {
+    stylesheet! {
+        @media (max-width: 60) {
+            .case-row => { direction: LayoutDirection::Column }
+        }
+    }
+
+    view! {
+        <Column>
+            <Text>"Intro"</Text>
+            <MacroResponsiveCaseRow />
+        </Column>
+    }
 }
 
 /// Parent component with styled and plain sibling component subtrees.
@@ -539,6 +568,20 @@ fn generated_component_props_render() -> Result<()> {
 
     assert!(text.contains("Panel"), "rendered text: {text:?}");
     assert!(text.contains("Child"), "rendered text: {text:?}");
+
+    Ok(())
+}
+
+/// Verifies generated component boundaries report responsive internal height.
+#[test]
+fn generated_component_min_height_tracks_responsive_internal_layout() -> Result<()> {
+    let mut component = MacroResponsiveCaseRoot::new();
+    let terminal = render_component(&mut component, 40, 3)?;
+    let text = rendered_text(&terminal);
+
+    assert!(text.contains("Intro"), "rendered text: {text:?}");
+    assert!(text.contains("type < class"), "rendered text: {text:?}");
+    assert!(text.contains("Sample"), "rendered text: {text:?}");
 
     Ok(())
 }

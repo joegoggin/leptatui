@@ -4,9 +4,9 @@
 //! padding, and block values.
 
 use leptatui::{
-    BorderType, Borders, Color, Modifier, StyleDeclarations, StyleMetadata, StyleModule,
-    StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables, TuiSpacing, TuiStyle,
-    ViewType, button, stylesheet, text, theme_color,
+    BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
+    StyleMetadata, StyleModule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
+    TuiSpacing, TuiStyle, ViewType, ViewportSize, button, stylesheet, text, theme_color,
 };
 use ratatui::{style::Style, widgets::Padding};
 
@@ -262,6 +262,180 @@ fn stylesheet_equal_specificity_uses_source_order() {
     );
 
     assert_eq!(resolved.foreground, Some(Color::Yellow));
+}
+
+#[test]
+fn stylesheet_media_query_matches_viewport_size() {
+    let view = text("Save").with_classes("compact");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("compact"),
+            TuiStyle::new().foreground(Color::White),
+        )
+        .media_rule(
+            MediaQuery::max_width(80),
+            StyleSelector::class("compact"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let compact = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(80, 24),
+        &ThemeVariables::new(),
+    );
+    let wide = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(81, 24),
+        &ThemeVariables::new(),
+    );
+    let without_viewport = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(compact.foreground, Some(Color::Yellow));
+    assert_eq!(wide.foreground, Some(Color::White));
+    assert_eq!(without_viewport.foreground, Some(Color::White));
+}
+
+#[test]
+fn stylesheet_media_query_combines_width_and_height_conditions() {
+    let view = text("Save");
+    let stylesheet = Stylesheet::new().media_rule(
+        MediaQuery::min_width(80)
+            .and(MediaQuery::min_height(24))
+            .and(MediaQuery::max_height(40)),
+        StyleSelector::view_type(ViewType::Text),
+        TuiStyle::new().background(Color::Blue),
+    );
+
+    let matching = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(100, 30),
+        &ThemeVariables::new(),
+    );
+    let too_narrow = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(79, 30),
+        &ThemeVariables::new(),
+    );
+    let too_tall = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(100, 41),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(matching.background, Some(Color::Blue));
+    assert_eq!(too_narrow.background, None);
+    assert_eq!(too_tall.background, None);
+}
+
+#[test]
+fn matching_media_rules_keep_selector_specificity() {
+    let view = text("Save").with_id("save").with_classes("warning");
+    let stylesheet = Stylesheet::new()
+        .media_rule(
+            MediaQuery::max_width(80),
+            StyleSelector::id("save"),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .media_rule(
+            MediaQuery::max_width(80),
+            StyleSelector::class("warning"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(80, 24),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+}
+
+#[test]
+fn stylesheet_direction_declaration_resolves() {
+    let view = text("Controls").with_classes("controls");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("controls"),
+        TuiStyle::new().direction(LayoutDirection::Column),
+    );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.direction, Some(LayoutDirection::Column));
+}
+
+#[test]
+fn stylesheet_media_query_can_override_layout_direction() {
+    let view = text("Controls").with_classes("controls");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("controls"),
+            TuiStyle::new().direction(LayoutDirection::Row),
+        )
+        .media_rule(
+            MediaQuery::max_width(60),
+            StyleSelector::class("controls"),
+            TuiStyle::new().direction(LayoutDirection::Column),
+        );
+
+    let compact = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(60, 24),
+        &ThemeVariables::new(),
+    );
+    let wide = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(61, 24),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(compact.direction, Some(LayoutDirection::Column));
+    assert_eq!(wide.direction, Some(LayoutDirection::Row));
+}
+
+#[test]
+fn stylesheet_important_direction_overrides_inline_direction() {
+    let view = text("Controls")
+        .with_classes("controls")
+        .with_inline_style(TuiStyle::new().direction(LayoutDirection::Row));
+    let stylesheet = stylesheet! {
+        .controls => { direction: LayoutDirection::Column !important }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.direction, Some(LayoutDirection::Column));
 }
 
 /// Verifies inline styles override normal stylesheet rules.
@@ -731,6 +905,7 @@ fn style_module_stores_typed_variables_and_mixins() {
         .variable("borders", Borders::ALL)
         .variable("border_type", BorderType::Rounded)
         .variable("padding", TuiSpacing::uniform(1))
+        .variable("direction", LayoutDirection::Column)
         .mixin("control", control.clone());
 
     assert_eq!(
@@ -748,6 +923,10 @@ fn style_module_stores_typed_variables_and_mixins() {
         BorderType::Rounded
     );
     assert_eq!(module.expect_spacing("padding"), TuiSpacing::uniform(1));
+    assert_eq!(
+        module.expect_layout_direction("direction"),
+        LayoutDirection::Column
+    );
     assert_eq!(module.expect_mixin("control"), &control);
 }
 

@@ -26,6 +26,12 @@ pub trait Component {
     /// that fails.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()>;
 
+    /// Returns the minimum useful render height for this component.
+    #[doc(hidden)]
+    fn __min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        if self.__focusable_count() > 0 { 3 } else { 1 }
+    }
+
     /// Handles a terminal event.
     ///
     /// # Arguments

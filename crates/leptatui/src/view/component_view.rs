@@ -59,6 +59,12 @@ impl ComponentView {
             .with_reset(|| self.inner.borrow_mut().render(ctx))
     }
 
+    /// Returns the minimum useful render height inside this component boundary.
+    pub(crate) fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        self.context
+            .with_reset(|| self.inner.borrow().__min_height(ctx))
+    }
+
     /// Handles an event inside this component's existing context scope.
     ///
     /// # Arguments

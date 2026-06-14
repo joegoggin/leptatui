@@ -107,6 +107,41 @@ fn Panel() -> View {
 }
 ```
 
+Stylesheets also support top-level media query blocks for responsive terminal
+UIs. Width and height values are terminal-cell counts from the root viewport,
+and `direction` can switch Row/Column layout at a breakpoint.
+
+```rust
+#[component]
+fn ResponsivePanel() -> View {
+    stylesheet! {
+        .panel => { padding: TuiSpacing::uniform(1) }
+
+        @media (max-width: 80) {
+            .panel => { padding: TuiSpacing::ZERO }
+            .actions => { direction: LayoutDirection::Column }
+            Text => { fg: Color::Yellow }
+        }
+
+        @media (min-width: 81) and (min-height: 24) {
+            Button:focus => { bg: Color::Yellow }
+        }
+    }
+
+    view! {
+        <Block class="panel">
+            <Column>
+                <Text>"Devtools"</Text>
+                <Row class="actions">
+                    <Button>"Inspect"</Button>
+                    <Button>"Quit"</Button>
+                </Row>
+            </Column>
+        </Block>
+    }
+}
+```
+
 Reusable declaration groups can be declared with `@mixin` and expanded in rule
 bodies with `@include`.
 

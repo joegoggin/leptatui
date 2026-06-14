@@ -10,8 +10,9 @@ use std::{
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
-    AppControl, Color, Component, RenderCtx, Result, StyleMetadata, StyleSelector, Stylesheet,
-    TuiStyle, View, ViewType, block, button, column, component, dynamic, row, text,
+    AppControl, Color, Component, KeyControl, LayoutDirection, MediaQuery, RenderCtx, Result,
+    StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View, ViewType, block, button, column,
+    component, dynamic, row, text,
 };
 use ratatui::{Terminal, backend::TestBackend};
 
@@ -46,6 +47,30 @@ fn button_focuses(view: &View) -> Vec<bool> {
         }
         View::Text { .. } | View::Dynamic(_) | View::Component(_) => Vec::new(),
     }
+}
+
+fn symbol_position(terminal: &Terminal<TestBackend>, symbol: &str, width: u16) -> (u16, u16) {
+    symbol_position_opt(terminal, symbol, width)
+        .unwrap_or_else(|| panic!("rendered `{symbol}` cell"))
+}
+
+fn symbol_position_opt(
+    terminal: &Terminal<TestBackend>,
+    symbol: &str,
+    width: u16,
+) -> Option<(u16, u16)> {
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .enumerate()
+        .find_map(|(index, cell)| {
+            (cell.symbol() == symbol).then(|| {
+                let index = index as u16;
+                (index % width, index / width)
+            })
+        })
 }
 
 /// Verifies a block view renders its child text.
@@ -131,6 +156,296 @@ fn renders_text_with_resolved_stylesheet_style() -> Result<()> {
 
     assert_eq!(cell.fg, Color::Yellow);
     assert_eq!(cell.bg, Color::Blue);
+
+    Ok(())
+}
+
+#[test]
+fn text_wraps_to_available_render_width() -> Result<()> {
+    let backend = TestBackend::new(6, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let view = text("Hello World");
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(symbol_position(&terminal, "H", 6), (0, 0));
+    assert_eq!(symbol_position(&terminal, "W", 6), (0, 1));
+
+    Ok(())
+}
+
+#[test]
+fn column_reserves_height_for_wrapped_text() -> Result<()> {
+    let backend = TestBackend::new(6, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let view = column(vec![text("Hello World"), text("End")]);
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(symbol_position(&terminal, "W", 6).1, 1);
+    assert_eq!(symbol_position(&terminal, "E", 6).1, 2);
+
+    Ok(())
+}
+
+#[test]
+fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
+    let backend = TestBackend::new(12, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let view = row(vec![text("Hello World"), text("Side")]);
+    let mut min_height = 0;
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = view.__min_height(&mut ctx);
+    })?;
+
+    assert_eq!(min_height, 2);
+
+    Ok(())
+}
+
+#[test]
+fn overflowing_column_scrolls_wrapped_text_rows() -> Result<()> {
+    let backend = TestBackend::new(6, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = column(vec![text("Hello World"), text("Bottom")]);
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert!(symbol_position_opt(&terminal, "B", 6).is_none());
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let mut render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(symbol_position(&terminal, "W", 6).1, 0);
+    assert_eq!(symbol_position(&terminal, "B", 6).1, 1);
+
+    Ok(())
+}
+
+#[test]
+fn render_context_applies_media_rules_from_root_viewport() -> Result<()> {
+    let backend = TestBackend::new(12, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let view = text("Hi").with_classes("accent");
+    let stylesheet = Stylesheet::new().media_rule(
+        MediaQuery::max_width(12),
+        StyleSelector::class("accent"),
+        TuiStyle::new().foreground(Color::Yellow),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "H")
+        .expect("rendered H cell");
+
+    assert_eq!(cell.fg, Color::Yellow);
+
+    Ok(())
+}
+
+#[test]
+fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()> {
+    let backend = TestBackend::new(12, 6);
+    let mut terminal = Terminal::new(backend)?;
+    let view = row(vec![button("A"), button("B")]).with_classes("stack");
+    let stylesheet = Stylesheet::new().media_rule(
+        MediaQuery::max_width(12),
+        StyleSelector::class("stack"),
+        TuiStyle::new().direction(LayoutDirection::Column),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert_eq!(symbol_position(&terminal, "A", 12).1, 1);
+    assert_eq!(symbol_position(&terminal, "B", 12).1, 4);
+
+    Ok(())
+}
+
+#[test]
+fn column_reserves_height_for_nested_stacked_bordered_buttons() -> Result<()> {
+    let backend = TestBackend::new(12, 14);
+    let mut terminal = Terminal::new(backend)?;
+    let view = column(vec![
+        text("Top"),
+        row(vec![button("A"), button("B"), button("C"), button("D")]).with_classes("stack"),
+        text("End"),
+    ]);
+    let stylesheet = Stylesheet::new().media_rule(
+        MediaQuery::max_width(12),
+        StyleSelector::class("stack"),
+        TuiStyle::new().direction(LayoutDirection::Column),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert_eq!(symbol_position(&terminal, "D", 12).1, 11);
+
+    Ok(())
+}
+
+#[test]
+fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
+    let backend = TestBackend::new(12, 6);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = column(vec![
+        text("One"),
+        text("Two"),
+        text("Three"),
+        text("Four"),
+        row(vec![button("Launch"), button("Quit")]).with_classes("focus-actions"),
+    ]);
+    let stylesheet = Stylesheet::new().media_rule(
+        MediaQuery::max_width(12),
+        StyleSelector::class("focus-actions"),
+        TuiStyle::new().direction(LayoutDirection::Column),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert!(symbol_position_opt(&terminal, "Q", 12).is_none());
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let mut render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert_eq!(symbol_position(&terminal, "Q", 12).1, 4);
+
+    Ok(())
+}
+
+#[test]
+fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()> {
+    let backend = TestBackend::new(12, 6);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = column(vec![
+        block(text("Top")),
+        row(vec![button("A"), button("B"), button("C"), button("D")]).with_classes("stack"),
+        text("End"),
+    ]);
+    let stylesheet = Stylesheet::new().media_rule(
+        MediaQuery::max_width(12),
+        StyleSelector::class("stack"),
+        TuiStyle::new().direction(LayoutDirection::Column),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert!(symbol_position_opt(&terminal, "T", 12).is_some());
+    assert!(symbol_position_opt(&terminal, "D", 12).is_none());
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let mut render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert!(symbol_position_opt(&terminal, "T", 12).is_none());
+    assert!(symbol_position_opt(&terminal, "C", 12).is_some());
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let mut render_result = Ok(());
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert!(symbol_position_opt(&terminal, "T", 12).is_none());
+    assert!(symbol_position_opt(&terminal, "D", 12).is_some());
+
+    Ok(())
+}
+
+#[test]
+fn row_layout_stays_horizontal_without_direction_override() -> Result<()> {
+    let backend = TestBackend::new(4, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = row(vec![text("A"), text("B")]);
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(symbol_position(&terminal, "A", 4), (0, 0));
+    assert_eq!(symbol_position(&terminal, "B", 4), (2, 0));
 
     Ok(())
 }

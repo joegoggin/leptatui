@@ -6,7 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use super::{BorderType, Borders, Color, Modifier, StyleDeclarations, ThemeValue, TuiSpacing};
+use super::{
+    BorderType, Borders, Color, LayoutDirection, Modifier, StyleDeclarations, ThemeValue,
+    TuiSpacing,
+};
 
 /// A typed value stored in a reusable stylesheet module.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -21,6 +24,8 @@ pub enum StyleValue {
     BorderType(BorderType),
     /// Internal widget padding.
     Spacing(TuiSpacing),
+    /// Child layout direction.
+    LayoutDirection(LayoutDirection),
 }
 
 impl StyleValue {
@@ -32,6 +37,7 @@ impl StyleValue {
             Self::Borders(_) => "borders",
             Self::BorderType(_) => "border_type",
             Self::Spacing(_) => "spacing",
+            Self::LayoutDirection(_) => "layout_direction",
         }
     }
 }
@@ -69,6 +75,12 @@ impl From<BorderType> for StyleValue {
 impl From<TuiSpacing> for StyleValue {
     fn from(value: TuiSpacing) -> Self {
         Self::Spacing(value)
+    }
+}
+
+impl From<LayoutDirection> for StyleValue {
+    fn from(value: LayoutDirection) -> Self {
+        Self::LayoutDirection(value)
     }
 }
 
@@ -251,6 +263,25 @@ impl StyleModule {
             StyleValue::Spacing(value) => *value,
             value => panic!(
                 "stylesheet module variable `${name}` is {}, expected spacing",
+                value.kind()
+            ),
+        }
+    }
+
+    /// Returns a layout direction variable or panics with a stylesheet-oriented message.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — Variable name without the `$` prefix.
+    ///
+    /// # Returns
+    ///
+    /// A [`LayoutDirection`] value for the stored variable.
+    pub fn expect_layout_direction(&self, name: &str) -> LayoutDirection {
+        match self.expect_value(name) {
+            StyleValue::LayoutDirection(value) => *value,
+            value => panic!(
+                "stylesheet module variable `${name}` is {}, expected layout_direction",
                 value.kind()
             ),
         }

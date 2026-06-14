@@ -178,9 +178,19 @@ impl Declaration {
                     Ok(quote! { (#style).padding(#value) })
                 }
             }
+            "direction" => {
+                let value =
+                    self.value
+                        .expand(variables, imports, StyleValueKind::LayoutDirection)?;
+                if self.important {
+                    Ok(quote! { (#style).direction_important(#value) })
+                } else {
+                    Ok(quote! { (#style).direction(#value) })
+                }
+            }
             _ => Err(Error::new_spanned(
                 &self.name,
-                "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, or padding",
+                "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, or direction",
             )),
         }
     }

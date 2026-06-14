@@ -7,6 +7,7 @@
 //!
 //! - [`declaration`] — Style property declaration parsing and expansion.
 //! - [`import`] — Imported style module parsing and lookup support.
+//! - [`media`] — Top-level viewport media query parsing and expansion.
 //! - [`mixin`] — Reusable declaration mixin parsing and lookup support.
 //! - [`rule`] — Selector plus declaration-block parsing and expansion.
 //! - [`selector`] — Stylesheet selector parsing and expansion.
@@ -16,6 +17,7 @@
 
 mod declaration;
 mod import;
+mod media;
 mod mixin;
 mod rule;
 mod selector;

@@ -1,11 +1,11 @@
 //! Builder-style terminal UI style values.
 //!
-//! This module collects text colors, modifiers, borders, and padding before
-//! converting them into Ratatui [`Style`] and [`Block`] values.
+//! This module collects text colors, modifiers, borders, padding, and layout
+//! direction before converting supported visual values into Ratatui values.
 
 use ratatui::{style::Style, widgets::Block};
 
-use super::{BorderType, Borders, Color, Modifier, TuiSpacing};
+use super::{BorderType, Borders, Color, LayoutDirection, Modifier, TuiSpacing};
 
 /// Reusable style values for terminal UI elements.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,6 +22,8 @@ pub struct TuiStyle {
     pub border_type: Option<BorderType>,
     /// Internal widget padding.
     pub padding: Option<TuiSpacing>,
+    /// Optional child layout direction override.
+    pub direction: Option<LayoutDirection>,
 }
 
 impl Default for TuiStyle {
@@ -49,6 +51,7 @@ impl TuiStyle {
             borders: None,
             border_type: None,
             padding: None,
+            direction: None,
         }
     }
 
@@ -136,6 +139,20 @@ impl TuiStyle {
         self
     }
 
+    /// Sets the child layout direction.
+    ///
+    /// # Arguments
+    ///
+    /// * `direction` — Direction used to split child view areas.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] with the provided layout direction.
+    pub const fn direction(mut self, direction: LayoutDirection) -> Self {
+        self.direction = Some(direction);
+        self
+    }
+
     /// Returns the style values inherited by descendant views.
     ///
     /// Foreground color and text modifiers inherit across view boundaries.
@@ -151,6 +168,7 @@ impl TuiStyle {
             borders: None,
             border_type: None,
             padding: None,
+            direction: None,
         }
     }
 
@@ -235,6 +253,7 @@ mod tests {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .padding(TuiSpacing::uniform(1))
+            .direction(LayoutDirection::Column)
             .inherited_values();
 
         assert_eq!(inherited.foreground, Some(Color::Green));
@@ -243,5 +262,6 @@ mod tests {
         assert_eq!(inherited.borders, None);
         assert_eq!(inherited.border_type, None);
         assert_eq!(inherited.padding, None);
+        assert_eq!(inherited.direction, None);
     }
 }

@@ -8,8 +8,12 @@ fn main() {
         $primary: Color::LightCyan;
         $surface: Color::Black;
         $pad: TuiSpacing::horizontal(2);
+        $mobile_direction: LayoutDirection::Column;
 
         Text => { fg: $primary, bg: $surface }
-        .panel => { padding: $pad }
+        .panel => {
+            padding: $pad,
+            direction: $mobile_direction
+        }
     };
 }

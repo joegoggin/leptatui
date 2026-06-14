@@ -15,8 +15,22 @@ fn Root() -> View {
         KeyControl::Pass
     });
 
+    stylesheet! {
+        .hello-panel => {
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::uniform(1)
+        }
+
+        @media (max-width: 60) {
+            .hello-panel => {
+                border_type: BorderType::Plain,
+                padding: TuiSpacing::ZERO
+            }
+        }
+    }
+
     view! {
-        <Block>
+        <Block class="hello-panel">
             <Column>
                 <Text>"Hello, world!"</Text>
                 <Text>"Press q to quit."</Text>

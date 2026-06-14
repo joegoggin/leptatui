@@ -1,7 +1,9 @@
 //! Selector metadata attached to render-tree views.
 //!
-//! This module stores the type, id, class, inline-style, and focus metadata
-//! used by stylesheet selectors during view rendering.
+//! This module stores the type, id, class, inline-style, focus, and scroll
+//! metadata used during style resolution and rendering.
+
+use std::cell::Cell;
 
 use crate::style::TuiStyle;
 
@@ -28,6 +30,8 @@ pub struct StyleMetadata {
     classes: Vec<String>,
     inline_style: Option<TuiStyle>,
     focused: bool,
+    scroll_offset: Cell<u16>,
+    max_scroll_offset: Cell<u16>,
 }
 
 impl StyleMetadata {
@@ -47,6 +51,8 @@ impl StyleMetadata {
             classes: Vec::new(),
             inline_style: None,
             focused: false,
+            scroll_offset: Cell::new(0),
+            max_scroll_offset: Cell::new(0),
         }
     }
 
@@ -95,6 +101,19 @@ impl StyleMetadata {
         self.focused
     }
 
+    /// Returns the current vertical scroll offset.
+    ///
+    /// The offset is maintained by render traversal for overflowing vertical
+    /// layouts and consumed by default scroll key handling.
+    pub fn scroll_offset(&self) -> u16 {
+        self.scroll_offset.get()
+    }
+
+    /// Returns the maximum currently valid vertical scroll offset.
+    pub fn max_scroll_offset(&self) -> u16 {
+        self.max_scroll_offset.get()
+    }
+
     /// Replaces the id selector value.
     ///
     /// # Arguments
@@ -133,5 +152,34 @@ impl StyleMetadata {
     /// * `focused` — Whether this view should match `:focus`.
     pub fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    /// Updates the maximum scroll offset and clamps the current offset.
+    pub(crate) fn set_max_scroll_offset(&self, max_scroll_offset: u16) {
+        self.max_scroll_offset.set(max_scroll_offset);
+        self.clamp_scroll_offset();
+    }
+
+    /// Adjusts the current scroll offset within the known scroll range.
+    pub(crate) fn scroll_by(&self, delta: i16) -> bool {
+        let current = i32::from(self.scroll_offset.get());
+        let max = i32::from(self.max_scroll_offset.get());
+        let next = (current + i32::from(delta)).clamp(0, max) as u16;
+
+        if next == self.scroll_offset.get() {
+            return false;
+        }
+
+        self.scroll_offset.set(next);
+        true
+    }
+
+    fn clamp_scroll_offset(&self) {
+        let scroll_offset = self.scroll_offset.get();
+        let max_scroll_offset = self.max_scroll_offset.get();
+
+        if scroll_offset > max_scroll_offset {
+            self.scroll_offset.set(max_scroll_offset);
+        }
     }
 }

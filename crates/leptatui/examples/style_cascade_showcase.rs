@@ -123,6 +123,16 @@ fn StyleCascadeShowcase() -> View {
                 border_type: BorderType::Thick
             }
         }
+
+        @media (max-width: 60) {
+            .screen => { padding: TuiSpacing::ZERO }
+            .case-row => { direction: LayoutDirection::Column }
+            .inheritance-parent => { padding: TuiSpacing::ZERO }
+            .focus-actions => { direction: LayoutDirection::Column }
+            Button => {
+                padding: TuiSpacing::ZERO
+            }
+        }
     }
 
     view! {
@@ -188,7 +198,7 @@ fn StyleCascadeShowcase() -> View {
                 </CaseRow>
 
                 <CaseRow title="Button:focus">
-                    <Row>
+                    <Row class="focus-actions">
                         <ActionButton label="Continue" on_press=|| AppControl::Continue />
                         <ActionButton label="Quit" on_press=|| AppControl::Exit />
                     </Row>

@@ -118,6 +118,25 @@ fn StylesheetImportsDemo() -> View {
                 &:focus => { @include buttons.focused }
             }
         }
+
+        @media (max-width: 60) {
+            .screen => { padding: TuiSpacing::ZERO }
+            .actions => { direction: LayoutDirection::Column }
+
+            .screen => {
+                .primary-action => {
+                    padding: TuiSpacing::ZERO
+                }
+
+                .secondary-action => {
+                    padding: TuiSpacing::ZERO
+                }
+
+                .danger-action => {
+                    padding: TuiSpacing::ZERO
+                }
+            }
+        }
     }
 
     view! {
@@ -134,7 +153,7 @@ fn StylesheetImportsDemo() -> View {
                         </Text>
                     }
                 }}
-                <Row>
+                <Row class="actions">
                     <Button
                         class="primary-action"
                         on_press=move || {

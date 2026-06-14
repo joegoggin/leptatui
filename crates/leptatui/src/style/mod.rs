@@ -9,6 +9,8 @@ pub use ratatui::{
 };
 
 mod declarations;
+mod layout;
+mod media;
 mod selector;
 mod spacing;
 mod style_module;
@@ -17,6 +19,8 @@ mod theme;
 mod tui_style;
 
 pub use declarations::StyleDeclarations;
+pub use layout::LayoutDirection;
+pub use media::{MediaQuery, ViewportSize};
 pub use selector::StyleSelector;
 pub use spacing::TuiSpacing;
 pub use style_module::{StyleModule, StyleValue};

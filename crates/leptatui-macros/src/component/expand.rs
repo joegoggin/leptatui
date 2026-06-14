@@ -199,6 +199,21 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __min_height(&self, ctx: &mut #leptatui::RenderCtx<'_, '_>) -> u16 {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+                let __leptatui_stylesheet = &self.__leptatui_stylesheet;
+
+                ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
+                    __leptatui_owner.with(|| {
+                        #leptatui::context::__with_context_scope_if_missing(|| {
+                            __leptatui_view.__min_height(ctx)
+                        })
+                    })
+                })
+            }
+
+            #[doc(hidden)]
             fn __focused_index_inner(&self, index: &mut usize) -> ::core::option::Option<usize> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;

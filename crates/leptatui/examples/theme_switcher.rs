@@ -82,6 +82,14 @@ fn ThemeDemo() -> View {
                 }
             }
         }
+
+        @media (max-width: 60) {
+            .app-panel => { padding: TuiSpacing::ZERO }
+            .controls => { direction: LayoutDirection::Column }
+            .theme-button => {
+                padding: TuiSpacing::ZERO
+            }
+        }
     }
 
     view! {

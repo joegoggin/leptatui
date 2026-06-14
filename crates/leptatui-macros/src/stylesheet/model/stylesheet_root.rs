@@ -13,6 +13,7 @@ use syn::{
 
 use crate::stylesheet::model::{
     import::{StylesheetImports, UseImport, starts_use},
+    media::{MediaBlock, starts_media},
     mixin::{Mixin, StylesheetMixins, starts_mixin},
     variable::{StylesheetVariables, Variable},
 };
@@ -27,8 +28,16 @@ pub(in crate::stylesheet) struct StylesheetRoot {
     variables: Vec<Variable>,
     /// Parsed mixin definitions in source order.
     mixins: Vec<Mixin>,
-    /// Parsed style rules in source order.
-    rules: Vec<Rule>,
+    /// Parsed style rules and media blocks in source order.
+    items: Vec<StylesheetItem>,
+}
+
+/// Parsed top-level stylesheet item.
+enum StylesheetItem {
+    /// Ordinary style rule.
+    Rule(Rule),
+    /// Viewport-gated rule group.
+    Media(MediaBlock),
 }
 
 impl Parse for StylesheetRoot {
@@ -64,17 +73,21 @@ impl Parse for StylesheetRoot {
             mixins.push(input.parse()?);
         }
 
-        let mut rules = Vec::new();
+        let mut items = Vec::new();
 
         while !input.is_empty() {
-            rules.push(input.parse()?);
+            if starts_media(input) {
+                items.push(StylesheetItem::Media(input.parse()?));
+            } else {
+                items.push(StylesheetItem::Rule(input.parse()?));
+            }
 
             if input.peek(Token![,]) {
                 input.parse::<Token![,]>()?;
             }
         }
 
-        if rules.is_empty() && variables.is_empty() && mixins.is_empty() {
+        if items.is_empty() && variables.is_empty() && mixins.is_empty() {
             return Err(input.error("stylesheet! requires at least one rule, variable, or mixin"));
         }
 
@@ -82,7 +95,7 @@ impl Parse for StylesheetRoot {
             imports,
             variables,
             mixins,
-            rules,
+            items,
         })
     }
 }
@@ -123,7 +136,7 @@ impl StylesheetRoot {
             mixins.insert(mixin)?;
         }
 
-        if self.rules.is_empty() {
+        if self.items.is_empty() {
             let mut module = quote! { #leptatui::StyleModule::new() };
 
             for variable in &self.variables {
@@ -151,8 +164,8 @@ impl StylesheetRoot {
 
         let mut stylesheet = quote! { #leptatui::Stylesheet::new() };
 
-        for rule in &self.rules {
-            stylesheet = rule.expand(stylesheet, &variables, &imports, &mixins)?;
+        for item in &self.items {
+            stylesheet = item.expand(stylesheet, &variables, &imports, &mixins)?;
         }
 
         Ok(quote! {
@@ -163,5 +176,21 @@ impl StylesheetRoot {
                 __leptatui_stylesheet
             }
         })
+    }
+}
+
+impl StylesheetItem {
+    /// Appends this item to an in-progress stylesheet expression.
+    fn expand(
+        &self,
+        stylesheet: TokenStream,
+        variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
+        mixins: &StylesheetMixins<'_>,
+    ) -> Result<TokenStream> {
+        match self {
+            Self::Rule(rule) => rule.expand(stylesheet, variables, imports, mixins),
+            Self::Media(media) => media.expand(stylesheet, variables, imports, mixins),
+        }
     }
 }

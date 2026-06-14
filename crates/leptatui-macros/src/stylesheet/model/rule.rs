@@ -168,7 +168,26 @@ impl Rule {
         imports: &StylesheetImports,
         mixins: &StylesheetMixins<'_>,
     ) -> Result<TokenStream> {
-        self.expand_with_parent_path(stylesheet, variables, imports, mixins, &[])
+        self.expand_with_parent_path(stylesheet, variables, imports, mixins, &[], None)
+    }
+
+    /// Appends this rule and descendants as media-gated stylesheet rules.
+    pub(super) fn expand_with_media(
+        &self,
+        stylesheet: TokenStream,
+        variables: &StylesheetVariables<'_>,
+        imports: &StylesheetImports,
+        mixins: &StylesheetMixins<'_>,
+        media_query: &TokenStream,
+    ) -> Result<TokenStream> {
+        self.expand_with_parent_path(
+            stylesheet,
+            variables,
+            imports,
+            mixins,
+            &[],
+            Some(media_query),
+        )
     }
 
     /// Appends this rule and any nested rules using an accumulated selector path.
@@ -196,6 +215,7 @@ impl Rule {
         imports: &StylesheetImports,
         mixins: &StylesheetMixins<'_>,
         parent_path: &[&Selector],
+        media_query: Option<&TokenStream>,
     ) -> Result<TokenStream> {
         let mut path = parent_path.to_vec();
         path.push(&self.selector);
@@ -209,12 +229,22 @@ impl Rule {
                 style = item.expand(style, variables, imports, mixins)?;
             }
 
-            stylesheet = quote! { (#stylesheet).rule(#selector, #style) };
+            stylesheet = if let Some(media_query) = media_query {
+                quote! { (#stylesheet).media_rule(#media_query, #selector, #style) }
+            } else {
+                quote! { (#stylesheet).rule(#selector, #style) }
+            };
         }
 
         for nested_rule in &self.nested_rules {
-            stylesheet = nested_rule
-                .expand_with_parent_path(stylesheet, variables, imports, mixins, &path)?;
+            stylesheet = nested_rule.expand_with_parent_path(
+                stylesheet,
+                variables,
+                imports,
+                mixins,
+                &path,
+                media_query,
+            )?;
         }
 
         Ok(stylesheet)

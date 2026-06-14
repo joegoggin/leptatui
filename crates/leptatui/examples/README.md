@@ -1,6 +1,8 @@
 # Leptatui Examples
 
 Runnable examples for the public `leptatui` crate live in this directory.
+Each example includes responsive stylesheet rules for terminals at or below 60
+columns, which is useful when running over SSH from a phone.
 
 ## Hello World
 

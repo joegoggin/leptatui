@@ -1,7 +1,8 @@
 //! Theme-aware style declarations stored by stylesheet rules.
 
 use super::{
-    BorderType, Borders, Color, Modifier, ThemeValue, ThemeVariables, TuiSpacing, TuiStyle,
+    BorderType, Borders, Color, LayoutDirection, Modifier, ThemeValue, ThemeVariables, TuiSpacing,
+    TuiStyle,
 };
 
 /// One style declaration value plus its cascade importance.
@@ -36,6 +37,7 @@ pub struct StyleDeclarations {
     borders: Option<Declaration<Borders>>,
     border_type: Option<Declaration<BorderType>>,
     padding: Option<Declaration<TuiSpacing>>,
+    direction: Option<Declaration<LayoutDirection>>,
 }
 
 impl StyleDeclarations {
@@ -48,6 +50,7 @@ impl StyleDeclarations {
             borders: None,
             border_type: None,
             padding: None,
+            direction: None,
         }
     }
 
@@ -144,6 +147,26 @@ impl StyleDeclarations {
         self
     }
 
+    pub const fn direction(mut self, direction: LayoutDirection) -> Self {
+        if !matches!(
+            self.direction,
+            Some(Declaration {
+                important: true,
+                ..
+            })
+        ) {
+            self.direction = Some(Declaration::normal(direction));
+        }
+
+        self
+    }
+
+    #[doc(hidden)]
+    pub const fn direction_important(mut self, direction: LayoutDirection) -> Self {
+        self.direction = Some(Declaration::important(direction));
+        self
+    }
+
     /// Overlays another declaration set and returns the updated declarations.
     pub fn merge(mut self, style: &Self) -> Self {
         self.overlay(style);
@@ -189,6 +212,10 @@ impl StyleDeclarations {
             style = style.padding(padding.value);
         }
 
+        if let Some(direction) = &self.direction {
+            style = style.direction(direction.value);
+        }
+
         style
     }
 
@@ -228,6 +255,12 @@ impl StyleDeclarations {
         {
             self.set_padding(declaration.value, declaration.important);
         }
+
+        if let Some(declaration) = &style.direction
+            && matches(declaration.important)
+        {
+            self.set_direction(declaration.value, declaration.important);
+        }
     }
 
     fn set_foreground(&mut self, color: ThemeValue<Color>, important: bool) {
@@ -252,6 +285,10 @@ impl StyleDeclarations {
 
     fn set_padding(&mut self, padding: TuiSpacing, important: bool) {
         set_declaration(&mut self.padding, padding, important);
+    }
+
+    fn set_direction(&mut self, direction: LayoutDirection, important: bool) {
+        set_declaration(&mut self.direction, direction, important);
     }
 }
 
@@ -289,6 +326,10 @@ impl From<TuiStyle> for StyleDeclarations {
 
         if let Some(padding) = style.padding {
             declarations = declarations.padding(padding);
+        }
+
+        if let Some(direction) = style.direction {
+            declarations = declarations.direction(direction);
         }
 
         declarations

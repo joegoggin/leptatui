@@ -4,21 +4,23 @@
 //! scoped stylesheets, inherited style values, selector ancestor metadata, and
 //! helper methods for drawing widgets or child views.
 
-use ratatui::{Frame, layout::Rect, widgets::Widget};
+use ratatui::{Frame, buffer::Buffer, layout::Rect, widgets::Widget};
 
 use crate::{
     StyleMetadata,
     app::Result,
-    style::{Stylesheet, TuiStyle},
+    style::{Stylesheet, TuiStyle, ViewportSize},
     view::View,
 };
 
 /// Rendering context for a single frame and target area.
 pub struct RenderCtx<'frame, 'buffer> {
-    /// Ratatui frame being rendered during the current draw pass.
-    frame: &'frame mut Frame<'buffer>,
+    /// Destination receiving rendered widgets.
+    target: RenderTarget<'frame, 'buffer>,
     /// Area inside the frame currently targeted by rendering calls.
     area: Rect,
+    /// Root terminal viewport size for responsive style resolution.
+    viewport_size: ViewportSize,
     /// Scoped stylesheets used to resolve view styles during rendering.
     stylesheets: Vec<Stylesheet>,
     /// Inherited style declarations available to the current view.
@@ -40,8 +42,9 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     pub fn new(frame: &'frame mut Frame<'buffer>) -> Self {
         let area = frame.area();
         Self {
-            frame,
+            target: RenderTarget::Frame(frame),
             area,
+            viewport_size: area.into(),
             stylesheets: Vec::new(),
             inherited_style: TuiStyle::new(),
             selector_ancestors: Vec::new(),
@@ -55,6 +58,15 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// A [`Rect`] describing the current rendering area.
     pub const fn area(&self) -> Rect {
         self.area
+    }
+
+    /// Returns the root terminal viewport size for this render pass.
+    ///
+    /// # Returns
+    ///
+    /// A [`ViewportSize`] measured in terminal cells.
+    pub const fn viewport_size(&self) -> ViewportSize {
+        self.viewport_size
     }
 
     /// Returns the stylesheets used by this render context.
@@ -77,8 +89,9 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         stylesheets.push(stylesheet.clone());
 
         let mut child = RenderCtx {
-            frame: &mut *self.frame,
+            target: self.target.reborrow(),
             area: self.area,
+            viewport_size: self.viewport_size,
             stylesheets,
             inherited_style: self.inherited_style,
             selector_ancestors: self.selector_ancestors.clone(),
@@ -115,7 +128,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     where
         W: Widget,
     {
-        self.frame.render_widget(widget, self.area);
+        self.target.render_widget(widget, self.area);
     }
 
     /// Renders a Leptatui view into the current target area.
@@ -134,6 +147,53 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// I/O that fails.
     pub fn render_view(&mut self, view: &View) -> Result<()> {
         view.render(self)
+    }
+
+    /// Renders a view into an offscreen buffer and copies a clipped row slice.
+    pub(crate) fn render_view_clipped(
+        &mut self,
+        view: &View,
+        full_area: Rect,
+        source_y: u16,
+        target_area: Rect,
+        inherited_style: TuiStyle,
+        selector_ancestor: StyleMetadata,
+    ) -> Result<()> {
+        if target_area.width == 0 || target_area.height == 0 || full_area.height == 0 {
+            return Ok(());
+        }
+
+        let mut buffer = Buffer::empty(Rect::new(0, 0, full_area.width, full_area.height));
+        let mut selector_ancestors = self.selector_ancestors.clone();
+        selector_ancestors.push(selector_ancestor);
+
+        {
+            let mut buffer_ctx = RenderCtx {
+                target: RenderTarget::Buffer(&mut buffer),
+                area: Rect::new(0, 0, full_area.width, full_area.height),
+                viewport_size: self.viewport_size,
+                stylesheets: self.stylesheets.clone(),
+                inherited_style,
+                selector_ancestors,
+            };
+            view.render(&mut buffer_ctx)?;
+        }
+
+        let target = self.target.buffer_mut();
+        for y in 0..target_area.height {
+            for x in 0..target_area.width {
+                let source = buffer[(x, source_y.saturating_add(y))].clone();
+                let destination_position = (
+                    target_area.x.saturating_add(x),
+                    target_area.y.saturating_add(y),
+                );
+                if let Some(destination) = target.cell_mut(destination_position) {
+                    *destination = source;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Renders into a temporary child area with explicit inherited style.
@@ -156,8 +216,9 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
     ) -> R {
         let mut child = RenderCtx {
-            frame: &mut *self.frame,
+            target: self.target.reborrow(),
             area,
+            viewport_size: self.viewport_size,
             stylesheets: self.stylesheets.clone(),
             inherited_style,
             selector_ancestors: self.selector_ancestors.clone(),
@@ -190,8 +251,9 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         selector_ancestors.push(selector_ancestor);
 
         let mut child = RenderCtx {
-            frame: &mut *self.frame,
+            target: self.target.reborrow(),
             area,
+            viewport_size: self.viewport_size,
             stylesheets: self.stylesheets.clone(),
             inherited_style,
             selector_ancestors,
@@ -216,5 +278,42 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
     ) -> R {
         self.with_area_and_inherited_style(area, self.inherited_style, render)
+    }
+}
+
+/// Destination for render operations.
+enum RenderTarget<'frame, 'buffer> {
+    /// Active Ratatui frame.
+    Frame(&'frame mut Frame<'buffer>),
+    /// Offscreen buffer used for clipping.
+    Buffer(&'frame mut Buffer),
+}
+
+impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
+    /// Returns a shorter mutable borrow of this render target.
+    fn reborrow(&mut self) -> RenderTarget<'_, 'buffer> {
+        match self {
+            Self::Frame(frame) => RenderTarget::Frame(&mut **frame),
+            Self::Buffer(buffer) => RenderTarget::Buffer(&mut **buffer),
+        }
+    }
+
+    /// Renders a widget into the target area.
+    fn render_widget<W>(&mut self, widget: W, area: Rect)
+    where
+        W: Widget,
+    {
+        match self {
+            Self::Frame(frame) => frame.render_widget(widget, area),
+            Self::Buffer(buffer) => widget.render(area, buffer),
+        }
+    }
+
+    /// Returns the underlying buffer.
+    fn buffer_mut(&mut self) -> &mut Buffer {
+        match self {
+            Self::Frame(frame) => frame.buffer_mut(),
+            Self::Buffer(buffer) => buffer,
+        }
     }
 }

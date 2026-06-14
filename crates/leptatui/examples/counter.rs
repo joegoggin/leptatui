@@ -28,12 +28,27 @@ fn Counter() -> View {
     });
 
     stylesheet! {
+        .counter-panel => {
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::uniform(1)
+        }
+        .counter-value => { fg: Color::LightCyan, modifier: Modifier::BOLD }
+        .counter-help => { fg: Color::Gray }
         Button => {
             fg: Color::White,
             borders: Borders::ALL,
-            border_type: BorderType::Rounded
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::horizontal(1)
         }
         .danger => { fg: Color::LightRed }
+
+        @media (max-width: 60) {
+            .counter-panel => { padding: TuiSpacing::ZERO }
+            .counter-controls => { direction: LayoutDirection::Column }
+            .counter-button => {
+                padding: TuiSpacing::ZERO
+            }
+        }
     }
 
     view! {
