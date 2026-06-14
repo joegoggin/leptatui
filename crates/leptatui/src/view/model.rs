@@ -1,68 +1,73 @@
-//! Render-tree node data structures.
+//! Render-tree view data structures.
 //!
-//! This module defines the node enum and its equality/debug behavior used by
-//! node builders and renderers.
+//! This module defines the view enum and its equality/debug behavior used by
+//! view builders and renderers.
 
 use std::{fmt, rc::Rc};
 
 use super::{
-    component_node::ComponentNode,
-    dynamic::DynamicNode,
-    metadata::{NodeType, StyleMetadata},
+    component_view::ComponentView,
+    dynamic::DynamicView,
+    metadata::{StyleMetadata, ViewType},
 };
 use crate::app::AppControl;
 
 /// Shared callback invoked when a button is activated.
 pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
 
-/// Minimal renderable node tree for hand-written terminal UI.
+/// Minimal renderable view tree for hand-written terminal UI.
 #[derive(Clone)]
-pub enum Node {
-    /// Bordered container around a child node.
+pub enum View {
+    /// Bordered container around a child view.
     Block {
-        /// Child node rendered inside the block's inner area.
-        child: Box<Node>,
-        /// Selector metadata for matching this node.
+        /// Child view rendered inside the block's inner area.
+        child: Box<View>,
+        /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Plain text content.
     Text {
         /// Text content to render.
         content: String,
-        /// Selector metadata for matching this node.
+        /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Horizontally arranged children.
     Row {
-        /// Child nodes divided across the row.
-        children: Vec<Node>,
-        /// Selector metadata for matching this node.
+        /// Child views divided across the row.
+        children: Vec<View>,
+        /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Vertically arranged children.
     Column {
-        /// Child nodes divided down the column.
-        children: Vec<Node>,
-        /// Selector metadata for matching this node.
+        /// Child views divided down the column.
+        children: Vec<View>,
+        /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Basic bordered button label.
     Button {
         /// Button label to render.
         label: String,
-        /// Selector metadata for matching this node.
+        /// Selector metadata for matching this view.
         metadata: StyleMetadata,
         /// Optional activation callback.
         on_press: Option<ButtonAction>,
     },
-    /// Child node produced when the tree is traversed.
-    Dynamic(DynamicNode),
+    /// Child view produced when the tree is traversed.
+    Dynamic(DynamicView),
     /// Child component preserved as a tree boundary.
-    Component(ComponentNode),
+    Component(ComponentView),
 }
 
-impl Node {
-    /// Returns selector metadata for styleable static nodes.
+impl View {
+    /// Returns selector metadata for styleable static views.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing a [`StyleMetadata`] reference for views that
+    /// carry selector metadata.
     pub fn style_metadata(&self) -> Option<&StyleMetadata> {
         match self {
             Self::Block { metadata, .. }
@@ -74,7 +79,12 @@ impl Node {
         }
     }
 
-    /// Returns mutable selector metadata for styleable static nodes.
+    /// Returns mutable selector metadata for styleable static views.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing a mutable [`StyleMetadata`] reference for views
+    /// that carry selector metadata.
     pub fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
         match self {
             Self::Block { metadata, .. }
@@ -86,7 +96,15 @@ impl Node {
         }
     }
 
-    /// Sets an id selector value on a styleable node.
+    /// Sets an id selector value on a styleable view.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` — Id selector value to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the provided id when the view is styleable.
     pub fn with_id(mut self, id: impl Into<String>) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_id(id);
@@ -95,7 +113,15 @@ impl Node {
         self
     }
 
-    /// Sets class selector values on a styleable node.
+    /// Sets class selector values on a styleable view.
+    ///
+    /// # Arguments
+    ///
+    /// * `classes` — Whitespace-separated class selector values to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the provided classes when the view is styleable.
     pub fn with_classes(mut self, classes: impl Into<String>) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_classes(classes);
@@ -104,7 +130,16 @@ impl Node {
         self
     }
 
-    /// Sets an inline style override on a styleable node.
+    /// Sets an inline style override on a styleable view.
+    ///
+    /// # Arguments
+    ///
+    /// * `style` — Inline style override to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the provided inline style when the view is
+    /// styleable.
     pub fn with_inline_style(mut self, style: crate::style::TuiStyle) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_inline_style(style);
@@ -113,7 +148,16 @@ impl Node {
         self
     }
 
-    /// Sets the current focus pseudo-class state on a styleable node.
+    /// Sets the current focus pseudo-class state on a styleable view.
+    ///
+    /// # Arguments
+    ///
+    /// * `focused` — Whether the view should match `:focus`.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the provided focus state when the view is
+    /// styleable.
     pub fn with_focus(mut self, focused: bool) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_focused(focused);
@@ -122,7 +166,15 @@ impl Node {
         self
     }
 
-    /// Stores an activation callback on a button node.
+    /// Stores an activation callback on a button view.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback invoked when this button is focused and activated.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the callback when the view is a button.
     pub fn on_press(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
         if let Self::Button { on_press, .. } = &mut self {
             *on_press = Some(Rc::new(action));
@@ -132,10 +184,10 @@ impl Node {
     }
 }
 
-impl fmt::Debug for Node {
-    /// Formats a node tree for diagnostics.
+impl fmt::Debug for View {
+    /// Formats a view tree for diagnostics.
     ///
-    /// Dynamic nodes avoid formatting their closures because closures do not
+    /// Dynamic views avoid formatting their closures because closures do not
     /// implement [`fmt::Debug`].
     ///
     /// # Arguments
@@ -201,16 +253,16 @@ fn button_actions_equal(left: &Option<ButtonAction>, right: &Option<ButtonAction
     }
 }
 
-impl PartialEq for Node {
-    /// Compares node trees by value, using pointer identity for deferred nodes.
+impl PartialEq for View {
+    /// Compares view trees by value, using pointer identity for deferred views.
     ///
     /// # Arguments
     ///
-    /// * `other` — Node to compare with `self`.
+    /// * `other` — View to compare with `self`.
     ///
     /// # Returns
     ///
-    /// A [`bool`] indicating whether the nodes are equal.
+    /// A [`bool`] indicating whether the views are equal.
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (
@@ -276,10 +328,10 @@ impl PartialEq for Node {
     }
 }
 
-impl Eq for Node {}
+impl Eq for View {}
 
-impl From<String> for Node {
-    /// Converts owned text into a text node.
+impl From<String> for View {
+    /// Converts owned text into a text view.
     ///
     /// # Arguments
     ///
@@ -287,29 +339,29 @@ impl From<String> for Node {
     ///
     /// # Returns
     ///
-    /// A [`Node::Text`] containing `value`.
+    /// A [`View::Text`] containing `value`.
     fn from(value: String) -> Self {
         Self::Text {
             content: value,
-            metadata: StyleMetadata::new(NodeType::Text),
+            metadata: StyleMetadata::new(ViewType::Text),
         }
     }
 }
 
-impl From<&str> for Node {
-    /// Converts borrowed text into a text node.
+impl From<&str> for View {
+    /// Converts borrowed text into a text view.
     ///
     /// # Arguments
     ///
-    /// * `value` — Text content to copy into the node.
+    /// * `value` — Text content to copy into the view.
     ///
     /// # Returns
     ///
-    /// A [`Node::Text`] containing `value`.
+    /// A [`View::Text`] containing `value`.
     fn from(value: &str) -> Self {
         Self::Text {
             content: value.to_owned(),
-            metadata: StyleMetadata::new(NodeType::Text),
+            metadata: StyleMetadata::new(ViewType::Text),
         }
     }
 }

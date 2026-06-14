@@ -14,6 +14,7 @@ use std::{
 type ContextValue = Box<dyn Any + Send + Sync>;
 /// Single render-scope frame containing context values keyed by type.
 type ContextFrameValues = HashMap<TypeId, ContextValue>;
+/// Shared mutable context frame reused by a component boundary.
 pub(super) type ContextFrame = Rc<RefCell<ContextFrameValues>>;
 
 thread_local! {
@@ -22,16 +23,28 @@ thread_local! {
 }
 
 /// Creates an empty reusable context frame.
+///
+/// # Returns
+///
+/// A [`ContextFrame`] containing no stored values.
 pub(super) fn new_frame() -> ContextFrame {
     Rc::new(RefCell::new(HashMap::new()))
 }
 
 /// Clears values stored in a reusable context frame.
+///
+/// # Arguments
+///
+/// * `frame` — Context frame to clear before a fresh render pass.
 pub(super) fn clear_frame(frame: &ContextFrame) {
     frame.borrow_mut().clear();
 }
 
 /// Pushes an existing context frame onto the current thread's active stack.
+///
+/// # Arguments
+///
+/// * `frame` — Context frame to make active for descendant lookups.
 pub(super) fn push_frame(frame: &ContextFrame) {
     CONTEXT_STACK.with(|stack| stack.borrow_mut().push(Rc::clone(frame)));
 }
@@ -46,6 +59,10 @@ pub(super) fn pop_frame() -> bool {
 }
 
 /// Returns whether the current thread has an active Leptatui context frame.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the context stack is non-empty.
 pub(super) fn has_active_frame() -> bool {
     CONTEXT_STACK.with(|stack| !stack.borrow().is_empty())
 }

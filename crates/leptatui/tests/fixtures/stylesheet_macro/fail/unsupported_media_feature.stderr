@@ -1,0 +1,5 @@
+error: unsupported stylesheet media feature; expected min-width, max-width, min-height, or max-height
+ --> tests/fixtures/stylesheet_macro/fail/unsupported_media_feature.rs:8:17
+  |
+8 |         @media (min-depth: 80) {
+  |                 ^^^

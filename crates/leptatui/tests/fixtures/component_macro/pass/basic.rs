@@ -5,9 +5,9 @@
 
 use leptatui::prelude::*;
 
-/// Returns a node from a private component function.
+/// Returns a view from a private component function.
 #[component]
-fn Greeting() -> Node {
+fn Greeting() -> View {
     text("hello")
 }
 

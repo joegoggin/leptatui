@@ -1,35 +1,45 @@
-//! Selectors for matching node style metadata.
+//! Selectors for matching view style metadata.
 //!
 //! This module defines the selectors used by [`Stylesheet`](super::Stylesheet)
-//! resolution and maps selectors to cascade specificity groups.
+//! resolution, including descendant selector paths, and maps selectors to CSS
+//! cascade specificity.
 
-use crate::node::{NodeType, StyleMetadata};
+use crate::view::{StyleMetadata, ViewType};
 
-/// Selector used to match a style rule against a node.
+/// Selector used to match a style rule against a view.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StyleSelector {
-    /// Matches nodes by their [`NodeType`].
-    Type(NodeType),
-    /// Matches nodes containing the provided class name.
+    /// Matches views by their [`ViewType`].
+    Type(ViewType),
+    /// Matches views containing the provided class name.
     Class(String),
-    /// Matches nodes with the provided id.
+    /// Matches views with the provided id.
     Id(String),
-    /// Matches nodes currently marked as focused.
+    /// Matches views currently marked as focused.
     Focus,
+    /// Matches views that satisfy every nested selector.
+    Compound(Vec<StyleSelector>),
+    /// Matches a target selector when its ordered ancestor chain matches.
+    Descendant {
+        /// Ancestor selectors ordered from outermost to innermost.
+        ancestors: Vec<StyleSelector>,
+        /// Selector matched against the current view.
+        target: Box<StyleSelector>,
+    },
 }
 
 impl StyleSelector {
-    /// Creates a selector that matches a node type.
+    /// Creates a selector that matches a view type.
     ///
     /// # Arguments
     ///
-    /// * `node_type` — Node type to match.
+    /// * `view_type` — View type to match.
     ///
     /// # Returns
     ///
     /// A [`StyleSelector::Type`] selector.
-    pub const fn node_type(node_type: NodeType) -> Self {
-        Self::Type(node_type)
+    pub const fn view_type(view_type: ViewType) -> Self {
+        Self::Type(view_type)
     }
 
     /// Creates a selector that matches a class name.
@@ -58,7 +68,7 @@ impl StyleSelector {
         Self::Id(id.into())
     }
 
-    /// Creates a selector that matches focused nodes.
+    /// Creates a selector that matches focused views.
     ///
     /// # Returns
     ///
@@ -67,22 +77,95 @@ impl StyleSelector {
         Self::Focus
     }
 
-    /// Returns whether this selector matches node style metadata.
+    /// Creates a selector that matches only when every nested selector matches.
     ///
     /// # Arguments
     ///
-    /// * `metadata` — Node selector metadata to inspect.
+    /// * `selectors` — Selector list to match together.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleSelector::Compound`] selector.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `selectors` is empty.
+    pub fn compound(selectors: impl Into<Vec<Self>>) -> Self {
+        let selectors = selectors.into();
+        debug_assert!(
+            !selectors.is_empty(),
+            "compound selector requires at least one nested selector",
+        );
+
+        Self::Compound(selectors)
+    }
+
+    /// Creates a selector that matches a target below matching ancestors.
+    ///
+    /// # Arguments
+    ///
+    /// * `ancestors` — Selector chain ordered from outermost ancestor to
+    ///   innermost ancestor.
+    /// * `target` — Selector matched against the current view.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleSelector::Descendant`] selector.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `ancestors` is empty.
+    pub fn descendant(ancestors: impl Into<Vec<Self>>, target: impl Into<Self>) -> Self {
+        let ancestors = ancestors.into();
+        debug_assert!(
+            !ancestors.is_empty(),
+            "descendant selector requires at least one ancestor selector",
+        );
+
+        Self::Descendant {
+            ancestors,
+            target: Box::new(target.into()),
+        }
+    }
+
+    /// Returns whether this selector matches view style metadata and ancestors.
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` — View selector metadata to inspect.
+    /// * `ancestors` — Ancestor metadata ordered from outermost to innermost.
     ///
     /// # Returns
     ///
     /// A [`bool`] indicating whether the selector matches.
-    pub(crate) fn matches(&self, metadata: &StyleMetadata) -> bool {
+    pub(crate) fn matches(&self, metadata: &StyleMetadata, ancestors: &[StyleMetadata]) -> bool {
         match self {
-            Self::Type(node_type) => metadata.node_type() == *node_type,
+            Self::Type(view_type) => metadata.view_type() == *view_type,
             Self::Class(class) => metadata.classes().iter().any(|value| value == class),
             Self::Id(id) => metadata.id() == Some(id.as_str()),
             Self::Focus => metadata.is_focused(),
+            Self::Compound(selectors) => selectors
+                .iter()
+                .all(|selector| selector.matches(metadata, ancestors)),
+            Self::Descendant {
+                ancestors: required_ancestors,
+                target,
+            } => {
+                target.matches(metadata, ancestors)
+                    && matches_ancestor_chain(required_ancestors, ancestors)
+            }
         }
+    }
+
+    /// Returns this selector's CSS specificity tuple.
+    ///
+    /// The tuple is ordered as `(ids, classes_and_pseudos, types)`.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing this selector's CSS-style specificity.
+    pub fn css_specificity(&self) -> (u16, u16, u16) {
+        self.specificity().as_tuple()
     }
 
     /// Returns the cascade specificity for this selector.
@@ -90,22 +173,103 @@ impl StyleSelector {
     /// # Returns
     ///
     /// A [`Specificity`] value used to order rule application.
-    pub(crate) const fn specificity(&self) -> Specificity {
+    pub(crate) fn specificity(&self) -> Specificity {
         match self {
-            Self::Type(_) => Specificity::Type,
-            Self::Class(_) | Self::Focus => Specificity::Class,
-            Self::Id(_) => Specificity::Id,
+            Self::Type(_) => Specificity::TYPE,
+            Self::Class(_) | Self::Focus => Specificity::CLASS,
+            Self::Id(_) => Specificity::ID,
+            Self::Compound(selectors) => selectors
+                .iter()
+                .fold(Specificity::ZERO, |specificity, selector| {
+                    specificity + selector.specificity()
+                }),
+            Self::Descendant { ancestors, target } => ancestors
+                .iter()
+                .fold(target.specificity(), |specificity, selector| {
+                    specificity + selector.specificity()
+                }),
         }
     }
 }
 
-/// Cascade specificity group for stylesheet rule application.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Specificity {
-    /// Type selector specificity.
-    Type,
-    /// Class and focus selector specificity.
-    Class,
-    /// Id selector specificity.
-    Id,
+/// Returns whether the available ancestors contain the required selector chain.
+///
+/// # Arguments
+///
+/// * `required_ancestors` — Selector chain required by a descendant selector.
+/// * `ancestors` — Available ancestor metadata ordered from outermost to
+///   innermost.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether each required ancestor selector matches in
+/// order.
+fn matches_ancestor_chain(
+    required_ancestors: &[StyleSelector],
+    ancestors: &[StyleMetadata],
+) -> bool {
+    let mut required = required_ancestors.iter();
+    let Some(mut current) = required.next() else {
+        return true;
+    };
+
+    for ancestor in ancestors {
+        if current.matches(ancestor, &[]) {
+            let Some(next) = required.next() else {
+                return true;
+            };
+            current = next;
+        }
+    }
+
+    false
+}
+
+/// CSS cascade specificity for stylesheet rule application.
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct Specificity {
+    ids: u16,
+    classes_and_pseudos: u16,
+    types: u16,
+}
+
+impl Specificity {
+    pub(crate) const ZERO: Self = Self {
+        ids: 0,
+        classes_and_pseudos: 0,
+        types: 0,
+    };
+    const ID: Self = Self {
+        ids: 1,
+        classes_and_pseudos: 0,
+        types: 0,
+    };
+    const CLASS: Self = Self {
+        ids: 0,
+        classes_and_pseudos: 1,
+        types: 0,
+    };
+    const TYPE: Self = Self {
+        ids: 0,
+        classes_and_pseudos: 0,
+        types: 1,
+    };
+
+    const fn as_tuple(self) -> (u16, u16, u16) {
+        (self.ids, self.classes_and_pseudos, self.types)
+    }
+}
+
+impl ::core::ops::Add for Specificity {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            ids: self.ids.saturating_add(rhs.ids),
+            classes_and_pseudos: self
+                .classes_and_pseudos
+                .saturating_add(rhs.classes_and_pseudos),
+            types: self.types.saturating_add(rhs.types),
+        }
+    }
 }

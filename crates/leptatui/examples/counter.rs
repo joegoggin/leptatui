@@ -1,106 +1,80 @@
 //! Interactive counter example.
 //!
-//! This binary demonstrates Leptos signals, Leptatui node rendering, stylesheet
-//! focus rules, and button activation through the application runner.
+//! This binary demonstrates Leptos signals, Leptatui view rendering, stylesheet
+//! rules, and explicit key maps through the application runner.
 
-use crossterm::event::Event;
 use leptatui::prelude::*;
 
 /// Root component for the interactive counter example.
-struct Counter {
-    /// Leptos owner that keeps the component's reactive graph alive.
-    _owner: Owner,
-    /// Node tree that owns counter controls and dispatches focused events.
-    root: Node,
-}
+#[component]
+fn Counter() -> View {
+    let count = RwSignal::new(0);
 
-impl Counter {
-    /// Creates a counter component with a zero value.
-    fn new() -> Self {
-        let owner = Owner::new();
-        let (count, set_count) = owner.with(|| signal(0));
+    use_key_event(KeyEventKind::Press, move |key| match key.code {
+        KeyCode::Char('+') | KeyCode::Char('=') => {
+            count.update(|count| *count += 1);
+            KeyControl::Handled
+        }
+        KeyCode::Char('-') => {
+            count.update(|count| *count -= 1);
+            KeyControl::Handled
+        }
+        KeyCode::Char('r') => {
+            count.set(0);
+            KeyControl::Handled
+        }
+        KeyCode::Char('q') => KeyControl::Exit,
+        _ => KeyControl::Pass,
+    });
 
-        let increment = set_count;
-        let decrement = set_count;
-        let reset = set_count;
+    stylesheet! {
+        .counter-panel => {
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::uniform(1)
+        }
+        .counter-value => { fg: Color::LightCyan, modifier: Modifier::BOLD }
+        .counter-help => { fg: Color::Gray }
+        Button => {
+            fg: Color::White,
+            borders: Borders::ALL,
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::horizontal(1)
+        }
+        .danger => { fg: Color::LightRed }
 
-        let root = column([
-            block(dynamic(move || {
-                text(format!("Count: {}", count.get_untracked())).with_classes("counter-value")
-            }))
-            .with_classes("counter-panel"),
-            row([
-                button("Increment")
-                    .with_classes("counter-button")
-                    .on_press(move || {
-                        increment.update(|count| *count += 1);
-                        AppControl::Continue
-                    }),
-                button("Decrement")
-                    .with_classes("counter-button")
-                    .on_press(move || {
-                        decrement.update(|count| *count -= 1);
-                        AppControl::Continue
-                    }),
-                button("Reset")
-                    .with_classes("counter-button")
-                    .on_press(move || {
-                        reset.set(0);
-                        AppControl::Continue
-                    }),
-                button("Quit")
-                    .with_classes("counter-button danger")
-                    .on_press(|| AppControl::Exit),
-            ])
-            .with_classes("counter-controls"),
-            text("Tab/Shift+Tab move focus. Enter/Space activate.").with_classes("counter-help"),
-        ]);
-
-        Self {
-            _owner: owner,
-            root,
+        @media (max-width: 60) {
+            .counter-panel => { padding: TuiSpacing::ZERO }
+            .counter-controls => { direction: LayoutDirection::Column }
+            .counter-button => {
+                padding: TuiSpacing::ZERO
+            }
         }
     }
-}
 
-impl Component for Counter {
-    /// Renders the current counter node tree.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        ctx.render_node(&self.root)
-    }
-
-    /// Delegates terminal events to the node tree.
-    fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        self.root.handle_event(event)
+    view! {
+        <Column>
+            <Block class="counter-panel">
+                {move || {
+                    view! {
+                        <Text class="counter-value">
+                            {format!("Count: {}", count.get_untracked())}
+                        </Text>
+                    }
+                }}
+            </Block>
+            <Row class="counter-controls">
+                <Button class="counter-button">"+ Increment"</Button>
+                <Button class="counter-button">"- Decrement"</Button>
+                <Button class="counter-button">"r Reset"</Button>
+                <Button class="counter-button danger">"q Quit"</Button>
+            </Row>
+            <Text class="counter-help">"+/- adjust. r resets. q quits."</Text>
+        </Column>
     }
 }
 
 /// Runs the counter example application.
 #[tokio::main]
 async fn main() -> Result<()> {
-    let stylesheet = Stylesheet::new()
-        .rule(
-            StyleSelector::node_type(NodeType::Button),
-            TuiStyle::new()
-                .foreground(Color::White)
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded),
-        )
-        .rule(
-            StyleSelector::class("danger"),
-            TuiStyle::new().foreground(Color::LightRed),
-        )
-        .rule(
-            StyleSelector::focus(),
-            TuiStyle::new()
-                .foreground(Color::Black)
-                .background(Color::Yellow)
-                .modifier(Modifier::BOLD)
-                .border_type(BorderType::Thick),
-        );
-
-    App::new(Counter::new())
-        .with_stylesheet(stylesheet)
-        .run()
-        .await
+    App::new(Counter::new()).run().await
 }

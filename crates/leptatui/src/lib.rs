@@ -8,64 +8,71 @@
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
 //! - [`mod@component`] — Component rendering contracts and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
-//! - [`node`] — Basic renderable node builders for hand-written terminal UI.
+//! - [`view`] — Basic renderable view builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
 
 pub mod app;
 pub mod component;
 pub mod context;
-pub mod node;
 pub mod prelude;
 pub mod style;
+pub mod view;
 
 extern crate self as leptatui;
 
 pub use app::{App, AppControl, AppRoot, Error, Result};
-pub use component::{Component, RenderCtx};
-pub use leptatui_macros::{component, view};
-pub use node::{
-    ButtonAction, Node, NodeType, StyleMetadata, block, button, column, component, dynamic, row,
-    text,
+pub use component::{
+    Children, ChildrenFn, ChildrenMut, Component, KeyControl, RenderCtx, use_key_event,
 };
+pub use leptatui_macros::{component, stylesheet, view};
 pub use style::{
-    BorderType, Borders, Color, Modifier, StyleRule, StyleSelector, Stylesheet, TuiSpacing,
-    TuiStyle,
+    BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
+    StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
+    TuiSpacing, TuiStyle, ViewportSize, theme_color,
+};
+pub use view::{
+    ButtonAction, StyleMetadata, View, ViewType, block, button, column, component, dynamic, row,
+    text,
 };
 
 #[doc(hidden)]
 pub mod __private {
-    use crate::Node;
+    use crate::View;
 
-    pub use crossterm::event::Event;
+    pub use crate::component::{
+        __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
+        KeyHandlerRegistry, StylesheetRegistry,
+    };
+    pub use crossterm::event::{Event, KeyEvent};
 
-    pub fn __reconcile_node(next: &mut Node, previous: &Node) {
+    pub fn __reconcile_view(next: &mut View, previous: &View) {
         match (next, previous) {
             (
-                Node::Block {
+                View::Block {
                     child: next_child, ..
                 },
-                Node::Block {
+                View::Block {
                     child: previous_child,
                     ..
                 },
-            ) => __reconcile_node(next_child, previous_child),
+            ) => __reconcile_view(next_child, previous_child),
             (
-                Node::Row {
+                View::Row {
                     children: next_children,
                     ..
                 },
-                Node::Row {
+                View::Row {
                     children: previous_children,
                     ..
                 },
             )
             | (
-                Node::Column {
+                View::Column {
                     children: next_children,
                     ..
                 },
-                Node::Column {
+                View::Column {
                     children: previous_children,
                     ..
                 },
@@ -73,21 +80,21 @@ pub mod __private {
                 for (next_child, previous_child) in
                     next_children.iter_mut().zip(previous_children.iter())
                 {
-                    __reconcile_node(next_child, previous_child);
+                    __reconcile_view(next_child, previous_child);
                 }
             }
             (
-                Node::Button {
+                View::Button {
                     metadata: next_metadata,
                     ..
                 },
-                Node::Button {
+                View::Button {
                     metadata: previous_metadata,
                     ..
                 },
             ) => next_metadata.set_focused(previous_metadata.is_focused()),
-            (next_node @ Node::Component(_), Node::Component(_)) => {
-                *next_node = previous.clone();
+            (next_view @ View::Component(_), View::Component(_)) => {
+                *next_view = previous.clone();
             }
             _ => {}
         }

@@ -1,11 +1,11 @@
 //! Builder-style terminal UI style values.
 //!
-//! This module collects text colors, modifiers, borders, and padding before
-//! converting them into Ratatui [`Style`] and [`Block`] values.
+//! This module collects text colors, modifiers, borders, padding, and layout
+//! direction before converting supported visual values into Ratatui values.
 
 use ratatui::{style::Style, widgets::Block};
 
-use super::{BorderType, Borders, Color, Modifier, TuiSpacing};
+use super::{BorderType, Borders, Color, LayoutDirection, Modifier, TuiSpacing};
 
 /// Reusable style values for terminal UI elements.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,6 +22,8 @@ pub struct TuiStyle {
     pub border_type: Option<BorderType>,
     /// Internal widget padding.
     pub padding: Option<TuiSpacing>,
+    /// Optional child layout direction override.
+    pub direction: Option<LayoutDirection>,
 }
 
 impl Default for TuiStyle {
@@ -49,6 +51,7 @@ impl TuiStyle {
             borders: None,
             border_type: None,
             padding: None,
+            direction: None,
         }
     }
 
@@ -136,23 +139,36 @@ impl TuiStyle {
         self
     }
 
-    pub(crate) fn overlay(&mut self, style: Self) {
-        self.foreground = style.foreground.or(self.foreground);
-        self.background = style.background.or(self.background);
-        self.modifiers = style.modifiers.or(self.modifiers);
-        self.borders = style.borders.or(self.borders);
-        self.border_type = style.border_type.or(self.border_type);
-        self.padding = style.padding.or(self.padding);
+    /// Sets the child layout direction.
+    ///
+    /// # Arguments
+    ///
+    /// * `direction` — Direction used to split child view areas.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] with the provided layout direction.
+    pub const fn direction(mut self, direction: LayoutDirection) -> Self {
+        self.direction = Some(direction);
+        self
     }
 
+    /// Returns the style values inherited by descendant views.
+    ///
+    /// Foreground color and text modifiers inherit across view boundaries.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] containing inheritable values from this style.
     pub(crate) const fn inherited_values(self) -> Self {
         Self {
             foreground: self.foreground,
-            background: self.background,
-            modifiers: None,
+            background: None,
+            modifiers: self.modifiers,
             borders: None,
             border_type: None,
             padding: None,
+            direction: None,
         }
     }
 
@@ -190,6 +206,16 @@ impl TuiStyle {
         self.to_block_with_default_borders(Borders::NONE)
     }
 
+    /// Converts this style to a Ratatui block with fallback borders.
+    ///
+    /// # Arguments
+    ///
+    /// * `default_borders` — Border sides to use when this style does not
+    ///   configure borders explicitly.
+    ///
+    /// # Returns
+    ///
+    /// A [`Block`] value containing configured style, borders, and padding.
     pub(crate) fn to_block_with_default_borders(self, default_borders: Borders) -> Block<'static> {
         Block::new()
             .style(self.to_ratatui_style())
@@ -211,5 +237,31 @@ impl From<TuiStyle> for Style {
     /// A [`Style`] value containing configured colors and modifiers.
     fn from(style: TuiStyle) -> Self {
         style.to_ratatui_style()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inherited_values_keep_text_style_and_drop_surface_style() {
+        let inherited = TuiStyle::new()
+            .foreground(Color::Green)
+            .background(Color::Blue)
+            .modifier(Modifier::BOLD)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .padding(TuiSpacing::uniform(1))
+            .direction(LayoutDirection::Column)
+            .inherited_values();
+
+        assert_eq!(inherited.foreground, Some(Color::Green));
+        assert_eq!(inherited.modifiers, Some(Modifier::BOLD));
+        assert_eq!(inherited.background, None);
+        assert_eq!(inherited.borders, None);
+        assert_eq!(inherited.border_type, None);
+        assert_eq!(inherited.padding, None);
+        assert_eq!(inherited.direction, None);
     }
 }

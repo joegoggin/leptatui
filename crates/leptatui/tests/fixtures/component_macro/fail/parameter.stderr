@@ -1,5 +1,5 @@
-error: #[component] functions cannot take parameters yet
-  --> tests/fixtures/component_macro/fail/parameter.rs:14:14
+error: #[component] prop parameters must use identifier patterns
+  --> tests/fixtures/component_macro/fail/parameter.rs:11:14
    |
-14 | fn WithProps(label: String) -> leptatui::Node {
-   |              ^^^^^^^^^^^^^
+11 | fn WithProps((label,): (String,)) -> leptatui::View {
+   |              ^^^^^^^^

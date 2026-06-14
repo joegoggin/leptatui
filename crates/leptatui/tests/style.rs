@@ -4,8 +4,9 @@
 //! padding, and block values.
 
 use leptatui::{
-    BorderType, Borders, Color, Modifier, NodeType, StyleSelector, Stylesheet, TuiSpacing,
-    TuiStyle, button, text,
+    BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
+    StyleMetadata, StyleModule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
+    TuiSpacing, TuiStyle, ViewType, ViewportSize, button, stylesheet, text, theme_color,
 };
 use ratatui::{style::Style, widgets::Padding};
 
@@ -96,13 +97,13 @@ fn tui_style_builds_a_block_with_border_configuration() {
 /// ```text
 /// text("Save").with_classes("primary")
 /// Stylesheet::new()
-///     .rule(StyleSelector::node_type(NodeType::Text), white)
+///     .rule(StyleSelector::view_type(ViewType::Text), white)
 ///     .rule(StyleSelector::class("primary"), yellow)
 /// ```
 ///
 /// # Assertions
 ///
-/// - Node metadata is available for stylesheet resolution.
+/// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is yellow.
 ///
 /// # Why
@@ -110,10 +111,10 @@ fn tui_style_builds_a_block_with_border_configuration() {
 /// Class selectors should have higher specificity than type selectors.
 #[test]
 fn stylesheet_class_overrides_type_style() {
-    let node = text("Save").with_classes("primary");
+    let view = text("Save").with_classes("primary");
     let stylesheet = Stylesheet::new()
         .rule(
-            StyleSelector::node_type(NodeType::Text),
+            StyleSelector::view_type(ViewType::Text),
             TuiStyle::new().foreground(Color::White),
         )
         .rule(
@@ -121,7 +122,12 @@ fn stylesheet_class_overrides_type_style() {
             TuiStyle::new().foreground(Color::Yellow),
         );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(resolved.foreground, Some(Color::Yellow));
 }
@@ -139,7 +145,7 @@ fn stylesheet_class_overrides_type_style() {
 ///
 /// # Assertions
 ///
-/// - Node metadata is available for stylesheet resolution.
+/// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is green.
 ///
 /// # Why
@@ -147,7 +153,7 @@ fn stylesheet_class_overrides_type_style() {
 /// Id selectors should have higher specificity than class selectors.
 #[test]
 fn stylesheet_id_overrides_class_style() {
-    let node = text("Save").with_classes("primary").with_id("save");
+    let view = text("Save").with_classes("primary").with_id("save");
     let stylesheet = Stylesheet::new()
         .rule(
             StyleSelector::class("primary"),
@@ -158,12 +164,281 @@ fn stylesheet_id_overrides_class_style() {
             TuiStyle::new().foreground(Color::Green),
         );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
 
-/// Verifies inline styles override stylesheet rules.
+#[test]
+fn selector_css_specificity_sums_compound_and_descendant_parts() {
+    let selector = StyleSelector::descendant(
+        vec![StyleSelector::class("panel")],
+        StyleSelector::compound(vec![
+            StyleSelector::view_type(ViewType::Button),
+            StyleSelector::focus(),
+        ]),
+    );
+
+    assert_eq!(selector.css_specificity(), (0, 2, 1));
+}
+
+#[test]
+fn stylesheet_descendant_specificity_overrides_later_class_rule() {
+    let mut panel = StyleMetadata::new(ViewType::Block);
+    panel.set_classes("panel");
+    let view = text("Save").with_classes("label");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::descendant(
+                vec![StyleSelector::class("panel")],
+                StyleSelector::view_type(ViewType::Text),
+            ),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .rule(
+            StyleSelector::class("label"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[panel],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+}
+
+#[test]
+fn stylesheet_compound_specificity_overrides_later_pseudo_rule() {
+    let view = button("Save").with_focus(true);
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::compound(vec![
+                StyleSelector::view_type(ViewType::Button),
+                StyleSelector::focus(),
+            ]),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .rule(
+            StyleSelector::focus(),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+}
+
+#[test]
+fn stylesheet_equal_specificity_uses_source_order() {
+    let view = text("Save").with_classes("primary warning");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("primary"),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .rule(
+            StyleSelector::class("warning"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Yellow));
+}
+
+#[test]
+fn stylesheet_media_query_matches_viewport_size() {
+    let view = text("Save").with_classes("compact");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("compact"),
+            TuiStyle::new().foreground(Color::White),
+        )
+        .media_rule(
+            MediaQuery::max_width(80),
+            StyleSelector::class("compact"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let compact = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(80, 24),
+        &ThemeVariables::new(),
+    );
+    let wide = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(81, 24),
+        &ThemeVariables::new(),
+    );
+    let without_viewport = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(compact.foreground, Some(Color::Yellow));
+    assert_eq!(wide.foreground, Some(Color::White));
+    assert_eq!(without_viewport.foreground, Some(Color::White));
+}
+
+#[test]
+fn stylesheet_media_query_combines_width_and_height_conditions() {
+    let view = text("Save");
+    let stylesheet = Stylesheet::new().media_rule(
+        MediaQuery::min_width(80)
+            .and(MediaQuery::min_height(24))
+            .and(MediaQuery::max_height(40)),
+        StyleSelector::view_type(ViewType::Text),
+        TuiStyle::new().background(Color::Blue),
+    );
+
+    let matching = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(100, 30),
+        &ThemeVariables::new(),
+    );
+    let too_narrow = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(79, 30),
+        &ThemeVariables::new(),
+    );
+    let too_tall = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(100, 41),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(matching.background, Some(Color::Blue));
+    assert_eq!(too_narrow.background, None);
+    assert_eq!(too_tall.background, None);
+}
+
+#[test]
+fn matching_media_rules_keep_selector_specificity() {
+    let view = text("Save").with_id("save").with_classes("warning");
+    let stylesheet = Stylesheet::new()
+        .media_rule(
+            MediaQuery::max_width(80),
+            StyleSelector::id("save"),
+            TuiStyle::new().foreground(Color::Green),
+        )
+        .media_rule(
+            MediaQuery::max_width(80),
+            StyleSelector::class("warning"),
+            TuiStyle::new().foreground(Color::Yellow),
+        );
+
+    let resolved = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(80, 24),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+}
+
+#[test]
+fn stylesheet_direction_declaration_resolves() {
+    let view = text("Controls").with_classes("controls");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("controls"),
+        TuiStyle::new().direction(LayoutDirection::Column),
+    );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.direction, Some(LayoutDirection::Column));
+}
+
+#[test]
+fn stylesheet_media_query_can_override_layout_direction() {
+    let view = text("Controls").with_classes("controls");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("controls"),
+            TuiStyle::new().direction(LayoutDirection::Row),
+        )
+        .media_rule(
+            MediaQuery::max_width(60),
+            StyleSelector::class("controls"),
+            TuiStyle::new().direction(LayoutDirection::Column),
+        );
+
+    let compact = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(60, 24),
+        &ThemeVariables::new(),
+    );
+    let wide = stylesheet.resolve_for_viewport(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(61, 24),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(compact.direction, Some(LayoutDirection::Column));
+    assert_eq!(wide.direction, Some(LayoutDirection::Row));
+}
+
+#[test]
+fn stylesheet_important_direction_overrides_inline_direction() {
+    let view = text("Controls")
+        .with_classes("controls")
+        .with_inline_style(TuiStyle::new().direction(LayoutDirection::Row));
+    let stylesheet = stylesheet! {
+        .controls => { direction: LayoutDirection::Column !important }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.direction, Some(LayoutDirection::Column));
+}
+
+/// Verifies inline styles override normal stylesheet rules.
 ///
 /// # Example Under Test
 ///
@@ -174,15 +449,15 @@ fn stylesheet_id_overrides_class_style() {
 ///
 /// # Assertions
 ///
-/// - Node metadata is available for stylesheet resolution.
+/// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is black.
 ///
 /// # Why
 ///
-/// Inline styles are the final override in style resolution.
+/// Normal inline styles override normal stylesheet declarations.
 #[test]
 fn inline_style_overrides_stylesheet_rules() {
-    let node = text("Save")
+    let view = text("Save")
         .with_id("save")
         .with_inline_style(TuiStyle::new().foreground(Color::Black));
     let stylesheet = Stylesheet::new().rule(
@@ -190,43 +465,161 @@ fn inline_style_overrides_stylesheet_rules() {
         TuiStyle::new().foreground(Color::Green),
     );
 
-    let resolved = stylesheet.resolve(node.style_metadata().unwrap(), TuiStyle::new());
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(resolved.foreground, Some(Color::Black));
 }
 
-/// Verifies inherited colors remain unless the node overrides them.
+/// Verifies inherited text styles remain unless the view overrides them.
 ///
 /// # Example Under Test
 ///
 /// ```text
 /// text("Child").with_inline_style(foreground: yellow)
-/// inherited = foreground: green, background: blue
+/// inherited = foreground: green, modifier: bold
 /// ```
 ///
 /// # Assertions
 ///
-/// - Node metadata is available for stylesheet resolution.
+/// - View metadata is available for stylesheet resolution.
 /// - The resolved foreground color is yellow.
-/// - The resolved background color is blue.
+/// - The resolved modifier is bold.
 ///
 /// # Why
 ///
 /// Child styles should preserve inherited fields that are not locally set.
 #[test]
-fn inherited_colors_flow_to_children_unless_overridden() {
-    let node = text("Child").with_inline_style(TuiStyle::new().foreground(Color::Yellow));
+fn inherited_text_styles_flow_to_children_unless_overridden() {
+    let view = text("Child").with_inline_style(TuiStyle::new().foreground(Color::Yellow));
     let inherited = TuiStyle::new()
         .foreground(Color::Green)
-        .background(Color::Blue);
+        .modifier(Modifier::BOLD);
 
-    let resolved = Stylesheet::new().resolve(node.style_metadata().unwrap(), inherited);
+    let resolved = Stylesheet::new().resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        inherited,
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(resolved.foreground, Some(Color::Yellow));
-    assert_eq!(resolved.background, Some(Color::Blue));
+    assert_eq!(resolved.modifiers, Some(Modifier::BOLD));
 }
 
-/// Verifies focus selectors match only focused nodes.
+#[test]
+fn stylesheet_important_overrides_normal_inline_style() {
+    let view = text("Alert")
+        .with_classes("alert")
+        .with_inline_style(TuiStyle::new().foreground(Color::Black));
+    let stylesheet = stylesheet! {
+        .alert => { fg: Color::Red !important }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Red));
+}
+
+#[test]
+fn stylesheet_important_overrides_normal_higher_specificity_rule() {
+    let view = text("Alert").with_classes("alert");
+    let stylesheet = stylesheet! {
+        Text => { fg: Color::Red !important }
+        .alert => { fg: Color::Blue }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Red));
+}
+
+#[test]
+fn stylesheet_important_rules_use_specificity_then_source_order() {
+    let view = button("Save")
+        .with_classes("primary danger")
+        .with_focus(true);
+    let stylesheet = stylesheet! {
+        Button:focus => { fg: Color::Green !important }
+        :focus => { fg: Color::Yellow !important }
+        .primary => { bg: Color::Blue !important }
+        .danger => { bg: Color::Red !important }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Green));
+    assert_eq!(resolved.background, Some(Color::Red));
+}
+
+#[test]
+fn stylesheet_normal_declaration_does_not_override_important_mixin_value() {
+    let view = text("Alert").with_classes("alert");
+    let stylesheet = stylesheet! {
+        @mixin urgent {
+            fg: Color::Red !important
+        }
+
+        .alert => { @include urgent, fg: Color::Blue }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Red));
+}
+
+#[test]
+fn stylesheet_theme_variables_resolve_against_active_theme() {
+    let view = text("Status").with_classes("status");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("status"),
+        StyleDeclarations::new()
+            .foreground(theme_color("text"))
+            .background(theme_color("surface")),
+    );
+    let light = ThemeVariables::new()
+        .color("text", Color::Black)
+        .color("surface", Color::White);
+    let dark = ThemeVariables::new()
+        .color("text", Color::White)
+        .color("surface", Color::Black);
+
+    let light_style =
+        stylesheet.resolve(view.style_metadata().unwrap(), &[], TuiStyle::new(), &light);
+    let dark_style =
+        stylesheet.resolve(view.style_metadata().unwrap(), &[], TuiStyle::new(), &dark);
+
+    assert_eq!(light_style.foreground, Some(Color::Black));
+    assert_eq!(light_style.background, Some(Color::White));
+    assert_eq!(dark_style.foreground, Some(Color::White));
+    assert_eq!(dark_style.background, Some(Color::Black));
+}
+
+/// Verifies focus selectors match only focused views.
 ///
 /// # Example Under Test
 ///
@@ -245,9 +638,9 @@ fn inherited_colors_flow_to_children_unless_overridden() {
 ///
 /// # Why
 ///
-/// Focus styling should depend on node focus state, not just node type.
+/// Focus styling should depend on view focus state, not just view type.
 #[test]
-fn stylesheet_focus_selector_matches_only_focused_nodes() {
+fn stylesheet_focus_selector_matches_only_focused_views() {
     let focused = button("Save").with_focus(true);
     let blurred = button("Cancel");
     let stylesheet = Stylesheet::new().rule(
@@ -255,9 +648,422 @@ fn stylesheet_focus_selector_matches_only_focused_nodes() {
         TuiStyle::new().foreground(Color::Yellow),
     );
 
-    let focused_style = stylesheet.resolve(focused.style_metadata().unwrap(), TuiStyle::new());
-    let blurred_style = stylesheet.resolve(blurred.style_metadata().unwrap(), TuiStyle::new());
+    let focused_style = stylesheet.resolve(
+        focused.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let blurred_style = stylesheet.resolve(
+        blurred.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
 
     assert_eq!(focused_style.foreground, Some(Color::Yellow));
     assert_eq!(blurred_style.foreground, None);
+}
+
+/// Verifies descendant selectors match ancestor metadata in source order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// ancestors = [.app, .panel]
+/// target = Button
+/// selector = descendant([.app, .panel], Button)
+/// ```
+///
+/// # Assertions
+///
+/// - The button metadata is available for stylesheet resolution.
+/// - The selector matches when `.app` appears before `.panel`.
+/// - The selector does not match when `.panel` appears before `.app`.
+///
+/// # Why
+///
+/// Descendant selector matching should honor ordered render ancestors without
+/// requiring direct parent-child adjacency.
+#[test]
+fn descendant_selector_matches_ordered_ancestors() {
+    let mut app = StyleMetadata::new(ViewType::Column);
+    app.set_classes("app");
+    let mut panel = StyleMetadata::new(ViewType::Block);
+    panel.set_classes("panel");
+    let button = button("Save");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::descendant(
+            vec![StyleSelector::class("app"), StyleSelector::class("panel")],
+            StyleSelector::view_type(ViewType::Button),
+        ),
+        TuiStyle::new().foreground(Color::Yellow),
+    );
+
+    let matched = stylesheet.resolve(
+        button.style_metadata().unwrap(),
+        &[app.clone(), panel.clone()],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let wrong_order = stylesheet.resolve(
+        button.style_metadata().unwrap(),
+        &[panel, app],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(matched.foreground, Some(Color::Yellow));
+    assert_eq!(wrong_order.foreground, None);
+}
+
+/// Verifies nested stylesheet macro rules resolve against ancestor metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .panel => {
+///     Button => {
+///         &:focus => { fg: Color::Yellow }
+///     }
+/// }
+/// ```
+///
+/// # Assertions
+///
+/// - The macro accepts nested rules with `&:focus`.
+/// - The focused button resolves to a yellow foreground under `.panel`.
+/// - The blurred button resolves with no foreground color under `.panel`.
+///
+/// # Why
+///
+/// Nested macro selectors should lower into descendant selectors that preserve
+/// terminal-view focus matching.
+#[test]
+fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
+    let styles = stylesheet! {
+        .panel => {
+            Button => {
+                &:focus => { fg: Color::Yellow }
+            }
+        }
+    };
+    let mut panel = StyleMetadata::new(ViewType::Block);
+    panel.set_classes("panel");
+    let focused = button("Save").with_focus(true);
+    let blurred = button("Cancel");
+
+    let focused_style = styles.resolve(
+        focused.style_metadata().unwrap(),
+        &[panel.clone()],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let blurred_style = styles.resolve(
+        blurred.style_metadata().unwrap(),
+        &[panel],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(focused_style.foreground, Some(Color::Yellow));
+    assert_eq!(blurred_style.foreground, None);
+}
+
+/// Verifies stylesheet variables reuse their stored style expressions.
+///
+/// # Example Under Test
+///
+/// ```text
+/// $primary: Color::LightCyan;
+/// $surface: Color::Black;
+/// $pad: TuiSpacing::uniform(1);
+/// Text => { fg: $primary, bg: $surface }
+/// .panel => { background: $surface, padding: $pad }
+/// ```
+///
+/// # Assertions
+///
+/// - The macro expands to a stylesheet with a text rule.
+/// - The text rule reuses foreground and background variables.
+/// - The macro expands to a stylesheet with a panel class rule.
+/// - The panel rule reuses background and padding variables.
+///
+/// # Why
+///
+/// Stylesheet variables should expand to the same expressions wherever they
+/// are referenced.
+#[test]
+fn stylesheet_macro_variables_reuse_values() {
+    let styles = stylesheet! {
+        $primary: Color::LightCyan;
+        $surface: Color::Black;
+        $pad: TuiSpacing::uniform(1);
+
+        Text => { fg: $primary, bg: $surface }
+        .panel => { background: $surface, padding: $pad }
+    };
+
+    let expected = Stylesheet::new()
+        .rule(
+            StyleSelector::view_type(ViewType::Text),
+            TuiStyle::new()
+                .foreground(Color::LightCyan)
+                .background(Color::Black),
+        )
+        .rule(
+            StyleSelector::class("panel"),
+            TuiStyle::new()
+                .background(Color::Black)
+                .padding(TuiSpacing::uniform(1)),
+        );
+
+    assert_eq!(styles, expected);
+}
+
+/// Verifies stylesheet mixins expand into ordinary declarations in source order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// @mixin control_chrome { fg: Color::White, bg: Color::Blue }
+/// Button => { @include control_chrome, fg: Color::Yellow }
+/// .primary => { @include control_chrome }
+/// ```
+///
+/// # Assertions
+///
+/// - The mixin can be reused across two rules.
+/// - The mixin expands to ordinary `TuiStyle` builder calls.
+/// - Rule-local declarations after the include override mixin defaults.
+///
+/// # Why
+///
+/// Mixin reuse should remain a compile-time macro convenience and preserve
+/// existing style resolution behavior.
+#[test]
+fn stylesheet_macro_mixins_expand_in_source_order() {
+    let styles = stylesheet! {
+        @mixin control_chrome {
+            fg: Color::White,
+            bg: Color::Blue
+        }
+
+        Button => { @include control_chrome, fg: Color::Yellow }
+        .primary => { @include control_chrome }
+    };
+
+    let expected = Stylesheet::new()
+        .rule(
+            StyleSelector::view_type(ViewType::Button),
+            TuiStyle::new()
+                .foreground(Color::White)
+                .background(Color::Blue)
+                .foreground(Color::Yellow),
+        )
+        .rule(
+            StyleSelector::class("primary"),
+            TuiStyle::new()
+                .foreground(Color::White)
+                .background(Color::Blue),
+        );
+
+    assert_eq!(styles, expected);
+}
+
+/// Verifies style modules store typed variables and mixins.
+///
+/// # Example Under Test
+///
+/// ```text
+/// StyleModule::new()
+///     .variable("fg", Color::Black)
+///     .variable("surface", theme_color("surface"))
+///     .mixin("control", StyleDeclarations::new().foreground(Color::Black))
+/// ```
+///
+/// # Assertions
+///
+/// - Literal color variables are stored as color style values.
+/// - Theme color variables are returned from the color getter.
+/// - Modifier, borders, border type, and spacing variables use typed getters.
+/// - Stored mixins can be retrieved by name.
+///
+/// # Why
+///
+/// Imported stylesheet modules rely on typed runtime lookups generated by the
+/// `stylesheet!` macro.
+#[test]
+fn style_module_stores_typed_variables_and_mixins() {
+    let control = StyleDeclarations::new()
+        .foreground(Color::Black)
+        .padding(TuiSpacing::uniform(1));
+    let module = StyleModule::new()
+        .variable("fg", Color::Black)
+        .variable("surface", theme_color("surface"))
+        .variable("modifier", Modifier::BOLD)
+        .variable("borders", Borders::ALL)
+        .variable("border_type", BorderType::Rounded)
+        .variable("padding", TuiSpacing::uniform(1))
+        .variable("direction", LayoutDirection::Column)
+        .mixin("control", control.clone());
+
+    assert_eq!(
+        module.get_value("fg"),
+        Some(&StyleValue::Color(ThemeValue::Literal(Color::Black)))
+    );
+    assert_eq!(
+        module.expect_color("surface"),
+        ThemeValue::Variable(String::from("surface"))
+    );
+    assert_eq!(module.expect_modifier("modifier"), Modifier::BOLD);
+    assert_eq!(module.expect_borders("borders"), Borders::ALL);
+    assert_eq!(
+        module.expect_border_type("border_type"),
+        BorderType::Rounded
+    );
+    assert_eq!(module.expect_spacing("padding"), TuiSpacing::uniform(1));
+    assert_eq!(
+        module.expect_layout_direction("direction"),
+        LayoutDirection::Column
+    );
+    assert_eq!(module.expect_mixin("control"), &control);
+}
+
+/// Verifies declaration merging overlays another declaration set.
+///
+/// # Example Under Test
+///
+/// ```text
+/// StyleDeclarations::new()
+///     .foreground(Color::White)
+///     .background(Color::Black)
+///     .merge(&StyleDeclarations::new().foreground(Color::Yellow))
+/// ```
+///
+/// # Assertions
+///
+/// - Overlay declarations replace existing values.
+/// - Missing overlay declarations preserve existing values.
+/// - New overlay declarations are added.
+///
+/// # Why
+///
+/// Imported mixins compose by merging stored [`StyleDeclarations`] into an
+/// in-progress declaration builder.
+#[test]
+fn style_declarations_merge_overlays_values() {
+    let base = StyleDeclarations::new()
+        .foreground(Color::White)
+        .background(Color::Black);
+    let overlay = StyleDeclarations::new()
+        .foreground(Color::Yellow)
+        .padding(TuiSpacing::uniform(1));
+
+    assert_eq!(
+        base.merge(&overlay),
+        StyleDeclarations::new()
+            .foreground(Color::Yellow)
+            .background(Color::Black)
+            .padding(TuiSpacing::uniform(1))
+    );
+}
+
+#[test]
+fn style_declarations_important_values_ignore_later_normal_values() {
+    assert_eq!(
+        StyleDeclarations::new()
+            .foreground_important(Color::Red)
+            .foreground(Color::Blue)
+            .padding_important(TuiSpacing::uniform(1))
+            .padding(TuiSpacing::uniform(2)),
+        StyleDeclarations::new()
+            .foreground_important(Color::Red)
+            .padding_important(TuiSpacing::uniform(1))
+    );
+}
+
+/// Defines reusable color and spacing variables for imported macro tests.
+fn imported_button_variables() -> StyleModule {
+    stylesheet! {
+        $fg: Color::Black;
+        $bg: Color::White;
+        $border: Borders::ALL;
+        $border_type: BorderType::Rounded;
+        $padding: TuiSpacing::uniform(1);
+    }
+}
+
+/// Defines reusable button mixins for imported macro tests.
+fn imported_button_mixins() -> StyleModule {
+    stylesheet! {
+        @use imported_button_variables as colors;
+
+        @mixin primary {
+            fg: colors.$fg,
+            bg: colors.$bg,
+            borders: colors.$border,
+            border_type: colors.$border_type,
+            padding: colors.$padding
+        }
+
+        @mixin inverted {
+            @include primary,
+            fg: colors.$bg,
+            bg: colors.$fg
+        }
+    }
+}
+
+/// Verifies stylesheet macro imports variables and mixins from another module.
+///
+/// # Example Under Test
+///
+/// ```text
+/// @use imported_button_mixins as button;
+/// .submit => { @include button.primary }
+/// .quit => { @include button.inverted }
+/// ```
+///
+/// # Assertions
+///
+/// - A variable-only `stylesheet!` invocation returns a [`StyleModule`].
+/// - A mixin-only `stylesheet!` invocation can import and use variables.
+/// - A rule-producing `stylesheet!` invocation can include imported mixins.
+/// - Imported mixin declarations preserve source-order overrides.
+///
+/// # Why
+///
+/// Reusable styles should be split across Rust modules without changing
+/// stylesheet rule resolution behavior.
+#[test]
+fn stylesheet_macro_imports_variables_and_mixins() {
+    let styles = stylesheet! {
+        @use imported_button_mixins as button;
+
+        .submit => { @include button.primary }
+        .quit => { @include button.inverted }
+    };
+
+    let button_base = TuiStyle::new()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .padding(TuiSpacing::uniform(1));
+    let expected = Stylesheet::new()
+        .rule(
+            StyleSelector::class("submit"),
+            button_base
+                .foreground(Color::Black)
+                .background(Color::White),
+        )
+        .rule(
+            StyleSelector::class("quit"),
+            button_base
+                .foreground(Color::Black)
+                .background(Color::White)
+                .foreground(Color::White)
+                .background(Color::Black),
+        );
+
+    assert_eq!(styles, expected);
 }

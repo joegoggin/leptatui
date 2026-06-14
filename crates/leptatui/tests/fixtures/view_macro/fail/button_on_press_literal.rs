@@ -3,7 +3,7 @@
 use leptatui::prelude::*;
 
 fn main() {
-    let _node: Node = view! {
+    let _view: View = view! {
         <Button on_press="save">"Save"</Button>
     };
 }

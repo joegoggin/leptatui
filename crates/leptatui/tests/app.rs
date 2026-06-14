@@ -6,10 +6,7 @@
 use std::time::Duration;
 
 use crossterm::event::Event;
-use leptatui::{
-    App, AppControl, AppRoot, Color, Component, RenderCtx, Result, StyleSelector, Stylesheet,
-    TuiStyle, button,
-};
+use leptatui::{App, AppControl, AppRoot, Component, RenderCtx, Result, button};
 
 /// Test component used to prove component-to-root adaptation.
 struct TestRoot {
@@ -66,12 +63,7 @@ fn app_accepts_component_contract() {
     ///
     /// * `root` — Root value to pass into the app constructor.
     fn assert_app_root<R: AppRoot>(root: R) {
-        let _app = App::new(root)
-            .with_redraw_interval(Duration::from_millis(50))
-            .with_stylesheet(Stylesheet::new().rule(
-                StyleSelector::class("root"),
-                TuiStyle::new().foreground(Color::White),
-            ));
+        let _app = App::new(root).with_redraw_interval(Duration::from_millis(50));
     }
 
     assert_app_root(TestRoot { events: 0 });
@@ -96,7 +88,7 @@ fn app_control_is_comparable() {
     assert_ne!(AppControl::Continue, AppControl::Exit);
 }
 
-/// Verifies node roots with button actions satisfy the app root contract.
+/// Verifies view roots with button actions satisfy the app root contract.
 ///
 /// # Example Under Test
 ///
@@ -106,15 +98,15 @@ fn app_control_is_comparable() {
 ///
 /// # Assertions
 ///
-/// - A button node with an action type-checks as an [`AppRoot`].
-/// - An [`App`] can be constructed with the node root.
+/// - A button view with an action type-checks as an [`AppRoot`].
+/// - An [`App`] can be constructed with the view root.
 ///
 /// # Why
 ///
-/// Button action callbacks should not prevent node trees from being used as
+/// Button action callbacks should not prevent view trees from being used as
 /// app roots.
 #[test]
-fn app_accepts_node_root_with_button_action() {
+fn app_accepts_view_root_with_button_action() {
     /// Accepts any root type that implements [`AppRoot`].
     ///
     /// # Arguments

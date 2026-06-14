@@ -3,8 +3,10 @@
 //! These tests cover public context APIs at runtime boundaries.
 
 use leptatui::{
-    AppControl, AppRoot, Component, RenderCtx, Result, Stylesheet, column, component,
+    AppControl, AppRoot, Color, Component, RenderCtx, Result, StyleDeclarations, StyleSelector,
+    Stylesheet, ThemeVariables, column, component,
     context::{expect_context, provide_context, use_context},
+    text, theme_color,
 };
 use leptos::prelude::{GetUntracked, Owner, ReadSignal, Set, signal};
 use ratatui::{Terminal, backend::TestBackend};
@@ -20,14 +22,14 @@ type ObservedLabels = Rc<RefCell<Vec<Option<ScopeLabel>>>>;
 /// Component that provides a label to its child subtree.
 struct LabelProvider {
     value: ScopeLabel,
-    child: leptatui::Node,
+    child: leptatui::View,
 }
 
 impl Component for LabelProvider {
     /// Provides a label, then renders the child subtree.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.value.clone());
-        ctx.render_node(&self.child)
+        ctx.render_view(&self.child)
     }
 }
 
@@ -54,14 +56,14 @@ impl Component for LabelConsumer {
 /// Component that provides a label during render and forwards events to a child.
 struct EventLabelProvider {
     value: ScopeLabel,
-    child: leptatui::Node,
+    child: leptatui::View,
 }
 
 impl Component for EventLabelProvider {
     /// Provides a label while rendering the provider subtree.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.value.clone());
-        ctx.render_node(&self.child)
+        ctx.render_view(&self.child)
     }
 
     /// Forwards events to the child while this provider's scope is active.
@@ -85,6 +87,44 @@ impl Component for EventLabelConsumer {
     fn handle_event(&mut self, _event: crossterm::event::Event) -> Result<AppControl> {
         *self.observed.borrow_mut() = use_context::<ScopeLabel>();
         Ok(AppControl::Continue)
+    }
+}
+
+/// Component that provides active theme variables before rendering a child.
+struct ThemeRenderRoot {
+    dark: ReadSignal<bool>,
+    child: leptatui::View,
+    stylesheet: Stylesheet,
+}
+
+impl Component for ThemeRenderRoot {
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let theme = if self.dark.get_untracked() {
+            ThemeVariables::new()
+                .color("text", Color::White)
+                .color("surface", Color::Black)
+        } else {
+            ThemeVariables::new()
+                .color("text", Color::Black)
+                .color("surface", Color::White)
+        };
+
+        provide_context(theme);
+        ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_view(&self.child))
+    }
+}
+
+/// Component that provides active theme variables through a signal context.
+struct ThemeSignalRoot {
+    theme: ReadSignal<ThemeVariables>,
+    child: leptatui::View,
+    stylesheet: Stylesheet,
+}
+
+impl Component for ThemeSignalRoot {
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        provide_context(self.theme);
+        ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_view(&self.child))
     }
 }
 
@@ -128,7 +168,7 @@ impl Component for ContextRoot {
 /// # Example Under Test
 ///
 /// ```text
-/// AppRoot::render(&mut ContextRoot, frame, &Stylesheet::empty())
+/// AppRoot::render(&mut ContextRoot, frame)
 /// provide_context(String::from("from component"))
 /// leptos::context::provide_context(ReadSignal<i32>)
 /// ```
@@ -154,12 +194,124 @@ fn component_render_scope_can_provide_and_read_context() -> Result<()> {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
-        render_result = AppRoot::render(&mut root, frame, &Stylesheet::empty());
+        render_result = AppRoot::render(&mut root, frame);
     })?;
     render_result?;
 
     assert_eq!(root.observed_text.as_deref(), Some("from component"));
     assert_eq!(root.observed_count, Some(2));
+
+    Ok(())
+}
+
+#[test]
+fn context_theme_variables_update_rendered_styles() -> Result<()> {
+    let owner = Owner::new();
+    let (dark, set_dark) = owner.with(|| signal(false));
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("themed"),
+        StyleDeclarations::new()
+            .foreground(theme_color("text"))
+            .background(theme_color("surface")),
+    );
+    let mut root = ThemeRenderRoot {
+        dark,
+        child: text("Theme").with_classes("themed"),
+        stylesheet,
+    };
+    let backend = TestBackend::new(12, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        render_result = AppRoot::render(&mut root, frame);
+    })?;
+    render_result?;
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "T")
+        .expect("rendered themed cell");
+    assert_eq!(cell.fg, Color::Black);
+    assert_eq!(cell.bg, Color::White);
+
+    set_dark.set(true);
+
+    render_result = Ok(());
+    terminal.draw(|frame| {
+        render_result = AppRoot::render(&mut root, frame);
+    })?;
+    render_result?;
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "T")
+        .expect("rendered themed cell");
+    assert_eq!(cell.fg, Color::White);
+    assert_eq!(cell.bg, Color::Black);
+
+    Ok(())
+}
+
+#[test]
+fn context_theme_signal_updates_rendered_styles() -> Result<()> {
+    let owner = Owner::new();
+    let light = ThemeVariables::new()
+        .color("text", Color::Black)
+        .color("surface", Color::White);
+    let dark = ThemeVariables::new()
+        .color("text", Color::White)
+        .color("surface", Color::Black);
+    let (theme, set_theme) = owner.with(|| signal(light));
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("themed"),
+        StyleDeclarations::new()
+            .foreground(theme_color("text"))
+            .background(theme_color("surface")),
+    );
+    let mut root = ThemeSignalRoot {
+        theme,
+        child: text("Theme").with_classes("themed"),
+        stylesheet,
+    };
+    let backend = TestBackend::new(12, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        render_result = AppRoot::render(&mut root, frame);
+    })?;
+    render_result?;
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "T")
+        .expect("rendered themed cell");
+    assert_eq!(cell.fg, Color::Black);
+    assert_eq!(cell.bg, Color::White);
+
+    set_theme.set(dark);
+
+    render_result = Ok(());
+    terminal.draw(|frame| {
+        render_result = AppRoot::render(&mut root, frame);
+    })?;
+    render_result?;
+    let cell = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "T")
+        .expect("rendered themed cell");
+    assert_eq!(cell.fg, Color::White);
+    assert_eq!(cell.bg, Color::Black);
 
     Ok(())
 }
@@ -215,7 +367,7 @@ fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
     let observed = Rc::new(RefCell::new(Vec::new()));
     let backend = TestBackend::new(24, 6);
     let mut terminal = Terminal::new(backend)?;
-    let node = component(LabelProvider {
+    let view = component(LabelProvider {
         value: ScopeLabel("outer"),
         child: column([
             component(LabelConsumer::new(Rc::clone(&observed))),
@@ -230,7 +382,7 @@ fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = node.render(&mut ctx);
+        render_result = view.render(&mut ctx);
     })?;
     render_result?;
 
@@ -266,7 +418,7 @@ fn component_context_is_available_during_descendant_events() -> Result<()> {
     let observed = Rc::new(RefCell::new(None));
     let backend = TestBackend::new(24, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut node = component(EventLabelProvider {
+    let mut view = component(EventLabelProvider {
         value: ScopeLabel("event"),
         child: component(EventLabelConsumer {
             observed: Rc::clone(&observed),
@@ -276,12 +428,12 @@ fn component_context_is_available_during_descendant_events() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = node.render(&mut ctx);
+        render_result = view.render(&mut ctx);
     })?;
     render_result?;
 
     assert_eq!(
-        node.handle_event(crossterm::event::Event::Resize(24, 4))?,
+        view.handle_event(crossterm::event::Event::Resize(24, 4))?,
         AppControl::Continue
     );
     assert_eq!(*observed.borrow(), Some(ScopeLabel("event")));

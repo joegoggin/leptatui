@@ -45,3 +45,18 @@ pub(crate) fn next_is_closing_tag(input: ParseStream<'_>) -> bool {
 
     fork.parse::<Token![<]>().is_ok() && fork.parse::<Token![/]>().is_ok()
 }
+
+/// Returns whether the next tokens end a self-closing opening tag.
+///
+/// # Arguments
+///
+/// * `input` — Macro input stream to inspect without consuming.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the stream begins with `/>`.
+pub(crate) fn next_is_self_closing_tag_end(input: ParseStream<'_>) -> bool {
+    let fork = input.fork();
+
+    fork.parse::<Token![/]>().is_ok() && fork.parse::<Token![>]>().is_ok()
+}

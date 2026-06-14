@@ -13,6 +13,10 @@ pub(crate) struct ContextScope {
 
 impl ContextScope {
     /// Creates an empty component context scope.
+    ///
+    /// # Returns
+    ///
+    /// A [`ContextScope`] with a reusable empty context frame.
     pub(crate) fn new() -> Self {
         Self {
             frame: storage::new_frame(),
@@ -20,12 +24,28 @@ impl ContextScope {
     }
 
     /// Runs a closure with this scope added to the active context stack.
+    ///
+    /// # Arguments
+    ///
+    /// * `render` — Closure that can provide and read scoped context values.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
     pub(crate) fn with<R>(&self, render: impl FnOnce() -> R) -> R {
         let _scope = ContextScopeGuard::enter(&self.frame);
         render()
     }
 
     /// Clears this scope, then runs a closure with it active.
+    ///
+    /// # Arguments
+    ///
+    /// * `render` — Closure that can repopulate the cleared context frame.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
     pub(crate) fn with_reset<R>(&self, render: impl FnOnce() -> R) -> R {
         storage::clear_frame(&self.frame);
         self.with(render)

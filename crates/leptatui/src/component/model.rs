@@ -1,28 +1,37 @@
 //! Frame rendering context model.
 //!
-//! This module wraps a Ratatui frame with the currently assigned render area and
-//! helper methods for drawing widgets or child nodes.
+//! This module wraps a Ratatui frame with the currently assigned render area,
+//! scoped stylesheets, inherited style values, selector ancestor metadata, and
+//! helper methods for drawing widgets or child views.
 
-use ratatui::{Frame, layout::Rect, widgets::Widget};
-
-use crate::{
-    app::Result,
-    node::Node,
-    style::{Stylesheet, TuiStyle},
+use ratatui::{
+    Frame,
+    buffer::Buffer,
+    layout::Rect,
+    widgets::{StatefulWidget, Widget},
 };
 
-static EMPTY_STYLESHEET: Stylesheet = Stylesheet::empty();
+use crate::{
+    StyleMetadata,
+    app::Result,
+    style::{Stylesheet, TuiStyle, ViewportSize},
+    view::View,
+};
 
 /// Rendering context for a single frame and target area.
 pub struct RenderCtx<'frame, 'buffer> {
-    /// Ratatui frame being rendered during the current draw pass.
-    frame: &'frame mut Frame<'buffer>,
+    /// Destination receiving rendered widgets.
+    target: RenderTarget<'frame, 'buffer>,
     /// Area inside the frame currently targeted by rendering calls.
     area: Rect,
-    /// Stylesheet used to resolve node styles during rendering.
-    stylesheet: &'frame Stylesheet,
-    /// Inherited style declarations available to the current node.
+    /// Root terminal viewport size for responsive style resolution.
+    viewport_size: ViewportSize,
+    /// Scoped stylesheets used to resolve view styles during rendering.
+    stylesheets: Vec<Stylesheet>,
+    /// Inherited style declarations available to the current view.
     inherited_style: TuiStyle,
+    /// Ancestor metadata used by descendant selector resolution.
+    selector_ancestors: Vec<StyleMetadata>,
 }
 
 impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
@@ -36,29 +45,14 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// A [`RenderCtx`] covering the full frame.
     pub fn new(frame: &'frame mut Frame<'buffer>) -> Self {
-        Self::with_stylesheet(frame, &EMPTY_STYLESHEET)
-    }
-
-    /// Creates a render context with an application stylesheet.
-    ///
-    /// # Arguments
-    ///
-    /// * `frame` — Ratatui frame for the current draw pass.
-    /// * `stylesheet` — Stylesheet used when resolving node styles.
-    ///
-    /// # Returns
-    ///
-    /// A [`RenderCtx`] covering the full frame.
-    pub fn with_stylesheet(
-        frame: &'frame mut Frame<'buffer>,
-        stylesheet: &'frame Stylesheet,
-    ) -> Self {
         let area = frame.area();
         Self {
-            frame,
+            target: RenderTarget::Frame(frame),
             area,
-            stylesheet,
+            viewport_size: area.into(),
+            stylesheets: Vec::new(),
             inherited_style: TuiStyle::new(),
+            selector_ancestors: Vec::new(),
         }
     }
 
@@ -71,14 +65,76 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.area
     }
 
-    /// Returns the stylesheet used by this render context.
-    pub(crate) fn stylesheet(&self) -> &Stylesheet {
-        self.stylesheet
+    /// Returns the root terminal viewport size for this render pass.
+    ///
+    /// # Returns
+    ///
+    /// A [`ViewportSize`] measured in terminal cells.
+    pub const fn viewport_size(&self) -> ViewportSize {
+        self.viewport_size
     }
 
-    /// Returns the style declarations inherited by the current node.
+    /// Returns the stylesheets used by this render context.
+    ///
+    /// # Returns
+    ///
+    /// A stylesheet slice used for view style resolution.
+    pub(crate) fn stylesheets(&self) -> &[Stylesheet] {
+        &self.stylesheets
+    }
+
+    /// Renders with an additional component-scoped stylesheet.
+    #[doc(hidden)]
+    pub fn __with_stylesheet<R>(
+        &mut self,
+        stylesheet: &Stylesheet,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let mut stylesheets = self.stylesheets.clone();
+        stylesheets.push(stylesheet.clone());
+        let area = self.area;
+        let inherited_style = self.inherited_style;
+        let selector_ancestors = self.selector_ancestors.clone();
+
+        let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
+
+        render(&mut child)
+    }
+
+    fn child_context(
+        &mut self,
+        area: Rect,
+        inherited_style: TuiStyle,
+        stylesheets: Vec<Stylesheet>,
+        selector_ancestors: Vec<StyleMetadata>,
+    ) -> RenderCtx<'_, 'buffer> {
+        RenderCtx {
+            target: self.target.reborrow(),
+            area,
+            viewport_size: self.viewport_size,
+            stylesheets,
+            inherited_style,
+            selector_ancestors,
+        }
+    }
+
+    /// Returns the style declarations inherited by the current view.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] containing inherited style values for the current area.
     pub(crate) fn inherited_style(&self) -> TuiStyle {
         self.inherited_style
+    }
+
+    /// Returns selector metadata for ancestor views in render order.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleMetadata`] slice ordered from outermost ancestor to innermost
+    /// ancestor.
+    pub(crate) fn selector_ancestors(&self) -> &[StyleMetadata] {
+        &self.selector_ancestors
     }
 
     /// Renders a Ratatui widget into the current target area.
@@ -90,14 +146,22 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     where
         W: Widget,
     {
-        self.frame.render_widget(widget, self.area);
+        self.target.render_widget(widget, self.area);
     }
 
-    /// Renders a Leptatui node into the current target area.
+    /// Renders a Ratatui stateful widget into the current target area.
+    pub(crate) fn render_stateful_widget<W>(&mut self, widget: W, state: &mut W::State)
+    where
+        W: StatefulWidget,
+    {
+        self.target.render_stateful_widget(widget, self.area, state);
+    }
+
+    /// Renders a Leptatui view into the current target area.
     ///
     /// # Arguments
     ///
-    /// * `node` — Node tree to render.
+    /// * `view` — View tree to render.
     ///
     /// # Returns
     ///
@@ -105,13 +169,82 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::app::Error::Io`] if node rendering performs terminal
+    /// Returns [`crate::app::Error::Io`] if view rendering performs terminal
     /// I/O that fails.
-    pub fn render_node(&mut self, node: &Node) -> Result<()> {
-        node.render(self)
+    pub fn render_view(&mut self, view: &View) -> Result<()> {
+        view.render(self)
+    }
+
+    /// Renders a view into an offscreen buffer and copies a clipped row slice.
+    pub(crate) fn render_view_clipped(
+        &mut self,
+        view: &View,
+        full_area: Rect,
+        source_y: u16,
+        target_area: Rect,
+        inherited_style: TuiStyle,
+        selector_ancestor: StyleMetadata,
+    ) -> Result<()> {
+        if target_area.width == 0 || target_area.height == 0 || full_area.height == 0 {
+            return Ok(());
+        }
+
+        let mut buffer = Buffer::empty(Rect::new(0, 0, full_area.width, full_area.height));
+        {
+            let target = self.target.buffer_mut();
+            for y in 0..target_area.height {
+                for x in 0..target_area.width {
+                    let target_position = (
+                        target_area.x.saturating_add(x),
+                        target_area.y.saturating_add(y),
+                    );
+                    let buffer_position = (x, source_y.saturating_add(y));
+
+                    if let (Some(target_cell), Some(buffer_cell)) = (
+                        target.cell(target_position),
+                        buffer.cell_mut(buffer_position),
+                    ) {
+                        *buffer_cell = target_cell.clone();
+                    }
+                }
+            }
+        }
+
+        let mut selector_ancestors = self.selector_ancestors.clone();
+        selector_ancestors.push(selector_ancestor);
+
+        {
+            let mut buffer_ctx = RenderCtx {
+                target: RenderTarget::Buffer(&mut buffer),
+                area: Rect::new(0, 0, full_area.width, full_area.height),
+                viewport_size: self.viewport_size,
+                stylesheets: self.stylesheets.clone(),
+                inherited_style,
+                selector_ancestors,
+            };
+            view.render(&mut buffer_ctx)?;
+        }
+
+        let target = self.target.buffer_mut();
+        for y in 0..target_area.height {
+            for x in 0..target_area.width {
+                let source = buffer[(x, source_y.saturating_add(y))].clone();
+                let destination_position = (
+                    target_area.x.saturating_add(x),
+                    target_area.y.saturating_add(y),
+                );
+                if let Some(destination) = target.cell_mut(destination_position) {
+                    *destination = source;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Renders into a temporary child area with explicit inherited style.
+    ///
+    /// Preserves the current selector ancestor path for the child context.
     ///
     /// # Arguments
     ///
@@ -128,12 +261,38 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         inherited_style: TuiStyle,
         render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
     ) -> R {
-        let mut child = RenderCtx {
-            frame: &mut *self.frame,
-            area,
-            stylesheet: self.stylesheet,
-            inherited_style,
-        };
+        let stylesheets = self.stylesheets.clone();
+        let selector_ancestors = self.selector_ancestors.clone();
+        let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
+
+        render(&mut child)
+    }
+
+    /// Renders into a child area with inherited style and one added selector ancestor.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Child area to use while invoking `render`.
+    /// * `inherited_style` — Inherited style declarations for the child area.
+    /// * `selector_ancestor` — Parent view metadata to append to the selector
+    ///   ancestor path.
+    /// * `render` — Closure that renders into the child context.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
+    pub(crate) fn with_area_inherited_style_and_selector_ancestor<R>(
+        &mut self,
+        area: Rect,
+        inherited_style: TuiStyle,
+        selector_ancestor: StyleMetadata,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let mut selector_ancestors = self.selector_ancestors.clone();
+        selector_ancestors.push(selector_ancestor);
+        let stylesheets = self.stylesheets.clone();
+
+        let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
 
         render(&mut child)
     }
@@ -154,5 +313,53 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
     ) -> R {
         self.with_area_and_inherited_style(area, self.inherited_style, render)
+    }
+}
+
+/// Destination for render operations.
+enum RenderTarget<'frame, 'buffer> {
+    /// Active Ratatui frame.
+    Frame(&'frame mut Frame<'buffer>),
+    /// Offscreen buffer used for clipping.
+    Buffer(&'frame mut Buffer),
+}
+
+impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
+    /// Returns a shorter mutable borrow of this render target.
+    fn reborrow(&mut self) -> RenderTarget<'_, 'buffer> {
+        match self {
+            Self::Frame(frame) => RenderTarget::Frame(frame),
+            Self::Buffer(buffer) => RenderTarget::Buffer(buffer),
+        }
+    }
+
+    /// Renders a widget into the target area.
+    fn render_widget<W>(&mut self, widget: W, area: Rect)
+    where
+        W: Widget,
+    {
+        match self {
+            Self::Frame(frame) => frame.render_widget(widget, area),
+            Self::Buffer(buffer) => widget.render(area, buffer),
+        }
+    }
+
+    /// Renders a stateful widget into the target area.
+    fn render_stateful_widget<W>(&mut self, widget: W, area: Rect, state: &mut W::State)
+    where
+        W: StatefulWidget,
+    {
+        match self {
+            Self::Frame(frame) => frame.render_stateful_widget(widget, area, state),
+            Self::Buffer(buffer) => widget.render(area, buffer, state),
+        }
+    }
+
+    /// Returns the underlying buffer.
+    fn buffer_mut(&mut self) -> &mut Buffer {
+        match self {
+            Self::Frame(frame) => frame.buffer_mut(),
+            Self::Buffer(buffer) => buffer,
+        }
     }
 }
