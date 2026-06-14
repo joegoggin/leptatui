@@ -5,6 +5,9 @@
 
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
+use tokio::{task::yield_now, time::timeout};
+
+use std::time::Duration;
 
 /// Component used to prove prelude macro and context exports work together.
 #[component]
@@ -136,4 +139,25 @@ fn prelude_exposes_reactivity_and_context() {
             )
         );
     });
+}
+
+/// Verifies the prelude exposes resource helpers.
+#[tokio::test(flavor = "current_thread")]
+async fn prelude_exposes_resource_helpers() {
+    let owner = Owner::new();
+
+    let resource: Resource<i32, &'static str> =
+        owner.with(|| create_resource(|| (), |_| async { Ok(42) }));
+
+    timeout(Duration::from_secs(1), async {
+        loop {
+            if matches!(resource.get_untracked(), ResourceState::Ready(42)) {
+                break;
+            }
+
+            yield_now().await;
+        }
+    })
+    .await
+    .expect("resource should resolve from prelude exports");
 }

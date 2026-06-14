@@ -9,6 +9,7 @@
 //! - [`mod@component`] — Component rendering contracts and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
 //! - [`route`] — Signal-backed route state helpers for page switches.
+//! - [`resource`] — Signal-backed async resource state helpers.
 //! - [`mod@view`] — Basic renderable view builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
@@ -17,6 +18,7 @@ pub mod app;
 pub mod component;
 pub mod context;
 pub mod prelude;
+pub mod resource;
 pub mod route;
 pub mod style;
 pub mod view;
@@ -28,6 +30,7 @@ pub use component::{
     Children, ChildrenFn, ChildrenMut, Component, KeyControl, RenderCtx, use_key_event,
 };
 pub use leptatui_macros::{component, stylesheet, view};
+pub use resource::{Resource, ResourceState, create_resource};
 pub use route::{RouteState, provide_route, use_navigate, use_route};
 pub use style::{
     BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
