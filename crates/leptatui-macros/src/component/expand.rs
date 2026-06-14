@@ -234,6 +234,24 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __focused_button_span(
+                &self,
+                ctx: &mut #leptatui::RenderCtx<'_, '_>,
+            ) -> ::core::option::Option<(u32, u32)> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+                let __leptatui_stylesheet = &self.__leptatui_stylesheet;
+
+                ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
+                    __leptatui_owner.with(|| {
+                        #leptatui::context::__with_context_scope_if_missing(|| {
+                            __leptatui_view.__focused_button_span(ctx)
+                        })
+                    })
+                })
+            }
+
+            #[doc(hidden)]
             fn __activate_focused_button(&self) -> ::core::option::Option<#leptatui::AppControl> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;

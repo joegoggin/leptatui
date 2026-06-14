@@ -94,6 +94,12 @@ pub trait Component {
     #[doc(hidden)]
     fn __set_focus_by_index_inner(&mut self, _target: usize, _index: &mut usize) {}
 
+    /// Returns the focused control's vertical span within this component area.
+    #[doc(hidden)]
+    fn __focused_button_span(&self, _ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        None
+    }
+
     /// Activates the focused control inside this component, if any.
     #[doc(hidden)]
     fn __activate_focused_button(&self) -> Option<AppControl> {

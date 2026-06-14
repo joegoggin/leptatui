@@ -127,6 +127,7 @@ impl View {
                         .style(style.to_ratatui_style())
                         .block(style.to_block_with_default_borders(Borders::ALL)),
                 );
+                metadata.clear_scroll_into_view_request();
                 Ok(())
             }
             Self::Dynamic(child) => child().render(ctx),
@@ -213,6 +214,12 @@ impl View {
     #[doc(hidden)]
     pub fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
         self.set_focus_by_index_inner(target, index);
+    }
+
+    /// Returns the focused button's vertical span inside this view area.
+    #[doc(hidden)]
+    pub fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        focused_button_span_for_view(self, ctx).map(VerticalSpan::into_tuple)
     }
 
     /// Activates the focused button if this view tree contains one.
@@ -435,7 +442,13 @@ impl View {
     fn set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
         match self {
             Self::Button { metadata, .. } => {
-                metadata.set_focused(*index == target);
+                let focused = *index == target;
+                metadata.set_focused(focused);
+                if focused {
+                    metadata.request_scroll_into_view();
+                } else {
+                    metadata.clear_scroll_into_view_request();
+                }
                 *index += 1;
             }
             Self::Block { child, .. } => child.set_focus_by_index_inner(target, index),
@@ -578,6 +591,12 @@ impl Component for View {
         View::__set_focus_by_index_inner(self, target, index);
     }
 
+    /// Returns the focused button's vertical span inside this component area.
+    #[doc(hidden)]
+    fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        View::__focused_button_span(self, ctx)
+    }
+
     /// Activates the focused button in the view tree, if any.
     #[doc(hidden)]
     fn __activate_focused_button(&self) -> Option<AppControl> {
@@ -592,6 +611,200 @@ enum FocusDirection {
     Forward,
     /// Move focus to the previous focusable view.
     Backward,
+}
+
+/// Vertical content span, with an exclusive bottom row.
+#[derive(Clone, Copy)]
+struct VerticalSpan {
+    /// First row occupied by the span.
+    top: u32,
+    /// Row after the span.
+    bottom: u32,
+}
+
+impl VerticalSpan {
+    /// Creates a span starting at row zero with the provided height.
+    fn from_height(height: u16) -> Self {
+        Self {
+            top: 0,
+            bottom: u32::from(height),
+        }
+    }
+
+    /// Returns this span offset by a parent content row.
+    fn offset_by(self, offset: u32) -> Self {
+        Self {
+            top: self.top.saturating_add(offset),
+            bottom: self.bottom.saturating_add(offset),
+        }
+    }
+
+    /// Returns the span height.
+    fn height(self) -> u32 {
+        self.bottom.saturating_sub(self.top)
+    }
+
+    /// Converts the span to its tuple representation for hidden component APIs.
+    fn into_tuple(self) -> (u32, u32) {
+        (self.top, self.bottom)
+    }
+}
+
+/// Moves a scroll offset just enough to make a span visible.
+fn scroll_span_into_view(
+    metadata: &StyleMetadata,
+    span: VerticalSpan,
+    viewport_height: u16,
+    max_scroll_offset: u16,
+) {
+    if viewport_height == 0 {
+        return;
+    }
+
+    let viewport_height = u32::from(viewport_height);
+    let current = u32::from(metadata.scroll_offset().min(max_scroll_offset));
+    let viewport_bottom = current.saturating_add(viewport_height);
+    let next = if span.top < current {
+        span.top
+    } else if span.bottom > viewport_bottom {
+        if span.height() > viewport_height {
+            span.top
+        } else {
+            span.bottom.saturating_sub(viewport_height)
+        }
+    } else {
+        current
+    }
+    .min(u32::from(max_scroll_offset));
+
+    metadata.set_scroll_offset(u16::try_from(next).unwrap_or(u16::MAX));
+}
+
+/// Returns the focused button's vertical span within a view's render area.
+fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<VerticalSpan> {
+    match view {
+        View::Button { metadata, .. }
+            if metadata.is_focused() && metadata.scroll_into_view_requested() =>
+        {
+            Some(VerticalSpan::from_height(ctx.area().height))
+        }
+        View::Block { child, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            let area = ctx.area();
+            let block = style.to_block_with_default_borders(Borders::ALL);
+            let inner = block.inner(area);
+            let top_offset = u32::from(inner.y.saturating_sub(area.y));
+
+            ctx.with_area_inherited_style_and_selector_ancestor(
+                inner,
+                style.inherited_values(),
+                metadata.clone(),
+                |ctx| focused_button_span_for_view(child, ctx),
+            )
+            .map(|span| span.offset_by(top_offset))
+        }
+        View::Row { children, metadata } => {
+            focused_button_span_for_layout_view(children, metadata, LayoutDirection::Row, ctx)
+        }
+        View::Column { children, metadata } => {
+            focused_button_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
+        }
+        View::Component(component) => component
+            .focused_button_span(ctx)
+            .map(|(top, bottom)| VerticalSpan { top, bottom }),
+        View::Text { .. } | View::Button { .. } | View::Dynamic(_) => None,
+    }
+}
+
+/// Returns the focused button's vertical span inside a layout view.
+fn focused_button_span_for_layout_view(
+    children: &[View],
+    metadata: &StyleMetadata,
+    default_direction: LayoutDirection,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    if children.is_empty() {
+        return None;
+    }
+
+    let style = resolve_style(metadata, ctx);
+    let direction = style.direction.unwrap_or(default_direction);
+
+    match direction {
+        LayoutDirection::Row => {
+            focused_button_span_in_row_children(children, style.inherited_values(), metadata, ctx)
+        }
+        LayoutDirection::Column => {
+            let min_heights = child_min_heights(children, style.inherited_values(), metadata, ctx);
+            focused_button_span_in_column_children(
+                children,
+                &min_heights,
+                style.inherited_values(),
+                metadata,
+                ctx,
+            )
+        }
+    }
+}
+
+/// Returns the focused button's vertical span inside row children.
+fn focused_button_span_in_row_children(
+    children: &[View],
+    inherited_style: TuiStyle,
+    parent_metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    let area = ctx.area();
+    let constraints = vec![Constraint::Fill(1); children.len()];
+    let areas = Layout::horizontal(constraints).split(area);
+
+    ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        inherited_style,
+        parent_metadata.clone(),
+        |ctx| {
+            children.iter().zip(areas.iter()).find_map(|(child, area)| {
+                ctx.with_area(*area, |ctx| focused_button_span_for_view(child, ctx))
+            })
+        },
+    )
+}
+
+/// Returns the focused button's vertical span inside column children.
+fn focused_button_span_in_column_children(
+    children: &[View],
+    min_heights: &[u16],
+    inherited_style: TuiStyle,
+    parent_metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    let area = ctx.area();
+
+    ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        inherited_style,
+        parent_metadata.clone(),
+        |ctx| {
+            let mut row = 0u32;
+
+            for (child, min_height) in children.iter().zip(min_heights.iter()) {
+                let child_area = Rect {
+                    height: *min_height,
+                    ..area
+                };
+
+                if let Some(span) =
+                    ctx.with_area(child_area, |ctx| focused_button_span_for_view(child, ctx))
+                {
+                    return Some(span.offset_by(row));
+                }
+
+                row = row.saturating_add(u32::from(*min_height));
+            }
+
+            None
+        },
+    )
 }
 
 /// Renders child views into row or column areas.
@@ -643,6 +856,18 @@ fn render_children(
                 u16::try_from(content_height.saturating_sub(u32::from(area_height)))
                     .unwrap_or(u16::MAX);
             parent_metadata.set_max_scroll_offset(max_scroll_offset);
+
+            if let Some(span) = ctx.with_area(content_area, |ctx| {
+                focused_button_span_in_column_children(
+                    children,
+                    &min_heights,
+                    inherited_style,
+                    parent_metadata,
+                    ctx,
+                )
+            }) {
+                scroll_span_into_view(parent_metadata, span, area_height, max_scroll_offset);
+            }
 
             let row_offset = parent_metadata.scroll_offset().min(max_scroll_offset);
             ctx.with_area(content_area, |ctx| {

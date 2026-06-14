@@ -53,6 +53,13 @@ fn button_focuses(view: &View) -> Vec<bool> {
     }
 }
 
+fn scroll_offset(view: &View) -> u16 {
+    match view {
+        View::Row { metadata, .. } | View::Column { metadata, .. } => metadata.scroll_offset(),
+        other => panic!("expected layout view, got {other:?}"),
+    }
+}
+
 fn symbol_position(terminal: &Terminal<TestBackend>, symbol: &str, width: u16) -> (u16, u16) {
     symbol_position_opt(terminal, symbol, width)
         .unwrap_or_else(|| panic!("rendered `{symbol}` cell"))
@@ -86,6 +93,17 @@ fn cell_colors(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> 
     let index = usize::from(y) * usize::from(width) + usize::from(x);
     let cell = &terminal.backend().buffer().content()[index];
     (cell.fg, cell.bg)
+}
+
+fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Result<()> {
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+
+    render_result
 }
 
 /// Verifies a block view renders its child text.
@@ -768,6 +786,176 @@ fn tab_focus_moves_between_static_buttons() -> Result<()> {
     Ok(())
 }
 
+/// Verifies tab focus scrolls an overflowing column to the focused button.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([button("A1"), button("B2"), button("C3")])
+/// height = 4
+/// Tab, Tab, render
+/// ```
+///
+/// # Assertions
+///
+/// - The second button receives focus.
+/// - Rendering scrolls the column by the minimum amount needed.
+/// - The focused button label is visible in the terminal buffer.
+///
+/// # Why
+///
+/// Keyboard focus should not move to an offscreen button without bringing that
+/// button into view.
+#[test]
+fn tab_focus_scrolls_overflowing_column_to_focused_button() -> Result<()> {
+    let width = 18;
+    let backend = TestBackend::new(width, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = column([button("A1"), button("B2"), button("C3")]);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    view.handle_event(key(KeyCode::Tab))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(button_focuses(&view), vec![false, true, false]);
+    assert_eq!(scroll_offset(&view), 2);
+    assert!(symbol_position_opt(&terminal, "B", width).is_some());
+
+    Ok(())
+}
+
+/// Verifies back-tab focus scrolls upward to a previously offscreen button.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([button("A1"), button("B2"), button("C3")])
+/// height = 4
+/// Tab x3, render, BackTab, render, BackTab, render
+/// ```
+///
+/// # Assertions
+///
+/// - Forward tabbing scrolls down to the third button.
+/// - Back-tab to the second button scrolls just enough to reveal it.
+/// - Back-tab to the first button returns to the top.
+///
+/// # Why
+///
+/// Reverse focus movement should use the same focus visibility rule as forward
+/// movement.
+#[test]
+fn backtab_focus_scrolls_overflowing_column_up_to_focused_button() -> Result<()> {
+    let width = 18;
+    let backend = TestBackend::new(width, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = column([button("A1"), button("B2"), button("C3")]);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    view.handle_event(key(KeyCode::Tab))?;
+    view.handle_event(key(KeyCode::Tab))?;
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(scroll_offset(&view), 5);
+    assert!(symbol_position_opt(&terminal, "C", width).is_some());
+
+    view.handle_event(key(KeyCode::BackTab))?;
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(button_focuses(&view), vec![false, true, false]);
+    assert_eq!(scroll_offset(&view), 3);
+    assert!(symbol_position_opt(&terminal, "B", width).is_some());
+
+    view.handle_event(key(KeyCode::BackTab))?;
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(button_focuses(&view), vec![true, false, false]);
+    assert_eq!(scroll_offset(&view), 0);
+    assert!(symbol_position_opt(&terminal, "A", width).is_some());
+
+    Ok(())
+}
+
+/// Verifies focus scrolling does not pin later manual scroll movement.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([button("A1"), button("B2"), button("C3")])
+/// Tab, Tab, render, PageDown, render
+/// ```
+///
+/// # Assertions
+///
+/// - Focus scrolling first reveals the second button.
+/// - A later page-down scroll is preserved after rendering.
+///
+/// # Why
+///
+/// Automatic focus visibility should be a response to focus movement, not a
+/// permanent constraint that prevents normal scrolling.
+#[test]
+fn focus_scroll_request_does_not_override_later_manual_scroll() -> Result<()> {
+    let width = 18;
+    let backend = TestBackend::new(width, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = column([button("A1"), button("B2"), button("C3")]);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    view.handle_event(key(KeyCode::Tab))?;
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(scroll_offset(&view), 2);
+
+    view.handle_event(key(KeyCode::PageDown))?;
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(scroll_offset(&view), 5);
+
+    Ok(())
+}
+
+/// Verifies focus scrolling works through component boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([button("A1"), component(FocusPanel(button("B2"))), button("C3")])
+/// height = 4
+/// Tab, Tab, render
+/// ```
+///
+/// # Assertions
+///
+/// - Tabbing into the component boundary succeeds.
+/// - Rendering scrolls the parent column to the component's focused button.
+/// - The component button label is visible in the terminal buffer.
+///
+/// # Why
+///
+/// Component boundaries should preserve the built-in focus visibility behavior.
+#[test]
+fn tab_focus_scrolls_to_focused_button_inside_component_boundary() -> Result<()> {
+    let width = 18;
+    let backend = TestBackend::new(width, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = column([
+        button("A1"),
+        component(FocusPanel { view: button("B2") }),
+        button("C3"),
+    ]);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    view.handle_event(key(KeyCode::Tab))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(scroll_offset(&view), 2);
+    assert!(symbol_position_opt(&terminal, "B", width).is_some());
+
+    Ok(())
+}
+
 /// Verifies enter and space activate focused button actions.
 ///
 /// # Example Under Test
@@ -892,6 +1080,63 @@ fn renders_focused_button_with_focus_stylesheet_rule() -> Result<()> {
     assert_eq!(focused_cell.bg, Color::Yellow);
 
     Ok(())
+}
+
+/// Component that forwards rendering and built-in focus traversal to a child view.
+struct FocusPanel {
+    /// Child view owned by this component boundary.
+    view: View,
+}
+
+impl Component for FocusPanel {
+    /// Renders the child view.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Rendering context supplied by the view boundary.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] on success.
+    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        ctx.render_view(&self.view)
+    }
+
+    /// Returns the minimum useful render height of the child view.
+    #[doc(hidden)]
+    fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        self.view.__min_height(ctx)
+    }
+
+    /// Returns the number of focusable controls inside the child view.
+    #[doc(hidden)]
+    fn __focusable_count(&self) -> usize {
+        self.view.__focusable_count()
+    }
+
+    /// Returns the focused control index while tracking traversal position.
+    #[doc(hidden)]
+    fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        self.view.__focused_index_inner(index)
+    }
+
+    /// Sets focus by flattened control index while tracking traversal position.
+    #[doc(hidden)]
+    fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        self.view.__set_focus_by_index_inner(target, index);
+    }
+
+    /// Returns the focused control's vertical span inside the child view.
+    #[doc(hidden)]
+    fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        self.view.__focused_button_span(ctx)
+    }
+
+    /// Activates the focused control inside the child view, if any.
+    #[doc(hidden)]
+    fn __activate_focused_button(&self) -> Option<AppControl> {
+        self.view.__activate_focused_button()
+    }
 }
 
 /// Component that renders text and exits on any event.

@@ -115,6 +115,13 @@ impl ComponentView {
         });
     }
 
+    /// Returns the focused control's vertical span inside this component boundary.
+    #[doc(hidden)]
+    pub(crate) fn focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        self.context
+            .with(|| self.inner.borrow().__focused_button_span(ctx))
+    }
+
     /// Activates the focused control inside the component boundary, if any.
     #[doc(hidden)]
     pub(crate) fn activate_focused_button(&self) -> Option<AppControl> {

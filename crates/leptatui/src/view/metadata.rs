@@ -30,6 +30,7 @@ pub struct StyleMetadata {
     classes: Vec<String>,
     inline_style: Option<TuiStyle>,
     focused: bool,
+    scroll_into_view_requested: Cell<bool>,
     scroll_offset: Cell<u16>,
     max_scroll_offset: Cell<u16>,
 }
@@ -51,6 +52,7 @@ impl StyleMetadata {
             classes: Vec::new(),
             inline_style: None,
             focused: false,
+            scroll_into_view_requested: Cell::new(false),
             scroll_offset: Cell::new(0),
             max_scroll_offset: Cell::new(0),
         }
@@ -99,6 +101,11 @@ impl StyleMetadata {
     /// A [`bool`] indicating whether this view is focused.
     pub const fn is_focused(&self) -> bool {
         self.focused
+    }
+
+    /// Returns whether this view requested focus visibility scrolling.
+    pub(crate) fn scroll_into_view_requested(&self) -> bool {
+        self.scroll_into_view_requested.get()
     }
 
     /// Returns the current vertical scroll offset.
@@ -154,6 +161,16 @@ impl StyleMetadata {
         self.focused = focused;
     }
 
+    /// Requests that this view be scrolled into visible overflow bounds.
+    pub(crate) fn request_scroll_into_view(&self) {
+        self.scroll_into_view_requested.set(true);
+    }
+
+    /// Clears a pending focus visibility scroll request.
+    pub(crate) fn clear_scroll_into_view_request(&self) {
+        self.scroll_into_view_requested.set(false);
+    }
+
     /// Updates the maximum scroll offset and clamps the current offset.
     pub(crate) fn set_max_scroll_offset(&self, max_scroll_offset: u16) {
         self.max_scroll_offset.set(max_scroll_offset);
@@ -172,6 +189,12 @@ impl StyleMetadata {
 
         self.scroll_offset.set(next);
         true
+    }
+
+    /// Replaces the current scroll offset within the known scroll range.
+    pub(crate) fn set_scroll_offset(&self, scroll_offset: u16) {
+        self.scroll_offset.set(scroll_offset);
+        self.clamp_scroll_offset();
     }
 
     fn clamp_scroll_offset(&self) {
