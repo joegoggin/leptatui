@@ -9,7 +9,7 @@
 //! - [`mod@component`] — Component rendering contracts and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
 //! - [`route`] — Signal-backed route state helpers for page switches.
-//! - [`view`] — Basic renderable view builders for hand-written terminal UI.
+//! - [`mod@view`] — Basic renderable view builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
 

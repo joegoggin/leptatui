@@ -334,20 +334,25 @@ fn ThemeRoot() -> View {
 See `cargo run --example theme_switcher` for the complete light/dark theme
 switcher.
 
-Route state can live in context the same way shared app state does. Provide a
-small route enum near the root, navigate with the returned write signal or
-`use_navigate()` in descendants, and branch inside a dynamic `view!` child.
-Root-owned signals and context remain owned by the root component while the
-visible page branch changes.
+Multi-page apps use ordinary Leptatui components with route state stored in
+typed context. Keep `main` focused on startup, build shared state in the root
+component, provide route and app-wide context there, and let page components
+consume the values they need. The active page is usually a small enum, updated
+through the route write signal returned by `provide_route()` or by
+`use_navigate()` in descendants. The root then switches pages from a dynamic
+`view!` child.
 
 Use props for required parent-to-child inputs and local component
 configuration. Use context for app-wide state that many routes or deeply nested
 descendants need to read or update, such as the active route, theme variables,
 or persisted settings. Keep shared state owned by the root when navigation
 should not reset it; add explicit reset behavior when a route change should
-clear shared state.
+clear shared state. Descendant pages can read required context with
+`expect_context()` or optional context with `use_context()`.
 
 ```rust
+use leptatui::prelude::*;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Page {
     Home,
@@ -378,9 +383,50 @@ fn Nav() -> View {
 }
 
 #[component]
+fn HomePage() -> View {
+    let counter = expect_context::<RwSignal<i32>>();
+
+    view! {
+        <Column>
+            <Text>"Home"</Text>
+            <Text>{move || format!("Count: {}", counter.get_untracked())}</Text>
+        </Column>
+    }
+}
+
+#[component]
+fn CounterPage() -> View {
+    let counter = expect_context::<RwSignal<i32>>();
+
+    view! {
+        <Column>
+            <Text>"Counter"</Text>
+            <Button on_press=move || {
+                counter.update(|count| *count += 1);
+                AppControl::Continue
+            }>
+                "Increment"
+            </Button>
+        </Column>
+    }
+}
+
+#[component]
+fn SettingsPage() -> View {
+    let route = use_route::<Page>();
+
+    view! {
+        <Text>{move || format!("Current page: {:?}", route.get_untracked())}</Text>
+    }
+}
+
+#[component]
 fn Root() -> View {
+    let counter = RwSignal::new(0);
     let route_state = provide_route(Page::Home);
     let route = route_state.route();
+
+    provide_context(counter);
 
     view! {
         <Column>
@@ -393,7 +439,17 @@ fn Root() -> View {
         </Column>
     }
 }
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let root = Root::new();
+    App::new(root).run().await
+}
 ```
+
+See `crates/leptatui/examples/multi_page_demo.rs` or run
+`cargo run --example multi_page_demo` for a complete routing and context
+example with shared counter and theme state.
 
 ## Examples
 
