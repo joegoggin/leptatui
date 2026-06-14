@@ -177,6 +177,26 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         }
 
         let mut buffer = Buffer::empty(Rect::new(0, 0, full_area.width, full_area.height));
+        {
+            let target = self.target.buffer_mut();
+            for y in 0..target_area.height {
+                for x in 0..target_area.width {
+                    let target_position = (
+                        target_area.x.saturating_add(x),
+                        target_area.y.saturating_add(y),
+                    );
+                    let buffer_position = (x, source_y.saturating_add(y));
+
+                    if let (Some(target_cell), Some(buffer_cell)) = (
+                        target.cell(target_position),
+                        buffer.cell_mut(buffer_position),
+                    ) {
+                        *buffer_cell = target_cell.clone();
+                    }
+                }
+            }
+        }
+
         let mut selector_ancestors = self.selector_ancestors.clone();
         selector_ancestors.push(selector_ancestor);
 
