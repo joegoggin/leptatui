@@ -278,6 +278,18 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     assert!(text.contains("Theme: Dark"), "rendered text: {text:?}");
 
     assert_eq!(
+        Component::handle_event(&mut component, key(KeyCode::Char('h')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 48, 6)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Home"), "rendered text: {text:?}");
+    assert!(
+        text.contains("Count: 1 | Theme: Dark"),
+        "rendered text: {text:?}"
+    );
+
+    assert_eq!(
         Component::handle_event(&mut component, key(KeyCode::Char('c')))?,
         AppControl::Continue
     );

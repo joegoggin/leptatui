@@ -45,6 +45,8 @@ cargo run --example multi_page_demo
 
 Use `h`, `c`, and `s` to switch pages. The Counter page supports `+`, `-`, and
 `r`; the Settings page supports `t` for theme switching. Press `q` to quit.
+Counter and theme settings are shared through root context, so changes persist
+while moving between pages.
 
 ## Style Cascade Showcase
 

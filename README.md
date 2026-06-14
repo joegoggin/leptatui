@@ -340,6 +340,13 @@ small route enum near the root, navigate with the returned write signal or
 Root-owned signals and context remain owned by the root component while the
 visible page branch changes.
 
+Use props for required parent-to-child inputs and local component
+configuration. Use context for app-wide state that many routes or deeply nested
+descendants need to read or update, such as the active route, theme variables,
+or persisted settings. Keep shared state owned by the root when navigation
+should not reset it; add explicit reset behavior when a route change should
+clear shared state.
+
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Page {
