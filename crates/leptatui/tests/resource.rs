@@ -8,12 +8,15 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
 };
 
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
-use tokio::{sync::oneshot, task::yield_now, time::timeout};
+use tokio::{sync::oneshot, task::yield_now};
+
+mod support;
+
+use support::{draw_component, rendered_text, wait_until};
 
 /// Result returned by the controlled test resource fetcher.
 type TestFetchResult = std::result::Result<String, &'static str>;
@@ -89,26 +92,8 @@ async fn resource_loads_initial_source_key_once() {
 async fn source_key_change_triggers_reload() {
     let owner = Owner::new();
     let pending = PendingFetches::default();
-    let pending_for_fetcher = Arc::clone(&pending);
 
-    let (resource, set_key): (Resource<String, &'static str>, WriteSignal<i32>) =
-        owner.with(|| {
-            let (key, set_key) = signal(1);
-
-            let resource = create_resource(
-                move || key.get(),
-                move |key| {
-                    let pending = Arc::clone(&pending_for_fetcher);
-
-                    async move {
-                        let receiver = insert_pending_fetch(&pending, key);
-                        receiver.await.expect("test fetch response")
-                    }
-                },
-            );
-
-            (resource, set_key)
-        });
+    let (resource, set_key) = create_keyed_test_resource(&owner, &pending);
 
     wait_until(|| has_pending_fetch(&pending, 1)).await;
     assert!(resource.is_pending());
@@ -148,26 +133,8 @@ async fn source_key_change_triggers_reload() {
 async fn stale_fetch_completion_does_not_overwrite_newer_result() {
     let owner = Owner::new();
     let pending = PendingFetches::default();
-    let pending_for_fetcher = Arc::clone(&pending);
 
-    let (resource, set_key): (Resource<String, &'static str>, WriteSignal<i32>) =
-        owner.with(|| {
-            let (key, set_key) = signal(1);
-
-            let resource = create_resource(
-                move || key.get(),
-                move |key| {
-                    let pending = Arc::clone(&pending_for_fetcher);
-
-                    async move {
-                        let receiver = insert_pending_fetch(&pending, key);
-                        receiver.await.expect("test fetch response")
-                    }
-                },
-            );
-
-            (resource, set_key)
-        });
+    let (resource, set_key) = create_keyed_test_resource(&owner, &pending);
 
     wait_until(|| has_pending_fetch(&pending, 1)).await;
 
@@ -229,14 +196,14 @@ async fn loading_and_error_states_render_in_component() -> Result<()> {
         resource: resource.clone(),
     };
 
-    render_component(&mut terminal, &mut component)?;
-    assert!(terminal_text(&terminal).contains("Loading"));
+    draw_component(&mut terminal, &mut component)?;
+    assert!(rendered_text(&terminal).contains("Loading"));
 
     sender.send(Err("offline")).expect("send error response");
     wait_until(|| matches!(resource.get_untracked(), ResourceState::Error("offline"))).await;
 
-    render_component(&mut terminal, &mut component)?;
-    assert!(terminal_text(&terminal).contains("Error: offline"));
+    draw_component(&mut terminal, &mut component)?;
+    assert!(rendered_text(&terminal).contains("Error: offline"));
 
     Ok(())
 }
@@ -270,6 +237,41 @@ impl Component for ResourceStatus {
 
         ctx.render_view(&text(label))
     }
+}
+
+/// Creates a controlled resource keyed by an integer signal.
+///
+/// # Arguments
+///
+/// * `owner` — Leptos owner that keeps the resource signals alive for the test.
+/// * `pending` — Shared map used to control fetch responses by source key.
+///
+/// # Returns
+///
+/// A [`Resource`] and [`WriteSignal`] pair for changing the source key.
+fn create_keyed_test_resource(
+    owner: &Owner,
+    pending: &PendingFetches,
+) -> (Resource<String, &'static str>, WriteSignal<i32>) {
+    let pending_for_fetcher = Arc::clone(pending);
+
+    owner.with(|| {
+        let (key, set_key) = signal(1);
+
+        let resource = create_resource(
+            move || key.get(),
+            move |key| {
+                let pending = Arc::clone(&pending_for_fetcher);
+
+                async move {
+                    let receiver = insert_pending_fetch(&pending, key);
+                    receiver.await.expect("test fetch response")
+                }
+            },
+        );
+
+        (resource, set_key)
+    })
 }
 
 /// Inserts a pending fetch sender for a source key and returns its receiver.
@@ -322,69 +324,6 @@ fn send_fetch_response(pending: &PendingFetches, key: i32, response: TestFetchRe
         .remove(&key)
         .expect("pending fetch should exist");
     sender.send(response).expect("send fetch response");
-}
-
-/// Renders a component into a test terminal.
-///
-/// # Arguments
-///
-/// * `terminal` — Ratatui test terminal used as the render target.
-/// * `component` — Component to render.
-///
-/// # Returns
-///
-/// An empty [`Result`] when terminal drawing and component rendering succeed.
-///
-/// # Errors
-///
-/// Returns [`Error::Io`] if terminal drawing fails or the component render
-/// method returns an error.
-fn render_component<C>(terminal: &mut Terminal<TestBackend>, component: &mut C) -> Result<()>
-where
-    C: Component,
-{
-    let mut render_result = Ok(());
-
-    terminal.draw(|frame| {
-        let mut ctx = RenderCtx::new(frame);
-        render_result = Component::render(component, &mut ctx);
-    })?;
-
-    render_result
-}
-
-/// Returns all symbols currently stored in the test terminal buffer.
-///
-/// # Arguments
-///
-/// * `terminal` — Ratatui test terminal to read.
-///
-/// # Returns
-///
-/// A [`String`] containing the terminal buffer contents.
-fn terminal_text(terminal: &Terminal<TestBackend>) -> String {
-    terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect()
-}
-
-/// Waits until a predicate becomes true.
-///
-/// # Arguments
-///
-/// * `predicate` — Condition polled between Tokio task yields.
-async fn wait_until(mut predicate: impl FnMut() -> bool) {
-    timeout(Duration::from_secs(1), async {
-        while !predicate() {
-            yield_now().await;
-        }
-    })
-    .await
-    .expect("condition should become true");
 }
 
 /// Yields repeatedly so spawned tasks can observe completed channels.

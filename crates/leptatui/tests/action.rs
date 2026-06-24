@@ -2,13 +2,14 @@
 //!
 //! These tests verify Leptatui's signal-backed async mutation state transitions.
 
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
 
 use leptatui::prelude::*;
-use tokio::{sync::oneshot, task::yield_now, time::timeout};
+use tokio::sync::oneshot;
+
+mod support;
+
+use support::wait_until;
 
 /// Result returned by the controlled test action handler.
 type TestActionResult = std::result::Result<String, &'static str>;
@@ -34,19 +35,8 @@ type PendingAction = Arc<Mutex<Option<oneshot::Sender<TestActionResult>>>>;
 async fn dispatch_sets_pending_state_and_captures_input() {
     let owner = Owner::new();
     let pending = PendingAction::default();
-    let pending_for_action = Arc::clone(&pending);
 
-    let action: Action<i32, String, &'static str> = owner.with(|| {
-        create_action(move |input| {
-            let pending = Arc::clone(&pending_for_action);
-
-            async move {
-                let receiver = insert_pending_action(&pending);
-                let value = receiver.await.expect("test action response")?;
-                Ok(format!("{input}:{value}"))
-            }
-        })
-    });
+    let action = create_test_action(&owner, &pending);
 
     action.dispatch(7);
 
@@ -76,19 +66,8 @@ async fn dispatch_sets_pending_state_and_captures_input() {
 async fn successful_completion_stores_output() {
     let owner = Owner::new();
     let pending = PendingAction::default();
-    let pending_for_action = Arc::clone(&pending);
 
-    let action: Action<i32, String, &'static str> = owner.with(|| {
-        create_action(move |input| {
-            let pending = Arc::clone(&pending_for_action);
-
-            async move {
-                let receiver = insert_pending_action(&pending);
-                let value = receiver.await.expect("test action response")?;
-                Ok(format!("{input}:{value}"))
-            }
-        })
-    });
+    let action = create_test_action(&owner, &pending);
 
     action.dispatch(3);
 
@@ -122,19 +101,8 @@ async fn successful_completion_stores_output() {
 async fn failed_completion_stores_error() {
     let owner = Owner::new();
     let pending = PendingAction::default();
-    let pending_for_action = Arc::clone(&pending);
 
-    let action: Action<i32, String, &'static str> = owner.with(|| {
-        create_action(move |input| {
-            let pending = Arc::clone(&pending_for_action);
-
-            async move {
-                let receiver = insert_pending_action(&pending);
-                let value = receiver.await.expect("test action response")?;
-                Ok(format!("{input}:{value}"))
-            }
-        })
-    });
+    let action = create_test_action(&owner, &pending);
 
     action.dispatch(4);
 
@@ -146,6 +114,32 @@ async fn failed_completion_stores_error() {
     assert_eq!(action.input_untracked(), Some(4));
     assert_eq!(action.result_untracked(), Some(Err("offline")));
     assert_eq!(action.value(), None);
+}
+
+/// Creates the controlled action used by action state tests.
+///
+/// # Arguments
+///
+/// * `owner` — Leptos owner that keeps the action signals alive for the test.
+/// * `pending` — Shared slot used to control the action response.
+///
+/// # Returns
+///
+/// An [`Action`] that formats successful responses as `{input}:{value}`.
+fn create_test_action(owner: &Owner, pending: &PendingAction) -> Action<i32, String, &'static str> {
+    let pending_for_action = Arc::clone(pending);
+
+    owner.with(|| {
+        create_action(move |input| {
+            let pending = Arc::clone(&pending_for_action);
+
+            async move {
+                let receiver = insert_pending_action(&pending);
+                let value = receiver.await.expect("test action response")?;
+                Ok(format!("{input}:{value}"))
+            }
+        })
+    })
 }
 
 /// Inserts a sender for the current test action and returns its receiver.
@@ -189,19 +183,4 @@ fn send_action_response(pending: &PendingAction, response: TestActionResult) {
         .take()
         .expect("pending action should exist");
     sender.send(response).expect("send action response");
-}
-
-/// Waits until a predicate becomes true.
-///
-/// # Arguments
-///
-/// * `predicate` — Condition polled between Tokio task yields.
-async fn wait_until(mut predicate: impl FnMut() -> bool) {
-    timeout(Duration::from_secs(1), async {
-        while !predicate() {
-            yield_now().await;
-        }
-    })
-    .await
-    .expect("condition should become true");
 }

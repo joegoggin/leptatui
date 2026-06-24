@@ -192,18 +192,12 @@ where
 
     /// Returns the successful value, when ready.
     pub fn value(&self) -> Option<T> {
-        match self.get() {
-            ResourceState::Ready(value) => Some(value),
-            ResourceState::Pending | ResourceState::Error(_) => None,
-        }
+        self.with(|state| state.as_ready().cloned())
     }
 
     /// Returns the error, when failed.
     pub fn error(&self) -> Option<E> {
-        match self.get() {
-            ResourceState::Error(error) => Some(error),
-            ResourceState::Pending | ResourceState::Ready(_) => None,
-        }
+        self.with(|state| state.as_error().cloned())
     }
 }
 
