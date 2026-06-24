@@ -1,14 +1,37 @@
 //! Common imports for Leptatui applications.
 //!
-//! This module gathers the runtime, component, view, style, context, and
-//! Leptos reactive APIs most application code needs.
+//! Application code should normally start with `use leptatui::prelude::*`.
+//! This module gathers the runtime, component, view, style, context, routing,
+//! async state, keyboard event, terminal key, and Leptos reactive APIs most
+//! application code needs.
+//!
+//! The prelude exports the Leptatui `#[component]`, `view!`, and `stylesheet!`
+//! macros. These macros build terminal components and [`crate::View`] trees;
+//! they are not Leptos DOM macros.
+//!
+//! ```no_run
+//! use leptatui::prelude::*;
+//!
+//! #[component]
+//! fn Root() -> View {
+//!     view! { <Text>"Hello"</Text> }
+//! }
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     App::new(Root::new()).run().await
+//! }
+//! ```
+//!
+//! Low-level render metadata, callback aliases, and generated-code hooks stay
+//! outside the default import.
 
 pub use crate::{
-    Action, ActionState, App, AppControl, AppRoot, BorderType, Borders, ButtonAction, Children,
-    ChildrenFn, ChildrenMut, Color, Component, Error, KeyControl, LayoutDirection, MediaQuery,
-    Modifier, RenderCtx, Resource, ResourceState, Result, RouteState, StyleDeclarations,
-    StyleMetadata, StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue,
-    ThemeVariables, TuiSpacing, TuiStyle, View, ViewType, ViewportSize, block, button, column,
+    Action, ActionState, App, AppControl, AppRoot, BorderType, Borders, Children, ChildrenFn,
+    ChildrenMut, Color, Component, Error, KeyControl, LayoutDirection, MediaQuery, Modifier,
+    RenderCtx, Resource, ResourceState, Result, RouteState, StyleDeclarations, StyleModule,
+    StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables, TuiSpacing,
+    TuiStyle, View, ViewType, ViewportSize, block, button, column,
     context::{expect_context, provide_context, use_context},
     create_action, create_resource, provide_route, row, text, theme_color, use_key_event,
     use_navigate, use_route,

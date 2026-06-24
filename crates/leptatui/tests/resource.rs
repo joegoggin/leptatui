@@ -12,11 +12,11 @@ use std::{
 
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
-use tokio::{sync::oneshot, task::yield_now};
+use tokio::sync::oneshot;
 
 mod support;
 
-use support::{draw_component, rendered_text, wait_until};
+use support::{draw_component, rendered_text, settle_tasks, wait_until};
 
 /// Result returned by the controlled test resource fetcher.
 type TestFetchResult = std::result::Result<String, &'static str>;
@@ -324,11 +324,4 @@ fn send_fetch_response(pending: &PendingFetches, key: i32, response: TestFetchRe
         .remove(&key)
         .expect("pending fetch should exist");
     sender.send(response).expect("send fetch response");
-}
-
-/// Yields repeatedly so spawned tasks can observe completed channels.
-async fn settle_tasks() {
-    for _ in 0..10 {
-        yield_now().await;
-    }
 }

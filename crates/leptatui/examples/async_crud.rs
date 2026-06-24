@@ -70,6 +70,23 @@ enum TicketMutation {
     Fail,
 }
 
+/// User commands supported by keyboard shortcuts and buttons.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CrudCommand {
+    /// Creates a generated ticket.
+    Create,
+    /// Toggles the first ticket in the current list.
+    UpdateFirst,
+    /// Reloads the ticket list.
+    Reload,
+    /// Fails the next ticket-list load and reloads.
+    FailLoad,
+    /// Dispatches a simulated failed mutation.
+    FailAction,
+    /// Exits the demo.
+    Quit,
+}
+
 impl TicketMutation {
     /// Returns the display label for this mutation.
     ///
@@ -379,45 +396,42 @@ fn MutationStatus() -> View {
 fn CrudControls() -> View {
     let context = expect_context::<CrudContext>();
 
-    let create = context.mutation.clone();
-    let update = context.mutation.clone();
-    let fail_action = context.mutation.clone();
+    let create = context.clone();
+    let update = context.clone();
     let reload = context.clone();
     let fail_list = context.clone();
+    let fail_action = context.clone();
 
     view! {
         <Row class="crud-actions">
             <Button on_press=move || {
-                create.dispatch(TicketMutation::Create);
-                AppControl::Continue
+                run_crud_command(&create, CrudCommand::Create)
             }>
                 "Create"
             </Button>
             <Button on_press=move || {
-                update.dispatch(TicketMutation::ToggleFirst);
-                AppControl::Continue
+                run_crud_command(&update, CrudCommand::UpdateFirst)
             }>
                 "Update first"
             </Button>
             <Button on_press=move || {
-                refresh_list(&reload);
-                AppControl::Continue
+                run_crud_command(&reload, CrudCommand::Reload)
             }>
                 "Reload"
             </Button>
             <Button on_press=move || {
-                fail_next_list(&fail_list);
-                AppControl::Continue
+                run_crud_command(&fail_list, CrudCommand::FailLoad)
             }>
                 "Fail load"
             </Button>
             <Button class="danger" on_press=move || {
-                fail_action.dispatch(TicketMutation::Fail);
-                AppControl::Continue
+                run_crud_command(&fail_action, CrudCommand::FailAction)
             }>
                 "Fail action"
             </Button>
-            <Button class="danger" on_press=|| AppControl::Exit>
+            <Button class="danger" on_press=move || {
+                run_crud_command(&context, CrudCommand::Quit)
+            }>
                 "Quit"
             </Button>
         </Row>
@@ -436,29 +450,37 @@ fn CrudControls() -> View {
 /// A [`KeyControl`] indicating whether the key was handled or exits the app.
 fn handle_key_event(key: KeyEvent, context: &CrudContext) -> KeyControl {
     match key.code {
-        KeyCode::Char('n') => {
-            context.mutation.dispatch(TicketMutation::Create);
-            KeyControl::Handled
-        }
-        KeyCode::Char('u') => {
-            context.mutation.dispatch(TicketMutation::ToggleFirst);
-            KeyControl::Handled
-        }
-        KeyCode::Char('r') => {
-            refresh_list(context);
-            KeyControl::Handled
-        }
-        KeyCode::Char('l') => {
-            fail_next_list(context);
-            KeyControl::Handled
-        }
-        KeyCode::Char('e') => {
-            context.mutation.dispatch(TicketMutation::Fail);
-            KeyControl::Handled
-        }
-        KeyCode::Char('q') => KeyControl::Exit,
+        KeyCode::Char('n') => run_crud_command(context, CrudCommand::Create).into(),
+        KeyCode::Char('u') => run_crud_command(context, CrudCommand::UpdateFirst).into(),
+        KeyCode::Char('r') => run_crud_command(context, CrudCommand::Reload).into(),
+        KeyCode::Char('l') => run_crud_command(context, CrudCommand::FailLoad).into(),
+        KeyCode::Char('e') => run_crud_command(context, CrudCommand::FailAction).into(),
+        KeyCode::Char('q') => run_crud_command(context, CrudCommand::Quit).into(),
         _ => KeyControl::Pass,
     }
+}
+
+/// Runs one CRUD demo command.
+///
+/// # Arguments
+///
+/// * `context` — Shared CRUD context used by the command.
+/// * `command` — Command selected by a key binding or button.
+///
+/// # Returns
+///
+/// An [`AppControl`] indicating whether the app should continue or exit.
+fn run_crud_command(context: &CrudContext, command: CrudCommand) -> AppControl {
+    match command {
+        CrudCommand::Create => context.mutation.dispatch(TicketMutation::Create),
+        CrudCommand::UpdateFirst => context.mutation.dispatch(TicketMutation::ToggleFirst),
+        CrudCommand::Reload => refresh_list(context),
+        CrudCommand::FailLoad => fail_next_list(context),
+        CrudCommand::FailAction => context.mutation.dispatch(TicketMutation::Fail),
+        CrudCommand::Quit => return AppControl::Exit,
+    }
+
+    AppControl::Continue
 }
 
 /// Increments the refresh signal to reload tickets.

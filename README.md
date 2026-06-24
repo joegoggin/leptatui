@@ -13,11 +13,28 @@ macros for building interactive terminal applications.
   `#[component]`, `view!`, and `stylesheet!`.
 - `crates/leptatui/examples`: Runnable examples for the public crate.
 
+## Quality Gates
+
+CI validates the full workspace with the same commands expected for local
+pre-review checks:
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo doc --workspace --no-deps
+cargo check --workspace --examples
+```
+
 ## Usage Shape
 
 Application code normally imports `leptatui::prelude::*`, defines a root
 component, builds a view tree with either builders or `view!`, and runs it with
 `App::new(root).run().await`.
+
+`view!` and `#[component]` are Leptatui-owned macros for terminal UIs. They use
+familiar Leptos-style component syntax, but they create Leptatui `View` values
+and component implementations instead of Leptos DOM nodes.
 
 Generated `#[component]` bodies run once when `new()` creates the component,
 under a stored Leptos owner. Create signals directly in the component body, and
@@ -458,6 +475,110 @@ async fn main() -> Result<()> {
 See `crates/leptatui/examples/multi_page_demo.rs` or run
 `cargo run --example multi_page_demo` for a complete routing and context
 example with shared counter and theme state.
+
+## Resources And Actions
+
+Use `create_resource` for asynchronous reads keyed by reactive source state and
+`create_action` for POST-like mutations triggered by buttons or key handlers.
+Both helpers publish signal-backed state and request redraws when pending or
+completed work changes, so components can render loading, success, and error
+states from ordinary dynamic views.
+
+Resources ignore stale completions from older source keys. Actions keep the
+latest dispatched input and ignore stale completions from older dispatches. A
+common pattern is to keep a refresh signal in root context, key the resource
+from that signal, and increment it after a successful action.
+
+```rust
+use leptatui::prelude::*;
+
+#[derive(Clone)]
+struct Todos {
+    items: Resource<Vec<String>, String>,
+    create: Action<String, String, String>,
+    refresh: WriteSignal<u64>,
+}
+
+async fn load_todos() -> std::result::Result<Vec<String>, String> {
+    Ok(vec![String::from("Write terminal docs")])
+}
+
+async fn create_todo(title: String) -> std::result::Result<String, String> {
+    Ok(title)
+}
+
+#[component]
+fn TodoApp() -> View {
+    let (refresh, set_refresh) = signal(0_u64);
+
+    let items = create_resource(
+        move || refresh.get(),
+        |_| async move { load_todos().await },
+    );
+
+    let create = create_action(move |title: String| {
+        let set_refresh = set_refresh;
+
+        async move {
+            let saved = create_todo(title).await?;
+            set_refresh.update(|version| *version += 1);
+            Ok(saved)
+        }
+    });
+
+    provide_context(Todos {
+        items,
+        create,
+        refresh: set_refresh,
+    });
+
+    view! {
+        <Column>
+            <TodoList />
+            <TodoActions />
+        </Column>
+    }
+}
+
+#[component]
+fn TodoList() -> View {
+    let todos = expect_context::<Todos>();
+
+    dynamic(move || match todos.items.get_untracked() {
+        ResourceState::Pending => text("Loading todos..."),
+        ResourceState::Ready(items) => column(items.into_iter().map(text)),
+        ResourceState::Error(error) => text(format!("Load failed: {error}")),
+    })
+}
+
+#[component]
+fn TodoActions() -> View {
+    let todos = expect_context::<Todos>();
+    let create = todos.create.clone();
+    let reload = todos.refresh;
+
+    view! {
+        <Row>
+            <Button on_press=move || {
+                create.dispatch(String::from("Review async state"));
+                AppControl::Continue
+            }>
+                "Create"
+            </Button>
+            <Button on_press=move || {
+                reload.update(|version| *version += 1);
+                AppControl::Continue
+            }>
+                "Reload"
+            </Button>
+        </Row>
+    }
+}
+```
+
+See `cargo run --example async_redraw` for a small async redraw example and
+`cargo run --example async_crud` for resources, actions, context, stylesheets,
+and app startup working together.
 
 ## Examples
 

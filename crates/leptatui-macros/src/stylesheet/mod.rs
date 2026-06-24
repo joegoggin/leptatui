@@ -11,7 +11,7 @@ use proc_macro::TokenStream;
 use model::StylesheetRoot;
 use syn::Error;
 
-/// Expands `stylesheet!` input into a registered Leptatui [`Stylesheet`]
+/// Expands `stylesheet!` input into a registered Leptatui `Stylesheet`
 /// expression.
 ///
 /// # Arguments

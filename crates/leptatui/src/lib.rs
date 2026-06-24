@@ -14,6 +14,48 @@
 //! - [`mod@view`] — Basic renderable view builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
+//!
+//! # Public API Shape
+//!
+//! Application code should normally import [`prelude`] and run a root component
+//! with `App::new(root).run().await`. Explicit module or top-level imports remain
+//! available for lower-level manual rendering and style inspection.
+//!
+//! ```no_run
+//! use leptatui::prelude::*;
+//!
+//! #[component]
+//! fn Root() -> View {
+//!     view! { <Text>"Hello from Leptatui"</Text> }
+//! }
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     App::new(Root::new()).run().await
+//! }
+//! ```
+//!
+//! The [`macro@view`] and [`macro@component`] macros are Leptatui terminal UI
+//! macros. They use Leptos-style syntax and Leptos reactive primitives, but
+//! they create Leptatui [`View`] trees and [`Component`] implementations rather
+//! than Leptos DOM nodes.
+//!
+//! Shared app state is usually stored with typed context via
+//! [`context::provide_context`], [`context::use_context`], and
+//! [`context::expect_context`]. Multi-page apps can store the active page with
+//! [`provide_route`], read it with [`use_route`], and navigate with
+//! [`use_navigate`]. Asynchronous reads and mutations use [`create_resource`]
+//! and [`create_action`] to expose pending, ready, and error state to
+//! components.
+//!
+//! # Deferred Scope
+//!
+//! The first baseline intentionally does not expose a Leptos DOM renderer, a
+//! generalized router, or raw terminal session customization APIs. Generated-code
+//! and runtime wiring hooks live under `__private` and are not supported as user
+//! APIs.
+
+mod executor;
 
 pub mod action;
 pub mod app;
@@ -54,6 +96,7 @@ pub mod __private {
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
         KeyHandlerRegistry, StylesheetRegistry,
     };
+    pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
     pub use crossterm::event::{Event, KeyEvent};
 
     /// Creates a component view from a generated component factory.

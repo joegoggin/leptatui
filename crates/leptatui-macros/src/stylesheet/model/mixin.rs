@@ -113,7 +113,7 @@ impl Mixin {
     ///
     /// # Returns
     ///
-    /// An [`Ident`] reference for this mixin's source name.
+    /// An [`struct@Ident`] reference for this mixin's source name.
     pub(super) fn name(&self) -> &Ident {
         &self.name
     }

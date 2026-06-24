@@ -3,19 +3,14 @@
 //! Resources connect Leptos reactive source keys to asynchronous read work and
 //! expose the latest pending, ready, or error state as a signal-friendly value.
 
-use std::{
-    future::Future,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::{future::Future, sync::Arc};
 
 use leptos::prelude::{
     Effect, Get, GetUntracked, ReadSignal, Set, SyncStorage, With, WithUntracked, signal,
 };
 
 use crate::app::request_redraw;
+use crate::executor::{LatestTask, init_tokio_executor};
 
 /// Current state for an asynchronous resource read.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -109,22 +104,22 @@ where
         init_tokio_executor();
 
         let (state, set_state) = signal(ResourceState::Pending);
-        let latest_request = Arc::new(AtomicU64::new(0));
+        let latest_request = LatestTask::default();
         let fetcher = Arc::new(fetcher);
 
         let watcher = {
-            let latest_request = Arc::clone(&latest_request);
+            let latest_request = latest_request.clone();
             Effect::watch_sync(
                 source,
                 move |key, _, _| {
-                    let request_id = latest_request.fetch_add(1, Ordering::AcqRel) + 1;
+                    let request_id = latest_request.next();
                     let _ = set_state.try_set(ResourceState::Pending);
                     request_redraw();
 
                     let key = key.clone();
                     let set_state = set_state;
                     let fetcher = Arc::clone(&fetcher);
-                    let latest_request = Arc::clone(&latest_request);
+                    let latest_request = latest_request.clone();
 
                     tokio::spawn(async move {
                         let next = match fetcher(key).await {
@@ -132,7 +127,7 @@ where
                             Err(error) => ResourceState::Error(error),
                         };
 
-                        if latest_request.load(Ordering::Acquire) == request_id {
+                        if latest_request.is_current(request_id) {
                             let _ = set_state.try_set(next);
                             request_redraw();
                         }
@@ -147,13 +142,7 @@ where
             _watcher: watcher,
         }
     }
-}
 
-impl<T, E> Resource<T, E>
-where
-    T: Send + Sync + 'static,
-    E: Send + Sync + 'static,
-{
     /// Returns the read signal containing this resource's state.
     pub fn state(&self) -> ReadSignal<ResourceState<T, E>> {
         self.state
@@ -226,11 +215,6 @@ where
     Fut: Future<Output = std::result::Result<T, E>> + Send + 'static,
 {
     Resource::new(source, fetcher)
-}
-
-/// Initializes the Any Spawner Tokio executor used by Leptos effects.
-fn init_tokio_executor() {
-    let _ = any_spawner::Executor::init_tokio();
 }
 
 #[cfg(test)]

@@ -3,20 +3,14 @@
 //! Actions run POST-like asynchronous writes and expose the latest pending,
 //! input, and result state as a signal-friendly value.
 
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use leptos::prelude::{
     Get, GetUntracked, ReadSignal, Set, With, WithUntracked, WriteSignal, signal,
 };
 
 use crate::app::request_redraw;
+use crate::executor::{LatestTask, init_tokio_executor};
 
 /// Boxed future returned by an action mutation handler.
 type BoxActionFuture<O, E> = Pin<Box<dyn Future<Output = std::result::Result<O, E>> + Send>>;
@@ -103,7 +97,7 @@ pub struct Action<I, O, E> {
     /// Async mutation handler invoked for each dispatch.
     handler: ActionHandler<I, O, E>,
     /// Monotonic dispatch id used to ignore stale completions.
-    latest_dispatch: Arc<AtomicU64>,
+    latest_dispatch: LatestTask,
 }
 
 impl<I, O, E> Clone for Action<I, O, E> {
@@ -113,7 +107,7 @@ impl<I, O, E> Clone for Action<I, O, E> {
             state: self.state,
             set_state: self.set_state,
             handler: Arc::clone(&self.handler),
-            latest_dispatch: Arc::clone(&self.latest_dispatch),
+            latest_dispatch: self.latest_dispatch.clone(),
         }
     }
 }
@@ -140,7 +134,7 @@ where
             state,
             set_state,
             handler,
-            latest_dispatch: Arc::new(AtomicU64::new(0)),
+            latest_dispatch: LatestTask::default(),
         }
     }
 
@@ -155,20 +149,20 @@ where
     /// Panics if called outside a Tokio runtime, because dispatches are
     /// scheduled with [`tokio::spawn`].
     pub fn dispatch(&self, input: I) {
-        let dispatch_id = self.latest_dispatch.fetch_add(1, Ordering::AcqRel) + 1;
+        let dispatch_id = self.latest_dispatch.next();
         let task_input = input.clone();
         let completion_input = input.clone();
         let _ = self.set_state.try_set(ActionState::pending(input));
         request_redraw();
 
         let handler = Arc::clone(&self.handler);
-        let latest_dispatch = Arc::clone(&self.latest_dispatch);
+        let latest_dispatch = self.latest_dispatch.clone();
         let set_state = self.set_state;
 
         tokio::spawn(async move {
             let result = handler(task_input).await;
 
-            if latest_dispatch.load(Ordering::Acquire) == dispatch_id {
+            if latest_dispatch.is_current(dispatch_id) {
                 let _ = set_state.try_set(ActionState::completed(completion_input, result));
                 request_redraw();
             }
@@ -261,11 +255,6 @@ where
     Fut: Future<Output = std::result::Result<O, E>> + Send + 'static,
 {
     Action::new(handler)
-}
-
-/// Initializes the Any Spawner Tokio executor used by Leptos effects.
-fn init_tokio_executor() {
-    let _ = any_spawner::Executor::init_tokio();
 }
 
 #[cfg(test)]

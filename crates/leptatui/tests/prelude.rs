@@ -5,9 +5,10 @@
 
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
-use tokio::{task::yield_now, time::timeout};
 
-use std::time::Duration;
+mod support;
+
+use support::wait_until;
 
 /// Renders a label from context using only prelude exports.
 ///
@@ -113,7 +114,7 @@ fn prelude_exposes_reactivity_and_context() {
 
         assert_eq!(doubled.get_untracked(), 4);
 
-        leptatui::context::__with_context_scope(|| {
+        leptatui::__private::__with_context_scope(|| {
             provide_context(String::from("from prelude"));
 
             assert_eq!(use_context::<String>().as_deref(), Some("from prelude"));
@@ -165,15 +166,5 @@ async fn prelude_exposes_resource_helpers() {
     let resource: Resource<i32, &'static str> =
         owner.with(|| create_resource(|| (), |_| async { Ok(42) }));
 
-    timeout(Duration::from_secs(1), async {
-        loop {
-            if matches!(resource.get_untracked(), ResourceState::Ready(42)) {
-                break;
-            }
-
-            yield_now().await;
-        }
-    })
-    .await
-    .expect("resource should resolve from prelude exports");
+    wait_until(|| matches!(resource.get_untracked(), ResourceState::Ready(42))).await;
 }

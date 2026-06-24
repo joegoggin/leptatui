@@ -10,6 +10,7 @@ mod metadata;
 mod model;
 mod render;
 
-pub use builders::{block, button, column, component, component_factory, dynamic, row, text};
+pub(crate) use builders::component_factory;
+pub use builders::{block, button, column, component, dynamic, row, text};
 pub use metadata::{StyleMetadata, ViewType};
 pub use model::{ButtonAction, View};
