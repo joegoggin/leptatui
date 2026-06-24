@@ -16,6 +16,7 @@ checksum = "1384d3fe1eecb464229fcf6eebb72306591c56bf27b373561489458a7c73027d"
 dependencies = [
  "futures",
  "thiserror 2.0.18",
+ "tokio",
  "wasm-bindgen-futures",
 ]
 
@@ -951,6 +952,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 name = "leptatui"
 version = "0.1.0"
 dependencies = [
+ "any_spawner",
  "crossterm",
  "leptatui-macros",
  "leptos",
