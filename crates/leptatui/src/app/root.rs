@@ -1,7 +1,7 @@
 //! App root adapter contract.
 //!
 //! This module defines the root-level rendering interface and adapts
-//! [`Component`](crate::Component) values into app roots.
+//! [`Component`] values into app roots.
 
 use crossterm::event::Event;
 use ratatui::Frame;
@@ -69,7 +69,7 @@ where
     /// Returns [`crate::app::Error::Io`] if component rendering performs terminal
     /// I/O that fails.
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
-        context::__with_context_scope(|| {
+        context::hooks::__with_context_scope(|| {
             let mut ctx = RenderCtx::new(frame);
             Component::render(self, &mut ctx)
         })

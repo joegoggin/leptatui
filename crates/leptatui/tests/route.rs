@@ -2,7 +2,7 @@
 //!
 //! These tests cover the public context-backed route helper API.
 
-use leptatui::{context, provide_route, use_navigate, use_route};
+use leptatui::{provide_route, use_navigate, use_route};
 use leptos::prelude::{GetUntracked, Owner, Update};
 
 /// Route values used by route helper tests.
@@ -30,7 +30,7 @@ enum TestRoute {
 #[test]
 fn route_helpers_provide_and_update_route_state() {
     Owner::new().with(|| {
-        context::__with_context_scope(|| {
+        leptatui::__private::__with_context_scope(|| {
             let state = provide_route(TestRoute::Home);
             let route = use_route::<TestRoute>();
             let navigate = use_navigate::<TestRoute>();

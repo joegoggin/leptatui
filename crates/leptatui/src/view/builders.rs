@@ -1,7 +1,7 @@
 //! Convenience constructors for render-tree views.
 //!
 //! This module provides the public helper functions re-exported by
-//! [`crate::view`] and [`crate::prelude`].
+//! [`mod@crate::view`] and [`crate::prelude`].
 
 use crate::component::Component;
 
@@ -119,8 +119,7 @@ pub fn component(component: impl Component + 'static) -> View {
 }
 
 /// Creates a lazy component-boundary view from a component constructor.
-#[doc(hidden)]
-pub fn component_factory<C>(
+pub(crate) fn component_factory<C>(
     preserve_on_reconcile: bool,
     factory: impl FnOnce() -> C + 'static,
 ) -> View

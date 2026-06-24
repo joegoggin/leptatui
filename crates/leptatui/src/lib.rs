@@ -14,6 +14,19 @@
 //! - [`mod@view`] — Basic renderable view builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
+//!
+//! # Public API Shape
+//!
+//! Application code should normally import [`prelude`] and run a root component
+//! with `App::new(root).run().await`. Explicit module or top-level imports remain
+//! available for lower-level manual rendering and style inspection.
+//!
+//! # Deferred Scope
+//!
+//! The first baseline intentionally does not expose a Leptos DOM renderer, a
+//! generalized router, or raw terminal session customization APIs. Generated-code
+//! and runtime wiring hooks live under `__private` and are not supported as user
+//! APIs.
 
 pub mod action;
 pub mod app;
@@ -54,6 +67,7 @@ pub mod __private {
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
         KeyHandlerRegistry, StylesheetRegistry,
     };
+    pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
     pub use crossterm::event::{Event, KeyEvent};
 
     /// Creates a component view from a generated component factory.

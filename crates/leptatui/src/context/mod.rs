@@ -4,12 +4,9 @@
 //! Leptatui component render scopes. Values provided in an inner scope shadow
 //! values of the same type from ancestor scopes.
 
-mod hooks;
+pub(crate) mod hooks;
 mod scope;
 mod storage;
 
-pub use hooks::{
-    __with_context_scope, __with_context_scope_if_missing, expect_context, provide_context,
-    use_context,
-};
+pub use hooks::{expect_context, provide_context, use_context};
 pub(crate) use scope::ContextScope;

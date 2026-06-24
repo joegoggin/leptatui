@@ -113,7 +113,7 @@ fn prelude_exposes_reactivity_and_context() {
 
         assert_eq!(doubled.get_untracked(), 4);
 
-        leptatui::context::__with_context_scope(|| {
+        leptatui::__private::__with_context_scope(|| {
             provide_context(String::from("from prelude"));
 
             assert_eq!(use_context::<String>().as_deref(), Some("from prelude"));

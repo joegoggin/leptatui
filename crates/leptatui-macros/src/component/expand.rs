@@ -122,7 +122,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                 ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
                     __leptatui_owner.with(|| {
-                        #leptatui::context::__with_context_scope_if_missing(|| {
+                        #leptatui::__private::__with_context_scope_if_missing(|| {
                             ctx.render_view(__leptatui_view)
                         })
                     })
@@ -206,7 +206,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                 ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
                     __leptatui_owner.with(|| {
-                        #leptatui::context::__with_context_scope_if_missing(|| {
+                        #leptatui::__private::__with_context_scope_if_missing(|| {
                             __leptatui_view.__min_height(ctx)
                         })
                     })
@@ -244,7 +244,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                 ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
                     __leptatui_owner.with(|| {
-                        #leptatui::context::__with_context_scope_if_missing(|| {
+                        #leptatui::__private::__with_context_scope_if_missing(|| {
                             __leptatui_view.__focused_button_span(ctx)
                         })
                     })
