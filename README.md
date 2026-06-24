@@ -13,6 +13,19 @@ macros for building interactive terminal applications.
   `#[component]`, `view!`, and `stylesheet!`.
 - `crates/leptatui/examples`: Runnable examples for the public crate.
 
+## Quality Gates
+
+CI validates the full workspace with the same commands expected for local
+pre-review checks:
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test
+cargo doc --workspace --no-deps
+cargo check --workspace --examples
+```
+
 ## Usage Shape
 
 Application code normally imports `leptatui::prelude::*`, defines a root
