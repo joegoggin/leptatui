@@ -21,7 +21,7 @@ fn AsyncRedraw() -> View {
         |request| async move {
             tokio::time::sleep(Duration::from_secs(2)).await;
 
-            if request % 2 == 0 {
+            if request.is_multiple_of(2) {
                 Ok(format!("loaded request {request}"))
             } else {
                 Err("simulated resource error")
@@ -32,7 +32,7 @@ fn AsyncRedraw() -> View {
     let action = create_action(|request: usize| async move {
         tokio::time::sleep(Duration::from_millis(900)).await;
 
-        if request % 2 == 0 {
+        if request.is_multiple_of(2) {
             Ok(format!("saved request {request}"))
         } else {
             Err("simulated action error")
@@ -70,33 +70,33 @@ fn AsyncRedraw() -> View {
     }
 
     view! {
-        <Block class="async-panel">
+        <Block class="panel">
             <Column>
-                <Text class="async-title">"Async redraw"</Text>
+                <Text class="title">"Async redraw"</Text>
                 {move || {
-                    let label = match resource.get_untracked() {
-                        ResourceState::Pending => String::from("Resource: pending"),
-                        ResourceState::Ready(value) => format!("Resource: {value}"),
-                        ResourceState::Error(error) => format!("Resource: {error}"),
+                    let (label, class) = match resource.get_untracked() {
+                        ResourceState::Pending => (String::from("Resource: pending"), "ready"),
+                        ResourceState::Ready(value) => (format!("Resource: {value}"), "ready"),
+                        ResourceState::Error(error) => (format!("Resource: {error}"), "error"),
                     };
 
-                    view! { <Text class="async-ready">{label}</Text> }
+                    view! { <Text class={class}>{label}</Text> }
                 }}
                 {move || {
                     let state = action.get_untracked();
-                    let label = if state.is_pending() {
-                        String::from("Action: pending")
+                    let (label, class) = if state.is_pending() {
+                        (String::from("Action: pending"), "ready")
                     } else {
                         match state.result() {
-                            Some(Ok(value)) => format!("Action: {value}"),
-                            Some(Err(error)) => format!("Action: {error}"),
-                            None => String::from("Action: idle"),
+                            Some(Ok(value)) => (format!("Action: {value}"), "ready"),
+                            Some(Err(error)) => (format!("Action: {error}"), "error"),
+                            None => (String::from("Action: idle"), "ready"),
                         }
                     };
 
-                    view! { <Text class="async-ready">{label}</Text> }
+                    view! { <Text class={class}>{label}</Text> }
                 }}
-                <Text class="async-help">"r reloads resource. a dispatches action. q quits."</Text>
+                <Text class="help">"r reloads resource. a dispatches action. q quits."</Text>
             </Column>
         </Block>
     }

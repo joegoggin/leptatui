@@ -132,6 +132,8 @@ where
     async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
         let mut redraw_requests = subscribe_redraws();
         let mut should_draw = true;
+        let event_poll = next_event(self.redraw_interval);
+        tokio::pin!(event_poll);
 
         loop {
             if should_draw {
@@ -140,7 +142,7 @@ where
             }
 
             tokio::select! {
-                event = next_event(self.redraw_interval) => {
+                event = &mut event_poll => {
                     if let Some(event) = event? {
                         if self.root.handle_event(event)? == AppControl::Exit {
                             break;
@@ -148,6 +150,8 @@ where
 
                         should_draw = true;
                     }
+
+                    event_poll.set(next_event(self.redraw_interval));
                 }
                 changed = redraw_requests.changed() => {
                     if changed.is_ok() {

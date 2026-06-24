@@ -125,11 +125,6 @@ where
     E: Send + Sync + 'static,
 {
     /// Creates an action from an async mutation handler.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called outside a Tokio runtime, because action dispatches are
-    /// scheduled onto Tokio.
     pub fn new<F, Fut>(handler: F) -> Self
     where
         F: Fn(I) -> Fut + Send + Sync + 'static,
@@ -154,6 +149,11 @@ where
     /// The latest dispatch controls the visible action state. Older in-flight
     /// tasks are not cancelled, but their completions are ignored if a newer
     /// dispatch has started.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called outside a Tokio runtime, because dispatches are
+    /// scheduled with [`tokio::spawn`].
     pub fn dispatch(&self, input: I) {
         let dispatch_id = self.latest_dispatch.fetch_add(1, Ordering::AcqRel) + 1;
         let task_input = input.clone();
