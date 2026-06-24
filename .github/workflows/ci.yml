@@ -28,7 +28,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Run tests
-        run: cargo test
+        run: cargo test --workspace
 
       - name: Build docs
         run: cargo doc --workspace --no-deps

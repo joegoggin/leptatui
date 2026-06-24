@@ -44,7 +44,7 @@ const DEFAULT_REDRAW_INTERVAL: Duration = Duration::from_millis(16);
 pub struct App<R> {
     /// Root component or runtime adapter rendered by the app loop.
     root: R,
-    /// Input polling timeout while waiting for explicit redraw requests.
+    /// Polling timeout that also controls idle redraw cadence.
     redraw_interval: Duration,
 }
 
@@ -65,12 +65,12 @@ impl<R> App<R> {
         }
     }
 
-    /// Overrides the terminal input polling timeout.
+    /// Overrides the polling timeout that drives periodic redraws.
     ///
     /// # Arguments
     ///
-    /// * `redraw_interval` — Non-zero event polling timeout used while the
-    ///   runner also waits for async redraw requests.
+    /// * `redraw_interval` — Non-zero event polling timeout and idle redraw
+    ///   cadence. Async redraw requests can wake the runner before this timeout.
     ///
     /// # Returns
     ///
@@ -143,14 +143,13 @@ where
 
             tokio::select! {
                 event = &mut event_poll => {
-                    if let Some(event) = event? {
-                        if self.root.handle_event(event)? == AppControl::Exit {
-                            break;
-                        }
-
-                        should_draw = true;
+                    if let Some(event) = event?
+                        && self.root.handle_event(event)? == AppControl::Exit
+                    {
+                        break;
                     }
 
+                    should_draw = true;
                     event_poll.set(next_event(self.redraw_interval));
                 }
                 changed = redraw_requests.changed() => {

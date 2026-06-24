@@ -21,7 +21,7 @@ pre-review checks:
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test
+cargo test --workspace
 cargo doc --workspace --no-deps
 cargo check --workspace --examples
 ```
