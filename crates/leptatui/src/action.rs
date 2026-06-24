@@ -18,14 +18,19 @@ use leptos::prelude::{
 
 use crate::app::request_redraw;
 
+/// Boxed future returned by an action mutation handler.
 type BoxActionFuture<O, E> = Pin<Box<dyn Future<Output = std::result::Result<O, E>> + Send>>;
+/// Shared mutation handler invoked for each dispatched action input.
 type ActionHandler<I, O, E> = Arc<dyn Fn(I) -> BoxActionFuture<O, E> + Send + Sync>;
 
 /// Current state for an asynchronous mutation action.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ActionState<I, O, E> {
+    /// Whether the latest dispatched mutation is still in flight.
     pending: bool,
+    /// Most recent input passed to [`Action::dispatch`].
     input: Option<I>,
+    /// Result produced by the most recent completed dispatch.
     result: Option<std::result::Result<O, E>>,
 }
 
@@ -91,9 +96,13 @@ impl<I, O, E> ActionState<I, O, E> {
 
 /// Reactive handle for an async mutation.
 pub struct Action<I, O, E> {
+    /// Signal containing the visible action state.
     state: ReadSignal<ActionState<I, O, E>>,
+    /// Setter used by dispatch tasks to publish pending and completed states.
     set_state: WriteSignal<ActionState<I, O, E>>,
+    /// Async mutation handler invoked for each dispatch.
     handler: ActionHandler<I, O, E>,
+    /// Monotonic dispatch id used to ignore stale completions.
     latest_dispatch: Arc<AtomicU64>,
 }
 
@@ -235,6 +244,14 @@ where
 }
 
 /// Creates an action from an async mutation handler.
+///
+/// # Arguments
+///
+/// * `handler` — Async mutation handler to run for each dispatched input.
+///
+/// # Returns
+///
+/// An [`Action`] that exposes pending, input, and result state for the handler.
 pub fn create_action<I, O, E, F, Fut>(handler: F) -> Action<I, O, E>
 where
     I: Clone + Send + Sync + 'static,
@@ -246,11 +263,13 @@ where
     Action::new(handler)
 }
 
+/// Initializes the Any Spawner Tokio executor used by Leptos effects.
 fn init_tokio_executor() {
     let _ = any_spawner::Executor::init_tokio();
 }
 
 #[cfg(test)]
+/// Tests for action redraw wakeups.
 mod tests {
     use std::{
         sync::{Arc, Mutex},
@@ -264,19 +283,54 @@ mod tests {
 
     use super::*;
 
+    /// Result returned by the controlled test action handler.
     type TestActionResult = std::result::Result<String, &'static str>;
+    /// Shared sender slot for completing a pending test action.
     type PendingAction = Arc<Mutex<Option<oneshot::Sender<TestActionResult>>>>;
 
+    /// Verifies successful action completion requests a redraw.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// create_action(|input| async move { Ok(format!("{input}:saved")) })
+    /// action.dispatch(5)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The pending dispatch sends a redraw request.
+    /// - Completing the action successfully sends another redraw request.
+    /// - The action stores `Ok("5:saved")` as its latest result.
     #[tokio::test(flavor = "current_thread")]
     async fn successful_completion_requests_redraw() {
         assert_completion_requests_redraw(Ok(String::from("saved"))).await;
     }
 
+    /// Verifies failed action completion requests a redraw.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// create_action(|_| async move { Err("offline") })
+    /// action.dispatch(5)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The pending dispatch sends a redraw request.
+    /// - Completing the action with an error sends another redraw request.
+    /// - The action stores `Err("offline")` as its latest result.
     #[tokio::test(flavor = "current_thread")]
     async fn error_completion_requests_redraw() {
         assert_completion_requests_redraw(Err("offline")).await;
     }
 
+    /// Verifies action completion redraw behavior for one controlled response.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` — Result sent into the pending action task.
     async fn assert_completion_requests_redraw(response: TestActionResult) {
         let _redraw_guard = redraw_test_lock().await;
         let owner = Owner::new();
@@ -321,12 +375,26 @@ mod tests {
         }
     }
 
+    /// Inserts a sender for the current test action and returns its receiver.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending` — Shared slot that stores the sender side of the action response.
+    ///
+    /// # Returns
+    ///
+    /// A [`oneshot::Receiver`] awaited by the test action handler.
     fn insert_pending_action(pending: &PendingAction) -> oneshot::Receiver<TestActionResult> {
         let (sender, receiver) = oneshot::channel();
         *pending.lock().expect("pending action lock") = Some(sender);
         receiver
     }
 
+    /// Waits until the controlled action has registered its response sender.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending` — Shared slot inspected for the pending sender.
     async fn wait_until_pending_action(pending: &PendingAction) {
         timeout(Duration::from_secs(1), async {
             while pending.lock().expect("pending action lock").is_none() {
@@ -337,6 +405,12 @@ mod tests {
         .expect("pending action should be registered");
     }
 
+    /// Sends the controlled action response to the pending task.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending` — Shared slot containing the sender side of the action response.
+    /// * `response` — Result to deliver to the action handler.
     fn send_action_response(pending: &PendingAction, response: TestActionResult) {
         let sender = pending
             .lock()

@@ -9,7 +9,11 @@ use tokio::{task::yield_now, time::timeout};
 
 use std::time::Duration;
 
-/// Component used to prove prelude macro and context exports work together.
+/// Renders a label from context using only prelude exports.
+///
+/// # Returns
+///
+/// A [`View`] containing the context label.
 #[component]
 fn PreludeComponent() -> View {
     provide_context(String::from("from prelude component"));
@@ -142,6 +146,18 @@ fn prelude_exposes_reactivity_and_context() {
 }
 
 /// Verifies the prelude exposes resource helpers.
+///
+/// # Example Under Test
+///
+/// ```text
+/// use leptatui::prelude::*;
+/// create_resource(|| (), |_| async { Ok(42) })
+/// ```
+///
+/// # Assertions
+///
+/// - A resource can be created through prelude exports.
+/// - The resource eventually resolves to `ResourceState::Ready(42)`.
 #[tokio::test(flavor = "current_thread")]
 async fn prelude_exposes_resource_helpers() {
     let owner = Owner::new();

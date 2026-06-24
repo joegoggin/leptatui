@@ -46,6 +46,7 @@ pub use view::{
 };
 
 #[doc(hidden)]
+/// Hidden implementation details used by generated macro code.
 pub mod __private {
     use crate::View;
 
@@ -55,6 +56,17 @@ pub mod __private {
     };
     pub use crossterm::event::{Event, KeyEvent};
 
+    /// Creates a component view from a generated component factory.
+    ///
+    /// # Arguments
+    ///
+    /// * `preserve_on_reconcile` — Whether reconciliation should retain the
+    ///   previous component boundary.
+    /// * `factory` — Closure that builds the component instance.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] wrapping the generated component factory.
     pub fn __component_factory<C>(
         preserve_on_reconcile: bool,
         factory: impl FnOnce() -> C + 'static,
@@ -65,6 +77,12 @@ pub mod __private {
         crate::view::component_factory(preserve_on_reconcile, factory)
     }
 
+    /// Reconciles a generated view tree with a previous rendered tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `next` — Newly generated view tree to update in place.
+    /// * `previous` — Previously rendered view tree used as reconciliation input.
     pub fn __reconcile_view(next: &mut View, previous: &View) {
         if should_preserve_deferred_boundary(next, previous) {
             *next = previous.clone();
@@ -121,6 +139,16 @@ pub mod __private {
         }
     }
 
+    /// Returns whether the previous deferred boundary should be preserved.
+    ///
+    /// # Arguments
+    ///
+    /// * `next` — Newly generated view node.
+    /// * `previous` — Previously rendered view node.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether reconciliation should keep the previous node.
     fn should_preserve_deferred_boundary(next: &View, previous: &View) -> bool {
         match (next, previous) {
             (View::Component(next), View::Component(previous)) => next.can_reconcile_from(previous),

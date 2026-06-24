@@ -10,22 +10,35 @@ use std::{
 
 use leptatui::prelude::*;
 
+/// Result type returned by the mock API.
 type ApiResult<T> = std::result::Result<T, String>;
 
+/// Ticket record returned by the mock API.
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Ticket {
+    /// Stable ticket identifier.
     id: u64,
+    /// Human-readable ticket title.
     title: String,
+    /// Current ticket status.
     status: TicketStatus,
 }
 
+/// Status values supported by the mock ticket API.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TicketStatus {
+    /// Ticket is active and incomplete.
     Open,
+    /// Ticket has been completed.
     Done,
 }
 
 impl TicketStatus {
+    /// Returns the opposite status value.
+    ///
+    /// # Returns
+    ///
+    /// A [`TicketStatus`] toggled from open to done or done to open.
     fn toggled(self) -> Self {
         match self {
             Self::Open => Self::Done,
@@ -33,6 +46,11 @@ impl TicketStatus {
         }
     }
 
+    /// Returns the display label for this status.
+    ///
+    /// # Returns
+    ///
+    /// A static string label for the status.
     fn label(self) -> &'static str {
         match self {
             Self::Open => "open",
@@ -41,14 +59,23 @@ impl TicketStatus {
     }
 }
 
+/// Mutations supported by the mock ticket API.
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum TicketMutation {
+    /// Creates a generated ticket.
     Create,
+    /// Toggles the first ticket in the current list.
     ToggleFirst,
+    /// Simulates a failed mutation response.
     Fail,
 }
 
 impl TicketMutation {
+    /// Returns the display label for this mutation.
+    ///
+    /// # Returns
+    ///
+    /// A static string label for the mutation.
     fn label(&self) -> &'static str {
         match self {
             Self::Create => "create ticket",
@@ -58,13 +85,21 @@ impl TicketMutation {
     }
 }
 
+/// Successful result returned by a mock ticket mutation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum MutationResult {
+    /// Mutation created the contained [`Ticket`].
     Created(Ticket),
+    /// Mutation updated the contained [`Ticket`].
     Updated(Ticket),
 }
 
 impl MutationResult {
+    /// Returns the display label for this mutation result.
+    ///
+    /// # Returns
+    ///
+    /// A [`String`] describing the created or updated ticket.
     fn label(&self) -> String {
         match self {
             Self::Created(ticket) => format!("Created #{}", ticket.id),
@@ -75,19 +110,30 @@ impl MutationResult {
     }
 }
 
+/// In-memory mock API used by the demo.
 #[derive(Clone)]
 struct MockApi {
+    /// Shared mutable state for mock endpoint calls.
     inner: Arc<Mutex<MockState>>,
 }
 
+/// Mutable state behind the mock API.
 #[derive(Debug)]
 struct MockState {
+    /// Tickets returned by the list endpoint.
     tickets: Vec<Ticket>,
+    /// Identifier assigned to the next generated ticket.
     next_id: u64,
+    /// Whether the next list call should fail.
     fail_next_list: bool,
 }
 
 impl MockApi {
+    /// Creates a mock API with seed tickets.
+    ///
+    /// # Returns
+    ///
+    /// A [`MockApi`] initialized with two tickets.
     fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(MockState {
@@ -109,6 +155,15 @@ impl MockApi {
         }
     }
 
+    /// Lists the current mock tickets after an artificial delay.
+    ///
+    /// # Returns
+    ///
+    /// An [`ApiResult`] containing the ticket list on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`String`] if the next list call has been configured to fail.
     async fn list(&self) -> ApiResult<Vec<Ticket>> {
         tokio::time::sleep(Duration::from_millis(900)).await;
 
@@ -121,6 +176,20 @@ impl MockApi {
         Ok(state.tickets.clone())
     }
 
+    /// Applies a mock ticket mutation after an artificial delay.
+    ///
+    /// # Arguments
+    ///
+    /// * `mutation` — Mutation to apply to the mock ticket state.
+    ///
+    /// # Returns
+    ///
+    /// An [`ApiResult`] containing the mutation result on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`String`] if the mutation is configured to fail or if no ticket
+    /// exists for [`TicketMutation::ToggleFirst`].
     async fn mutate(&self, mutation: TicketMutation) -> ApiResult<MutationResult> {
         tokio::time::sleep(Duration::from_millis(650)).await;
 
@@ -150,19 +219,30 @@ impl MockApi {
         }
     }
 
+    /// Configures the next list call to return an error.
     fn fail_next_list(&self) {
         self.inner.lock().expect("mock api lock").fail_next_list = true;
     }
 }
 
+/// Context shared by the demo components and key handlers.
 #[derive(Clone)]
 struct CrudContext {
+    /// Mock API used for list and mutation requests.
     api: MockApi,
+    /// Resource containing the current ticket list state.
     tickets: Resource<Vec<Ticket>, String>,
+    /// Action used to run ticket mutations.
     mutation: Action<TicketMutation, MutationResult, String>,
+    /// Signal setter that increments to refresh the ticket list.
     refresh: WriteSignal<u64>,
 }
 
+/// Renders the async CRUD demo.
+///
+/// # Returns
+///
+/// A [`View`] containing the ticket list, mutation status, controls, and help text.
 #[component]
 fn AsyncCrudDemo() -> View {
     let api = MockApi::new();
@@ -262,21 +342,27 @@ fn AsyncCrudDemo() -> View {
     }
 }
 
+/// Renders the current ticket-list resource state.
+///
+/// # Returns
+///
+/// A [`View`] showing pending, ready, or error content for the ticket list.
 #[component]
 fn TicketList() -> View {
     let context = expect_context::<CrudContext>();
 
     dynamic(move || match context.tickets.get_untracked() {
-        ResourceState::Pending => {
-            text("Loading tickets from mock API...").with_classes("pending")
-        }
+        ResourceState::Pending => text("Loading tickets from mock API...").with_classes("pending"),
         ResourceState::Ready(tickets) => render_ticket_list(tickets),
-        ResourceState::Error(error) => {
-            text(format!("Load error: {error}")).with_classes("error")
-        }
+        ResourceState::Error(error) => text(format!("Load error: {error}")).with_classes("error"),
     })
 }
 
+/// Renders the current mutation action state.
+///
+/// # Returns
+///
+/// A [`View`] showing idle, pending, success, or error mutation status.
 #[component]
 fn MutationStatus() -> View {
     let context = expect_context::<CrudContext>();
@@ -284,6 +370,11 @@ fn MutationStatus() -> View {
     dynamic(move || render_mutation_status(context.mutation.get_untracked()))
 }
 
+/// Renders button controls for demo mutations and reloads.
+///
+/// # Returns
+///
+/// A [`View`] containing the CRUD control row.
 #[component]
 fn CrudControls() -> View {
     let context = expect_context::<CrudContext>();
@@ -333,6 +424,16 @@ fn CrudControls() -> View {
     }
 }
 
+/// Handles keyboard shortcuts for the CRUD demo.
+///
+/// # Arguments
+///
+/// * `key` — Key event received by the app.
+/// * `context` — Shared CRUD context used to dispatch work.
+///
+/// # Returns
+///
+/// A [`KeyControl`] indicating whether the key was handled or exits the app.
 fn handle_key_event(key: KeyEvent, context: &CrudContext) -> KeyControl {
     match key.code {
         KeyCode::Char('n') => {
@@ -360,15 +461,34 @@ fn handle_key_event(key: KeyEvent, context: &CrudContext) -> KeyControl {
     }
 }
 
+/// Increments the refresh signal to reload tickets.
+///
+/// # Arguments
+///
+/// * `context` — Shared CRUD context containing the refresh setter.
 fn refresh_list(context: &CrudContext) {
     context.refresh.update(|version| *version += 1);
 }
 
+/// Marks the next list call as failed and triggers a reload.
+///
+/// # Arguments
+///
+/// * `context` — Shared CRUD context containing the mock API and refresh setter.
 fn fail_next_list(context: &CrudContext) {
     context.api.fail_next_list();
     refresh_list(context);
 }
 
+/// Renders a ticket-list view.
+///
+/// # Arguments
+///
+/// * `tickets` — Tickets returned by the mock API.
+///
+/// # Returns
+///
+/// A [`View`] containing a section header and ticket rows.
 fn render_ticket_list(tickets: Vec<Ticket>) -> View {
     let mut rows = Vec::with_capacity(tickets.len() + 1);
     rows.push(text(format!("Tickets ({})", tickets.len())).with_classes("section-title ready"));
@@ -382,6 +502,15 @@ fn render_ticket_list(tickets: Vec<Ticket>) -> View {
     column(rows).with_classes("ticket-list")
 }
 
+/// Renders one ticket row.
+///
+/// # Arguments
+///
+/// * `ticket` — Ticket to display.
+///
+/// # Returns
+///
+/// A [`View`] containing the ticket id, status, and title.
 fn render_ticket(ticket: Ticket) -> View {
     let class = match ticket.status {
         TicketStatus::Open => "ticket-open",
@@ -397,6 +526,15 @@ fn render_ticket(ticket: Ticket) -> View {
     .with_classes(class)
 }
 
+/// Renders mutation action status.
+///
+/// # Arguments
+///
+/// * `state` — Current mutation action state.
+///
+/// # Returns
+///
+/// A [`View`] describing the current mutation state.
 fn render_mutation_status(state: ActionState<TicketMutation, MutationResult, String>) -> View {
     if state.is_pending() {
         let label = state
@@ -416,6 +554,15 @@ fn render_mutation_status(state: ActionState<TicketMutation, MutationResult, Str
     }
 }
 
+/// Runs the async CRUD example.
+///
+/// # Returns
+///
+/// An empty [`Result`] when the app exits successfully.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 #[tokio::main]
 async fn main() -> Result<()> {
     App::new(AsyncCrudDemo::new()).run().await

@@ -7,6 +7,11 @@ use std::time::Duration;
 
 use leptatui::prelude::*;
 
+/// Renders resource and action state that update after async completions.
+///
+/// # Returns
+///
+/// A [`View`] containing resource state, action state, and keyboard help.
 #[component]
 fn AsyncRedraw() -> View {
     let request = RwSignal::new(0usize);
@@ -97,6 +102,15 @@ fn AsyncRedraw() -> View {
     }
 }
 
+/// Runs the async redraw example.
+///
+/// # Returns
+///
+/// An empty [`Result`] when the app exits successfully.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 #[tokio::main]
 async fn main() -> Result<()> {
     App::new(AsyncRedraw::new()).run().await

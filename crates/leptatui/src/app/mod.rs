@@ -4,6 +4,16 @@
 //! for Leptatui applications. It adapts either an [`AppRoot`] implementation or
 //! a [`Component`](crate::Component) to a managed Ratatui/Crossterm terminal
 //! session.
+//!
+//! # Modules
+//!
+//! - [`control`] — App-loop control-flow decisions returned by roots.
+//! - [`error`] — Runtime error and result types.
+//! - [`event`] — Blocking Crossterm event polling helpers.
+//! - [`render`] — Root drawing helpers.
+//! - [`root`] — Root component abstraction used by the app runner.
+//! - [`terminal`] — Managed terminal setup and cleanup.
+//! - [`wakeup`] — Async redraw wakeup coordination.
 
 mod control;
 mod error;

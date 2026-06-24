@@ -63,7 +63,9 @@ impl<T, E> ResourceState<T, E> {
 
 /// Reactive handle for an async read keyed by a tracked source value.
 pub struct Resource<T, E> {
+    /// Signal containing the visible resource state.
     state: ReadSignal<ResourceState<T, E>>,
+    /// Effect that tracks source-key changes and starts fetch tasks.
     _watcher: Effect<SyncStorage>,
 }
 
@@ -209,6 +211,15 @@ where
 ///
 /// Older in-flight fetch tasks are not cancelled when the source key changes.
 /// Their results are ignored if a newer request has started.
+///
+/// # Arguments
+///
+/// * `source` — Tracked closure that returns the current resource key.
+/// * `fetcher` — Async function that loads a value for each source key.
+///
+/// # Returns
+///
+/// A [`Resource`] that exposes pending, ready, and error state for the fetcher.
 pub fn create_resource<K, T, E, F, Fut>(
     source: impl Fn() -> K + Send + Sync + 'static,
     fetcher: F,
@@ -223,11 +234,13 @@ where
     Resource::new(source, fetcher)
 }
 
+/// Initializes the Any Spawner Tokio executor used by Leptos effects.
 fn init_tokio_executor() {
     let _ = any_spawner::Executor::init_tokio();
 }
 
 #[cfg(test)]
+/// Tests for resource redraw wakeups.
 mod tests {
     use std::{
         sync::{Arc, Mutex},
@@ -241,18 +254,50 @@ mod tests {
 
     use super::*;
 
+    /// Result returned by the controlled test resource fetcher.
     type TestFetchResult = std::result::Result<String, &'static str>;
 
+    /// Verifies successful resource completion requests a redraw.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// create_resource(|| (), |_| async move { Ok("ready") })
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The initial pending load sends a redraw request.
+    /// - Completing the fetch successfully sends another redraw request.
+    /// - The resource stores `ResourceState::Ready("ready")`.
     #[tokio::test(flavor = "current_thread")]
     async fn successful_completion_requests_redraw() {
         assert_completion_requests_redraw(Ok(String::from("ready"))).await;
     }
 
+    /// Verifies failed resource completion requests a redraw.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// create_resource(|| (), |_| async move { Err("offline") })
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The initial pending load sends a redraw request.
+    /// - Completing the fetch with an error sends another redraw request.
+    /// - The resource stores `ResourceState::Error("offline")`.
     #[tokio::test(flavor = "current_thread")]
     async fn error_completion_requests_redraw() {
         assert_completion_requests_redraw(Err("offline")).await;
     }
 
+    /// Verifies resource completion redraw behavior for one controlled response.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` — Result sent into the pending resource fetch task.
     async fn assert_completion_requests_redraw(response: TestFetchResult) {
         let _redraw_guard = redraw_test_lock().await;
         let owner = Owner::new();

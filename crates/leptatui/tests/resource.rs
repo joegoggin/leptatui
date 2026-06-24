@@ -15,10 +15,25 @@ use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
 use tokio::{sync::oneshot, task::yield_now, time::timeout};
 
+/// Result returned by the controlled test resource fetcher.
 type TestFetchResult = std::result::Result<String, &'static str>;
+/// Pending fetch senders keyed by the source value that started each fetch.
 type PendingFetches = Arc<Mutex<HashMap<i32, oneshot::Sender<TestFetchResult>>>>;
 
 /// Verifies a resource loads once for its initial source key.
+///
+/// # Example Under Test
+///
+/// ```text
+/// let (key, _set_key) = signal(7);
+/// create_resource(move || key.get(), |key| async move { Ok(format!("item-{key}")) });
+/// ```
+///
+/// # Assertions
+///
+/// - The resource starts in the pending state.
+/// - The resource eventually stores `ResourceState::Ready("item-7")`.
+/// - The fetcher is called exactly once for the initial source key.
 #[tokio::test(flavor = "current_thread")]
 async fn resource_loads_initial_source_key_once() {
     let owner = Owner::new();
@@ -54,8 +69,22 @@ async fn resource_loads_initial_source_key_once() {
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
-/// Verifies changing the source key starts a new pending load and stores the
-/// new result.
+/// Verifies changing the source key starts a new pending load and stores the new result.
+///
+/// # Example Under Test
+///
+/// ```text
+/// let (key, set_key) = signal(1);
+/// let resource = create_resource(move || key.get(), fetch);
+/// set_key.set(2);
+/// ```
+///
+/// # Assertions
+///
+/// - The initial key `1` registers a pending fetch.
+/// - Completing key `1` stores `one` as the resource value.
+/// - Updating the key to `2` registers a new pending fetch.
+/// - Completing key `2` stores `two` as the resource value.
 #[tokio::test(flavor = "current_thread")]
 async fn source_key_change_triggers_reload() {
     let owner = Owner::new();
@@ -97,6 +126,24 @@ async fn source_key_change_triggers_reload() {
 }
 
 /// Verifies a slower stale fetch cannot overwrite a newer load result.
+///
+/// # Example Under Test
+///
+/// ```text
+/// set_key.set(2);
+/// send_fetch_response(2, Ok("second"));
+/// send_fetch_response(1, Ok("first"));
+/// ```
+///
+/// # Assertions
+///
+/// - Fetches are registered for keys `1` and `2`.
+/// - Completing key `2` first stores `second` as the resource value.
+/// - Completing stale key `1` afterward does not replace the newer value.
+///
+/// # Why
+///
+/// Slow responses from older source keys must not overwrite fresher UI state.
 #[tokio::test(flavor = "current_thread")]
 async fn stale_fetch_completion_does_not_overwrite_newer_result() {
     let owner = Owner::new();
@@ -137,6 +184,20 @@ async fn stale_fetch_completion_does_not_overwrite_newer_result() {
 }
 
 /// Verifies loading and error states render from a component.
+///
+/// # Example Under Test
+///
+/// ```text
+/// ResourceStatus { resource: resource.clone() }
+/// render_component(&mut terminal, &mut component)
+/// ```
+///
+/// # Assertions
+///
+/// - Terminal creation succeeds.
+/// - Rendering the pending resource succeeds and shows `Loading`.
+/// - Completing the fetch with `offline` stores `ResourceState::Error`.
+/// - Rendering the failed resource succeeds and shows `Error: offline`.
 #[tokio::test(flavor = "current_thread")]
 async fn loading_and_error_states_render_in_component() -> Result<()> {
     let owner = Owner::new();
@@ -180,11 +241,26 @@ async fn loading_and_error_states_render_in_component() -> Result<()> {
     Ok(())
 }
 
+/// Test component that renders a label for the current resource state.
 struct ResourceStatus {
+    /// Resource read by the component during render.
     resource: Resource<String, &'static str>,
 }
 
 impl Component for ResourceStatus {
+    /// Renders the current resource state into the terminal frame.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Render context for the current terminal frame.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] when the state label renders successfully.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if rendering the text view fails.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let label = match self.resource.get() {
             ResourceState::Pending => String::from("Loading"),
@@ -196,6 +272,16 @@ impl Component for ResourceStatus {
     }
 }
 
+/// Inserts a pending fetch sender for a source key and returns its receiver.
+///
+/// # Arguments
+///
+/// * `pending` — Shared map that stores fetch response senders by key.
+/// * `key` — Source key associated with the fetch.
+///
+/// # Returns
+///
+/// A [`oneshot::Receiver`] awaited by the test fetcher.
 fn insert_pending_fetch(pending: &PendingFetches, key: i32) -> oneshot::Receiver<TestFetchResult> {
     let (sender, receiver) = oneshot::channel();
     pending
@@ -205,6 +291,16 @@ fn insert_pending_fetch(pending: &PendingFetches, key: i32) -> oneshot::Receiver
     receiver
 }
 
+/// Returns whether a source key has a pending controlled fetch.
+///
+/// # Arguments
+///
+/// * `pending` — Shared map inspected for the key.
+/// * `key` — Source key to look up.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the key is waiting for a response.
 fn has_pending_fetch(pending: &PendingFetches, key: i32) -> bool {
     pending
         .lock()
@@ -212,6 +308,13 @@ fn has_pending_fetch(pending: &PendingFetches, key: i32) -> bool {
         .contains_key(&key)
 }
 
+/// Sends a controlled fetch response for a source key.
+///
+/// # Arguments
+///
+/// * `pending` — Shared map containing the pending sender.
+/// * `key` — Source key whose fetch should be completed.
+/// * `response` — Result to deliver to the fetcher.
 fn send_fetch_response(pending: &PendingFetches, key: i32, response: TestFetchResult) {
     let sender = pending
         .lock()
@@ -221,6 +324,21 @@ fn send_fetch_response(pending: &PendingFetches, key: i32, response: TestFetchRe
     sender.send(response).expect("send fetch response");
 }
 
+/// Renders a component into a test terminal.
+///
+/// # Arguments
+///
+/// * `terminal` — Ratatui test terminal used as the render target.
+/// * `component` — Component to render.
+///
+/// # Returns
+///
+/// An empty [`Result`] when terminal drawing and component rendering succeed.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] if terminal drawing fails or the component render
+/// method returns an error.
 fn render_component<C>(terminal: &mut Terminal<TestBackend>, component: &mut C) -> Result<()>
 where
     C: Component,
@@ -235,6 +353,15 @@ where
     render_result
 }
 
+/// Returns all symbols currently stored in the test terminal buffer.
+///
+/// # Arguments
+///
+/// * `terminal` — Ratatui test terminal to read.
+///
+/// # Returns
+///
+/// A [`String`] containing the terminal buffer contents.
 fn terminal_text(terminal: &Terminal<TestBackend>) -> String {
     terminal
         .backend()
@@ -245,6 +372,11 @@ fn terminal_text(terminal: &Terminal<TestBackend>) -> String {
         .collect()
 }
 
+/// Waits until a predicate becomes true.
+///
+/// # Arguments
+///
+/// * `predicate` — Condition polled between Tokio task yields.
 async fn wait_until(mut predicate: impl FnMut() -> bool) {
     timeout(Duration::from_secs(1), async {
         while !predicate() {
@@ -255,6 +387,7 @@ async fn wait_until(mut predicate: impl FnMut() -> bool) {
     .expect("condition should become true");
 }
 
+/// Yields repeatedly so spawned tasks can observe completed channels.
 async fn settle_tasks() {
     for _ in 0..10 {
         yield_now().await;
