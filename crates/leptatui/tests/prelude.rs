@@ -5,9 +5,10 @@
 
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
-use tokio::{task::yield_now, time::timeout};
 
-use std::time::Duration;
+mod support;
+
+use support::wait_until;
 
 /// Renders a label from context using only prelude exports.
 ///
@@ -165,15 +166,5 @@ async fn prelude_exposes_resource_helpers() {
     let resource: Resource<i32, &'static str> =
         owner.with(|| create_resource(|| (), |_| async { Ok(42) }));
 
-    timeout(Duration::from_secs(1), async {
-        loop {
-            if matches!(resource.get_untracked(), ResourceState::Ready(42)) {
-                break;
-            }
-
-            yield_now().await;
-        }
-    })
-    .await
-    .expect("resource should resolve from prelude exports");
+    wait_until(|| matches!(resource.get_untracked(), ResourceState::Ready(42))).await;
 }

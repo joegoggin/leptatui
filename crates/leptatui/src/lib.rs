@@ -55,6 +55,8 @@
 //! and runtime wiring hooks live under `__private` and are not supported as user
 //! APIs.
 
+mod executor;
+
 pub mod action;
 pub mod app;
 pub mod component;

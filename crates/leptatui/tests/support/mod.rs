@@ -116,3 +116,10 @@ pub(crate) async fn wait_until(mut predicate: impl FnMut() -> bool) {
     .await
     .expect("condition should become true");
 }
+
+/// Yields repeatedly so spawned tasks can observe completed channels.
+pub(crate) async fn settle_tasks() {
+    for _ in 0..10 {
+        yield_now().await;
+    }
+}

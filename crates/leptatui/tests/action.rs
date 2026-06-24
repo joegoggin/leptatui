@@ -8,11 +8,11 @@ use std::{
 };
 
 use leptatui::prelude::*;
-use tokio::{sync::oneshot, task::yield_now};
+use tokio::sync::oneshot;
 
 mod support;
 
-use support::wait_until;
+use support::{settle_tasks, wait_until};
 
 /// Result returned by the controlled test action handler.
 type TestActionResult = std::result::Result<String, &'static str>;
@@ -320,11 +320,4 @@ fn send_dispatch_response(pending: &PendingActions, input: i32, response: TestAc
         .remove(&input)
         .expect("pending dispatch should exist");
     sender.send(response).expect("send dispatch response");
-}
-
-/// Yields repeatedly so spawned tasks can observe completed channels.
-async fn settle_tasks() {
-    for _ in 0..10 {
-        yield_now().await;
-    }
 }
