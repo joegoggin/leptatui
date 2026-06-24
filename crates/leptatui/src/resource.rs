@@ -237,7 +237,7 @@ mod tests {
     use leptos::prelude::Owner;
     use tokio::{sync::oneshot, time::timeout};
 
-    use crate::app::subscribe_redraws;
+    use crate::app::{redraw_test_lock, subscribe_redraws};
 
     use super::*;
 
@@ -254,6 +254,7 @@ mod tests {
     }
 
     async fn assert_completion_requests_redraw(response: TestFetchResult) {
+        let _redraw_guard = redraw_test_lock().await;
         let owner = Owner::new();
         let expected = response.clone();
         let (sender, receiver) = oneshot::channel();
@@ -292,9 +293,11 @@ mod tests {
             .expect("completion redraw request should arrive")
             .expect("redraw sender should stay available");
 
+        let state = resource.get_untracked();
+
         match expected {
-            Ok(value) => assert_eq!(resource.value(), Some(value)),
-            Err(error) => assert_eq!(resource.error(), Some(error)),
+            Ok(value) => assert_eq!(state, ResourceState::Ready(value)),
+            Err(error) => assert_eq!(state, ResourceState::Error(error)),
         }
     }
 }

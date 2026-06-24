@@ -18,6 +18,8 @@ use std::time::Duration;
 pub use control::AppControl;
 pub use error::{Error, Result};
 pub use root::AppRoot;
+#[cfg(test)]
+pub(crate) use wakeup::redraw_test_lock;
 pub(crate) use wakeup::{request_redraw, subscribe_redraws};
 
 use event::next_event;

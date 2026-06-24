@@ -83,3 +83,16 @@ cargo run --example async_redraw
 
 The initial resource completion should redraw after its delay without key
 input. Use `r` to reload, `a` to dispatch the async action, and `q` to quit.
+
+## Async CRUD
+
+Run the async CRUD-style mock API demo:
+
+```sh
+cargo run --example async_crud
+```
+
+The demo loads a mock ticket list, dispatches create/update actions, refetches
+after successful mutations, and renders pending, success, and error states.
+Use `n` to create, `u` to update the first ticket, `r` to reload, `l` to fail
+the next list request, `e` to fail a mutation, and `q` to quit.

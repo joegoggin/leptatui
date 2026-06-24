@@ -13,6 +13,16 @@ use tokio::sync::watch;
 
 static REDRAW_GENERATION: AtomicU64 = AtomicU64::new(0);
 static REDRAW_SENDER: OnceLock<watch::Sender<u64>> = OnceLock::new();
+#[cfg(test)]
+static REDRAW_TEST_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) async fn redraw_test_lock() -> tokio::sync::MutexGuard<'static, ()> {
+    REDRAW_TEST_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await
+}
 
 /// Requests that active app runners perform a redraw.
 pub(crate) fn request_redraw() {
@@ -43,6 +53,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn request_redraw_wakes_subscriber() {
+        let _redraw_guard = redraw_test_lock().await;
         let mut redraws = subscribe_redraws();
 
         request_redraw();
