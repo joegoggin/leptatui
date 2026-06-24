@@ -72,3 +72,14 @@ cargo run --example stylesheet_imports
 This demonstrates `@use`, namespaced variables, imported mixins, and local
 mixin composition. Use Tab and Shift+Tab to move focus. Activate buttons with
 Enter or Space, and press `q` to quit.
+
+## Async Redraw
+
+Run the async redraw example:
+
+```sh
+cargo run --example async_redraw
+```
+
+The initial resource completion should redraw after its delay without key
+input. Use `r` to reload, `a` to dispatch the async action, and `q` to quit.

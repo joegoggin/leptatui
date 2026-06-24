@@ -16,6 +16,8 @@ use leptos::prelude::{
     Get, GetUntracked, ReadSignal, Set, With, WithUntracked, WriteSignal, signal,
 };
 
+use crate::app::request_redraw;
+
 type BoxActionFuture<O, E> = Pin<Box<dyn Future<Output = std::result::Result<O, E>> + Send>>;
 type ActionHandler<I, O, E> = Arc<dyn Fn(I) -> BoxActionFuture<O, E> + Send + Sync>;
 
@@ -148,6 +150,7 @@ where
         let task_input = input.clone();
         let completion_input = input.clone();
         let _ = self.set_state.try_set(ActionState::pending(input));
+        request_redraw();
 
         let handler = Arc::clone(&self.handler);
         let latest_dispatch = Arc::clone(&self.latest_dispatch);
@@ -158,6 +161,7 @@ where
 
             if latest_dispatch.load(Ordering::Acquire) == dispatch_id {
                 let _ = set_state.try_set(ActionState::completed(completion_input, result));
+                request_redraw();
             }
         });
     }
@@ -244,4 +248,98 @@ where
 
 fn init_tokio_executor() {
     let _ = any_spawner::Executor::init_tokio();
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+
+    use leptos::prelude::Owner;
+    use tokio::{sync::oneshot, task::yield_now, time::timeout};
+
+    use crate::app::subscribe_redraws;
+
+    use super::*;
+
+    type TestActionResult = std::result::Result<String, &'static str>;
+    type PendingAction = Arc<Mutex<Option<oneshot::Sender<TestActionResult>>>>;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn successful_completion_requests_redraw() {
+        assert_completion_requests_redraw(Ok(String::from("saved"))).await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn error_completion_requests_redraw() {
+        assert_completion_requests_redraw(Err("offline")).await;
+    }
+
+    async fn assert_completion_requests_redraw(response: TestActionResult) {
+        let owner = Owner::new();
+        let expected = response.clone();
+        let pending = PendingAction::default();
+        let pending_for_action = Arc::clone(&pending);
+        let mut redraws = subscribe_redraws();
+
+        let action: Action<i32, String, &'static str> = owner.with(|| {
+            create_action(move |input| {
+                let pending = Arc::clone(&pending_for_action);
+
+                async move {
+                    let receiver = insert_pending_action(&pending);
+                    let value = receiver.await.expect("test action response")?;
+                    Ok(format!("{input}:{value}"))
+                }
+            })
+        });
+
+        action.dispatch(5);
+
+        timeout(Duration::from_secs(1), redraws.changed())
+            .await
+            .expect("pending redraw request should arrive")
+            .expect("redraw sender should stay available");
+        redraws.borrow_and_update();
+
+        wait_until_pending_action(&pending).await;
+        send_action_response(&pending, response);
+
+        timeout(Duration::from_secs(1), redraws.changed())
+            .await
+            .expect("completion redraw request should arrive")
+            .expect("redraw sender should stay available");
+
+        match expected {
+            Ok(value) => assert_eq!(action.value(), Some(format!("5:{value}"))),
+            Err(error) => assert_eq!(action.error(), Some(error)),
+        }
+    }
+
+    fn insert_pending_action(pending: &PendingAction) -> oneshot::Receiver<TestActionResult> {
+        let (sender, receiver) = oneshot::channel();
+        *pending.lock().expect("pending action lock") = Some(sender);
+        receiver
+    }
+
+    async fn wait_until_pending_action(pending: &PendingAction) {
+        timeout(Duration::from_secs(1), async {
+            while pending.lock().expect("pending action lock").is_none() {
+                yield_now().await;
+            }
+        })
+        .await
+        .expect("pending action should be registered");
+    }
+
+    fn send_action_response(pending: &PendingAction, response: TestActionResult) {
+        let sender = pending
+            .lock()
+            .expect("pending action lock")
+            .take()
+            .expect("pending action should exist");
+        sender.send(response).expect("send action response");
+    }
 }

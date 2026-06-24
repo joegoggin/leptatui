@@ -15,6 +15,8 @@ use leptos::prelude::{
     Effect, Get, GetUntracked, ReadSignal, Set, SyncStorage, With, WithUntracked, signal,
 };
 
+use crate::app::request_redraw;
+
 /// Current state for an asynchronous resource read.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ResourceState<T, E> {
@@ -115,6 +117,7 @@ where
                 move |key, _, _| {
                     let request_id = latest_request.fetch_add(1, Ordering::AcqRel) + 1;
                     let _ = set_state.try_set(ResourceState::Pending);
+                    request_redraw();
 
                     let key = key.clone();
                     let set_state = set_state;
@@ -129,6 +132,7 @@ where
 
                         if latest_request.load(Ordering::Acquire) == request_id {
                             let _ = set_state.try_set(next);
+                            request_redraw();
                         }
                     });
                 },
@@ -221,4 +225,76 @@ where
 
 fn init_tokio_executor() {
     let _ = any_spawner::Executor::init_tokio();
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+
+    use leptos::prelude::Owner;
+    use tokio::{sync::oneshot, time::timeout};
+
+    use crate::app::subscribe_redraws;
+
+    use super::*;
+
+    type TestFetchResult = std::result::Result<String, &'static str>;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn successful_completion_requests_redraw() {
+        assert_completion_requests_redraw(Ok(String::from("ready"))).await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn error_completion_requests_redraw() {
+        assert_completion_requests_redraw(Err("offline")).await;
+    }
+
+    async fn assert_completion_requests_redraw(response: TestFetchResult) {
+        let owner = Owner::new();
+        let expected = response.clone();
+        let (sender, receiver) = oneshot::channel();
+        let receiver = Arc::new(Mutex::new(Some(receiver)));
+        let receiver_for_fetcher = Arc::clone(&receiver);
+        let mut redraws = subscribe_redraws();
+
+        let resource: Resource<String, &'static str> = owner.with(|| {
+            create_resource(
+                || (),
+                move |_| {
+                    let receiver = Arc::clone(&receiver_for_fetcher);
+
+                    async move {
+                        let receiver = receiver
+                            .lock()
+                            .expect("test receiver lock")
+                            .take()
+                            .expect("test receiver should be available");
+                        receiver.await.expect("test fetch response")
+                    }
+                },
+            )
+        });
+
+        timeout(Duration::from_secs(1), redraws.changed())
+            .await
+            .expect("pending redraw request should arrive")
+            .expect("redraw sender should stay available");
+        redraws.borrow_and_update();
+
+        sender.send(response).expect("send fetch response");
+
+        timeout(Duration::from_secs(1), redraws.changed())
+            .await
+            .expect("completion redraw request should arrive")
+            .expect("redraw sender should stay available");
+
+        match expected {
+            Ok(value) => assert_eq!(resource.value(), Some(value)),
+            Err(error) => assert_eq!(resource.error(), Some(error)),
+        }
+    }
 }

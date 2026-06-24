@@ -11,12 +11,14 @@ mod event;
 mod render;
 mod root;
 mod terminal;
+mod wakeup;
 
 use std::time::Duration;
 
 pub use control::AppControl;
 pub use error::{Error, Result};
 pub use root::AppRoot;
+pub(crate) use wakeup::{request_redraw, subscribe_redraws};
 
 use event::next_event;
 use render::draw_root;
@@ -30,7 +32,7 @@ const DEFAULT_REDRAW_INTERVAL: Duration = Duration::from_millis(16);
 pub struct App<R> {
     /// Root component or runtime adapter rendered by the app loop.
     root: R,
-    /// Polling timeout that also controls idle redraw cadence.
+    /// Input polling timeout while waiting for explicit redraw requests.
     redraw_interval: Duration,
 }
 
@@ -51,12 +53,12 @@ impl<R> App<R> {
         }
     }
 
-    /// Overrides the polling timeout that drives periodic redraws.
+    /// Overrides the terminal input polling timeout.
     ///
     /// # Arguments
     ///
-    /// * `redraw_interval` — Non-zero event polling timeout and idle redraw
-    ///   cadence.
+    /// * `redraw_interval` — Non-zero event polling timeout used while the
+    ///   runner also waits for async redraw requests.
     ///
     /// # Returns
     ///
@@ -116,13 +118,30 @@ where
     /// Returns [`Error::Io`] if drawing, event polling, or event reading fails.
     /// Returns [`Error::EventTask`] if the blocking event task fails.
     async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
-        loop {
-            draw_root(&mut self.root, &mut session.terminal)?;
+        let mut redraw_requests = subscribe_redraws();
+        let mut should_draw = true;
 
-            if let Some(event) = next_event(self.redraw_interval).await?
-                && self.root.handle_event(event)? == AppControl::Exit
-            {
-                break;
+        loop {
+            if should_draw {
+                draw_root(&mut self.root, &mut session.terminal)?;
+                should_draw = false;
+            }
+
+            tokio::select! {
+                event = next_event(self.redraw_interval) => {
+                    if let Some(event) = event? {
+                        if self.root.handle_event(event)? == AppControl::Exit {
+                            break;
+                        }
+
+                        should_draw = true;
+                    }
+                }
+                changed = redraw_requests.changed() => {
+                    if changed.is_ok() {
+                        should_draw = true;
+                    }
+                }
             }
         }
 
