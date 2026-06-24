@@ -5,6 +5,7 @@
 //!
 //! # Modules
 //!
+//! - [`action`] — Signal-backed async mutation state helpers.
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
 //! - [`mod@component`] — Component rendering contracts and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
@@ -14,6 +15,7 @@
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
 
+pub mod action;
 pub mod app;
 pub mod component;
 pub mod context;
@@ -25,6 +27,7 @@ pub mod view;
 
 extern crate self as leptatui;
 
+pub use action::{Action, ActionState, create_action};
 pub use app::{App, AppControl, AppRoot, Error, Result};
 pub use component::{
     Children, ChildrenFn, ChildrenMut, Component, KeyControl, RenderCtx, use_key_event,
