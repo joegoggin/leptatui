@@ -1,7 +1,28 @@
 //! Common imports for Leptatui applications.
 //!
-//! This module gathers the runtime, component, view, style, context, and
-//! Leptos reactive APIs most application code needs.
+//! Application code should normally start with `use leptatui::prelude::*`.
+//! This module gathers the runtime, component, view, style, context, routing,
+//! async state, keyboard event, terminal key, and Leptos reactive APIs most
+//! application code needs.
+//!
+//! The prelude exports the Leptatui `#[component]`, `view!`, and `stylesheet!`
+//! macros. These macros build terminal components and [`crate::View`] trees;
+//! they are not Leptos DOM macros.
+//!
+//! ```no_run
+//! use leptatui::prelude::*;
+//!
+//! #[component]
+//! fn Root() -> View {
+//!     view! { <Text>"Hello"</Text> }
+//! }
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     App::new(Root::new()).run().await
+//! }
+//! ```
+//!
 //! Low-level render metadata, callback aliases, and generated-code hooks stay
 //! outside the default import.
 

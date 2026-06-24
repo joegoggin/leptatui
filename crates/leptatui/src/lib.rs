@@ -21,6 +21,33 @@
 //! with `App::new(root).run().await`. Explicit module or top-level imports remain
 //! available for lower-level manual rendering and style inspection.
 //!
+//! ```no_run
+//! use leptatui::prelude::*;
+//!
+//! #[component]
+//! fn Root() -> View {
+//!     view! { <Text>"Hello from Leptatui"</Text> }
+//! }
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     App::new(Root::new()).run().await
+//! }
+//! ```
+//!
+//! The [`macro@view`] and [`macro@component`] macros are Leptatui terminal UI
+//! macros. They use Leptos-style syntax and Leptos reactive primitives, but
+//! they create Leptatui [`View`] trees and [`Component`] implementations rather
+//! than Leptos DOM nodes.
+//!
+//! Shared app state is usually stored with typed context via
+//! [`context::provide_context`], [`context::use_context`], and
+//! [`context::expect_context`]. Multi-page apps can store the active page with
+//! [`provide_route`], read it with [`use_route`], and navigate with
+//! [`use_navigate`]. Asynchronous reads and mutations use [`create_resource`]
+//! and [`create_action`] to expose pending, ready, and error state to
+//! components.
+//!
 //! # Deferred Scope
 //!
 //! The first baseline intentionally does not expose a Leptos DOM renderer, a
