@@ -20,6 +20,177 @@ pub enum ViewType {
     Column,
     /// Basic button view.
     Button,
+    /// Single-line editable text control.
+    Input,
+    /// Multiline editable text control.
+    TextArea,
+}
+
+/// Mini-Vim editing mode retained for editable text controls.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum MiniVimMode {
+    /// Text entry mode.
+    #[default]
+    Insert,
+    /// Command mode.
+    Normal,
+}
+
+/// Runtime state shared by editable text controls.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct EditableState {
+    /// Text cursor offset retained across reconciled redraws.
+    cursor: usize,
+    /// Horizontal viewport offset retained across reconciled redraws.
+    horizontal_scroll: u16,
+    /// Vertical viewport offset retained across reconciled redraws.
+    vertical_scroll: u16,
+    /// Mini-Vim mode retained across reconciled redraws.
+    mode: MiniVimMode,
+    /// Yank buffer retained across reconciled redraws.
+    yank_buffer: String,
+    /// Undo snapshots retained across reconciled redraws.
+    undo_stack: Vec<String>,
+    /// Redo snapshots retained across reconciled redraws.
+    redo_stack: Vec<String>,
+}
+
+impl EditableState {
+    /// Creates empty editable-control state.
+    ///
+    /// # Returns
+    ///
+    /// An [`EditableState`] value with zeroed cursor and scroll offsets, insert
+    /// mode, and empty history buffers.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the retained text cursor offset.
+    ///
+    /// # Returns
+    ///
+    /// A [`usize`] cursor offset.
+    pub const fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    /// Returns the retained horizontal viewport offset.
+    ///
+    /// # Returns
+    ///
+    /// A [`u16`] column offset.
+    pub const fn horizontal_scroll(&self) -> u16 {
+        self.horizontal_scroll
+    }
+
+    /// Returns the retained vertical viewport offset.
+    ///
+    /// # Returns
+    ///
+    /// A [`u16`] row offset.
+    pub const fn vertical_scroll(&self) -> u16 {
+        self.vertical_scroll
+    }
+
+    /// Returns the retained mini-Vim mode.
+    ///
+    /// # Returns
+    ///
+    /// A [`MiniVimMode`] value.
+    pub const fn mode(&self) -> MiniVimMode {
+        self.mode
+    }
+
+    /// Returns the retained selection-free yank buffer.
+    ///
+    /// # Returns
+    ///
+    /// A string slice containing the yank buffer.
+    pub fn yank_buffer(&self) -> &str {
+        &self.yank_buffer
+    }
+
+    /// Returns retained undo history.
+    ///
+    /// # Returns
+    ///
+    /// A slice containing retained undo snapshots.
+    pub fn undo_stack(&self) -> &[String] {
+        &self.undo_stack
+    }
+
+    /// Returns retained redo history.
+    ///
+    /// # Returns
+    ///
+    /// A slice containing retained redo snapshots.
+    pub fn redo_stack(&self) -> &[String] {
+        &self.redo_stack
+    }
+
+    /// Replaces the retained text cursor offset.
+    ///
+    /// # Arguments
+    ///
+    /// * `cursor` — Text cursor offset to retain.
+    pub fn set_cursor(&mut self, cursor: usize) {
+        self.cursor = cursor;
+    }
+
+    /// Replaces the retained horizontal viewport offset.
+    ///
+    /// # Arguments
+    ///
+    /// * `horizontal_scroll` — Horizontal viewport offset to retain.
+    pub fn set_horizontal_scroll(&mut self, horizontal_scroll: u16) {
+        self.horizontal_scroll = horizontal_scroll;
+    }
+
+    /// Replaces the retained vertical viewport offset.
+    ///
+    /// # Arguments
+    ///
+    /// * `vertical_scroll` — Vertical viewport offset to retain.
+    pub fn set_vertical_scroll(&mut self, vertical_scroll: u16) {
+        self.vertical_scroll = vertical_scroll;
+    }
+
+    /// Replaces the retained mini-Vim mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` — Mini-Vim mode to retain.
+    pub fn set_mode(&mut self, mode: MiniVimMode) {
+        self.mode = mode;
+    }
+
+    /// Replaces the retained selection-free yank buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `yank_buffer` — Yank buffer contents to retain.
+    pub fn set_yank_buffer(&mut self, yank_buffer: impl Into<String>) {
+        self.yank_buffer = yank_buffer.into();
+    }
+
+    /// Pushes a retained undo-history snapshot.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Undo snapshot to append.
+    pub fn push_undo(&mut self, value: impl Into<String>) {
+        self.undo_stack.push(value.into());
+    }
+
+    /// Pushes a retained redo-history snapshot.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Redo snapshot to append.
+    pub fn push_redo(&mut self, value: impl Into<String>) {
+        self.redo_stack.push(value.into());
+    }
 }
 
 /// Selector metadata stored with styleable render-tree views.

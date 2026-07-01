@@ -8,7 +8,7 @@ use std::{fmt, rc::Rc};
 use super::{
     component_view::ComponentView,
     dynamic::DynamicView,
-    metadata::{StyleMetadata, ViewType},
+    metadata::{EditableState, StyleMetadata, ViewType},
 };
 use crate::app::AppControl;
 
@@ -55,6 +55,24 @@ pub enum View {
         /// Optional activation callback.
         on_press: Option<ButtonAction>,
     },
+    /// Preparatory single-line editable text control.
+    Input {
+        /// Caller-owned value to display.
+        value: String,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+        /// Retained editing state for reconciled redraws.
+        editable_state: EditableState,
+    },
+    /// Preparatory multiline editable text control.
+    TextArea {
+        /// Caller-owned value to display.
+        value: String,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+        /// Retained editing state for reconciled redraws.
+        editable_state: EditableState,
+    },
     /// Child view produced when the tree is traversed.
     Dynamic(DynamicView),
     /// Child component preserved as a tree boundary.
@@ -74,7 +92,9 @@ impl View {
             | Self::Text { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
-            | Self::Button { metadata, .. } => Some(metadata),
+            | Self::Button { metadata, .. }
+            | Self::Input { metadata, .. }
+            | Self::TextArea { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -91,7 +111,9 @@ impl View {
             | Self::Text { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
-            | Self::Button { metadata, .. } => Some(metadata),
+            | Self::Button { metadata, .. }
+            | Self::Input { metadata, .. }
+            | Self::TextArea { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -229,6 +251,26 @@ impl fmt::Debug for View {
                 .field("metadata", metadata)
                 .field("on_press", &on_press.is_some())
                 .finish(),
+            Self::Input {
+                value,
+                metadata,
+                editable_state,
+            } => f
+                .debug_struct("Input")
+                .field("value", value)
+                .field("metadata", metadata)
+                .field("editable_state", editable_state)
+                .finish(),
+            Self::TextArea {
+                value,
+                metadata,
+                editable_state,
+            } => f
+                .debug_struct("TextArea")
+                .field("value", value)
+                .field("metadata", metadata)
+                .field("editable_state", editable_state)
+                .finish(),
             Self::Dynamic(_) => f.write_str("Dynamic(..)"),
             Self::Component(component) => f.debug_tuple("Component").field(component).finish(),
         }
@@ -320,6 +362,38 @@ impl PartialEq for View {
                 left_label == right_label
                     && left_metadata == right_metadata
                     && button_actions_equal(left_on_press, right_on_press)
+            }
+            (
+                Self::Input {
+                    value: left_value,
+                    metadata: left_metadata,
+                    editable_state: left_editable_state,
+                },
+                Self::Input {
+                    value: right_value,
+                    metadata: right_metadata,
+                    editable_state: right_editable_state,
+                },
+            ) => {
+                left_value == right_value
+                    && left_metadata == right_metadata
+                    && left_editable_state == right_editable_state
+            }
+            (
+                Self::TextArea {
+                    value: left_value,
+                    metadata: left_metadata,
+                    editable_state: left_editable_state,
+                },
+                Self::TextArea {
+                    value: right_value,
+                    metadata: right_metadata,
+                    editable_state: right_editable_state,
+                },
+            ) => {
+                left_value == right_value
+                    && left_metadata == right_metadata
+                    && left_editable_state == right_editable_state
             }
             (Self::Dynamic(left), Self::Dynamic(right)) => left.ptr_eq(right),
             (Self::Component(left), Self::Component(right)) => left.ptr_eq(right),

@@ -222,9 +222,11 @@ impl Selector {
             "Row" => Ok(quote! { #leptatui::ViewType::Row }),
             "Column" => Ok(quote! { #leptatui::ViewType::Column }),
             "Button" => Ok(quote! { #leptatui::ViewType::Button }),
+            "Input" => Ok(quote! { #leptatui::ViewType::Input }),
+            "TextArea" => Ok(quote! { #leptatui::ViewType::TextArea }),
             _ => Err(Error::new_spanned(
                 view_type,
-                "unsupported stylesheet type selector; expected Block, Text, Row, Column, or Button",
+                "unsupported stylesheet type selector; expected Block, Text, Row, Column, Button, Input, or TextArea",
             )),
         }
     }

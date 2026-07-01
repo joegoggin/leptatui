@@ -12,5 +12,5 @@ mod render;
 
 pub(crate) use builders::component_factory;
 pub use builders::{block, button, column, component, dynamic, row, text};
-pub use metadata::{StyleMetadata, ViewType};
+pub use metadata::{EditableState, MiniVimMode, StyleMetadata, ViewType};
 pub use model::{ButtonAction, View};

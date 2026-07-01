@@ -56,6 +56,47 @@ fn text_paragraph<'a>(content: &'a str, style: TuiStyle) -> Paragraph<'a> {
         .wrap(Wrap { trim: false })
 }
 
+/// Returns a paragraph configured for single-line editable control rendering.
+///
+/// # Arguments
+///
+/// * `value` — Text value to render inside the input.
+/// * `style` — Resolved view style applied to the paragraph.
+/// * `horizontal_scroll` — Horizontal viewport offset applied to the paragraph.
+///
+/// # Returns
+///
+/// A [`Paragraph`] configured for input rendering.
+fn input_paragraph<'a>(value: &'a str, style: TuiStyle, horizontal_scroll: u16) -> Paragraph<'a> {
+    Paragraph::new(value)
+        .style(style.to_ratatui_style())
+        .scroll((0, horizontal_scroll))
+}
+
+/// Returns a paragraph configured for multiline editable control rendering.
+///
+/// # Arguments
+///
+/// * `value` — Text value to render inside the text area.
+/// * `style` — Resolved view style applied to the paragraph.
+/// * `vertical_scroll` — Vertical viewport offset applied to the paragraph.
+/// * `horizontal_scroll` — Horizontal viewport offset applied to the paragraph.
+///
+/// # Returns
+///
+/// A [`Paragraph`] configured for text-area rendering.
+fn text_area_paragraph<'a>(
+    value: &'a str,
+    style: TuiStyle,
+    vertical_scroll: u16,
+    horizontal_scroll: u16,
+) -> Paragraph<'a> {
+    Paragraph::new(value)
+        .style(style.to_ratatui_style())
+        .wrap(Wrap { trim: false })
+        .scroll((vertical_scroll, horizontal_scroll))
+}
+
 /// Converts a rendered line count into a saturated terminal height.
 fn line_count_height(line_count: usize) -> u16 {
     u16::try_from(line_count).unwrap_or(u16::MAX)
@@ -130,6 +171,35 @@ impl View {
                 metadata.clear_scroll_into_view_request();
                 Ok(())
             }
+            Self::Input {
+                value,
+                metadata,
+                editable_state,
+            } => {
+                let style = resolve_style(metadata, ctx);
+                ctx.render_widget(input_paragraph(
+                    value.as_str(),
+                    style,
+                    editable_state.horizontal_scroll(),
+                ));
+                metadata.clear_scroll_into_view_request();
+                Ok(())
+            }
+            Self::TextArea {
+                value,
+                metadata,
+                editable_state,
+            } => {
+                let style = resolve_style(metadata, ctx);
+                ctx.render_widget(text_area_paragraph(
+                    value.as_str(),
+                    style,
+                    editable_state.vertical_scroll(),
+                    editable_state.horizontal_scroll(),
+                ));
+                metadata.clear_scroll_into_view_request();
+                Ok(())
+            }
             Self::Dynamic(child) => child.with_view(|child| child.render(ctx)),
             Self::Component(component) => component.render(ctx),
         }
@@ -192,7 +262,7 @@ impl View {
         Ok(self.handle_default_key_event_ref(&key))
     }
 
-    /// Returns the number of focusable buttons in this view tree.
+    /// Returns the number of focusable controls in this view tree.
     #[doc(hidden)]
     pub fn __focusable_count(&self) -> usize {
         self.focusable_count()
@@ -204,19 +274,19 @@ impl View {
         min_height_for_view(self, ctx)
     }
 
-    /// Returns the focused button index while tracking traversal position.
+    /// Returns the focused control index while tracking traversal position.
     #[doc(hidden)]
     pub fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
         self.focused_index_inner(index)
     }
 
-    /// Sets focus by flattened button index while tracking traversal position.
+    /// Sets focus by flattened control index while tracking traversal position.
     #[doc(hidden)]
     pub fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
         self.set_focus_by_index_inner(target, index);
     }
 
-    /// Returns the focused button's vertical span inside this view area.
+    /// Returns the focused control's vertical span inside this view area.
     #[doc(hidden)]
     pub fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         focused_button_span_for_view(self, ctx).map(VerticalSpan::into_tuple)
@@ -275,7 +345,10 @@ impl View {
             }
             Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_key_event_ref(key)),
             Self::Component(component) => component.dispatch_key_event(*key),
-            Self::Text { .. } | Self::Button { .. } => Ok(KeyControl::Pass),
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => Ok(KeyControl::Pass),
         }
     }
 
@@ -375,7 +448,10 @@ impl View {
                 child.with_view_mut(|child| child.scroll_first_overflowing(delta))
             }
             Self::Component(component) => component.scroll_first_overflowing(delta),
-            Self::Text { .. } | Self::Button { .. } => false,
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => false,
         }
     }
 
@@ -407,7 +483,10 @@ impl View {
             Self::Dynamic(child) => {
                 child.with_view_mut(|child| child.scroll_first_overflowing_to(boundary))
             }
-            Self::Text { .. } | Self::Button { .. } => false,
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => false,
         }
     }
 
@@ -421,7 +500,10 @@ impl View {
             }
             Self::Dynamic(child) => child.with_view(Self::has_overflowing_scroll_target),
             Self::Component(component) => component.has_overflowing_scroll_target(),
-            Self::Text { .. } | Self::Button { .. } => false,
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => false,
         }
     }
 
@@ -432,7 +514,9 @@ impl View {
             | Self::Text { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
-            | Self::Button { metadata, .. } => Some(metadata),
+            | Self::Button { metadata, .. }
+            | Self::Input { metadata, .. }
+            | Self::TextArea { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -455,14 +539,14 @@ impl View {
         self.set_scroll_to_top_key_pending(false);
     }
 
-    /// Returns the number of focusable buttons in this view tree.
+    /// Returns the number of focusable controls in this view tree.
     ///
     /// # Returns
     ///
-    /// A [`usize`] count of focusable button views.
+    /// A [`usize`] count of focusable control views.
     fn focusable_count(&self) -> usize {
         match self {
-            Self::Button { .. } => 1,
+            Self::Button { .. } | Self::Input { .. } | Self::TextArea { .. } => 1,
             Self::Block { child, .. } => child.focusable_count(),
             Self::Row { children, .. } | Self::Column { children, .. } => {
                 children.iter().map(Self::focusable_count).sum()
@@ -473,12 +557,12 @@ impl View {
         }
     }
 
-    /// Moves focus to the next or previous focusable button.
+    /// Moves focus to the next or previous focusable control.
     ///
     /// # Arguments
     ///
-    /// * `direction` — Direction to move through focusable buttons.
-    /// * `count` — Number of focusable buttons in the view tree.
+    /// * `direction` — Direction to move through focusable controls.
+    /// * `count` — Number of focusable controls in the view tree.
     fn move_focus(&mut self, direction: FocusDirection, count: usize) {
         if count == 0 {
             return;
@@ -495,28 +579,30 @@ impl View {
         self.set_focus_by_index(target);
     }
 
-    /// Returns the flattened index of the currently focused button.
+    /// Returns the flattened index of the currently focused control.
     ///
     /// # Returns
     ///
-    /// An [`Option<usize>`] containing the focused button index.
+    /// An [`Option<usize>`] containing the focused control index.
     fn focused_index(&self) -> Option<usize> {
         let mut index = 0;
         self.focused_index_inner(&mut index)
     }
 
-    /// Returns the focused button index while tracking traversal position.
+    /// Returns the focused control index while tracking traversal position.
     ///
     /// # Arguments
     ///
-    /// * `index` — Current flattened button index during traversal.
+    /// * `index` — Current flattened control index during traversal.
     ///
     /// # Returns
     ///
-    /// An [`Option<usize>`] containing the focused button index.
+    /// An [`Option<usize>`] containing the focused control index.
     fn focused_index_inner(&self, index: &mut usize) -> Option<usize> {
         match self {
-            Self::Button { metadata, .. } => {
+            Self::Button { metadata, .. }
+            | Self::Input { metadata, .. }
+            | Self::TextArea { metadata, .. } => {
                 let current = *index;
                 *index += 1;
                 metadata.is_focused().then_some(current)
@@ -531,25 +617,27 @@ impl View {
         }
     }
 
-    /// Sets focus by flattened button index.
+    /// Sets focus by flattened control index.
     ///
     /// # Arguments
     ///
-    /// * `target` — Flattened button index that should receive focus.
+    /// * `target` — Flattened control index that should receive focus.
     fn set_focus_by_index(&mut self, target: usize) {
         let mut index = 0;
         self.set_focus_by_index_inner(target, &mut index);
     }
 
-    /// Sets focus by flattened button index while tracking traversal position.
+    /// Sets focus by flattened control index while tracking traversal position.
     ///
     /// # Arguments
     ///
-    /// * `target` — Flattened button index that should receive focus.
-    /// * `index` — Current flattened button index during traversal.
+    /// * `target` — Flattened control index that should receive focus.
+    /// * `index` — Current flattened control index during traversal.
     fn set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
         match self {
-            Self::Button { metadata, .. } => {
+            Self::Button { metadata, .. }
+            | Self::Input { metadata, .. }
+            | Self::TextArea { metadata, .. } => {
                 let focused = *index == target;
                 metadata.set_focused(focused);
                 if focused {
@@ -593,7 +681,10 @@ impl View {
             }
             Self::Dynamic(child) => child.with_view(Self::activate_focused_button),
             Self::Component(component) => component.activate_focused_button(),
-            Self::Text { .. } | Self::Button { .. } => None,
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => None,
         }
     }
 
@@ -619,7 +710,10 @@ impl View {
             }
             Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_event_ref(event)),
             Self::Component(component) => component.handle_event(event.clone()),
-            Self::Text { .. } | Self::Button { .. } => Ok(AppControl::Continue),
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => Ok(AppControl::Continue),
         }
     }
 }
@@ -691,25 +785,25 @@ impl Component for View {
         View::__dispatch_key_event(self, key)
     }
 
-    /// Returns the number of focusable buttons in the view tree.
+    /// Returns the number of focusable controls in the view tree.
     #[doc(hidden)]
     fn __focusable_count(&self) -> usize {
         View::__focusable_count(self)
     }
 
-    /// Returns the focused button index while tracking traversal position.
+    /// Returns the focused control index while tracking traversal position.
     #[doc(hidden)]
     fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
         View::__focused_index_inner(self, index)
     }
 
-    /// Sets focus by flattened button index while tracking traversal position.
+    /// Sets focus by flattened control index while tracking traversal position.
     #[doc(hidden)]
     fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
         View::__set_focus_by_index_inner(self, target, index);
     }
 
-    /// Returns the focused button's vertical span inside this component area.
+    /// Returns the focused control's vertical span inside this component area.
     #[doc(hidden)]
     fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         View::__focused_button_span(self, ctx)
@@ -746,12 +840,12 @@ impl Component for View {
     }
 }
 
-/// Direction used to move focus through focusable views.
+/// Direction used to move focus through focusable controls.
 #[derive(Clone, Copy)]
 enum FocusDirection {
-    /// Move focus to the next focusable view.
+    /// Move focus to the next focusable control.
     Forward,
-    /// Move focus to the previous focusable view.
+    /// Move focus to the previous focusable control.
     Backward,
 }
 
@@ -840,10 +934,12 @@ fn scroll_span_into_view(
     metadata.set_scroll_offset(u16::try_from(next).unwrap_or(u16::MAX));
 }
 
-/// Returns the focused button's vertical span within a view's render area.
+/// Returns the focused control's vertical span within a view's render area.
 fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<VerticalSpan> {
     match view {
         View::Button { metadata, .. }
+        | View::Input { metadata, .. }
+        | View::TextArea { metadata, .. }
             if metadata.is_focused() && metadata.scroll_into_view_requested() =>
         {
             Some(VerticalSpan::from_height(ctx.area().height))
@@ -873,11 +969,13 @@ fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Opt
         View::Component(component) => component
             .focused_button_span(ctx)
             .map(|(top, bottom)| VerticalSpan { top, bottom }),
-        View::Text { .. } | View::Button { .. } => None,
+        View::Text { .. } | View::Button { .. } | View::Input { .. } | View::TextArea { .. } => {
+            None
+        }
     }
 }
 
-/// Returns the focused button's vertical span inside a layout view.
+/// Returns the focused control's vertical span inside a layout view.
 fn focused_button_span_for_layout_view(
     children: &[View],
     metadata: &StyleMetadata,
@@ -908,7 +1006,7 @@ fn focused_button_span_for_layout_view(
     }
 }
 
-/// Returns the focused button's vertical span inside row children.
+/// Returns the focused control's vertical span inside row children.
 fn focused_button_span_in_row_children(
     children: &[View],
     inherited_style: TuiStyle,
@@ -931,7 +1029,7 @@ fn focused_button_span_in_row_children(
     )
 }
 
-/// Returns the focused button's vertical span inside column children.
+/// Returns the focused control's vertical span inside column children.
 fn focused_button_span_in_column_children(
     children: &[View],
     min_heights: &[u16],
@@ -1255,6 +1353,27 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             let style = resolve_style(metadata, ctx);
             1 + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
                 + vertical_padding_rows(style.padding)
+        }
+        View::Input { metadata, .. } => {
+            let _style = resolve_style(metadata, ctx);
+            1
+        }
+        View::TextArea {
+            value,
+            metadata,
+            editable_state,
+        } => {
+            let style = resolve_style(metadata, ctx);
+            line_count_height(
+                text_area_paragraph(
+                    value.as_str(),
+                    style,
+                    editable_state.vertical_scroll(),
+                    editable_state.horizontal_scroll(),
+                )
+                .line_count(ctx.area().width),
+            )
+            .max(1)
         }
         View::Block { child, metadata } => {
             let style = resolve_style(metadata, ctx);

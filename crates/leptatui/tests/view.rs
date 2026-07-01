@@ -10,9 +10,9 @@ use std::{
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
-    AppControl, Color, Component, KeyControl, LayoutDirection, MediaQuery, RenderCtx, Result,
-    StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View, ViewType, block, button, column,
-    component, dynamic, row, text,
+    AppControl, Color, Component, EditableState, KeyControl, LayoutDirection, MediaQuery,
+    MiniVimMode, RenderCtx, Result, StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View,
+    ViewType, block, button, column, component, dynamic, row, text,
 };
 use ratatui::{
     Terminal,
@@ -49,7 +49,105 @@ fn button_focuses(view: &View) -> Vec<bool> {
         View::Row { children, .. } | View::Column { children, .. } => {
             children.iter().flat_map(button_focuses).collect()
         }
+        View::Text { .. }
+        | View::Input { .. }
+        | View::TextArea { .. }
+        | View::Dynamic(_)
+        | View::Component(_) => Vec::new(),
+    }
+}
+
+/// Returns flattened focus states for all focusable controls in a view tree.
+///
+/// # Arguments
+///
+/// * `view` — View tree to inspect.
+///
+/// # Returns
+///
+/// A [`Vec<bool>`] containing focus state for each focusable control.
+fn control_focuses(view: &View) -> Vec<bool> {
+    match view {
+        View::Button { metadata, .. }
+        | View::Input { metadata, .. }
+        | View::TextArea { metadata, .. } => vec![metadata.is_focused()],
+        View::Block { child, .. } => control_focuses(child),
+        View::Row { children, .. } | View::Column { children, .. } => {
+            children.iter().flat_map(control_focuses).collect()
+        }
         View::Text { .. } | View::Dynamic(_) | View::Component(_) => Vec::new(),
+    }
+}
+
+/// Creates an editable input test view.
+///
+/// # Arguments
+///
+/// * `value` — Caller-owned value to display in the input.
+///
+/// # Returns
+///
+/// A [`View`] containing an input with fresh editable state.
+fn editable_input(value: impl Into<String>) -> View {
+    View::Input {
+        value: value.into(),
+        metadata: StyleMetadata::new(ViewType::Input),
+        editable_state: EditableState::new(),
+    }
+}
+
+/// Creates an editable text-area test view.
+///
+/// # Arguments
+///
+/// * `value` — Caller-owned value to display in the text area.
+///
+/// # Returns
+///
+/// A [`View`] containing a text area with fresh editable state.
+fn editable_text_area(value: impl Into<String>) -> View {
+    View::TextArea {
+        value: value.into(),
+        metadata: StyleMetadata::new(ViewType::TextArea),
+        editable_state: EditableState::new(),
+    }
+}
+
+/// Creates non-default editable state for reconciliation tests.
+///
+/// # Returns
+///
+/// An [`EditableState`] value containing cursor, scroll, mode, yank, undo, and
+/// redo state.
+fn editable_state_fixture() -> EditableState {
+    let mut state = EditableState::new();
+    state.set_cursor(6);
+    state.set_horizontal_scroll(2);
+    state.set_vertical_scroll(3);
+    state.set_mode(MiniVimMode::Normal);
+    state.set_yank_buffer("copied");
+    state.push_undo("before");
+    state.push_redo("after");
+    state
+}
+
+/// Returns editable state stored by an editable test view.
+///
+/// Panics if `view` is not an editable control.
+///
+/// # Arguments
+///
+/// * `view` — Editable view to inspect.
+///
+/// # Returns
+///
+/// An [`EditableState`] reference retained by the view.
+fn editable_state(view: &View) -> &EditableState {
+    match view {
+        View::Input { editable_state, .. } | View::TextArea { editable_state, .. } => {
+            editable_state
+        }
+        other => panic!("expected editable view, got {other:?}"),
     }
 }
 
@@ -886,6 +984,51 @@ fn tab_focus_moves_between_static_buttons() -> Result<()> {
     Ok(())
 }
 
+/// Verifies tab navigation includes editable controls.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([button("Save"), text("Gap"), Input, TextArea, button("Submit")])
+/// Tab x4, BackTab
+/// ```
+///
+/// # Assertions
+///
+/// - The view reports four focusable controls.
+/// - Each tab event succeeds and moves focus in render order.
+/// - The back-tab event succeeds and moves focus back one control.
+/// - Non-editable text is skipped.
+#[test]
+fn tab_focus_moves_across_buttons_and_editable_controls() -> Result<()> {
+    let mut view = column([
+        button("Save"),
+        text("Gap"),
+        editable_input("Ada"),
+        editable_text_area("Notes"),
+        button("Submit"),
+    ]);
+
+    assert_eq!(view.__focusable_count(), 4);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    assert_eq!(control_focuses(&view), vec![true, false, false, false]);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    assert_eq!(control_focuses(&view), vec![false, true, false, false]);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    assert_eq!(control_focuses(&view), vec![false, false, true, false]);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    assert_eq!(control_focuses(&view), vec![false, false, false, true]);
+
+    view.handle_event(key(KeyCode::BackTab))?;
+    assert_eq!(control_focuses(&view), vec![false, false, true, false]);
+
+    Ok(())
+}
+
 /// Verifies tab focus scrolls an overflowing column to the focused button.
 ///
 /// # Example Under Test
@@ -1100,6 +1243,58 @@ fn enter_and_space_activate_focused_button() -> Result<()> {
     view.handle_event(key(KeyCode::Tab))?;
     view.handle_event(key(KeyCode::Char(' ')))?;
     assert_eq!(count.get(), 2);
+
+    Ok(())
+}
+
+/// Verifies activation keys do not activate focused editable controls.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([Input, button("Submit")])
+/// Tab, Enter, Space, Tab, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - The editable input receives focus.
+/// - Enter and space return [`AppControl::Continue`] without running callbacks
+///   while the editable input is focused.
+/// - The button receives focus after another tab event.
+/// - Enter returns [`AppControl::Continue`] and runs the focused button callback.
+#[test]
+fn enter_and_space_do_not_activate_focused_editable_controls() -> Result<()> {
+    let count = Rc::new(Cell::new(0));
+    let submit_count = Rc::clone(&count);
+    let mut view = column([
+        editable_input("Ada"),
+        button("Submit").on_press(move || {
+            submit_count.set(submit_count.get() + 1);
+            AppControl::Continue
+        }),
+    ]);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    assert_eq!(control_focuses(&view), vec![true, false]);
+
+    assert_eq!(
+        view.handle_event(key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        view.handle_event(key(KeyCode::Char(' ')))?,
+        AppControl::Continue
+    );
+    assert_eq!(count.get(), 0);
+
+    view.handle_event(key(KeyCode::Tab))?;
+    assert_eq!(control_focuses(&view), vec![false, true]);
+    assert_eq!(
+        view.handle_event(key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(count.get(), 1);
 
     Ok(())
 }
@@ -1490,6 +1685,95 @@ fn compares_dynamic_views_by_identity() {
 
     assert_eq!(first, first_clone);
     assert_ne!(first, second);
+}
+
+/// Verifies editable control reconciliation retains shared runtime state.
+///
+/// # Example Under Test
+///
+/// ```text
+/// reconcile(Input, previous Input with editable state)
+/// reconcile(TextArea, previous TextArea with editable state)
+/// ```
+///
+/// # Assertions
+///
+/// - Matching editable variants preserve focus.
+/// - Matching editable variants preserve cursor, scroll, mode, yank, undo, and
+///   redo state.
+#[test]
+fn reconciliation_retains_editable_state_for_matching_controls() {
+    let retained_input_state = editable_state_fixture();
+    let mut previous_input = editable_input("old").with_focus(true);
+    if let View::Input { editable_state, .. } = &mut previous_input {
+        *editable_state = retained_input_state.clone();
+    }
+    let mut next_input = editable_input("new");
+
+    leptatui::__private::__reconcile_view(&mut next_input, &previous_input);
+
+    assert!(next_input.style_metadata().unwrap().is_focused());
+    assert_eq!(editable_state(&next_input), &retained_input_state);
+
+    let retained_text_area_state = editable_state_fixture();
+    let mut previous_text_area = editable_text_area("old notes").with_focus(true);
+    if let View::TextArea { editable_state, .. } = &mut previous_text_area {
+        *editable_state = retained_text_area_state.clone();
+    }
+    let mut next_text_area = editable_text_area("new notes");
+
+    leptatui::__private::__reconcile_view(&mut next_text_area, &previous_text_area);
+
+    assert!(next_text_area.style_metadata().unwrap().is_focused());
+    assert_eq!(editable_state(&next_text_area), &retained_text_area_state);
+}
+
+/// Verifies editable control reconciliation does not leak state across unrelated views.
+///
+/// # Example Under Test
+///
+/// ```text
+/// reconcile(TextArea, previous Input with editable state)
+/// reconcile(Input, previous TextArea with editable state)
+/// reconcile(Button, previous Input with editable state)
+/// ```
+///
+/// # Assertions
+///
+/// - Mismatched editable variants do not preserve focus.
+/// - Mismatched editable variants keep their fresh editable state.
+/// - Buttons do not inherit focus from previous editable controls.
+#[test]
+fn reconciliation_does_not_leak_editable_state_to_unrelated_views() {
+    let retained_state = editable_state_fixture();
+    let mut previous_input = editable_input("old").with_focus(true);
+    if let View::Input { editable_state, .. } = &mut previous_input {
+        *editable_state = retained_state.clone();
+    }
+
+    let mut next_text_area = editable_text_area("new notes");
+    leptatui::__private::__reconcile_view(&mut next_text_area, &previous_input);
+
+    assert!(!next_text_area.style_metadata().unwrap().is_focused());
+    assert_eq!(editable_state(&next_text_area), &EditableState::new());
+    assert_ne!(editable_state(&next_text_area), &retained_state);
+
+    let mut previous_text_area = editable_text_area("old notes").with_focus(true);
+    if let View::TextArea { editable_state, .. } = &mut previous_text_area {
+        *editable_state = retained_state.clone();
+    }
+
+    let mut next_input = editable_input("new");
+    leptatui::__private::__reconcile_view(&mut next_input, &previous_text_area);
+
+    assert!(!next_input.style_metadata().unwrap().is_focused());
+    assert_eq!(editable_state(&next_input), &EditableState::new());
+    assert_ne!(editable_state(&next_input), &retained_state);
+
+    let mut next_button = button("Submit");
+    leptatui::__private::__reconcile_view(&mut next_button, &previous_input);
+
+    assert!(!next_button.style_metadata().unwrap().is_focused());
 }
 
 /// Verifies dynamic reconciliation replaces newly produced nested dynamic boundaries.

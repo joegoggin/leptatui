@@ -83,8 +83,8 @@ pub use style::{
     TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
-    ButtonAction, StyleMetadata, View, ViewType, block, button, column, component, dynamic, row,
-    text,
+    ButtonAction, EditableState, MiniVimMode, StyleMetadata, View, ViewType, block, button, column,
+    component, dynamic, row, text,
 };
 
 #[doc(hidden)]
@@ -178,6 +178,36 @@ pub mod __private {
                     ..
                 },
             ) => next_metadata.set_focused(previous_metadata.is_focused()),
+            (
+                View::Input {
+                    metadata: next_metadata,
+                    editable_state: next_editable_state,
+                    ..
+                },
+                View::Input {
+                    metadata: previous_metadata,
+                    editable_state: previous_editable_state,
+                    ..
+                },
+            ) => {
+                next_metadata.set_focused(previous_metadata.is_focused());
+                *next_editable_state = previous_editable_state.clone();
+            }
+            (
+                View::TextArea {
+                    metadata: next_metadata,
+                    editable_state: next_editable_state,
+                    ..
+                },
+                View::TextArea {
+                    metadata: previous_metadata,
+                    editable_state: previous_editable_state,
+                    ..
+                },
+            ) => {
+                next_metadata.set_focused(previous_metadata.is_focused());
+                *next_editable_state = previous_editable_state.clone();
+            }
             _ => {}
         }
     }
