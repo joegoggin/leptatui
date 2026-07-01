@@ -104,6 +104,10 @@ impl Element {
     /// Returns [`syn::Error`] if attributes, children, or the element name are
     /// unsupported.
     pub(super) fn expand(&self) -> Result<TokenStream> {
+        if self.name == "Input" {
+            return self.expand_input();
+        }
+
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 let leptatui = crate::utils::crate_path::leptatui();
@@ -129,7 +133,7 @@ impl Element {
             _ => {
                 return Err(Error::new_spanned(
                     &self.name,
-                    "unsupported Leptatui element; expected Block, Text, Row, Column, Button, or a PascalCase component",
+                    "unsupported Leptatui element; expected Block, Text, Row, Column, Button, Input, or a PascalCase component",
                 ));
             }
         }
@@ -141,6 +145,51 @@ impl Element {
                 Ok(view)
             }
         })
+    }
+
+    /// Expands a controlled single-line input element.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing an input builder expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if children are present, `value` is missing,
+    /// duplicate `value` attributes are supplied, or input attributes are
+    /// invalid.
+    fn expand_input(&self) -> Result<TokenStream> {
+        if !self.children.is_empty() {
+            return Err(Error::new_spanned(
+                &self.name,
+                "Input does not accept children",
+            ));
+        }
+
+        let attrs = self.validate_attrs()?;
+        let value_attrs = attrs
+            .iter()
+            .filter(|validated| matches!(validated.kind, AttrKind::InputValue))
+            .collect::<Vec<_>>();
+        let value_attr = match value_attrs.as_slice() {
+            [value_attr] => *value_attr,
+            [] => {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    "Input requires a value attribute",
+                ));
+            }
+            [first, ..] => {
+                return Err(Error::new_spanned(
+                    &first.attr.name,
+                    "Input expects exactly one value attribute",
+                ));
+            }
+        };
+
+        let leptatui = crate::utils::crate_path::leptatui();
+        let value = value_attr.attr.value.to_tokens();
+        self.expand_attrs(quote! { #leptatui::input(#value) }, &attrs)
     }
 
     /// Expands a PascalCase component tag into a component constructor call.
@@ -226,6 +275,20 @@ impl Element {
                 "class" => AttrKind::Class,
                 "id" => AttrKind::Id,
                 "style" => AttrKind::Style,
+                "value" if element_name == "Input" => AttrKind::InputValue,
+                "value" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! value attribute is only supported on Input",
+                    ));
+                }
+                "placeholder" if element_name == "Input" => AttrKind::Placeholder,
+                "placeholder" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! placeholder attribute is only supported on Input",
+                    ));
+                }
                 "on_press" if element_name == "Button" => AttrKind::OnPress,
                 "on_press" => {
                     return Err(Error::new_spanned(
@@ -233,11 +296,24 @@ impl Element {
                         "view! on_press attribute is only supported on Button",
                     ));
                 }
-                _ => {
+                "on_input" if element_name == "Input" => AttrKind::OnInput,
+                "on_input" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "unsupported view! attribute; expected class, id, style, or button on_press",
+                        "view! on_input attribute is only supported on Input",
                     ));
+                }
+                _ => {
+                    let message = match element_name.as_str() {
+                        "Button" => {
+                            "unsupported view! attribute; expected class, id, style, or on_press"
+                        }
+                        "Input" => {
+                            "unsupported view! attribute; expected class, id, style, value, placeholder, or on_input"
+                        }
+                        _ => "unsupported view! attribute; expected class, id, or style",
+                    };
+                    return Err(Error::new_spanned(&attr.name, message));
                 }
             };
 
@@ -289,10 +365,24 @@ impl Element {
 
                     quote! { (#expanded).on_press(#value) }
                 }
+                AttrKind::InputValue => expanded,
+                AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
+                AttrKind::OnInput => {
+                    if attr.value.is_literal() {
+                        return Err(Error::new_spanned(
+                            &attr.name,
+                            "view! on_input attribute must be a callback expression",
+                        ));
+                    }
+
+                    quote! { (#expanded).on_input(#value) }
+                }
             };
 
-            if !matches!(*kind, AttrKind::OnPress | AttrKind::Style)
-                && attr.value.is_unbraced_expr()
+            if !matches!(
+                *kind,
+                AttrKind::OnPress | AttrKind::OnInput | AttrKind::Style
+            ) && attr.value.is_unbraced_expr()
             {
                 return Err(Error::new_spanned(
                     &attr.name,
@@ -487,7 +577,7 @@ impl Element {
 fn is_builtin_element(name: &Ident) -> bool {
     matches!(
         name.to_string().as_str(),
-        "Block" | "Row" | "Column" | "Text" | "Button"
+        "Block" | "Row" | "Column" | "Text" | "Button" | "Input"
     )
 }
 
@@ -512,8 +602,14 @@ mod attr_validation {
         Id,
         /// Inline `style` override.
         Style,
+        /// Required input value.
+        InputValue,
+        /// Input placeholder text.
+        Placeholder,
         /// Button activation callback.
         OnPress,
+        /// Input value-change callback.
+        OnInput,
     }
 
     /// Attribute paired with its validated kind.

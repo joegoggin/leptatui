@@ -3,7 +3,7 @@
 //! This module maps [`View`] variants to Ratatui widgets, layout splits, and
 //! component event propagation.
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
@@ -18,7 +18,10 @@ use crate::{
     style::{Borders, LayoutDirection, TuiStyle},
 };
 
-use super::{metadata::StyleMetadata, model::View};
+use super::{
+    metadata::{EditableState, StyleMetadata},
+    model::{InputAction, View},
+};
 
 /// Resolves a view style from context stylesheets, ancestors, and inherited style values.
 ///
@@ -173,15 +176,28 @@ impl View {
             }
             Self::Input {
                 value,
+                placeholder,
                 metadata,
                 editable_state,
+                ..
             } => {
                 let style = resolve_style(metadata, ctx);
-                ctx.render_widget(input_paragraph(
-                    value.as_str(),
-                    style,
-                    editable_state.horizontal_scroll(),
-                ));
+                let display_value = if value.is_empty() {
+                    placeholder.as_deref().unwrap_or("")
+                } else {
+                    value.as_str()
+                };
+                let horizontal_scroll = if value.is_empty() {
+                    0
+                } else {
+                    input_horizontal_scroll(
+                        value.as_str(),
+                        editable_state.cursor(),
+                        editable_state.horizontal_scroll(),
+                        ctx.area().width,
+                    )
+                };
+                ctx.render_widget(input_paragraph(display_value, style, horizontal_scroll));
                 metadata.clear_scroll_into_view_request();
                 Ok(())
             }
@@ -298,6 +314,21 @@ impl View {
         self.activate_focused_button()
     }
 
+    /// Handles a key on the focused input, if this tree contains one.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to apply to the focused input.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the key control result when an input handles
+    /// the key.
+    #[doc(hidden)]
+    pub fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        self.handle_focused_input_key_ref(&key)
+    }
+
     /// Scrolls the first overflowing vertical layout in this view tree.
     #[doc(hidden)]
     pub fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
@@ -364,6 +395,11 @@ impl View {
     fn handle_default_key_event_ref(&mut self, key: &KeyEvent) -> KeyControl {
         if key.kind != KeyEventKind::Press {
             return KeyControl::Pass;
+        }
+
+        if let Some(control) = self.handle_focused_input_key_ref(key) {
+            self.clear_scroll_to_top_key_pending();
+            return control;
         }
 
         match key.code {
@@ -537,6 +573,42 @@ impl View {
     /// Clears any pending first `g` key.
     fn clear_scroll_to_top_key_pending(&self) {
         self.set_scroll_to_top_key_pending(false);
+    }
+
+    /// Handles an editing key for the currently focused input.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to apply to the focused input.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the key control result when an input handles
+    /// the key.
+    fn handle_focused_input_key_ref(&mut self, key: &KeyEvent) -> Option<KeyControl> {
+        match self {
+            Self::Input {
+                value,
+                metadata,
+                on_input,
+                editable_state,
+                ..
+            } if metadata.is_focused() => {
+                handle_input_key(value.as_str(), on_input, editable_state, key)
+            }
+            Self::Block { child, .. } => child.handle_focused_input_key_ref(key),
+            Self::Row { children, .. } | Self::Column { children, .. } => children
+                .iter_mut()
+                .find_map(|child| child.handle_focused_input_key_ref(key)),
+            Self::Dynamic(child) => {
+                child.with_view_mut(|child| child.handle_focused_input_key_ref(key))
+            }
+            Self::Component(component) => component.handle_focused_input_key(*key),
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => None,
+        }
     }
 
     /// Returns the number of focusable controls in this view tree.
@@ -815,6 +887,21 @@ impl Component for View {
         View::__activate_focused_button(self)
     }
 
+    /// Handles a key on the focused input in the view tree, if any.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to apply to the focused input.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the key control result when an input handles
+    /// the key.
+    #[doc(hidden)]
+    fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        View::__handle_focused_input_key(self, key)
+    }
+
     /// Scrolls the first overflowing vertical layout in the view tree.
     #[doc(hidden)]
     fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
@@ -865,6 +952,289 @@ fn key_control_from_bool(handled: bool) -> KeyControl {
     } else {
         KeyControl::Pass
     }
+}
+
+/// Returns the horizontal scroll offset needed to keep an input cursor visible.
+///
+/// # Arguments
+///
+/// * `value` — Input value used to map the cursor byte index to a character
+///   column.
+/// * `cursor` — Cursor byte index to keep visible.
+/// * `current_scroll` — Current horizontal scroll offset.
+/// * `width` — Available input render width.
+///
+/// # Returns
+///
+/// A [`u16`] scroll offset that keeps the cursor within the render width.
+fn input_horizontal_scroll(value: &str, cursor: usize, current_scroll: u16, width: u16) -> u16 {
+    if width == 0 {
+        return 0;
+    }
+
+    let cursor = clamp_cursor(value, cursor);
+    let cursor_column = char_column(value, cursor);
+    let width = usize::from(width);
+    let current_scroll = usize::from(current_scroll);
+    let next_scroll = if cursor_column < current_scroll {
+        cursor_column
+    } else if cursor_column > current_scroll.saturating_add(width) {
+        cursor_column.saturating_sub(width)
+    } else {
+        current_scroll
+    };
+
+    u16::try_from(next_scroll).unwrap_or(u16::MAX)
+}
+
+/// Handles a focused input key and returns whether default propagation stops.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled input value.
+/// * `on_input` — Optional callback that receives proposed next values.
+/// * `editable_state` — Retained cursor and scroll state for the input.
+/// * `key` — Key event to apply to the input.
+///
+/// # Returns
+///
+/// An [`Option`] containing a [`KeyControl`] value when the key is handled by
+/// input editing behavior.
+fn handle_input_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    key: &KeyEvent,
+) -> Option<KeyControl> {
+    match key.code {
+        KeyCode::Left => {
+            let cursor = previous_char_boundary(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Right => {
+            let cursor = next_char_boundary(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Home => {
+            editable_state.set_cursor(0);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::End => {
+            editable_state.set_cursor(value.len());
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Enter => Some(KeyControl::Handled),
+        KeyCode::Backspace => Some(handle_backspace_input_key(value, on_input, editable_state)),
+        KeyCode::Delete => Some(handle_delete_input_key(value, on_input, editable_state)),
+        KeyCode::Char(character)
+            if !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            Some(handle_insert_input_key(
+                value,
+                on_input,
+                editable_state,
+                character,
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// Handles insertion for a focused input.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled input value.
+/// * `on_input` — Optional callback that receives the inserted value.
+/// * `editable_state` — Retained cursor and scroll state for the input.
+/// * `character` — Character to insert at the cursor.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that insertion was handled.
+fn handle_insert_input_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    character: char,
+) -> KeyControl {
+    let cursor = clamp_cursor(value, editable_state.cursor());
+    let mut next = String::with_capacity(value.len().saturating_add(character.len_utf8()));
+    next.push_str(&value[..cursor]);
+    next.push(character);
+    next.push_str(&value[cursor..]);
+
+    commit_input_value(
+        on_input,
+        editable_state,
+        next,
+        cursor.saturating_add(character.len_utf8()),
+    )
+}
+
+/// Handles backspace for a focused input.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled input value.
+/// * `on_input` — Optional callback that receives the shortened value.
+/// * `editable_state` — Retained cursor and scroll state for the input.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that backspace was handled.
+fn handle_backspace_input_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+) -> KeyControl {
+    let cursor = clamp_cursor(value, editable_state.cursor());
+    if cursor == 0 {
+        editable_state.set_cursor(0);
+        return KeyControl::Handled;
+    }
+
+    let previous = previous_char_boundary(value, cursor);
+    let mut next = String::with_capacity(value.len().saturating_sub(cursor - previous));
+    next.push_str(&value[..previous]);
+    next.push_str(&value[cursor..]);
+
+    commit_input_value(on_input, editable_state, next, previous)
+}
+
+/// Handles delete for a focused input.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled input value.
+/// * `on_input` — Optional callback that receives the shortened value.
+/// * `editable_state` — Retained cursor and scroll state for the input.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that delete was handled.
+fn handle_delete_input_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+) -> KeyControl {
+    let cursor = clamp_cursor(value, editable_state.cursor());
+    if cursor == value.len() {
+        editable_state.set_cursor(cursor);
+        return KeyControl::Handled;
+    }
+
+    let next_boundary = next_char_boundary(value, cursor);
+    let mut next = String::with_capacity(value.len().saturating_sub(next_boundary - cursor));
+    next.push_str(&value[..cursor]);
+    next.push_str(&value[next_boundary..]);
+
+    commit_input_value(on_input, editable_state, next, cursor)
+}
+
+/// Emits a controlled input update when a callback exists.
+///
+/// # Arguments
+///
+/// * `on_input` — Optional callback that receives the proposed value.
+/// * `editable_state` — Retained cursor and scroll state for the input.
+/// * `next` — Proposed next controlled value.
+/// * `next_cursor` — Cursor byte index to retain after emitting the value.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value produced by the callback or handled by default when
+/// no callback exists.
+fn commit_input_value(
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    next: String,
+    next_cursor: usize,
+) -> KeyControl {
+    let Some(on_input) = on_input.as_ref() else {
+        return KeyControl::Handled;
+    };
+
+    editable_state.set_cursor(next_cursor);
+    on_input(next).into()
+}
+
+/// Clamps a cursor to a valid byte index and UTF-8 character boundary.
+///
+/// # Arguments
+///
+/// * `value` — Input value that defines valid byte boundaries.
+/// * `cursor` — Candidate cursor byte index.
+///
+/// # Returns
+///
+/// A [`usize`] cursor byte index within `value` and on a UTF-8 boundary.
+fn clamp_cursor(value: &str, cursor: usize) -> usize {
+    let mut cursor = cursor.min(value.len());
+    while !value.is_char_boundary(cursor) {
+        cursor = cursor.saturating_sub(1);
+    }
+
+    cursor
+}
+
+/// Returns the previous character boundary before or at a cursor.
+///
+/// # Arguments
+///
+/// * `value` — Input value that defines valid byte boundaries.
+/// * `cursor` — Candidate cursor byte index.
+///
+/// # Returns
+///
+/// A [`usize`] cursor byte index for the previous character boundary.
+fn previous_char_boundary(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    value[..cursor]
+        .char_indices()
+        .next_back()
+        .map_or(0, |(index, _)| index)
+}
+
+/// Returns the next character boundary after or at a cursor.
+///
+/// # Arguments
+///
+/// * `value` — Input value that defines valid byte boundaries.
+/// * `cursor` — Candidate cursor byte index.
+///
+/// # Returns
+///
+/// A [`usize`] cursor byte index for the next character boundary.
+fn next_char_boundary(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    if cursor == value.len() {
+        return cursor;
+    }
+
+    value[cursor..]
+        .char_indices()
+        .nth(1)
+        .map_or(value.len(), |(index, _)| cursor + index)
+}
+
+/// Returns the character column represented by a byte cursor.
+///
+/// # Arguments
+///
+/// * `value` — Input value that defines character columns.
+/// * `cursor` — Candidate cursor byte index.
+///
+/// # Returns
+///
+/// A [`usize`] character column represented by the clamped cursor.
+fn char_column(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    value[..cursor].chars().count()
 }
 
 /// Vertical content span, with an exclusive bottom row.

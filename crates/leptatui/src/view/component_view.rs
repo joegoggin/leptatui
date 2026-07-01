@@ -158,6 +158,21 @@ impl ComponentView {
         self.with_component(|component| component.__activate_focused_button())
     }
 
+    /// Handles a key on the focused input inside this component boundary, if any.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to forward to the component boundary.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the key control result when an input handles
+    /// the key.
+    #[doc(hidden)]
+    pub(crate) fn handle_focused_input_key(&self, key: KeyEvent) -> Option<KeyControl> {
+        self.with_component_mut(|component| component.__handle_focused_input_key(key))
+    }
+
     /// Scrolls the first overflowing layout inside this component boundary.
     #[doc(hidden)]
     pub(crate) fn scroll_first_overflowing(&self, delta: i16) -> bool {

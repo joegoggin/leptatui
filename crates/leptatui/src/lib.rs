@@ -83,8 +83,8 @@ pub use style::{
     TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
-    ButtonAction, EditableState, MiniVimMode, StyleMetadata, View, ViewType, block, button, column,
-    component, dynamic, row, text,
+    ButtonAction, EditableState, InputAction, MiniVimMode, StyleMetadata, View, ViewType, block,
+    button, column, component, dynamic, input, row, text,
 };
 
 #[doc(hidden)]

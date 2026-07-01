@@ -15,6 +15,9 @@ use crate::app::AppControl;
 /// Shared callback invoked when a button is activated.
 pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
 
+/// Shared callback invoked when an input proposes a new value.
+pub type InputAction = Rc<dyn Fn(String) -> AppControl>;
+
 /// Minimal renderable view tree for hand-written terminal UI.
 #[derive(Clone)]
 pub enum View {
@@ -59,8 +62,12 @@ pub enum View {
     Input {
         /// Caller-owned value to display.
         value: String,
+        /// Placeholder text shown when the value is empty.
+        placeholder: Option<String>,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
+        /// Optional controlled-value change callback.
+        on_input: Option<InputAction>,
         /// Retained editing state for reconciled redraws.
         editable_state: EditableState,
     },
@@ -204,6 +211,44 @@ impl View {
 
         self
     }
+
+    /// Stores placeholder text on an input view.
+    ///
+    /// # Arguments
+    ///
+    /// * `placeholder` — Text displayed when the input value is empty.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with placeholder text when the view is an input.
+    pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        if let Self::Input {
+            placeholder: slot, ..
+        } = &mut self
+        {
+            *slot = Some(placeholder.into());
+        }
+
+        self
+    }
+
+    /// Stores a controlled-value callback on an input view.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback invoked with the next value when editing keys are
+    ///   pressed while this input is focused.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the callback when the view is an input.
+    pub fn on_input(mut self, action: impl Fn(String) -> AppControl + 'static) -> Self {
+        if let Self::Input { on_input, .. } = &mut self {
+            *on_input = Some(Rc::new(action));
+        }
+
+        self
+    }
 }
 
 impl fmt::Debug for View {
@@ -253,12 +298,16 @@ impl fmt::Debug for View {
                 .finish(),
             Self::Input {
                 value,
+                placeholder,
                 metadata,
+                on_input,
                 editable_state,
             } => f
                 .debug_struct("Input")
                 .field("value", value)
+                .field("placeholder", placeholder)
                 .field("metadata", metadata)
+                .field("on_input", &on_input.is_some())
                 .field("editable_state", editable_state)
                 .finish(),
             Self::TextArea {
@@ -288,6 +337,24 @@ impl fmt::Debug for View {
 ///
 /// A [`bool`] indicating whether both callbacks are absent or share identity.
 fn button_actions_equal(left: &Option<ButtonAction>, right: &Option<ButtonAction>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => Rc::ptr_eq(left, right),
+        _ => false,
+    }
+}
+
+/// Returns whether optional input actions represent the same callback.
+///
+/// # Arguments
+///
+/// * `left` — Left optional input action to compare.
+/// * `right` — Right optional input action to compare.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether both callbacks are absent or share identity.
+fn input_actions_equal(left: &Option<InputAction>, right: &Option<InputAction>) -> bool {
     match (left, right) {
         (None, None) => true,
         (Some(left), Some(right)) => Rc::ptr_eq(left, right),
@@ -366,17 +433,23 @@ impl PartialEq for View {
             (
                 Self::Input {
                     value: left_value,
+                    placeholder: left_placeholder,
                     metadata: left_metadata,
+                    on_input: left_on_input,
                     editable_state: left_editable_state,
                 },
                 Self::Input {
                     value: right_value,
+                    placeholder: right_placeholder,
                     metadata: right_metadata,
+                    on_input: right_on_input,
                     editable_state: right_editable_state,
                 },
             ) => {
                 left_value == right_value
+                    && left_placeholder == right_placeholder
                     && left_metadata == right_metadata
+                    && input_actions_equal(left_on_input, right_on_input)
                     && left_editable_state == right_editable_state
             }
             (

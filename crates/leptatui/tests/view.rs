@@ -12,7 +12,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     AppControl, Color, Component, EditableState, KeyControl, LayoutDirection, MediaQuery,
     MiniVimMode, RenderCtx, Result, StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View,
-    ViewType, block, button, column, component, dynamic, row, text,
+    ViewType, block, button, column, component, dynamic, input, row, text,
 };
 use ratatui::{
     Terminal,
@@ -89,11 +89,7 @@ fn control_focuses(view: &View) -> Vec<bool> {
 ///
 /// A [`View`] containing an input with fresh editable state.
 fn editable_input(value: impl Into<String>) -> View {
-    View::Input {
-        value: value.into(),
-        metadata: StyleMetadata::new(ViewType::Input),
-        editable_state: EditableState::new(),
-    }
+    input(value)
 }
 
 /// Creates an editable text-area test view.
@@ -143,6 +139,26 @@ fn editable_state_fixture() -> EditableState {
 ///
 /// An [`EditableState`] reference retained by the view.
 fn editable_state(view: &View) -> &EditableState {
+    match view {
+        View::Input { editable_state, .. } | View::TextArea { editable_state, .. } => {
+            editable_state
+        }
+        other => panic!("expected editable view, got {other:?}"),
+    }
+}
+
+/// Returns mutable editable state stored by an editable test view.
+///
+/// Panics if `view` is not an editable control.
+///
+/// # Arguments
+///
+/// * `view` — Editable view to mutate.
+///
+/// # Returns
+///
+/// An [`EditableState`] reference retained by the view.
+fn editable_state_mut(view: &mut View) -> &mut EditableState {
     match view {
         View::Input { editable_state, .. } | View::TextArea { editable_state, .. } => {
             editable_state
@@ -306,6 +322,135 @@ fn text_wraps_to_available_render_width() -> Result<()> {
 
     assert_eq!(symbol_position(&terminal, "H", 6), (0, 0));
     assert_eq!(symbol_position(&terminal, "W", 6), (0, 1));
+
+    Ok(())
+}
+
+/// Verifies input views render their controlled value.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada")
+/// width = 8
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The first three rendered cells contain `A`, `d`, and `a`.
+#[test]
+fn renders_input_value() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = input("Ada");
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 1, 0, 8), "d");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 8), "a");
+
+    Ok(())
+}
+
+/// Verifies empty input views render placeholder text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("").placeholder("Name")
+/// width = 8
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The rendered cells contain the first and last placeholder characters.
+#[test]
+fn renders_input_placeholder_when_value_is_empty() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = input("").placeholder("Name");
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "N");
+    assert_eq!(cell_symbol(&terminal, 3, 0, 8), "e");
+
+    Ok(())
+}
+
+/// Verifies focused input views receive focus stylesheet rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true)
+/// :focus { fg: Black, bg: Yellow }
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The component render call succeeds.
+/// - The focused input cell uses the stylesheet foreground color.
+/// - The focused input cell uses the stylesheet background color.
+#[test]
+fn renders_focused_input_with_focus_stylesheet_rule() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = input("Ada").with_focus(true);
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::focus(),
+        TuiStyle::new()
+            .foreground(Color::Black)
+            .background(Color::Yellow),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let (fg, bg) = cell_colors(&terminal, 0, 0, 8);
+    assert_eq!(fg, Color::Black);
+    assert_eq!(bg, Color::Yellow);
+
+    Ok(())
+}
+
+/// Verifies input rendering clips content around the retained cursor.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("abcdef").with_focus(true)
+/// width = 4
+/// cursor = end, then cursor = 0
+/// ```
+///
+/// # Assertions
+///
+/// - The first render succeeds and shows the tail of the value.
+/// - Moving the cursor to the start succeeds.
+/// - The second render succeeds and shows the head of the value.
+#[test]
+fn input_rendering_clips_and_scrolls_around_cursor() -> Result<()> {
+    let backend = TestBackend::new(4, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = input("abcdef").with_focus(true);
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(cell_symbol(&terminal, 0, 0, 4), "c");
+    assert_eq!(cell_symbol(&terminal, 3, 0, 4), "f");
+
+    editable_state_mut(&mut view).set_cursor(0);
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(cell_symbol(&terminal, 0, 0, 4), "a");
+    assert_eq!(cell_symbol(&terminal, 3, 0, 4), "d");
 
     Ok(())
 }
@@ -1247,6 +1392,218 @@ fn enter_and_space_activate_focused_button() -> Result<()> {
     Ok(())
 }
 
+/// Verifies focused input character keys emit inserted text through `on_input`.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// Char('!'), Char(' ')
+/// ```
+///
+/// # Assertions
+///
+/// - The `!` key is handled.
+/// - The space key is handled.
+/// - The callback receives `Ada!`.
+/// - The callback receives `Ada `.
+#[test]
+fn focused_input_emits_inserted_text_through_on_input() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let emitted_for_char = Rc::clone(&emitted);
+    let mut char_view = input("Ada").with_focus(true).on_input(move |next| {
+        emitted_for_char.borrow_mut().push(next);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        char_view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let emitted_for_space = Rc::clone(&emitted);
+    let mut space_view = input("Ada").with_focus(true).on_input(move |next| {
+        emitted_for_space.borrow_mut().push(next);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        space_view.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    assert_eq!(
+        emitted.borrow().as_slice(),
+        &[String::from("Ada!"), String::from("Ada ")]
+    );
+
+    Ok(())
+}
+
+/// Verifies focused input deletion keys emit shortened text through `on_input`.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// Backspace, Delete at cursor 1
+/// ```
+///
+/// # Assertions
+///
+/// - The backspace key is handled.
+/// - The delete key is handled.
+/// - The callback receives `Ad` after backspace.
+/// - The callback receives `Aa` after delete.
+#[test]
+fn focused_input_emits_deletions_through_on_input() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let emitted_for_backspace = Rc::clone(&emitted);
+    let mut backspace_view = input("Ada").with_focus(true).on_input(move |next| {
+        emitted_for_backspace.borrow_mut().push(next);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        backspace_view.handle_key_event(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let emitted_for_delete = Rc::clone(&emitted);
+    let mut delete_view = input("Ada").with_focus(true).on_input(move |next| {
+        emitted_for_delete.borrow_mut().push(next);
+        AppControl::Continue
+    });
+    editable_state_mut(&mut delete_view).set_cursor(1);
+
+    assert_eq!(
+        delete_view.handle_key_event(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    assert_eq!(
+        emitted.borrow().as_slice(),
+        &[String::from("Ad"), String::from("Aa")]
+    );
+
+    Ok(())
+}
+
+/// Verifies focused input cursor keys move without emitting text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// Left, Home, Right, End
+/// ```
+///
+/// # Assertions
+///
+/// - Left moves the cursor to byte index `2`.
+/// - Home moves the cursor to byte index `0`.
+/// - Right moves the cursor to byte index `1`.
+/// - End moves the cursor to byte index `3`.
+/// - No input callback values are emitted.
+#[test]
+fn focused_input_cursor_keys_move_without_emitting_text() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let emitted_for_input = Rc::clone(&emitted);
+    let mut view = input("Ada").with_focus(true).on_input(move |next| {
+        emitted_for_input.borrow_mut().push(next);
+        AppControl::Continue
+    });
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 2);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 0);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 1);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::End, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 3);
+    assert!(emitted.borrow().is_empty());
+
+    Ok(())
+}
+
+/// Verifies focused inputs without callbacks do not mutate displayed values.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true)
+/// Char('!')
+/// ```
+///
+/// # Assertions
+///
+/// - The character key is handled.
+/// - The retained input value remains `Ada`.
+/// - Rendering still shows `Ada`.
+/// - The cell after the value remains blank.
+#[test]
+fn focused_input_without_callback_does_not_mutate_displayed_value() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = input("Ada").with_focus(true);
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    match &view {
+        View::Input { value, .. } => assert_eq!(value, "Ada"),
+        other => panic!("expected input view, got {other:?}"),
+    }
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 8), "a");
+    assert_eq!(cell_symbol(&terminal, 3, 0, 8), " ");
+
+    Ok(())
+}
+
+/// Verifies focused input editing works inside component boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// component(FocusPanel { view: input("Ada").on_input(...) })
+/// Tab, Char('!')
+/// ```
+///
+/// # Assertions
+///
+/// - Tabbing into the component boundary succeeds.
+/// - The character key is handled by the focused input.
+/// - The callback receives `Ada!`.
+#[test]
+fn focused_input_inside_component_boundary_handles_editing_keys() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let emitted_for_input = Rc::clone(&emitted);
+    let input_view = input("Ada").on_input(move |next| {
+        emitted_for_input.borrow_mut().push(next);
+        AppControl::Continue
+    });
+    let mut view = component(FocusPanel { view: input_view });
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    assert_eq!(emitted.borrow().as_slice(), &[String::from("Ada!")]);
+
+    Ok(())
+}
+
 /// Verifies activation keys do not activate focused editable controls.
 ///
 /// # Example Under Test
@@ -1431,6 +1788,21 @@ impl Component for FocusPanel {
     #[doc(hidden)]
     fn __activate_focused_button(&self) -> Option<AppControl> {
         self.view.__activate_focused_button()
+    }
+
+    /// Handles keys for a focused input inside the child view, if any.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to apply to the focused child input.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the key control result when an input handles
+    /// the key.
+    #[doc(hidden)]
+    fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        self.view.__handle_focused_input_key(key)
     }
 }
 
@@ -1764,10 +2136,11 @@ fn reconciliation_does_not_leak_editable_state_to_unrelated_views() {
     }
 
     let mut next_input = editable_input("new");
+    let fresh_input = editable_input("new");
     leptatui::__private::__reconcile_view(&mut next_input, &previous_text_area);
 
     assert!(!next_input.style_metadata().unwrap().is_focused());
-    assert_eq!(editable_state(&next_input), &EditableState::new());
+    assert_eq!(editable_state(&next_input), editable_state(&fresh_input));
     assert_ne!(editable_state(&next_input), &retained_state);
 
     let mut next_button = button("Submit");

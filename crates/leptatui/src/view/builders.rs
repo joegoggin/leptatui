@@ -7,7 +7,7 @@ use crate::component::Component;
 
 use super::{
     component_view::ComponentView,
-    metadata::{StyleMetadata, ViewType},
+    metadata::{EditableState, StyleMetadata, ViewType},
     model::View,
 };
 
@@ -89,6 +89,29 @@ pub fn button(label: impl Into<String>) -> View {
         label: label.into(),
         metadata: StyleMetadata::new(ViewType::Button),
         on_press: None,
+    }
+}
+
+/// Creates a controlled single-line input.
+///
+/// # Arguments
+///
+/// * `value` — Caller-owned value displayed by the input.
+///
+/// # Returns
+///
+/// A [`View::Input`] containing the provided value.
+pub fn input(value: impl Into<String>) -> View {
+    let value = value.into();
+    let mut editable_state = EditableState::new();
+    editable_state.set_cursor(value.len());
+
+    View::Input {
+        value,
+        placeholder: None,
+        metadata: StyleMetadata::new(ViewType::Input),
+        on_input: None,
+        editable_state,
     }
 }
 

@@ -106,6 +106,21 @@ pub trait Component {
         None
     }
 
+    /// Handles a key on the focused input inside this component, if any.
+    ///
+    /// # Arguments
+    ///
+    /// * `_key` — Key event to apply to the focused input.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the key control result when an input handles
+    /// the key.
+    #[doc(hidden)]
+    fn __handle_focused_input_key(&mut self, _key: KeyEvent) -> Option<KeyControl> {
+        None
+    }
+
     /// Scrolls the first overflowing vertical layout inside this component.
     #[doc(hidden)]
     fn __scroll_first_overflowing(&mut self, _delta: i16) -> bool {
