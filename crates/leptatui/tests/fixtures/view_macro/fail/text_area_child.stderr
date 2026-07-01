@@ -1,0 +1,5 @@
+error: TextArea does not accept children
+ --> tests/fixtures/view_macro/fail/text_area_child.rs:8:10
+  |
+8 |         <TextArea value="Ada">
+  |          ^^^^^^^^

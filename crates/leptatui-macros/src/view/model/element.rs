@@ -105,7 +105,17 @@ impl Element {
     /// unsupported.
     pub(super) fn expand(&self) -> Result<TokenStream> {
         if self.name == "Input" {
-            return self.expand_input();
+            return self.expand_editable_text_control("Input", |value| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::input(#value) }
+            });
+        }
+
+        if self.name == "TextArea" {
+            return self.expand_editable_text_control("TextArea", |value| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::text_area(#value) }
+            });
         }
 
         match self.name.to_string().as_str() {
@@ -133,7 +143,7 @@ impl Element {
             _ => {
                 return Err(Error::new_spanned(
                     &self.name,
-                    "unsupported Leptatui element; expected Block, Text, Row, Column, Button, Input, or a PascalCase component",
+                    "unsupported Leptatui element; expected Block, Text, Row, Column, Button, Input, TextArea, or a PascalCase component",
                 ));
             }
         }
@@ -147,22 +157,31 @@ impl Element {
         })
     }
 
-    /// Expands a controlled single-line input element.
+    /// Expands a controlled editable text element.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `build` — Function that wraps the required value in a builder call.
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing an input builder expression.
+    /// A [`TokenStream`] containing an editable text-control builder expression.
     ///
     /// # Errors
     ///
     /// Returns [`syn::Error`] if children are present, `value` is missing,
-    /// duplicate `value` attributes are supplied, or input attributes are
+    /// duplicate `value` attributes are supplied, or control attributes are
     /// invalid.
-    fn expand_input(&self) -> Result<TokenStream> {
+    fn expand_editable_text_control(
+        &self,
+        element_name: &str,
+        build: impl FnOnce(TokenStream) -> TokenStream,
+    ) -> Result<TokenStream> {
         if !self.children.is_empty() {
             return Err(Error::new_spanned(
                 &self.name,
-                "Input does not accept children",
+                format!("{element_name} does not accept children"),
             ));
         }
 
@@ -176,20 +195,19 @@ impl Element {
             [] => {
                 return Err(Error::new_spanned(
                     &self.name,
-                    "Input requires a value attribute",
+                    format!("{element_name} requires a value attribute"),
                 ));
             }
             [first, ..] => {
                 return Err(Error::new_spanned(
                     &first.attr.name,
-                    "Input expects exactly one value attribute",
+                    format!("{element_name} expects exactly one value attribute"),
                 ));
             }
         };
 
-        let leptatui = crate::utils::crate_path::leptatui();
         let value = value_attr.attr.value.to_tokens();
-        self.expand_attrs(quote! { #leptatui::input(#value) }, &attrs)
+        self.expand_attrs(build(value), &attrs)
     }
 
     /// Expands a PascalCase component tag into a component constructor call.
@@ -275,18 +293,22 @@ impl Element {
                 "class" => AttrKind::Class,
                 "id" => AttrKind::Id,
                 "style" => AttrKind::Style,
-                "value" if element_name == "Input" => AttrKind::InputValue,
+                "value" if matches!(element_name.as_str(), "Input" | "TextArea") => {
+                    AttrKind::InputValue
+                }
                 "value" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "view! value attribute is only supported on Input",
+                        "view! value attribute is only supported on Input or TextArea",
                     ));
                 }
-                "placeholder" if element_name == "Input" => AttrKind::Placeholder,
+                "placeholder" if matches!(element_name.as_str(), "Input" | "TextArea") => {
+                    AttrKind::Placeholder
+                }
                 "placeholder" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "view! placeholder attribute is only supported on Input",
+                        "view! placeholder attribute is only supported on Input or TextArea",
                     ));
                 }
                 "on_press" if element_name == "Button" => AttrKind::OnPress,
@@ -296,11 +318,13 @@ impl Element {
                         "view! on_press attribute is only supported on Button",
                     ));
                 }
-                "on_input" if element_name == "Input" => AttrKind::OnInput,
+                "on_input" if matches!(element_name.as_str(), "Input" | "TextArea") => {
+                    AttrKind::OnInput
+                }
                 "on_input" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "view! on_input attribute is only supported on Input",
+                        "view! on_input attribute is only supported on Input or TextArea",
                     ));
                 }
                 _ => {
@@ -308,7 +332,7 @@ impl Element {
                         "Button" => {
                             "unsupported view! attribute; expected class, id, style, or on_press"
                         }
-                        "Input" => {
+                        "Input" | "TextArea" => {
                             "unsupported view! attribute; expected class, id, style, value, placeholder, or on_input"
                         }
                         _ => "unsupported view! attribute; expected class, id, or style",
@@ -577,7 +601,7 @@ impl Element {
 fn is_builtin_element(name: &Ident) -> bool {
     matches!(
         name.to_string().as_str(),
-        "Block" | "Row" | "Column" | "Text" | "Button" | "Input"
+        "Block" | "Row" | "Column" | "Text" | "Button" | "Input" | "TextArea"
     )
 }
 

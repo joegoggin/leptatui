@@ -115,6 +115,29 @@ pub fn input(value: impl Into<String>) -> View {
     }
 }
 
+/// Creates a controlled multiline text area.
+///
+/// # Arguments
+///
+/// * `value` — Caller-owned value displayed by the text area.
+///
+/// # Returns
+///
+/// A [`View::TextArea`] containing the provided value.
+pub fn text_area(value: impl Into<String>) -> View {
+    let value = value.into();
+    let mut editable_state = EditableState::new();
+    editable_state.set_cursor(value.len());
+
+    View::TextArea {
+        value,
+        placeholder: None,
+        metadata: StyleMetadata::new(ViewType::TextArea),
+        on_input: None,
+        editable_state,
+    }
+}
+
 /// Creates a dynamic child view.
 ///
 /// # Arguments

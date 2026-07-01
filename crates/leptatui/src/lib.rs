@@ -84,7 +84,7 @@ pub use style::{
 };
 pub use view::{
     ButtonAction, EditableState, InputAction, MiniVimMode, StyleMetadata, View, ViewType, block,
-    button, column, component, dynamic, input, row, text,
+    button, column, component, dynamic, input, row, text, text_area,
 };
 
 #[doc(hidden)]

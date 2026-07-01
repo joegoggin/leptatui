@@ -88,7 +88,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// use leptatui::prelude::*;
 /// signal(0)
 /// provide_context(String::from("from prelude"))
-/// block(column([text("from prelude"), input("Ada"), button("OK")]))
+/// block(column([text("from prelude"), input("Ada"), text_area("Notes"), button("OK")]))
 /// ```
 ///
 /// # Assertions
@@ -123,7 +123,12 @@ fn prelude_exposes_reactivity_and_context() {
 
         let input_action: InputAction = std::rc::Rc::new(|_| AppControl::Continue);
         let input_view = input("Ada").on_input(move |next| input_action(next));
-        let view: View = block(column([text("from prelude"), input_view, button("OK")]));
+        let view: View = block(column([
+            text("from prelude"),
+            input_view,
+            text_area("Notes"),
+            button("OK"),
+        ]));
         let _ = view;
 
         let style = TuiStyle::new()

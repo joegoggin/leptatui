@@ -12,7 +12,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     AppControl, Color, Component, EditableState, KeyControl, LayoutDirection, MediaQuery,
     MiniVimMode, RenderCtx, Result, StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View,
-    ViewType, block, button, column, component, dynamic, input, row, text,
+    ViewType, block, button, column, component, dynamic, input, row, text, text_area,
 };
 use ratatui::{
     Terminal,
@@ -102,11 +102,7 @@ fn editable_input(value: impl Into<String>) -> View {
 ///
 /// A [`View`] containing a text area with fresh editable state.
 fn editable_text_area(value: impl Into<String>) -> View {
-    View::TextArea {
-        value: value.into(),
-        metadata: StyleMetadata::new(ViewType::TextArea),
-        editable_state: EditableState::new(),
-    }
+    text_area(value)
 }
 
 /// Creates non-default editable state for reconciliation tests.
@@ -451,6 +447,161 @@ fn input_rendering_clips_and_scrolls_around_cursor() -> Result<()> {
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 0, 0, 4), "a");
     assert_eq!(cell_symbol(&terminal, 3, 0, 4), "d");
+
+    Ok(())
+}
+
+/// Verifies text-area views render multiline controlled values.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("One\nTwo")
+/// width = 8, height = 2
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The first line starts on the first terminal row.
+/// - The second line starts on the second terminal row.
+#[test]
+fn renders_text_area_multiline_value() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = text_area("One\nTwo");
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "O");
+    assert_eq!(cell_symbol(&terminal, 0, 1, 8), "T");
+
+    Ok(())
+}
+
+/// Verifies empty text areas render placeholder text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("").placeholder("Notes")
+/// width = 8
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The rendered cells contain the first and last placeholder characters.
+#[test]
+fn renders_text_area_placeholder_when_value_is_empty() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = text_area("").placeholder("Notes");
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "N");
+    assert_eq!(cell_symbol(&terminal, 4, 0, 8), "s");
+
+    Ok(())
+}
+
+/// Verifies focused text areas receive focus stylesheet rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada").with_focus(true)
+/// :focus { fg: Black, bg: Yellow }
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The component render call succeeds.
+/// - The focused text-area cell uses the stylesheet foreground color.
+/// - The focused text-area cell uses the stylesheet background color.
+#[test]
+fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = text_area("Ada").with_focus(true);
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::focus(),
+        TuiStyle::new()
+            .foreground(Color::Black)
+            .background(Color::Yellow),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let (fg, bg) = cell_colors(&terminal, 0, 0, 8);
+    assert_eq!(fg, Color::Black);
+    assert_eq!(bg, Color::Yellow);
+
+    Ok(())
+}
+
+/// Verifies text-area rendering scrolls vertically around the retained cursor.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("aaa\nbbb\nccc").with_focus(true)
+/// height = 2
+/// cursor = end, then cursor = 0
+/// ```
+///
+/// # Assertions
+///
+/// - The first render succeeds and shows the tail of the multiline value.
+/// - Moving the cursor to the start succeeds.
+/// - The second render succeeds and shows the head of the multiline value.
+#[test]
+fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = text_area("aaa\nbbb\nccc").with_focus(true);
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "b");
+    assert_eq!(cell_symbol(&terminal, 0, 1, 8), "c");
+
+    editable_state_mut(&mut view).set_cursor(0);
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "a");
+    assert_eq!(cell_symbol(&terminal, 0, 1, 8), "b");
+
+    Ok(())
+}
+
+/// Verifies columns reserve multiline text-area render height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text_area("Hello World"), text("End")])
+/// width = 6
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The following text view renders after the wrapped text-area rows.
+#[test]
+fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
+    let backend = TestBackend::new(6, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let view = column(vec![text_area("Hello World"), text("End")]);
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(symbol_position(&terminal, "E", 6), (0, 2));
 
     Ok(())
 }
@@ -1569,6 +1720,195 @@ fn focused_input_without_callback_does_not_mutate_displayed_value() -> Result<()
     Ok(())
 }
 
+/// Verifies focused text-area insertion keys emit full next values.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada\nLovelace").with_focus(true).on_input(...)
+/// Char('!'), Enter
+/// ```
+///
+/// # Assertions
+///
+/// - The character key is handled.
+/// - The enter key is handled.
+/// - The callbacks receive the full proposed multiline values.
+#[test]
+fn focused_text_area_emits_inserted_text_through_on_input() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let emitted_for_char = Rc::clone(&emitted);
+    let mut char_view = text_area("Ada\nLovelace")
+        .with_focus(true)
+        .on_input(move |next| {
+            emitted_for_char.borrow_mut().push(next);
+            AppControl::Continue
+        });
+
+    assert_eq!(
+        char_view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let emitted_for_enter = Rc::clone(&emitted);
+    let mut enter_view = text_area("Ada").with_focus(true).on_input(move |next| {
+        emitted_for_enter.borrow_mut().push(next);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        enter_view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    assert_eq!(
+        emitted.borrow().as_slice(),
+        &[String::from("Ada\nLovelace!"), String::from("Ada\n")]
+    );
+
+    Ok(())
+}
+
+/// Verifies focused text-area deletion keys can remove line boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada\nLovelace").with_focus(true).on_input(...)
+/// Backspace after newline, Delete before newline
+/// ```
+///
+/// # Assertions
+///
+/// - Backspace at the start of the second line is handled.
+/// - Delete at the end of the first line is handled.
+/// - Both callbacks receive the joined multiline value.
+#[test]
+fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let emitted_for_backspace = Rc::clone(&emitted);
+    let mut backspace_view = text_area("Ada\nLovelace")
+        .with_focus(true)
+        .on_input(move |next| {
+            emitted_for_backspace.borrow_mut().push(next);
+            AppControl::Continue
+        });
+    editable_state_mut(&mut backspace_view).set_cursor(4);
+
+    assert_eq!(
+        backspace_view.handle_key_event(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    let emitted_for_delete = Rc::clone(&emitted);
+    let mut delete_view = text_area("Ada\nLovelace")
+        .with_focus(true)
+        .on_input(move |next| {
+            emitted_for_delete.borrow_mut().push(next);
+            AppControl::Continue
+        });
+    editable_state_mut(&mut delete_view).set_cursor(3);
+
+    assert_eq!(
+        delete_view.handle_key_event(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    assert_eq!(
+        emitted.borrow().as_slice(),
+        &[String::from("AdaLovelace"), String::from("AdaLovelace")]
+    );
+
+    Ok(())
+}
+
+/// Verifies focused text-area cursor keys move without emitting values.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("abc\nde\nfghi").with_focus(true).on_input(...)
+/// Up, Up, Down, Down, Home, End
+/// ```
+///
+/// # Assertions
+///
+/// - Up and down move between logical lines at the nearest available column.
+/// - Home and End move within the current logical line.
+/// - No input callback values are emitted.
+#[test]
+fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let emitted_for_text_area = Rc::clone(&emitted);
+    let mut view = text_area("abc\nde\nfghi")
+        .with_focus(true)
+        .on_input(move |next| {
+            emitted_for_text_area.borrow_mut().push(next);
+            AppControl::Continue
+        });
+    editable_state_mut(&mut view).set_cursor(9);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 6);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 2);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 6);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 9);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 7);
+
+    view.handle_key_event(KeyEvent::new(KeyCode::End, KeyModifiers::NONE))?;
+    assert_eq!(editable_state(&view).cursor(), 11);
+    assert!(emitted.borrow().is_empty());
+
+    Ok(())
+}
+
+/// Verifies focused text areas without callbacks do not mutate displayed values.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada\nLovelace").with_focus(true)
+/// Char('!')
+/// ```
+///
+/// # Assertions
+///
+/// - The character key is handled.
+/// - The retained text-area value remains unchanged.
+/// - Rendering still shows the original value.
+/// - The cell after the first line remains blank.
+#[test]
+fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> Result<()> {
+    let backend = TestBackend::new(12, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = text_area("Ada\nLovelace").with_focus(true);
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    match &view {
+        View::TextArea { value, .. } => assert_eq!(value, "Ada\nLovelace"),
+        other => panic!("expected text-area view, got {other:?}"),
+    }
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(cell_symbol(&terminal, 0, 0, 12), "A");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 12), "a");
+    assert_eq!(cell_symbol(&terminal, 3, 0, 12), " ");
+
+    Ok(())
+}
+
 /// Verifies focused input editing works inside component boundaries.
 ///
 /// # Example Under Test
@@ -1600,6 +1940,43 @@ fn focused_input_inside_component_boundary_handles_editing_keys() -> Result<()> 
     );
 
     assert_eq!(emitted.borrow().as_slice(), &[String::from("Ada!")]);
+
+    Ok(())
+}
+
+/// Verifies focused text-area editing works inside component boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// component(FocusPanel { view: text_area("Ada").on_input(...) })
+/// Tab, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - Tabbing into the component boundary succeeds.
+/// - The enter key is handled by the focused text area.
+/// - The callback receives `Ada\n`.
+#[test]
+fn focused_text_area_inside_component_boundary_handles_editing_keys() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let emitted_for_text_area = Rc::clone(&emitted);
+    let text_area_view = text_area("Ada").on_input(move |next| {
+        emitted_for_text_area.borrow_mut().push(next);
+        AppControl::Continue
+    });
+    let mut view = component(FocusPanel {
+        view: text_area_view,
+    });
+
+    view.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+
+    assert_eq!(emitted.borrow().as_slice(), &[String::from("Ada\n")]);
 
     Ok(())
 }
@@ -2124,10 +2501,14 @@ fn reconciliation_does_not_leak_editable_state_to_unrelated_views() {
     }
 
     let mut next_text_area = editable_text_area("new notes");
+    let fresh_text_area = editable_text_area("new notes");
     leptatui::__private::__reconcile_view(&mut next_text_area, &previous_input);
 
     assert!(!next_text_area.style_metadata().unwrap().is_focused());
-    assert_eq!(editable_state(&next_text_area), &EditableState::new());
+    assert_eq!(
+        editable_state(&next_text_area),
+        editable_state(&fresh_text_area)
+    );
     assert_ne!(editable_state(&next_text_area), &retained_state);
 
     let mut previous_text_area = editable_text_area("old notes").with_focus(true);

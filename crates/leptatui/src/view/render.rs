@@ -203,14 +203,32 @@ impl View {
             }
             Self::TextArea {
                 value,
+                placeholder,
                 metadata,
                 editable_state,
+                ..
             } => {
                 let style = resolve_style(metadata, ctx);
+                let display_value = if value.is_empty() {
+                    placeholder.as_deref().unwrap_or("")
+                } else {
+                    value.as_str()
+                };
+                let vertical_scroll = if value.is_empty() {
+                    0
+                } else {
+                    text_area_vertical_scroll(
+                        value.as_str(),
+                        editable_state.cursor(),
+                        editable_state.vertical_scroll(),
+                        ctx.area().height,
+                        ctx.area().width,
+                    )
+                };
                 ctx.render_widget(text_area_paragraph(
-                    value.as_str(),
+                    display_value,
                     style,
-                    editable_state.vertical_scroll(),
+                    vertical_scroll,
                     editable_state.horizontal_scroll(),
                 ));
                 metadata.clear_scroll_into_view_request();
@@ -595,6 +613,15 @@ impl View {
                 ..
             } if metadata.is_focused() => {
                 handle_input_key(value.as_str(), on_input, editable_state, key)
+            }
+            Self::TextArea {
+                value,
+                metadata,
+                on_input,
+                editable_state,
+                ..
+            } if metadata.is_focused() => {
+                handle_text_area_key(value.as_str(), on_input, editable_state, key)
             }
             Self::Block { child, .. } => child.handle_focused_input_key_ref(key),
             Self::Row { children, .. } | Self::Column { children, .. } => children
@@ -987,6 +1014,127 @@ fn input_horizontal_scroll(value: &str, cursor: usize, current_scroll: u16, widt
     u16::try_from(next_scroll).unwrap_or(u16::MAX)
 }
 
+/// Returns the vertical scroll offset needed to keep a text-area cursor visible.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value used to map the cursor byte index to a rendered
+///   row.
+/// * `cursor` — Cursor byte index to keep visible.
+/// * `current_scroll` — Current vertical scroll offset.
+/// * `height` — Available text-area render height.
+/// * `width` — Available text-area render width.
+///
+/// # Returns
+///
+/// A [`u16`] scroll offset that keeps the cursor within the render height.
+fn text_area_vertical_scroll(
+    value: &str,
+    cursor: usize,
+    current_scroll: u16,
+    height: u16,
+    width: u16,
+) -> u16 {
+    if height == 0 || width == 0 {
+        return 0;
+    }
+
+    let viewport_height = usize::from(height);
+    let total_rows = text_area_rendered_rows(value, width);
+    let max_scroll = total_rows.saturating_sub(viewport_height);
+    let current_scroll = usize::from(current_scroll).min(max_scroll);
+    let cursor_row = text_area_cursor_row(value, cursor, width);
+    let viewport_bottom = current_scroll.saturating_add(viewport_height);
+    let next_scroll = if cursor_row < current_scroll {
+        cursor_row
+    } else if cursor_row >= viewport_bottom {
+        cursor_row.saturating_sub(viewport_height.saturating_sub(1))
+    } else {
+        current_scroll
+    }
+    .min(max_scroll);
+
+    u16::try_from(next_scroll).unwrap_or(u16::MAX)
+}
+
+/// Returns the number of wrapped rows needed to render a text-area value.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value to measure.
+/// * `width` — Available text-area render width.
+///
+/// # Returns
+///
+/// A [`usize`] row count for the wrapped text-area value.
+fn text_area_rendered_rows(value: &str, width: u16) -> usize {
+    if width == 0 {
+        return 1;
+    }
+
+    let width = usize::from(width);
+    let mut rows = 1usize;
+    let mut column = 0usize;
+
+    for character in value.chars() {
+        if character == '\n' {
+            rows = rows.saturating_add(1);
+            column = 0;
+            continue;
+        }
+
+        if column == width {
+            rows = rows.saturating_add(1);
+            column = 0;
+        }
+        column = column.saturating_add(1);
+    }
+
+    rows
+}
+
+/// Returns the wrapped render row represented by a text-area cursor.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value used to map the cursor byte index.
+/// * `cursor` — Cursor byte index to locate.
+/// * `width` — Available text-area render width.
+///
+/// # Returns
+///
+/// A [`usize`] row index containing the cursor.
+fn text_area_cursor_row(value: &str, cursor: usize, width: u16) -> usize {
+    if width == 0 {
+        return 0;
+    }
+
+    let cursor = clamp_cursor(value, cursor);
+    let width = usize::from(width);
+    let mut row = 0usize;
+    let mut column = 0usize;
+
+    for (index, character) in value.char_indices() {
+        if index >= cursor {
+            break;
+        }
+
+        if character == '\n' {
+            row = row.saturating_add(1);
+            column = 0;
+            continue;
+        }
+
+        if column == width {
+            row = row.saturating_add(1);
+            column = 0;
+        }
+        column = column.saturating_add(1);
+    }
+
+    row
+}
+
 /// Handles a focused input key and returns whether default propagation stops.
 ///
 /// # Arguments
@@ -1044,13 +1192,219 @@ fn handle_input_key(
     }
 }
 
-/// Handles insertion for a focused input.
+/// Handles a focused text-area key and returns whether default propagation stops.
 ///
 /// # Arguments
 ///
-/// * `value` — Current controlled input value.
+/// * `value` — Current controlled text-area value.
+/// * `on_input` — Optional callback that receives proposed next values.
+/// * `editable_state` — Retained cursor and scroll state for the text area.
+/// * `key` — Key event to apply to the text area.
+///
+/// # Returns
+///
+/// An [`Option`] containing a [`KeyControl`] value when the key is handled by
+/// text-area editing behavior.
+fn handle_text_area_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    key: &KeyEvent,
+) -> Option<KeyControl> {
+    match key.code {
+        KeyCode::Left => {
+            let cursor = previous_char_boundary(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Right => {
+            let cursor = next_char_boundary(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Home => {
+            let cursor = text_area_line_start(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::End => {
+            let cursor = text_area_line_end(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Up => {
+            let cursor = text_area_previous_line_cursor(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Down => {
+            let cursor = text_area_next_line_cursor(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Enter => Some(handle_insert_input_key(
+            value,
+            on_input,
+            editable_state,
+            '\n',
+        )),
+        KeyCode::Backspace => Some(handle_backspace_input_key(value, on_input, editable_state)),
+        KeyCode::Delete => Some(handle_delete_input_key(value, on_input, editable_state)),
+        KeyCode::Char(character)
+            if !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            Some(handle_insert_input_key(
+                value,
+                on_input,
+                editable_state,
+                character,
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// Returns the byte index at the start of the cursor's logical line.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value containing logical lines.
+/// * `cursor` — Cursor byte index used to select the line.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the start of the logical line.
+fn text_area_line_start(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    value[..cursor].rfind('\n').map_or(0, |index| index + 1)
+}
+
+/// Returns the byte index at the end of the cursor's logical line.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value containing logical lines.
+/// * `cursor` — Cursor byte index used to select the line.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the end of the logical line.
+fn text_area_line_end(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    value[cursor..]
+        .find('\n')
+        .map_or(value.len(), |index| cursor + index)
+}
+
+/// Returns the character column represented by a cursor within its logical line.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value containing logical lines.
+/// * `cursor` — Cursor byte index used to select the line and column.
+///
+/// # Returns
+///
+/// A [`usize`] character column within the logical line.
+fn text_area_line_column(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    let start = text_area_line_start(value, cursor);
+    value[start..cursor].chars().count()
+}
+
+/// Returns the cursor byte index for a character column inside a line range.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value containing the target line.
+/// * `line_start` — Byte index where the target line starts.
+/// * `line_end` — Byte index where the target line ends.
+/// * `target_column` — Character column to locate within the line.
+///
+/// # Returns
+///
+/// A [`usize`] cursor byte index for the target line and column.
+fn text_area_cursor_for_line_column(
+    value: &str,
+    line_start: usize,
+    line_end: usize,
+    target_column: usize,
+) -> usize {
+    let mut column = 0usize;
+
+    for (offset, _) in value[line_start..line_end].char_indices() {
+        if column == target_column {
+            return line_start + offset;
+        }
+        column = column.saturating_add(1);
+    }
+
+    line_end
+}
+
+/// Returns the cursor position on the previous logical line.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value containing logical lines.
+/// * `cursor` — Cursor byte index used to derive the source column.
+///
+/// # Returns
+///
+/// A [`usize`] cursor byte index on the previous line, or the original cursor
+/// when no previous line exists.
+fn text_area_previous_line_cursor(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    let current_start = text_area_line_start(value, cursor);
+    if current_start == 0 {
+        return cursor;
+    }
+
+    let target_column = text_area_line_column(value, cursor);
+    let previous_end = current_start.saturating_sub(1);
+    let previous_start = value[..previous_end]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+
+    text_area_cursor_for_line_column(value, previous_start, previous_end, target_column)
+}
+
+/// Returns the cursor position on the next logical line.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value containing logical lines.
+/// * `cursor` — Cursor byte index used to derive the source column.
+///
+/// # Returns
+///
+/// A [`usize`] cursor byte index on the next line, or the original cursor when
+/// no next line exists.
+fn text_area_next_line_cursor(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    let current_end = text_area_line_end(value, cursor);
+    if current_end == value.len() {
+        return cursor;
+    }
+
+    let target_column = text_area_line_column(value, cursor);
+    let next_start = current_end + 1;
+    let next_end = value[next_start..]
+        .find('\n')
+        .map_or(value.len(), |index| next_start + index);
+
+    text_area_cursor_for_line_column(value, next_start, next_end, target_column)
+}
+
+/// Handles insertion for a focused editable text control.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled value.
 /// * `on_input` — Optional callback that receives the inserted value.
-/// * `editable_state` — Retained cursor and scroll state for the input.
+/// * `editable_state` — Retained cursor and scroll state for the control.
 /// * `character` — Character to insert at the cursor.
 ///
 /// # Returns
@@ -1076,13 +1430,13 @@ fn handle_insert_input_key(
     )
 }
 
-/// Handles backspace for a focused input.
+/// Handles backspace for a focused editable text control.
 ///
 /// # Arguments
 ///
-/// * `value` — Current controlled input value.
+/// * `value` — Current controlled value.
 /// * `on_input` — Optional callback that receives the shortened value.
-/// * `editable_state` — Retained cursor and scroll state for the input.
+/// * `editable_state` — Retained cursor and scroll state for the control.
 ///
 /// # Returns
 ///
@@ -1106,13 +1460,13 @@ fn handle_backspace_input_key(
     commit_input_value(on_input, editable_state, next, previous)
 }
 
-/// Handles delete for a focused input.
+/// Handles delete for a focused editable text control.
 ///
 /// # Arguments
 ///
-/// * `value` — Current controlled input value.
+/// * `value` — Current controlled value.
 /// * `on_input` — Optional callback that receives the shortened value.
-/// * `editable_state` — Retained cursor and scroll state for the input.
+/// * `editable_state` — Retained cursor and scroll state for the control.
 ///
 /// # Returns
 ///
@@ -1136,12 +1490,12 @@ fn handle_delete_input_key(
     commit_input_value(on_input, editable_state, next, cursor)
 }
 
-/// Emits a controlled input update when a callback exists.
+/// Emits a controlled editable value update when a callback exists.
 ///
 /// # Arguments
 ///
 /// * `on_input` — Optional callback that receives the proposed value.
-/// * `editable_state` — Retained cursor and scroll state for the input.
+/// * `editable_state` — Retained cursor and scroll state for the control.
 /// * `next` — Proposed next controlled value.
 /// * `next_cursor` — Cursor byte index to retain after emitting the value.
 ///
@@ -1730,13 +2084,20 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         }
         View::TextArea {
             value,
+            placeholder,
             metadata,
             editable_state,
+            ..
         } => {
             let style = resolve_style(metadata, ctx);
+            let display_value = if value.is_empty() {
+                placeholder.as_deref().unwrap_or("")
+            } else {
+                value.as_str()
+            };
             line_count_height(
                 text_area_paragraph(
-                    value.as_str(),
+                    display_value,
                     style,
                     editable_state.vertical_scroll(),
                     editable_state.horizontal_scroll(),

@@ -75,8 +75,12 @@ pub enum View {
     TextArea {
         /// Caller-owned value to display.
         value: String,
+        /// Placeholder text shown when the value is empty.
+        placeholder: Option<String>,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
+        /// Optional controlled-value change callback.
+        on_input: Option<InputAction>,
         /// Retained editing state for reconciled redraws.
         editable_state: EditableState,
     },
@@ -212,7 +216,7 @@ impl View {
         self
     }
 
-    /// Stores placeholder text on an input view.
+    /// Stores placeholder text on an editable text control.
     ///
     /// # Arguments
     ///
@@ -220,31 +224,41 @@ impl View {
     ///
     /// # Returns
     ///
-    /// A [`View`] updated with placeholder text when the view is an input.
+    /// A [`View`] updated with placeholder text when the view is an editable
+    /// text control.
     pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
-        if let Self::Input {
-            placeholder: slot, ..
-        } = &mut self
-        {
-            *slot = Some(placeholder.into());
+        match &mut self {
+            Self::Input {
+                placeholder: slot, ..
+            }
+            | Self::TextArea {
+                placeholder: slot, ..
+            } => {
+                *slot = Some(placeholder.into());
+            }
+            _ => {}
         }
 
         self
     }
 
-    /// Stores a controlled-value callback on an input view.
+    /// Stores a controlled-value callback on an editable text control.
     ///
     /// # Arguments
     ///
     /// * `action` — Callback invoked with the next value when editing keys are
-    ///   pressed while this input is focused.
+    ///   pressed while this control is focused.
     ///
     /// # Returns
     ///
-    /// A [`View`] updated with the callback when the view is an input.
+    /// A [`View`] updated with the callback when the view is an editable text
+    /// control.
     pub fn on_input(mut self, action: impl Fn(String) -> AppControl + 'static) -> Self {
-        if let Self::Input { on_input, .. } = &mut self {
-            *on_input = Some(Rc::new(action));
+        match &mut self {
+            Self::Input { on_input, .. } | Self::TextArea { on_input, .. } => {
+                *on_input = Some(Rc::new(action));
+            }
+            _ => {}
         }
 
         self
@@ -312,12 +326,16 @@ impl fmt::Debug for View {
                 .finish(),
             Self::TextArea {
                 value,
+                placeholder,
                 metadata,
+                on_input,
                 editable_state,
             } => f
                 .debug_struct("TextArea")
                 .field("value", value)
+                .field("placeholder", placeholder)
                 .field("metadata", metadata)
+                .field("on_input", &on_input.is_some())
                 .field("editable_state", editable_state)
                 .finish(),
             Self::Dynamic(_) => f.write_str("Dynamic(..)"),
@@ -455,17 +473,23 @@ impl PartialEq for View {
             (
                 Self::TextArea {
                     value: left_value,
+                    placeholder: left_placeholder,
                     metadata: left_metadata,
+                    on_input: left_on_input,
                     editable_state: left_editable_state,
                 },
                 Self::TextArea {
                     value: right_value,
+                    placeholder: right_placeholder,
                     metadata: right_metadata,
+                    on_input: right_on_input,
                     editable_state: right_editable_state,
                 },
             ) => {
                 left_value == right_value
+                    && left_placeholder == right_placeholder
                     && left_metadata == right_metadata
+                    && input_actions_equal(left_on_input, right_on_input)
                     && left_editable_state == right_editable_state
             }
             (Self::Dynamic(left), Self::Dynamic(right)) => left.ptr_eq(right),
