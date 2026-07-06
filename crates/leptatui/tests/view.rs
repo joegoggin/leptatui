@@ -163,6 +163,111 @@ fn editable_state_mut(view: &mut View) -> &mut EditableState {
     }
 }
 
+/// Returns an unmodified key event for a test key code.
+///
+/// # Arguments
+///
+/// * `code` — Key code to wrap in a [`KeyEvent`].
+///
+/// # Returns
+///
+/// A [`KeyEvent`] value without modifiers.
+fn key_event(code: KeyCode) -> KeyEvent {
+    KeyEvent::new(code, KeyModifiers::NONE)
+}
+
+/// Returns a control-modified character key event for tests.
+///
+/// # Arguments
+///
+/// * `character` — Character to wrap in a control-modified [`KeyEvent`].
+///
+/// # Returns
+///
+/// A [`KeyEvent`] value with the control modifier set.
+fn ctrl_key_event(character: char) -> KeyEvent {
+    KeyEvent::new(KeyCode::Char(character), KeyModifiers::CONTROL)
+}
+
+/// Creates a focused input view that records emitted values.
+///
+/// # Arguments
+///
+/// * `value` — Initial controlled input value.
+/// * `emitted` — Shared vector that receives callback values.
+///
+/// # Returns
+///
+/// A focused [`View`] configured as an input.
+fn emitting_input(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) -> View {
+    let emitted_for_input = Rc::clone(emitted);
+    input(value).with_focus(true).on_input(move |next| {
+        emitted_for_input.borrow_mut().push(next);
+        AppControl::Continue
+    })
+}
+
+/// Creates a focused text-area view that records emitted values.
+///
+/// # Arguments
+///
+/// * `value` — Initial controlled text-area value.
+/// * `emitted` — Shared vector that receives callback values.
+///
+/// # Returns
+///
+/// A focused [`View`] configured as a text area.
+fn emitting_text_area(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) -> View {
+    let emitted_for_text_area = Rc::clone(emitted);
+    text_area(value).with_focus(true).on_input(move |next| {
+        emitted_for_text_area.borrow_mut().push(next);
+        AppControl::Continue
+    })
+}
+
+/// Returns a reconciled input view with a new controlled value.
+///
+/// # Arguments
+///
+/// * `previous` — Previous input view whose retained metadata should be reused.
+/// * `value` — Next controlled input value.
+/// * `emitted` — Shared vector that receives callback values.
+///
+/// # Returns
+///
+/// A [`View`] containing the reconciled input.
+fn reconcile_input_value(
+    previous: &View,
+    value: impl Into<String>,
+    emitted: &Rc<RefCell<Vec<String>>>,
+) -> View {
+    let mut next = emitting_input(value, emitted);
+    leptatui::__private::__reconcile_view(&mut next, previous);
+    next
+}
+
+/// Returns a reconciled text-area view with a new controlled value.
+///
+/// # Arguments
+///
+/// * `previous` — Previous text-area view whose retained metadata should be
+/// reused.
+/// * `value` — Next controlled text-area value.
+/// * `emitted` — Shared vector that receives callback values.
+///
+/// # Returns
+///
+/// A [`View`] containing the reconciled text area.
+fn reconcile_text_area_value(
+    previous: &View,
+    value: impl Into<String>,
+    emitted: &Rc<RefCell<Vec<String>>>,
+) -> View {
+    let mut next = emitting_text_area(value, emitted);
+    leptatui::__private::__reconcile_view(&mut next, previous);
+    next
+}
+
 fn scroll_offset(view: &View) -> u16 {
     match view {
         View::Row { metadata, .. } | View::Column { metadata, .. } => metadata.scroll_offset(),
@@ -1866,6 +1971,371 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
     view.handle_key_event(KeyEvent::new(KeyCode::End, KeyModifiers::NONE))?;
     assert_eq!(editable_state(&view).cursor(), 11);
     assert!(emitted.borrow().is_empty());
+
+    Ok(())
+}
+
+/// Verifies editable controls support mini-Vim mode transition keys.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true)
+/// Esc, i, a, I, A
+///
+/// text_area("ab\ncd").with_focus(true)
+/// I, A
+/// ```
+///
+/// # Assertions
+///
+/// - Inputs start in insert mode.
+/// - Esc switches the input to normal mode and moves the cursor onto the
+/// previous character.
+/// - `i` and `a` switch the input to insert mode at the current and next
+/// normal-mode positions.
+/// - `I` and `A` move to the line start and line end for inputs and text
+/// areas.
+#[test]
+fn focused_editable_controls_support_mini_vim_mode_transitions() -> Result<()> {
+    let mut input_view = input("Ada").with_focus(true);
+    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Insert);
+
+    assert_eq!(
+        input_view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Normal);
+    assert_eq!(editable_state(&input_view).cursor(), 2);
+
+    editable_state_mut(&mut input_view).set_cursor(1);
+    assert_eq!(
+        input_view.handle_key_event(key_event(KeyCode::Char('i')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Insert);
+    assert_eq!(editable_state(&input_view).cursor(), 1);
+
+    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut input_view).set_cursor(1);
+    input_view.handle_key_event(key_event(KeyCode::Char('a')))?;
+    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Insert);
+    assert_eq!(editable_state(&input_view).cursor(), 2);
+
+    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut input_view).set_cursor(2);
+    input_view.handle_key_event(key_event(KeyCode::Char('I')))?;
+    assert_eq!(editable_state(&input_view).cursor(), 0);
+
+    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut input_view).set_cursor(0);
+    input_view.handle_key_event(key_event(KeyCode::Char('A')))?;
+    assert_eq!(editable_state(&input_view).cursor(), 3);
+
+    let mut text_area_view = text_area("ab\ncd").with_focus(true);
+    editable_state_mut(&mut text_area_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut text_area_view).set_cursor(4);
+    text_area_view.handle_key_event(key_event(KeyCode::Char('I')))?;
+    assert_eq!(editable_state(&text_area_view).mode(), MiniVimMode::Insert);
+    assert_eq!(editable_state(&text_area_view).cursor(), 3);
+
+    editable_state_mut(&mut text_area_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut text_area_view).set_cursor(4);
+    text_area_view.handle_key_event(key_event(KeyCode::Char('A')))?;
+    assert_eq!(editable_state(&text_area_view).cursor(), 5);
+
+    Ok(())
+}
+
+/// Verifies focused inputs support mini-Vim normal-mode movement.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("one two three").with_focus(true)
+/// l, Left, Right, h, w, e, b, $, 0, G, gg
+/// ```
+///
+/// # Assertions
+///
+/// - Character movement keys and arrows update the input cursor.
+/// - Word motions move to the expected word start and end positions.
+/// - Line and value boundary motions move to the first or last character.
+/// - `gg` moves the cursor back to the first character.
+#[test]
+fn focused_input_supports_mini_vim_normal_mode_movement() -> Result<()> {
+    let mut view = input("one two three").with_focus(true);
+    editable_state_mut(&mut view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(0);
+
+    view.handle_key_event(key_event(KeyCode::Char('l')))?;
+    assert_eq!(editable_state(&view).cursor(), 1);
+
+    view.handle_key_event(key_event(KeyCode::Left))?;
+    assert_eq!(editable_state(&view).cursor(), 0);
+
+    view.handle_key_event(key_event(KeyCode::Right))?;
+    assert_eq!(editable_state(&view).cursor(), 1);
+
+    view.handle_key_event(key_event(KeyCode::Char('h')))?;
+    assert_eq!(editable_state(&view).cursor(), 0);
+
+    view.handle_key_event(key_event(KeyCode::Char('w')))?;
+    assert_eq!(editable_state(&view).cursor(), 4);
+
+    view.handle_key_event(key_event(KeyCode::Char('e')))?;
+    assert_eq!(editable_state(&view).cursor(), 6);
+
+    view.handle_key_event(key_event(KeyCode::Char('b')))?;
+    assert_eq!(editable_state(&view).cursor(), 4);
+
+    view.handle_key_event(key_event(KeyCode::Char('$')))?;
+    assert_eq!(editable_state(&view).cursor(), 12);
+
+    view.handle_key_event(key_event(KeyCode::Char('0')))?;
+    assert_eq!(editable_state(&view).cursor(), 0);
+
+    view.handle_key_event(key_event(KeyCode::Char('G')))?;
+    assert_eq!(editable_state(&view).cursor(), 12);
+
+    view.handle_key_event(key_event(KeyCode::Char('g')))?;
+    view.handle_key_event(key_event(KeyCode::Char('g')))?;
+    assert_eq!(editable_state(&view).cursor(), 0);
+
+    Ok(())
+}
+
+/// Verifies focused text areas support mini-Vim normal-mode movement.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("one\ntwo\nthree").with_focus(true)
+/// j, k, Down, Up, $, 0, G, gg
+/// ```
+///
+/// # Assertions
+///
+/// - `j`, `k`, Down, and Up move between logical lines.
+/// - Vertical movement preserves the nearest available column.
+/// - `$` and `0` move to the current line end and start.
+/// - `G` and `gg` move to the last and first characters in the text area.
+#[test]
+fn focused_text_area_supports_mini_vim_normal_mode_movement() -> Result<()> {
+    let mut view = text_area("one\ntwo\nthree").with_focus(true);
+    editable_state_mut(&mut view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(4);
+
+    view.handle_key_event(key_event(KeyCode::Char('j')))?;
+    assert_eq!(editable_state(&view).cursor(), 8);
+
+    view.handle_key_event(key_event(KeyCode::Char('k')))?;
+    assert_eq!(editable_state(&view).cursor(), 4);
+
+    view.handle_key_event(key_event(KeyCode::Down))?;
+    assert_eq!(editable_state(&view).cursor(), 8);
+
+    view.handle_key_event(key_event(KeyCode::Up))?;
+    assert_eq!(editable_state(&view).cursor(), 4);
+
+    editable_state_mut(&mut view).set_cursor(5);
+    view.handle_key_event(key_event(KeyCode::Char('k')))?;
+    assert_eq!(editable_state(&view).cursor(), 1);
+
+    editable_state_mut(&mut view).set_cursor(8);
+    view.handle_key_event(key_event(KeyCode::Char('$')))?;
+    assert_eq!(editable_state(&view).cursor(), 12);
+
+    view.handle_key_event(key_event(KeyCode::Char('0')))?;
+    assert_eq!(editable_state(&view).cursor(), 8);
+
+    view.handle_key_event(key_event(KeyCode::Char('G')))?;
+    assert_eq!(editable_state(&view).cursor(), 12);
+
+    view.handle_key_event(key_event(KeyCode::Char('g')))?;
+    view.handle_key_event(key_event(KeyCode::Char('g')))?;
+    assert_eq!(editable_state(&view).cursor(), 0);
+
+    Ok(())
+}
+
+/// Verifies focused inputs support normal-mode mutation and history commands.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("abc").with_focus(true).on_input(...)
+/// x, yy, p, dd, u, Ctrl+r
+/// ```
+///
+/// # Assertions
+///
+/// - `x` emits `ac` and records the original value in undo history.
+/// - `yy` yanks the current input value.
+/// - `p` emits the pasted `acac` value.
+/// - `dd` emits an empty value.
+/// - `u` emits the previous value and records redo history.
+/// - Ctrl+r emits the redone empty value.
+/// - The full emitted value sequence matches the expected mutation order.
+///
+/// # Why
+///
+/// Undo and redo history must survive controlled-value reconciliation between
+/// emitted input values.
+#[test]
+fn focused_input_supports_mini_vim_delete_yank_paste_undo_and_redo() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_input("abc", &emitted);
+    editable_state_mut(&mut view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(1);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('x')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().last().map(String::as_str), Some("ac"));
+    assert_eq!(editable_state(&view).undo_stack(), &[String::from("abc")]);
+
+    view = reconcile_input_value(&view, "ac", &emitted);
+    view.handle_key_event(key_event(KeyCode::Char('y')))?;
+    view.handle_key_event(key_event(KeyCode::Char('y')))?;
+    assert_eq!(editable_state(&view).yank_buffer(), "ac");
+
+    view.handle_key_event(key_event(KeyCode::Char('p')))?;
+    assert_eq!(emitted.borrow().last().map(String::as_str), Some("acac"));
+
+    view = reconcile_input_value(&view, "acac", &emitted);
+    view.handle_key_event(key_event(KeyCode::Char('d')))?;
+    view.handle_key_event(key_event(KeyCode::Char('d')))?;
+    assert_eq!(emitted.borrow().last().map(String::as_str), Some(""));
+
+    view = reconcile_input_value(&view, "", &emitted);
+    view.handle_key_event(key_event(KeyCode::Char('u')))?;
+    assert_eq!(emitted.borrow().last().map(String::as_str), Some("acac"));
+    assert_eq!(editable_state(&view).redo_stack(), &[String::new()]);
+
+    view = reconcile_input_value(&view, "acac", &emitted);
+    view.handle_key_event(ctrl_key_event('r'))?;
+    assert_eq!(emitted.borrow().last().map(String::as_str), Some(""));
+
+    assert_eq!(
+        emitted.borrow().as_slice(),
+        &[
+            String::from("ac"),
+            String::from("acac"),
+            String::new(),
+            String::from("acac"),
+            String::new(),
+        ]
+    );
+
+    Ok(())
+}
+
+/// Verifies focused text areas support linewise yank, delete, paste, and history.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("one\ntwo\nthree").with_focus(true).on_input(...)
+/// yy, G, p, dd, u, Ctrl+r
+/// ```
+///
+/// # Assertions
+///
+/// - `yy` yanks the current logical line without a trailing newline.
+/// - `p` after `G` appends the yanked line below the final line.
+/// - `dd` deletes the selected logical line and keeps that line in the yank
+/// buffer.
+/// - `u` emits the previous text-area value.
+/// - Ctrl+r emits the redone line-deleted value.
+///
+/// # Why
+///
+/// Linewise operations need different paste ranges than character-wise input
+/// operations.
+#[test]
+fn focused_text_area_supports_linewise_yank_delete_paste_undo_and_redo() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_text_area("one\ntwo\nthree", &emitted);
+    editable_state_mut(&mut view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(4);
+
+    view.handle_key_event(key_event(KeyCode::Char('y')))?;
+    view.handle_key_event(key_event(KeyCode::Char('y')))?;
+    assert_eq!(editable_state(&view).yank_buffer(), "two");
+
+    view.handle_key_event(key_event(KeyCode::Char('G')))?;
+    view.handle_key_event(key_event(KeyCode::Char('p')))?;
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\ntwo\nthree\ntwo")
+    );
+
+    view = reconcile_text_area_value(&view, "one\ntwo\nthree\ntwo", &emitted);
+    editable_state_mut(&mut view).set_cursor(4);
+    view.handle_key_event(key_event(KeyCode::Char('d')))?;
+    view.handle_key_event(key_event(KeyCode::Char('d')))?;
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\nthree\ntwo")
+    );
+    assert_eq!(editable_state(&view).yank_buffer(), "two");
+
+    view = reconcile_text_area_value(&view, "one\nthree\ntwo", &emitted);
+    view.handle_key_event(key_event(KeyCode::Char('u')))?;
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\ntwo\nthree\ntwo")
+    );
+
+    view = reconcile_text_area_value(&view, "one\ntwo\nthree\ntwo", &emitted);
+    view.handle_key_event(ctrl_key_event('r'))?;
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\nthree\ntwo")
+    );
+
+    Ok(())
+}
+
+/// Verifies insert-mode Enter keeps inputs single-line and text areas multiline.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// Enter
+///
+/// text_area("Ada").with_focus(true).on_input(...)
+/// Enter
+/// ```
+///
+/// # Assertions
+///
+/// - Enter is handled for a focused input without emitting values.
+/// - Enter is handled for a focused text area.
+/// - The text-area callback emits the value with a trailing newline.
+#[test]
+fn insert_mode_keeps_input_single_line_and_text_area_multiline() -> Result<()> {
+    let input_emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut input_view = emitting_input("Ada", &input_emitted);
+    assert_eq!(
+        input_view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert!(input_emitted.borrow().is_empty());
+
+    let text_area_emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut text_area_view = emitting_text_area("Ada", &text_area_emitted);
+    assert_eq!(
+        text_area_view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        text_area_emitted.borrow().as_slice(),
+        &[String::from("Ada\n")]
+    );
 
     Ok(())
 }

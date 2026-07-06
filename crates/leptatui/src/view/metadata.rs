@@ -49,10 +49,14 @@ pub struct EditableState {
     mode: MiniVimMode,
     /// Yank buffer retained across reconciled redraws.
     yank_buffer: String,
+    /// Whether the yank buffer should paste as whole logical lines.
+    yank_linewise: bool,
     /// Undo snapshots retained across reconciled redraws.
     undo_stack: Vec<String>,
     /// Redo snapshots retained across reconciled redraws.
     redo_stack: Vec<String>,
+    /// First key in a pending normal-mode multi-key command.
+    normal_key_pending: Option<char>,
 }
 
 impl EditableState {
@@ -167,11 +171,15 @@ impl EditableState {
 
     /// Replaces the retained selection-free yank buffer.
     ///
+    /// Marks the buffer as character-wise so later paste operations insert it
+    /// after the current normal-mode cursor.
+    ///
     /// # Arguments
     ///
     /// * `yank_buffer` — Yank buffer contents to retain.
     pub fn set_yank_buffer(&mut self, yank_buffer: impl Into<String>) {
         self.yank_buffer = yank_buffer.into();
+        self.yank_linewise = false;
     }
 
     /// Pushes a retained undo-history snapshot.
@@ -190,6 +198,69 @@ impl EditableState {
     /// * `value` — Redo snapshot to append.
     pub fn push_redo(&mut self, value: impl Into<String>) {
         self.redo_stack.push(value.into());
+    }
+
+    /// Replaces the retained linewise yank buffer.
+    ///
+    /// Marks the buffer as linewise so later text-area paste operations insert
+    /// it as a whole logical line.
+    ///
+    /// # Arguments
+    ///
+    /// * `yank_buffer` — Yank buffer contents to retain.
+    pub(crate) fn set_linewise_yank_buffer(&mut self, yank_buffer: impl Into<String>) {
+        self.yank_buffer = yank_buffer.into();
+        self.yank_linewise = true;
+    }
+
+    /// Returns whether the yank buffer should paste as whole logical lines.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] value indicating whether the yank buffer is linewise.
+    pub(crate) const fn yank_linewise(&self) -> bool {
+        self.yank_linewise
+    }
+
+    /// Clears retained redo history.
+    pub(crate) fn clear_redo(&mut self) {
+        self.redo_stack.clear();
+    }
+
+    /// Pops the most recent retained undo snapshot.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the most recent undo snapshot.
+    pub(crate) fn pop_undo(&mut self) -> Option<String> {
+        self.undo_stack.pop()
+    }
+
+    /// Pops the most recent retained redo snapshot.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the most recent redo snapshot.
+    pub(crate) fn pop_redo(&mut self) -> Option<String> {
+        self.redo_stack.pop()
+    }
+
+    /// Replaces the pending normal-mode command key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Pending first key in a normal-mode command sequence.
+    pub(crate) fn set_normal_key_pending(&mut self, key: Option<char>) {
+        self.normal_key_pending = key;
+    }
+
+    /// Clears and returns the pending normal-mode command key.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the pending first key.
+    pub(crate) fn take_normal_key_pending(&mut self) -> Option<char> {
+        self.normal_key_pending.take()
     }
 }
 

@@ -3,6 +3,8 @@
 //! This module maps [`View`] variants to Ratatui widgets, layout splits, and
 //! component event propagation.
 
+use std::ops::Range;
+
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
@@ -19,7 +21,7 @@ use crate::{
 };
 
 use super::{
-    metadata::{EditableState, StyleMetadata},
+    metadata::{EditableState, MiniVimMode, StyleMetadata},
     model::{InputAction, View},
 };
 
@@ -1154,42 +1156,13 @@ fn handle_input_key(
     editable_state: &mut EditableState,
     key: &KeyEvent,
 ) -> Option<KeyControl> {
-    match key.code {
-        KeyCode::Left => {
-            let cursor = previous_char_boundary(value, editable_state.cursor());
-            editable_state.set_cursor(cursor);
-            Some(KeyControl::Handled)
-        }
-        KeyCode::Right => {
-            let cursor = next_char_boundary(value, editable_state.cursor());
-            editable_state.set_cursor(cursor);
-            Some(KeyControl::Handled)
-        }
-        KeyCode::Home => {
-            editable_state.set_cursor(0);
-            Some(KeyControl::Handled)
-        }
-        KeyCode::End => {
-            editable_state.set_cursor(value.len());
-            Some(KeyControl::Handled)
-        }
-        KeyCode::Enter => Some(KeyControl::Handled),
-        KeyCode::Backspace => Some(handle_backspace_input_key(value, on_input, editable_state)),
-        KeyCode::Delete => Some(handle_delete_input_key(value, on_input, editable_state)),
-        KeyCode::Char(character)
-            if !key
-                .modifiers
-                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-        {
-            Some(handle_insert_input_key(
-                value,
-                on_input,
-                editable_state,
-                character,
-            ))
-        }
-        _ => None,
-    }
+    handle_editable_key(
+        value,
+        on_input,
+        editable_state,
+        key,
+        EditableControlKind::Input,
+    )
 }
 
 /// Handles a focused text-area key and returns whether default propagation stops.
@@ -1211,7 +1184,80 @@ fn handle_text_area_key(
     editable_state: &mut EditableState,
     key: &KeyEvent,
 ) -> Option<KeyControl> {
+    handle_editable_key(
+        value,
+        on_input,
+        editable_state,
+        key,
+        EditableControlKind::TextArea,
+    )
+}
+
+/// Editable control variant used by shared key handling helpers.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum EditableControlKind {
+    /// Single-line input behavior.
+    Input,
+    /// Multiline text-area behavior.
+    TextArea,
+}
+
+/// Handles a focused editable-control key according to its mini-Vim mode.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives proposed next values.
+/// * `editable_state` — Retained cursor, mode, and history state for the control.
+/// * `key` — Key event to apply to the control.
+/// * `kind` — Editable control variant receiving the key.
+///
+/// # Returns
+///
+/// An [`Option`] containing a [`KeyControl`] value when editable behavior
+/// handles the key.
+fn handle_editable_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    key: &KeyEvent,
+    kind: EditableControlKind,
+) -> Option<KeyControl> {
+    match editable_state.mode() {
+        MiniVimMode::Insert => handle_insert_mode_key(value, on_input, editable_state, key, kind),
+        MiniVimMode::Normal => handle_normal_mode_key(value, on_input, editable_state, key, kind),
+    }
+}
+
+/// Handles insert-mode editing and cursor movement for a focused control.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives proposed next values.
+/// * `editable_state` — Retained cursor, mode, and history state for the control.
+/// * `key` — Key event to apply while the control is in insert mode.
+/// * `kind` — Editable control variant receiving the key.
+///
+/// # Returns
+///
+/// An [`Option`] containing a [`KeyControl`] value when insert-mode behavior
+/// handles the key.
+fn handle_insert_mode_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    key: &KeyEvent,
+    kind: EditableControlKind,
+) -> Option<KeyControl> {
+    editable_state.set_normal_key_pending(None);
+
     match key.code {
+        KeyCode::Esc => {
+            editable_state.set_mode(MiniVimMode::Normal);
+            editable_state.set_cursor(normal_cursor_from_insert(value, editable_state.cursor()));
+            Some(KeyControl::Handled)
+        }
         KeyCode::Left => {
             let cursor = previous_char_boundary(value, editable_state.cursor());
             editable_state.set_cursor(cursor);
@@ -1223,31 +1269,37 @@ fn handle_text_area_key(
             Some(KeyControl::Handled)
         }
         KeyCode::Home => {
-            let cursor = text_area_line_start(value, editable_state.cursor());
+            let cursor = match kind {
+                EditableControlKind::Input => 0,
+                EditableControlKind::TextArea => {
+                    text_area_line_start(value, editable_state.cursor())
+                }
+            };
             editable_state.set_cursor(cursor);
             Some(KeyControl::Handled)
         }
         KeyCode::End => {
-            let cursor = text_area_line_end(value, editable_state.cursor());
+            let cursor = insert_line_end(value, editable_state.cursor(), kind);
             editable_state.set_cursor(cursor);
             Some(KeyControl::Handled)
         }
-        KeyCode::Up => {
+        KeyCode::Up if kind == EditableControlKind::TextArea => {
             let cursor = text_area_previous_line_cursor(value, editable_state.cursor());
             editable_state.set_cursor(cursor);
             Some(KeyControl::Handled)
         }
-        KeyCode::Down => {
+        KeyCode::Down if kind == EditableControlKind::TextArea => {
             let cursor = text_area_next_line_cursor(value, editable_state.cursor());
             editable_state.set_cursor(cursor);
             Some(KeyControl::Handled)
         }
-        KeyCode::Enter => Some(handle_insert_input_key(
+        KeyCode::Enter if kind == EditableControlKind::TextArea => Some(handle_insert_input_key(
             value,
             on_input,
             editable_state,
             '\n',
         )),
+        KeyCode::Enter => Some(KeyControl::Handled),
         KeyCode::Backspace => Some(handle_backspace_input_key(value, on_input, editable_state)),
         KeyCode::Delete => Some(handle_delete_input_key(value, on_input, editable_state)),
         KeyCode::Char(character)
@@ -1263,6 +1315,867 @@ fn handle_text_area_key(
             ))
         }
         _ => None,
+    }
+}
+
+/// Handles normal-mode movement, command sequences, and mutations.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives proposed next values.
+/// * `editable_state` — Retained cursor, mode, and history state for the control.
+/// * `key` — Key event to apply while the control is in normal mode.
+/// * `kind` — Editable control variant receiving the key.
+///
+/// # Returns
+///
+/// An [`Option`] containing a [`KeyControl`] value when normal-mode behavior
+/// handles the key.
+fn handle_normal_mode_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    key: &KeyEvent,
+    kind: EditableControlKind,
+) -> Option<KeyControl> {
+    if key.code == KeyCode::Char('r') && key.modifiers == KeyModifiers::CONTROL {
+        editable_state.set_normal_key_pending(None);
+        return Some(handle_redo_input_key(value, on_input, editable_state));
+    }
+
+    if let Some(pending) = editable_state.take_normal_key_pending() {
+        return Some(handle_pending_normal_mode_key(
+            value,
+            on_input,
+            editable_state,
+            key,
+            kind,
+            pending,
+        ));
+    }
+
+    let plain_key = !key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+
+    match key.code {
+        KeyCode::Esc => Some(KeyControl::Handled),
+        KeyCode::Left | KeyCode::Char('h') if plain_key => {
+            let cursor = normal_previous_char_cursor(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Right | KeyCode::Char('l') if plain_key => {
+            let cursor = normal_next_char_cursor(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Up | KeyCode::Char('k') if plain_key => {
+            let cursor = match kind {
+                EditableControlKind::Input => normal_cursor(value, editable_state.cursor()),
+                EditableControlKind::TextArea => normal_cursor(
+                    value,
+                    text_area_previous_line_cursor(value, editable_state.cursor()),
+                ),
+            };
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Down | KeyCode::Char('j') if plain_key => {
+            let cursor = match kind {
+                EditableControlKind::Input => normal_cursor(value, editable_state.cursor()),
+                EditableControlKind::TextArea => normal_cursor(
+                    value,
+                    text_area_next_line_cursor(value, editable_state.cursor()),
+                ),
+            };
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Home | KeyCode::Char('0') if plain_key => {
+            let cursor = line_start(value, editable_state.cursor(), kind);
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::End | KeyCode::Char('$') if plain_key => {
+            let cursor = normal_line_end(value, editable_state.cursor(), kind);
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('w') if plain_key => {
+            let cursor = next_word_start_cursor(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('b') if plain_key => {
+            let cursor = previous_word_start_cursor(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('e') if plain_key => {
+            let cursor = word_end_cursor(value, editable_state.cursor());
+            editable_state.set_cursor(cursor);
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('g') if plain_key => {
+            editable_state.set_normal_key_pending(Some('g'));
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('G') if plain_key => {
+            editable_state.set_cursor(normal_last_char_cursor(value));
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('d') if plain_key => {
+            editable_state.set_normal_key_pending(Some('d'));
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('y') if plain_key => {
+            editable_state.set_normal_key_pending(Some('y'));
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('x') if plain_key => Some(handle_delete_normal_char_key(
+            value,
+            on_input,
+            editable_state,
+        )),
+        KeyCode::Char('p') if plain_key => Some(handle_paste_input_key(
+            value,
+            on_input,
+            editable_state,
+            kind,
+        )),
+        KeyCode::Char('u') if plain_key => {
+            Some(handle_undo_input_key(value, on_input, editable_state))
+        }
+        KeyCode::Char('i') if plain_key => {
+            editable_state.set_mode(MiniVimMode::Insert);
+            editable_state.set_cursor(clamp_cursor(value, editable_state.cursor()));
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('a') if plain_key => {
+            editable_state.set_mode(MiniVimMode::Insert);
+            editable_state.set_cursor(insert_after_normal_cursor(value, editable_state.cursor()));
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('I') if plain_key => {
+            editable_state.set_mode(MiniVimMode::Insert);
+            editable_state.set_cursor(line_start(value, editable_state.cursor(), kind));
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Char('A') if plain_key => {
+            editable_state.set_mode(MiniVimMode::Insert);
+            editable_state.set_cursor(insert_line_end(value, editable_state.cursor(), kind));
+            Some(KeyControl::Handled)
+        }
+        KeyCode::Enter | KeyCode::Backspace | KeyCode::Delete => Some(KeyControl::Handled),
+        KeyCode::Char(_) if plain_key => Some(KeyControl::Handled),
+        _ => None,
+    }
+}
+
+/// Handles the second key in a normal-mode command sequence.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives proposed next values.
+/// * `editable_state` — Retained cursor, mode, and history state for the control.
+/// * `key` — Key event completing or cancelling the sequence.
+/// * `kind` — Editable control variant receiving the key.
+/// * `pending` — First key already captured for the sequence.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that the pending sequence was handled.
+fn handle_pending_normal_mode_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    key: &KeyEvent,
+    kind: EditableControlKind,
+    pending: char,
+) -> KeyControl {
+    let plain_key = !key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+
+    match (pending, key.code) {
+        ('g', KeyCode::Char('g')) if plain_key => {
+            editable_state.set_cursor(0);
+            KeyControl::Handled
+        }
+        ('d', KeyCode::Char('d')) if plain_key => {
+            handle_delete_line_key(value, on_input, editable_state, kind)
+        }
+        ('y', KeyCode::Char('y')) if plain_key => handle_yank_line_key(value, editable_state, kind),
+        _ => KeyControl::Handled,
+    }
+}
+
+/// Returns the logical line start for an editable control.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index used to select the line.
+/// * `kind` — Editable control variant that defines line behavior.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the start of the logical line.
+fn line_start(value: &str, cursor: usize, kind: EditableControlKind) -> usize {
+    match kind {
+        EditableControlKind::Input => 0,
+        EditableControlKind::TextArea => text_area_line_start(value, cursor),
+    }
+}
+
+/// Returns the insert-mode line end for an editable control.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index used to select the line.
+/// * `kind` — Editable control variant that defines line behavior.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the insert-mode end of the logical line.
+fn insert_line_end(value: &str, cursor: usize, kind: EditableControlKind) -> usize {
+    match kind {
+        EditableControlKind::Input => value.len(),
+        EditableControlKind::TextArea => text_area_line_end(value, cursor),
+    }
+}
+
+/// Returns the normal-mode cursor position for the end of the current line.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index used to select the line.
+/// * `kind` — Editable control variant that defines line behavior.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the last character in the logical line, or the
+/// line start for an empty line.
+fn normal_line_end(value: &str, cursor: usize, kind: EditableControlKind) -> usize {
+    let start = line_start(value, cursor, kind);
+    let end = insert_line_end(value, cursor, kind);
+    if end > start {
+        previous_char_boundary(value, end)
+    } else {
+        start
+    }
+}
+
+/// Converts an insert-mode cursor to the matching normal-mode cursor.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Insert-mode cursor byte index.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the normal-mode cursor.
+fn normal_cursor_from_insert(value: &str, cursor: usize) -> usize {
+    let cursor = clamp_cursor(value, cursor);
+    if cursor == 0 {
+        0
+    } else {
+        previous_char_boundary(value, cursor)
+    }
+}
+
+/// Returns a normal-mode cursor clamped to an existing character.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Candidate cursor byte index.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for an existing character, or zero for an empty value.
+fn normal_cursor(value: &str, cursor: usize) -> usize {
+    if value.is_empty() {
+        return 0;
+    }
+
+    let cursor = clamp_cursor(value, cursor);
+    if cursor == value.len() {
+        previous_char_boundary(value, cursor)
+    } else {
+        cursor
+    }
+}
+
+/// Returns the cursor for the final character in a value.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the final character, or zero for an empty value.
+fn normal_last_char_cursor(value: &str) -> usize {
+    normal_cursor(value, value.len())
+}
+
+/// Returns the previous normal-mode character cursor.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index used as the movement origin.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the previous normal-mode cursor.
+fn normal_previous_char_cursor(value: &str, cursor: usize) -> usize {
+    previous_char_boundary(value, normal_cursor(value, cursor))
+}
+
+/// Returns the next normal-mode character cursor.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index used as the movement origin.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the next normal-mode cursor.
+fn normal_next_char_cursor(value: &str, cursor: usize) -> usize {
+    if value.is_empty() {
+        return 0;
+    }
+
+    let cursor = normal_cursor(value, cursor);
+    let next = next_char_boundary(value, cursor);
+    if next == value.len() { cursor } else { next }
+}
+
+/// Returns the insert position after the current normal-mode cursor.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Normal-mode cursor byte index.
+///
+/// # Returns
+///
+/// A [`usize`] byte index where inserted text should begin.
+fn insert_after_normal_cursor(value: &str, cursor: usize) -> usize {
+    if value.is_empty() {
+        0
+    } else {
+        next_char_boundary(value, normal_cursor(value, cursor))
+    }
+}
+
+/// Returns a cursor after replacing the controlled value.
+///
+/// # Arguments
+///
+/// * `value` — Replacement controlled editable value.
+/// * `cursor` — Cursor byte index retained before replacement.
+/// * `mode` — Mini-Vim mode that determines cursor clamping behavior.
+///
+/// # Returns
+///
+/// A [`usize`] byte index valid for the replacement value.
+fn cursor_after_value_replace(value: &str, cursor: usize, mode: MiniVimMode) -> usize {
+    match mode {
+        MiniVimMode::Insert => clamp_cursor(value, cursor),
+        MiniVimMode::Normal => normal_cursor_after_change(value, cursor),
+    }
+}
+
+/// Returns a normal-mode cursor after mutating text near `cursor`.
+///
+/// # Arguments
+///
+/// * `value` — Mutated controlled editable value.
+/// * `cursor` — Cursor byte index near the mutation.
+///
+/// # Returns
+///
+/// A [`usize`] normal-mode cursor byte index valid for the mutated value.
+fn normal_cursor_after_change(value: &str, cursor: usize) -> usize {
+    if value.is_empty() {
+        return 0;
+    }
+
+    let cursor = clamp_cursor(value, cursor);
+    if cursor == value.len() {
+        previous_char_boundary(value, cursor)
+    } else {
+        cursor
+    }
+}
+
+/// Returns the character at a byte cursor.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index to inspect.
+///
+/// # Returns
+///
+/// An [`Option`] containing the character starting at `cursor`.
+fn char_at(value: &str, cursor: usize) -> Option<char> {
+    value.get(cursor..)?.chars().next()
+}
+
+/// Returns whether a character participates in mini-Vim word motions.
+///
+/// # Arguments
+///
+/// * `character` — Character to classify.
+///
+/// # Returns
+///
+/// A [`bool`] value indicating whether `character` belongs to a mini-Vim word.
+fn is_word_character(character: char) -> bool {
+    !character.is_whitespace()
+}
+
+/// Returns the start of the next word for normal-mode `w`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index used as the movement origin.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the next word start.
+fn next_word_start_cursor(value: &str, cursor: usize) -> usize {
+    if value.is_empty() {
+        return 0;
+    }
+
+    let mut cursor = normal_cursor(value, cursor);
+    if char_at(value, cursor).is_some_and(is_word_character) {
+        while cursor < value.len() && char_at(value, cursor).is_some_and(is_word_character) {
+            cursor = next_char_boundary(value, cursor);
+        }
+    }
+
+    while cursor < value.len()
+        && char_at(value, cursor).is_some_and(|character| !is_word_character(character))
+    {
+        cursor = next_char_boundary(value, cursor);
+    }
+
+    if cursor == value.len() {
+        normal_last_char_cursor(value)
+    } else {
+        cursor
+    }
+}
+
+/// Returns the start of the previous word for normal-mode `b`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index used as the movement origin.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the previous word start.
+fn previous_word_start_cursor(value: &str, cursor: usize) -> usize {
+    if value.is_empty() {
+        return 0;
+    }
+
+    let cursor = normal_cursor(value, cursor);
+    if cursor == 0 {
+        return 0;
+    }
+
+    let mut cursor = previous_char_boundary(value, cursor);
+    while cursor > 0
+        && char_at(value, cursor).is_some_and(|character| !is_word_character(character))
+    {
+        cursor = previous_char_boundary(value, cursor);
+    }
+
+    while cursor > 0 {
+        let previous = previous_char_boundary(value, cursor);
+        if char_at(value, previous).is_some_and(|character| !is_word_character(character)) {
+            break;
+        }
+        cursor = previous;
+    }
+
+    cursor
+}
+
+/// Returns the end of the current or next word for normal-mode `e`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index used as the movement origin.
+///
+/// # Returns
+///
+/// A [`usize`] byte index for the current or next word end.
+fn word_end_cursor(value: &str, cursor: usize) -> usize {
+    if value.is_empty() {
+        return 0;
+    }
+
+    let mut cursor = normal_cursor(value, cursor);
+    if char_at(value, cursor).is_some_and(is_word_character) {
+        let next = next_char_boundary(value, cursor);
+        if next < value.len() && char_at(value, next).is_some_and(is_word_character) {
+            cursor = next;
+            while next_char_boundary(value, cursor) < value.len()
+                && char_at(value, next_char_boundary(value, cursor)).is_some_and(is_word_character)
+            {
+                cursor = next_char_boundary(value, cursor);
+            }
+            return cursor;
+        }
+        cursor = next;
+    }
+
+    while cursor < value.len()
+        && char_at(value, cursor).is_some_and(|character| !is_word_character(character))
+    {
+        cursor = next_char_boundary(value, cursor);
+    }
+
+    if cursor == value.len() {
+        return normal_last_char_cursor(value);
+    }
+
+    while next_char_boundary(value, cursor) < value.len()
+        && char_at(value, next_char_boundary(value, cursor)).is_some_and(is_word_character)
+    {
+        cursor = next_char_boundary(value, cursor);
+    }
+
+    cursor
+}
+
+/// Handles normal-mode `x`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives the shortened value.
+/// * `editable_state` — Retained cursor, mode, and history state for the control.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that character deletion was handled.
+fn handle_delete_normal_char_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+) -> KeyControl {
+    if value.is_empty() {
+        editable_state.set_cursor(0);
+        return KeyControl::Handled;
+    }
+
+    let cursor = normal_cursor(value, editable_state.cursor());
+    let next_boundary = next_char_boundary(value, cursor);
+    let mut next = String::with_capacity(value.len().saturating_sub(next_boundary - cursor));
+    next.push_str(&value[..cursor]);
+    next.push_str(&value[next_boundary..]);
+    let next_cursor = normal_cursor_after_change(&next, cursor);
+
+    commit_input_value(value, on_input, editable_state, next, next_cursor)
+}
+
+/// Handles normal-mode `dd`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives the shortened value.
+/// * `editable_state` — Retained cursor, mode, and history state for the control.
+/// * `kind` — Editable control variant receiving the command.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that line deletion was handled.
+fn handle_delete_line_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    kind: EditableControlKind,
+) -> KeyControl {
+    if value.is_empty() {
+        editable_state.set_yank_buffer("");
+        editable_state.set_cursor(0);
+        return KeyControl::Handled;
+    }
+
+    match kind {
+        EditableControlKind::Input => {
+            editable_state.set_yank_buffer(value);
+            commit_input_value(value, on_input, editable_state, String::new(), 0)
+        }
+        EditableControlKind::TextArea => {
+            let content_range = text_area_line_content_range(value, editable_state.cursor());
+            let deleted_line = value[content_range].to_owned();
+            editable_state.set_linewise_yank_buffer(deleted_line);
+
+            let delete_range = text_area_line_delete_range(value, editable_state.cursor());
+            let mut next = String::with_capacity(value.len().saturating_sub(delete_range.len()));
+            next.push_str(&value[..delete_range.start]);
+            next.push_str(&value[delete_range.end..]);
+            let next_cursor = normal_cursor_after_change(&next, delete_range.start);
+
+            commit_input_value(value, on_input, editable_state, next, next_cursor)
+        }
+    }
+}
+
+/// Handles normal-mode `yy`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `editable_state` — Retained cursor, mode, and yank-buffer state for the
+/// control.
+/// * `kind` — Editable control variant receiving the command.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that line yanking was handled.
+fn handle_yank_line_key(
+    value: &str,
+    editable_state: &mut EditableState,
+    kind: EditableControlKind,
+) -> KeyControl {
+    match kind {
+        EditableControlKind::Input => editable_state.set_yank_buffer(value),
+        EditableControlKind::TextArea => {
+            let range = text_area_line_content_range(value, editable_state.cursor());
+            editable_state.set_linewise_yank_buffer(value[range].to_owned());
+        }
+    }
+
+    KeyControl::Handled
+}
+
+/// Handles normal-mode `p`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives the pasted value.
+/// * `editable_state` — Retained cursor, mode, and yank-buffer state for the
+/// control.
+/// * `kind` — Editable control variant receiving the command.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that paste was handled.
+fn handle_paste_input_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    kind: EditableControlKind,
+) -> KeyControl {
+    let yank_buffer = editable_state.yank_buffer().to_owned();
+    if yank_buffer.is_empty() {
+        return KeyControl::Handled;
+    }
+
+    let (next, next_cursor) =
+        if kind == EditableControlKind::TextArea && editable_state.yank_linewise() {
+            text_area_linewise_paste(value, editable_state.cursor(), &yank_buffer)
+        } else {
+            charwise_paste(value, editable_state.cursor(), &yank_buffer)
+        };
+
+    commit_input_value(value, on_input, editable_state, next, next_cursor)
+}
+
+/// Handles normal-mode `u`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives the restored value.
+/// * `editable_state` — Retained cursor, mode, and undo-history state for the
+/// control.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that undo was handled.
+fn handle_undo_input_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+) -> KeyControl {
+    let Some(on_input) = on_input.as_ref() else {
+        return KeyControl::Handled;
+    };
+    let Some(previous) = editable_state.pop_undo() else {
+        return KeyControl::Handled;
+    };
+
+    editable_state.push_redo(value.to_owned());
+    let next_cursor =
+        cursor_after_value_replace(&previous, editable_state.cursor(), editable_state.mode());
+    editable_state.set_cursor(next_cursor);
+    on_input(previous).into()
+}
+
+/// Handles normal-mode `Ctrl+r`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives the redone value.
+/// * `editable_state` — Retained cursor, mode, and redo-history state for the
+/// control.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that redo was handled.
+fn handle_redo_input_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+) -> KeyControl {
+    let Some(on_input) = on_input.as_ref() else {
+        return KeyControl::Handled;
+    };
+    let Some(next) = editable_state.pop_redo() else {
+        return KeyControl::Handled;
+    };
+
+    editable_state.push_undo(value.to_owned());
+    let next_cursor =
+        cursor_after_value_replace(&next, editable_state.cursor(), editable_state.mode());
+    editable_state.set_cursor(next_cursor);
+    on_input(next).into()
+}
+
+/// Returns a charwise paste result and normal-mode cursor.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Normal-mode cursor byte index used as the paste origin.
+/// * `yank_buffer` — Character-wise yank buffer to insert.
+///
+/// # Returns
+///
+/// A `(String, usize)` tuple containing the pasted value and next
+/// normal-mode cursor.
+fn charwise_paste(value: &str, cursor: usize, yank_buffer: &str) -> (String, usize) {
+    let insert_at = insert_after_normal_cursor(value, cursor);
+    let mut next = String::with_capacity(value.len().saturating_add(yank_buffer.len()));
+    next.push_str(&value[..insert_at]);
+    next.push_str(yank_buffer);
+    next.push_str(&value[insert_at..]);
+    let next_cursor =
+        normal_cursor_after_change(&next, insert_at.saturating_add(yank_buffer.len()));
+
+    (next, next_cursor)
+}
+
+/// Returns a linewise text-area paste result and normal-mode cursor.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled text-area value.
+/// * `cursor` — Normal-mode cursor byte index used to select the current line.
+/// * `yank_buffer` — Linewise yank buffer to insert.
+///
+/// # Returns
+///
+/// A `(String, usize)` tuple containing the pasted value and next
+/// normal-mode cursor.
+fn text_area_linewise_paste(value: &str, cursor: usize, yank_buffer: &str) -> (String, usize) {
+    if value.is_empty() {
+        return (yank_buffer.to_owned(), 0);
+    }
+
+    let current_end = text_area_line_end(value, cursor);
+    if current_end < value.len() {
+        let insert_at = current_end + 1;
+        let mut next = String::with_capacity(
+            value
+                .len()
+                .saturating_add(yank_buffer.len())
+                .saturating_add(1),
+        );
+        next.push_str(&value[..insert_at]);
+        next.push_str(yank_buffer);
+        next.push('\n');
+        next.push_str(&value[insert_at..]);
+        return (next, insert_at);
+    }
+
+    let insert_at = value.len().saturating_add(1);
+    let mut next = String::with_capacity(
+        value
+            .len()
+            .saturating_add(yank_buffer.len())
+            .saturating_add(1),
+    );
+    next.push_str(value);
+    next.push('\n');
+    next.push_str(yank_buffer);
+    let next_cursor = normal_cursor_after_change(&next, insert_at);
+
+    (next, next_cursor)
+}
+
+/// Returns the current text-area line content range without a trailing newline.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled text-area value.
+/// * `cursor` — Cursor byte index used to select the line.
+///
+/// # Returns
+///
+/// A [`Range`] covering the current line content.
+fn text_area_line_content_range(value: &str, cursor: usize) -> Range<usize> {
+    let start = text_area_line_start(value, cursor);
+    let end = text_area_line_end(value, cursor);
+    start..end
+}
+
+/// Returns the text-area range removed by a linewise delete.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled text-area value.
+/// * `cursor` — Cursor byte index used to select the line.
+///
+/// # Returns
+///
+/// A [`Range`] covering the bytes removed by a linewise delete.
+fn text_area_line_delete_range(value: &str, cursor: usize) -> Range<usize> {
+    let start = text_area_line_start(value, cursor);
+    let end = text_area_line_end(value, cursor);
+
+    if end < value.len() {
+        start..end + 1
+    } else if start > 0 {
+        start - 1..end
+    } else {
+        start..end
     }
 }
 
@@ -1423,6 +2336,7 @@ fn handle_insert_input_key(
     next.push_str(&value[cursor..]);
 
     commit_input_value(
+        value,
         on_input,
         editable_state,
         next,
@@ -1457,7 +2371,7 @@ fn handle_backspace_input_key(
     next.push_str(&value[..previous]);
     next.push_str(&value[cursor..]);
 
-    commit_input_value(on_input, editable_state, next, previous)
+    commit_input_value(value, on_input, editable_state, next, previous)
 }
 
 /// Handles delete for a focused editable text control.
@@ -1487,13 +2401,14 @@ fn handle_delete_input_key(
     next.push_str(&value[..cursor]);
     next.push_str(&value[next_boundary..]);
 
-    commit_input_value(on_input, editable_state, next, cursor)
+    commit_input_value(value, on_input, editable_state, next, cursor)
 }
 
 /// Emits a controlled editable value update when a callback exists.
 ///
 /// # Arguments
 ///
+/// * `value` — Current controlled value before the proposed update.
 /// * `on_input` — Optional callback that receives the proposed value.
 /// * `editable_state` — Retained cursor and scroll state for the control.
 /// * `next` — Proposed next controlled value.
@@ -1504,6 +2419,7 @@ fn handle_delete_input_key(
 /// A [`KeyControl`] value produced by the callback or handled by default when
 /// no callback exists.
 fn commit_input_value(
+    value: &str,
     on_input: &Option<InputAction>,
     editable_state: &mut EditableState,
     next: String,
@@ -1513,6 +2429,10 @@ fn commit_input_value(
         return KeyControl::Handled;
     };
 
+    if next != value {
+        editable_state.push_undo(value.to_owned());
+        editable_state.clear_redo();
+    }
     editable_state.set_cursor(next_cursor);
     on_input(next).into()
 }
