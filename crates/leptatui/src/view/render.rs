@@ -15,14 +15,14 @@ use ratatui::{
 use crate::{
     ThemeVariables,
     app::{AppControl, Result},
-    component::{Component, KeyControl, RenderCtx},
+    component::{Component, FocusedControl, KeyControl, RenderCtx},
     context,
     style::{Borders, LayoutDirection, TuiStyle},
 };
 
 use super::{
     metadata::{EditableState, MiniVimMode, StyleMetadata},
-    model::{InputAction, View},
+    model::{FormAction, InputAction, View},
 };
 
 /// Resolves a view style from context stylesheets, ancestors, and inherited style values.
@@ -153,6 +153,19 @@ impl View {
                 )
             }
             Self::Column { children, metadata } => {
+                let style = resolve_style(metadata, ctx);
+                ctx.render_widget(Block::new().style(style.to_ratatui_style()));
+                render_children(
+                    children,
+                    style.direction.unwrap_or(LayoutDirection::Column),
+                    style.inherited_values(),
+                    metadata,
+                    ctx,
+                )
+            }
+            Self::Form {
+                children, metadata, ..
+            } => {
                 let style = resolve_style(metadata, ctx);
                 ctx.render_widget(Block::new().style(style.to_ratatui_style()));
                 render_children(
@@ -349,6 +362,32 @@ impl View {
         self.handle_focused_input_key_ref(&key)
     }
 
+    /// Returns the focused built-in control in this view tree.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing focused control metadata when a supported
+    /// built-in control is focused.
+    #[doc(hidden)]
+    pub fn __focused_control(&self) -> Option<FocusedControl> {
+        self.focused_control()
+    }
+
+    /// Handles form-owned submit or cancel keys in this view tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to evaluate for form behavior.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing key traversal control when a form handles the
+    /// key.
+    #[doc(hidden)]
+    pub fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        self.handle_form_key_ref(&key)
+    }
+
     /// Scrolls the first overflowing vertical layout in this view tree.
     #[doc(hidden)]
     pub fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
@@ -391,9 +430,9 @@ impl View {
     fn dispatch_key_event_ref(&mut self, key: &KeyEvent) -> Result<KeyControl> {
         match self {
             Self::Block { child, .. } => child.dispatch_key_event_ref(key),
-            Self::Row { children, .. } | Self::Column { children, .. } => {
-                handle_child_key_events(children, key)
-            }
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => handle_child_key_events(children, key),
             Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_key_event_ref(key)),
             Self::Component(component) => component.dispatch_key_event(*key),
             Self::Text { .. }
@@ -415,6 +454,11 @@ impl View {
     fn handle_default_key_event_ref(&mut self, key: &KeyEvent) -> KeyControl {
         if key.kind != KeyEventKind::Press {
             return KeyControl::Pass;
+        }
+
+        if let Some(control) = self.handle_form_key_ref(key) {
+            self.clear_scroll_to_top_key_pending();
+            return control;
         }
 
         if let Some(control) = self.handle_focused_input_key_ref(key) {
@@ -491,7 +535,11 @@ impl View {
     fn scroll_first_overflowing(&mut self, delta: i16) -> bool {
         match self {
             Self::Block { child, .. } => child.scroll_first_overflowing(delta),
-            Self::Row { children, metadata } | Self::Column { children, metadata } => {
+            Self::Row { children, metadata }
+            | Self::Column { children, metadata }
+            | Self::Form {
+                children, metadata, ..
+            } => {
                 if metadata.max_scroll_offset() > 0 && metadata.scroll_by(delta) {
                     return true;
                 }
@@ -515,7 +563,11 @@ impl View {
     fn scroll_first_overflowing_to(&mut self, boundary: ScrollBoundary) -> bool {
         match self {
             Self::Block { child, .. } => child.scroll_first_overflowing_to(boundary),
-            Self::Row { children, metadata } | Self::Column { children, metadata } => {
+            Self::Row { children, metadata }
+            | Self::Column { children, metadata }
+            | Self::Form {
+                children, metadata, ..
+            } => {
                 if metadata.max_scroll_offset() > 0 {
                     let target = match boundary {
                         ScrollBoundary::Top => 0,
@@ -550,7 +602,11 @@ impl View {
     fn has_overflowing_scroll_target(&self) -> bool {
         match self {
             Self::Block { child, .. } => child.has_overflowing_scroll_target(),
-            Self::Row { children, metadata } | Self::Column { children, metadata } => {
+            Self::Row { children, metadata }
+            | Self::Column { children, metadata }
+            | Self::Form {
+                children, metadata, ..
+            } => {
                 metadata.max_scroll_offset() > 0
                     || children.iter().any(Self::has_overflowing_scroll_target)
             }
@@ -570,6 +626,7 @@ impl View {
             | Self::Text { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
+            | Self::Form { metadata, .. }
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
             | Self::TextArea { metadata, .. } => Some(metadata),
@@ -626,13 +683,92 @@ impl View {
                 handle_text_area_key(value.as_str(), on_input, editable_state, key)
             }
             Self::Block { child, .. } => child.handle_focused_input_key_ref(key),
-            Self::Row { children, .. } | Self::Column { children, .. } => children
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => children
                 .iter_mut()
                 .find_map(|child| child.handle_focused_input_key_ref(key)),
             Self::Dynamic(child) => {
                 child.with_view_mut(|child| child.handle_focused_input_key_ref(key))
             }
             Self::Component(component) => component.handle_focused_input_key(*key),
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => None,
+        }
+    }
+
+    /// Returns the focused built-in control in this view tree.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing focused control metadata when a supported
+    /// built-in control is focused.
+    fn focused_control(&self) -> Option<FocusedControl> {
+        match self {
+            Self::Button { metadata, .. } if metadata.is_focused() => Some(FocusedControl::Button),
+            Self::Input {
+                metadata,
+                editable_state,
+                ..
+            } if metadata.is_focused() => Some(FocusedControl::Input {
+                insert_mode: editable_state.mode() == MiniVimMode::Insert,
+            }),
+            Self::TextArea {
+                metadata,
+                editable_state,
+                ..
+            } if metadata.is_focused() => Some(FocusedControl::TextArea {
+                insert_mode: editable_state.mode() == MiniVimMode::Insert,
+            }),
+            Self::Block { child, .. } => child.focused_control(),
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => children.iter().find_map(Self::focused_control),
+            Self::Dynamic(child) => child.with_view(Self::focused_control),
+            Self::Component(component) => component.focused_control(),
+            Self::Text { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. } => None,
+        }
+    }
+
+    /// Handles form-owned submit and cancel keys.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to evaluate for form behavior.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing key traversal control when a form handles the
+    /// key.
+    fn handle_form_key_ref(&mut self, key: &KeyEvent) -> Option<KeyControl> {
+        match self {
+            Self::Form {
+                children,
+                on_submit,
+                on_cancel,
+                ..
+            } => {
+                if let Some(control) = children
+                    .iter_mut()
+                    .find_map(|child| child.handle_form_key_ref(key))
+                {
+                    return Some(control);
+                }
+
+                let focused = children.iter().find_map(Self::focused_control)?;
+                handle_form_focused_key(focused, key, on_submit, on_cancel)
+            }
+            Self::Block { child, .. } => child.handle_form_key_ref(key),
+            Self::Row { children, .. } | Self::Column { children, .. } => children
+                .iter_mut()
+                .find_map(|child| child.handle_form_key_ref(key)),
+            Self::Dynamic(child) => child.with_view_mut(|child| child.handle_form_key_ref(key)),
+            Self::Component(component) => component.handle_form_key(*key),
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
@@ -649,9 +785,9 @@ impl View {
         match self {
             Self::Button { .. } | Self::Input { .. } | Self::TextArea { .. } => 1,
             Self::Block { child, .. } => child.focusable_count(),
-            Self::Row { children, .. } | Self::Column { children, .. } => {
-                children.iter().map(Self::focusable_count).sum()
-            }
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => children.iter().map(Self::focusable_count).sum(),
             Self::Dynamic(child) => child.with_view(Self::focusable_count),
             Self::Component(component) => component.focusable_count(),
             Self::Text { .. } => 0,
@@ -709,7 +845,9 @@ impl View {
                 metadata.is_focused().then_some(current)
             }
             Self::Block { child, .. } => child.focused_index_inner(index),
-            Self::Row { children, .. } | Self::Column { children, .. } => children
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => children
                 .iter()
                 .find_map(|child| child.focused_index_inner(index)),
             Self::Dynamic(child) => child.with_view(|child| child.focused_index_inner(index)),
@@ -749,7 +887,9 @@ impl View {
                 *index += 1;
             }
             Self::Block { child, .. } => child.set_focus_by_index_inner(target, index),
-            Self::Row { children, .. } | Self::Column { children, .. } => {
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => {
                 for child in children {
                     child.set_focus_by_index_inner(target, index);
                 }
@@ -777,7 +917,9 @@ impl View {
                     .map_or(AppControl::Continue, |action| action()),
             ),
             Self::Block { child, .. } => child.activate_focused_button(),
-            Self::Row { children, .. } | Self::Column { children, .. } => {
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => {
                 children.iter().find_map(Self::activate_focused_button)
             }
             Self::Dynamic(child) => child.with_view(Self::activate_focused_button),
@@ -806,9 +948,9 @@ impl View {
     fn dispatch_event_ref(&mut self, event: &Event) -> Result<AppControl> {
         match self {
             Self::Block { child, .. } => child.dispatch_event_ref(event),
-            Self::Row { children, .. } | Self::Column { children, .. } => {
-                handle_child_events(children, event)
-            }
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => handle_child_events(children, event),
             Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_event_ref(event)),
             Self::Component(component) => component.handle_event(event.clone()),
             Self::Text { .. }
@@ -931,6 +1073,32 @@ impl Component for View {
         View::__handle_focused_input_key(self, key)
     }
 
+    /// Returns the focused built-in control in the view tree, if any.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing focused control metadata when a supported
+    /// built-in control is focused.
+    #[doc(hidden)]
+    fn __focused_control(&self) -> Option<FocusedControl> {
+        View::__focused_control(self)
+    }
+
+    /// Handles form-owned submit or cancel keys in the view tree, if any.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to evaluate for form behavior.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing key traversal control when a form handles the
+    /// key.
+    #[doc(hidden)]
+    fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        View::__handle_form_key(self, key)
+    }
+
     /// Scrolls the first overflowing vertical layout in the view tree.
     #[doc(hidden)]
     fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
@@ -981,6 +1149,55 @@ fn key_control_from_bool(handled: bool) -> KeyControl {
     } else {
         KeyControl::Pass
     }
+}
+
+/// Handles a key against the form owning the focused control.
+///
+/// # Arguments
+///
+/// * `focused` — Focused descendant control metadata.
+/// * `key` — Key event being evaluated for form behavior.
+/// * `on_submit` — Optional submit callback stored by the form.
+/// * `on_cancel` — Optional cancel callback stored by the form.
+///
+/// # Returns
+///
+/// An [`Option`] containing key traversal control when the form handles the
+/// key.
+fn handle_form_focused_key(
+    focused: FocusedControl,
+    key: &KeyEvent,
+    on_submit: &Option<FormAction>,
+    on_cancel: &Option<FormAction>,
+) -> Option<KeyControl> {
+    match (focused, key.code) {
+        (FocusedControl::Input { .. }, KeyCode::Enter) => Some(form_action_control(on_submit)),
+        (FocusedControl::TextArea { .. }, KeyCode::Enter)
+            if key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            Some(form_action_control(on_submit))
+        }
+        (FocusedControl::Input { insert_mode: true }, KeyCode::Esc)
+        | (FocusedControl::TextArea { insert_mode: true }, KeyCode::Esc) => None,
+        (_, KeyCode::Esc) => Some(form_action_control(on_cancel)),
+        _ => None,
+    }
+}
+
+/// Converts an optional form action into key traversal control.
+///
+/// # Arguments
+///
+/// * `action` — Optional form callback to invoke.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value that stops key propagation and reflects the callback
+/// result.
+fn form_action_control(action: &Option<FormAction>) -> KeyControl {
+    action
+        .as_ref()
+        .map_or(KeyControl::Handled, |action| action().into())
 }
 
 /// Returns the horizontal scroll offset needed to keep an input cursor visible.
@@ -1950,7 +2167,7 @@ fn handle_delete_line_key(
 ///
 /// * `value` — Current controlled editable value.
 /// * `editable_state` — Retained cursor, mode, and yank-buffer state for the
-/// control.
+///   control.
 /// * `kind` — Editable control variant receiving the command.
 ///
 /// # Returns
@@ -1979,7 +2196,7 @@ fn handle_yank_line_key(
 /// * `value` — Current controlled editable value.
 /// * `on_input` — Optional callback that receives the pasted value.
 /// * `editable_state` — Retained cursor, mode, and yank-buffer state for the
-/// control.
+///   control.
 /// * `kind` — Editable control variant receiving the command.
 ///
 /// # Returns
@@ -2013,7 +2230,7 @@ fn handle_paste_input_key(
 /// * `value` — Current controlled editable value.
 /// * `on_input` — Optional callback that receives the restored value.
 /// * `editable_state` — Retained cursor, mode, and undo-history state for the
-/// control.
+///   control.
 ///
 /// # Returns
 ///
@@ -2044,7 +2261,7 @@ fn handle_undo_input_key(
 /// * `value` — Current controlled editable value.
 /// * `on_input` — Optional callback that receives the redone value.
 /// * `editable_state` — Retained cursor, mode, and redo-history state for the
-/// control.
+///   control.
 ///
 /// # Returns
 ///
@@ -2609,6 +2826,9 @@ fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Opt
         View::Column { children, metadata } => {
             focused_button_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
         }
+        View::Form {
+            children, metadata, ..
+        } => focused_button_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
         View::Dynamic(child) => child.with_view(|child| focused_button_span_for_view(child, ctx)),
         View::Component(component) => component
             .focused_button_span(ctx)
@@ -3046,6 +3266,9 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         View::Column { children, metadata } => {
             min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
         }
+        View::Form {
+            children, metadata, ..
+        } => min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
         View::Component(component) => component.min_height(ctx),
     }
 }

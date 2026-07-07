@@ -12,7 +12,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     AppControl, Color, Component, EditableState, KeyControl, LayoutDirection, MediaQuery,
     MiniVimMode, RenderCtx, Result, StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View,
-    ViewType, block, button, column, component, dynamic, input, row, text, text_area,
+    ViewType, block, button, column, component, dynamic, form, input, row, text, text_area,
 };
 use ratatui::{
     Terminal,
@@ -46,9 +46,9 @@ fn button_focuses(view: &View) -> Vec<bool> {
     match view {
         View::Button { metadata, .. } => vec![metadata.is_focused()],
         View::Block { child, .. } => button_focuses(child),
-        View::Row { children, .. } | View::Column { children, .. } => {
-            children.iter().flat_map(button_focuses).collect()
-        }
+        View::Row { children, .. }
+        | View::Column { children, .. }
+        | View::Form { children, .. } => children.iter().flat_map(button_focuses).collect(),
         View::Text { .. }
         | View::Input { .. }
         | View::TextArea { .. }
@@ -72,9 +72,9 @@ fn control_focuses(view: &View) -> Vec<bool> {
         | View::Input { metadata, .. }
         | View::TextArea { metadata, .. } => vec![metadata.is_focused()],
         View::Block { child, .. } => control_focuses(child),
-        View::Row { children, .. } | View::Column { children, .. } => {
-            children.iter().flat_map(control_focuses).collect()
-        }
+        View::Row { children, .. }
+        | View::Column { children, .. }
+        | View::Form { children, .. } => children.iter().flat_map(control_focuses).collect(),
         View::Text { .. } | View::Dynamic(_) | View::Component(_) => Vec::new(),
     }
 }
@@ -189,6 +189,15 @@ fn ctrl_key_event(character: char) -> KeyEvent {
     KeyEvent::new(KeyCode::Char(character), KeyModifiers::CONTROL)
 }
 
+/// Returns a control-modified enter key event for tests.
+///
+/// # Returns
+///
+/// A [`KeyEvent`] value with enter and the control modifier set.
+fn ctrl_enter_key_event() -> KeyEvent {
+    KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL)
+}
+
 /// Creates a focused input view that records emitted values.
 ///
 /// # Arguments
@@ -251,7 +260,7 @@ fn reconcile_input_value(
 /// # Arguments
 ///
 /// * `previous` — Previous text-area view whose retained metadata should be
-/// reused.
+///   reused.
 /// * `value` — Next controlled text-area value.
 /// * `emitted` — Shared vector that receives callback values.
 ///
@@ -726,6 +735,86 @@ fn column_reserves_height_for_wrapped_text() -> Result<()> {
 
     assert_eq!(symbol_position(&terminal, "W", 6).1, 1);
     assert_eq!(symbol_position(&terminal, "E", 6).1, 2);
+
+    Ok(())
+}
+
+/// Verifies form views render children and participate in focus traversal.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([text("Title"), input("Ada"), button("Save")])
+/// Tab, Tab
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The title renders before the input value.
+/// - The form reports two focusable descendant controls.
+/// - Tab moves focus from the input to the button.
+#[test]
+fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
+    let backend = TestBackend::new(12, 6);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = form([text("Title"), input("Ada"), button("Save")]);
+
+    draw_view(&mut terminal, &view)?;
+
+    let title_position = symbol_position(&terminal, "T", 12);
+    let input_position = symbol_position(&terminal, "A", 12);
+    assert_eq!(title_position, (0, 0));
+    assert_eq!(input_position.0, 0);
+    assert!(input_position.1 > title_position.1);
+    assert_eq!(view.__focusable_count(), 2);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    assert_eq!(control_focuses(&view), vec![true, false]);
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    assert_eq!(control_focuses(&view), vec![false, true]);
+
+    Ok(())
+}
+
+/// Verifies form type stylesheet rules apply through rendered descendants.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Form { fg: Green }
+/// form([text("Hi")])
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The rendered text cell inherits the form foreground color.
+#[test]
+fn form_type_styles_apply_to_descendants() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = form([text("Hi")]);
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::view_type(ViewType::Form),
+        TuiStyle::new().foreground(Color::Green),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let (fg, _) = cell_colors(&terminal, 0, 0, 8);
+    assert_eq!(fg, Color::Green);
 
     Ok(())
 }
@@ -1991,11 +2080,11 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
 ///
 /// - Inputs start in insert mode.
 /// - Esc switches the input to normal mode and moves the cursor onto the
-/// previous character.
+///   previous character.
 /// - `i` and `a` switch the input to insert mode at the current and next
-/// normal-mode positions.
+///   normal-mode positions.
 /// - `I` and `A` move to the line start and line end for inputs and text
-/// areas.
+///   areas.
 #[test]
 fn focused_editable_controls_support_mini_vim_mode_transitions() -> Result<()> {
     let mut input_view = input("Ada").with_focus(true);
@@ -2246,7 +2335,7 @@ fn focused_input_supports_mini_vim_delete_yank_paste_undo_and_redo() -> Result<(
 /// - `yy` yanks the current logical line without a trailing newline.
 /// - `p` after `G` appends the yanked line below the final line.
 /// - `dd` deletes the selected logical line and keeps that line in the yank
-/// buffer.
+///   buffer.
 /// - `u` emits the previous text-area value.
 /// - Ctrl+r emits the redone line-deleted value.
 ///
@@ -2336,6 +2425,167 @@ fn insert_mode_keeps_input_single_line_and_text_area_multiline() -> Result<()> {
         text_area_emitted.borrow().as_slice(),
         &[String::from("Ada\n")]
     );
+
+    Ok(())
+}
+
+/// Verifies focused inputs submit forms on Enter in insert and normal mode.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([input("Ada").with_focus(true)]).on_submit(...)
+/// Enter
+/// ```
+///
+/// # Assertions
+///
+/// - Insert-mode Enter is handled.
+/// - Insert-mode Enter invokes the submit callback once.
+/// - Normal-mode Enter is handled.
+/// - Normal-mode Enter invokes the submit callback once.
+#[test]
+fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> Result<()> {
+    let insert_submits = Rc::new(Cell::new(0));
+    let insert_submits_for_form = Rc::clone(&insert_submits);
+    let mut insert_view = form([input("Ada").with_focus(true)]).on_submit(move || {
+        insert_submits_for_form.set(insert_submits_for_form.get() + 1);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        insert_view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert_eq!(insert_submits.get(), 1);
+
+    let normal_submits = Rc::new(Cell::new(0));
+    let normal_submits_for_form = Rc::clone(&normal_submits);
+    let mut normal_input = input("Ada").with_focus(true);
+    editable_state_mut(&mut normal_input).set_mode(MiniVimMode::Normal);
+    let mut normal_view = form([normal_input]).on_submit(move || {
+        normal_submits_for_form.set(normal_submits_for_form.get() + 1);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        normal_view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert_eq!(normal_submits.get(), 1);
+
+    Ok(())
+}
+
+/// Verifies text areas keep multiline Enter behavior inside forms.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([text_area("Ada").with_focus(true).on_input(...)])
+/// Enter, Ctrl+Enter
+/// ```
+///
+/// # Assertions
+///
+/// - Plain Enter is handled by the text area.
+/// - Plain Enter emits a value with a trailing newline.
+/// - Plain Enter does not submit the form.
+/// - Ctrl+Enter is handled by the form.
+/// - Ctrl+Enter submits the form without emitting another input value.
+#[test]
+fn form_text_area_uses_plain_enter_for_newlines_and_ctrl_enter_for_submit() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let submits = Rc::new(Cell::new(0));
+    let submits_for_form = Rc::clone(&submits);
+    let mut view = form([emitting_text_area("Ada", &emitted)]).on_submit(move || {
+        submits_for_form.set(submits_for_form.get() + 1);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().as_slice(), &[String::from("Ada\n")]);
+    assert_eq!(submits.get(), 0);
+
+    assert_eq!(
+        view.handle_key_event(ctrl_enter_key_event())?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().len(), 1);
+    assert_eq!(submits.get(), 1);
+
+    Ok(())
+}
+
+/// Verifies Esc leaves editable insert mode before canceling a form.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([input("Ada").with_focus(true)]).on_cancel(...)
+/// Esc, Esc
+/// ```
+///
+/// # Assertions
+///
+/// - The first Esc is handled by the focused input.
+/// - The first Esc does not invoke the cancel callback.
+/// - The second Esc is handled by the form.
+/// - The second Esc invokes the cancel callback once.
+#[test]
+fn form_esc_leaves_insert_mode_before_canceling() -> Result<()> {
+    let cancels = Rc::new(Cell::new(0));
+    let cancels_for_form = Rc::clone(&cancels);
+    let mut view = form([input("Ada").with_focus(true)]).on_cancel(move || {
+        cancels_for_form.set(cancels_for_form.get() + 1);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 0);
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 1);
+
+    Ok(())
+}
+
+/// Verifies forms inside component boundaries handle submit keys.
+///
+/// # Example Under Test
+///
+/// ```text
+/// component(FocusPanel { view: form([focused input]).on_submit(...) })
+/// Enter
+/// ```
+///
+/// # Assertions
+///
+/// - Enter is handled through the component boundary.
+/// - The nested form submit callback runs once.
+#[test]
+fn form_inside_component_boundary_handles_submit_key() -> Result<()> {
+    let submits = Rc::new(Cell::new(0));
+    let submits_for_form = Rc::clone(&submits);
+    let view = form([input("Ada").with_focus(true)]).on_submit(move || {
+        submits_for_form.set(submits_for_form.get() + 1);
+        AppControl::Continue
+    });
+    let mut view = component(FocusPanel { view });
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert_eq!(submits.get(), 1);
 
     Ok(())
 }
@@ -2650,6 +2900,32 @@ impl Component for FocusPanel {
     #[doc(hidden)]
     fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
         self.view.__handle_focused_input_key(key)
+    }
+
+    /// Returns the focused built-in control inside the child view.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing focused control metadata when a supported
+    /// built-in control is focused.
+    #[doc(hidden)]
+    fn __focused_control(&self) -> Option<leptatui::__private::FocusedControl> {
+        self.view.__focused_control()
+    }
+
+    /// Handles form-owned submit or cancel keys inside the child view.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to evaluate for nested form behavior.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing key traversal control when a nested form
+    /// handles the key.
+    #[doc(hidden)]
+    fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        self.view.__handle_form_key(key)
     }
 }
 

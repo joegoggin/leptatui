@@ -18,6 +18,8 @@ pub enum ViewType {
     Row,
     /// Vertical layout view.
     Column,
+    /// Grouping container for form controls.
+    Form,
     /// Basic button view.
     Button,
     /// Single-line editable text control.

@@ -8,6 +8,24 @@ use crossterm::event::{Event, KeyEvent};
 use super::{key::KeyControl, model::RenderCtx};
 use crate::app::{AppControl, Result};
 
+/// Focused built-in control metadata used by internal view traversal.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FocusedControl {
+    /// A button is focused.
+    Button,
+    /// A single-line input is focused.
+    Input {
+        /// Whether the input is currently in insert mode.
+        insert_mode: bool,
+    },
+    /// A multiline text area is focused.
+    TextArea {
+        /// Whether the text area is currently in insert mode.
+        insert_mode: bool,
+    },
+}
+
 /// Root or child component that can render into a terminal frame.
 pub trait Component {
     /// Renders the current component state into the provided context.
@@ -118,6 +136,32 @@ pub trait Component {
     /// the key.
     #[doc(hidden)]
     fn __handle_focused_input_key(&mut self, _key: KeyEvent) -> Option<KeyControl> {
+        None
+    }
+
+    /// Returns metadata for the focused built-in control inside this component.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing focused control metadata when a supported
+    /// built-in control is focused.
+    #[doc(hidden)]
+    fn __focused_control(&self) -> Option<FocusedControl> {
+        None
+    }
+
+    /// Handles a form-owned submit or cancel key inside this component.
+    ///
+    /// # Arguments
+    ///
+    /// * `_key` — Key event to evaluate for nested form behavior.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing key traversal control when a nested form
+    /// handles the key.
+    #[doc(hidden)]
+    fn __handle_form_key(&mut self, _key: KeyEvent) -> Option<KeyControl> {
         None
     }
 

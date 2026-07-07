@@ -1,4 +1,4 @@
-error: unsupported stylesheet type selector; expected Block, Text, Row, Column, Button, Input, or TextArea
+error: unsupported stylesheet type selector; expected Block, Text, Row, Column, Form, Button, Input, or TextArea
  --> tests/fixtures/stylesheet_macro/fail/unsupported_type.rs:8:9
   |
 8 |         Panel => { fg: Color::White }

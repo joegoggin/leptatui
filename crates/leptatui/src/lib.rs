@@ -83,8 +83,8 @@ pub use style::{
     TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
-    ButtonAction, EditableState, InputAction, MiniVimMode, StyleMetadata, View, ViewType, block,
-    button, column, component, dynamic, input, row, text, text_area,
+    ButtonAction, EditableState, FormAction, InputAction, MiniVimMode, StyleMetadata, View,
+    ViewType, block, button, column, component, dynamic, form, input, row, text, text_area,
 };
 
 #[doc(hidden)]
@@ -94,7 +94,7 @@ pub mod __private {
 
     pub use crate::component::{
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
-        KeyHandlerRegistry, StylesheetRegistry,
+        FocusedControl, KeyHandlerRegistry, StylesheetRegistry,
     };
     pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
     pub use crossterm::event::{Event, KeyEvent};
@@ -158,6 +158,16 @@ pub mod __private {
                     ..
                 },
                 View::Column {
+                    children: previous_children,
+                    ..
+                },
+            )
+            | (
+                View::Form {
+                    children: next_children,
+                    ..
+                },
+                View::Form {
                     children: previous_children,
                     ..
                 },

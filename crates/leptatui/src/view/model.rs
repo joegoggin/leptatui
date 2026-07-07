@@ -15,6 +15,9 @@ use crate::app::AppControl;
 /// Shared callback invoked when a button is activated.
 pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
 
+/// Shared callback invoked when a form is submitted or canceled.
+pub type FormAction = Rc<dyn Fn() -> AppControl>;
+
 /// Shared callback invoked when an input proposes a new value.
 pub type InputAction = Rc<dyn Fn(String) -> AppControl>;
 
@@ -48,6 +51,17 @@ pub enum View {
         children: Vec<View>,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
+    },
+    /// Grouping container for controls and submit/cancel behavior.
+    Form {
+        /// Child views grouped inside the form.
+        children: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+        /// Optional submit callback.
+        on_submit: Option<FormAction>,
+        /// Optional cancel callback.
+        on_cancel: Option<FormAction>,
     },
     /// Basic bordered button label.
     Button {
@@ -103,6 +117,7 @@ impl View {
             | Self::Text { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
+            | Self::Form { metadata, .. }
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
             | Self::TextArea { metadata, .. } => Some(metadata),
@@ -122,6 +137,7 @@ impl View {
             | Self::Text { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
+            | Self::Form { metadata, .. }
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
             | Self::TextArea { metadata, .. } => Some(metadata),
@@ -216,6 +232,41 @@ impl View {
         self
     }
 
+    /// Stores a submit callback on a form view.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback invoked when a focused descendant submits the
+    ///   form.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the callback when the view is a form.
+    pub fn on_submit(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
+        if let Self::Form { on_submit, .. } = &mut self {
+            *on_submit = Some(Rc::new(action));
+        }
+
+        self
+    }
+
+    /// Stores a cancel callback on a form view.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback invoked when a focused descendant cancels the form.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the callback when the view is a form.
+    pub fn on_cancel(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
+        if let Self::Form { on_cancel, .. } = &mut self {
+            *on_cancel = Some(Rc::new(action));
+        }
+
+        self
+    }
+
     /// Stores placeholder text on an editable text control.
     ///
     /// # Arguments
@@ -300,6 +351,18 @@ impl fmt::Debug for View {
                 .field("children", children)
                 .field("metadata", metadata)
                 .finish(),
+            Self::Form {
+                children,
+                metadata,
+                on_submit,
+                on_cancel,
+            } => f
+                .debug_struct("Form")
+                .field("children", children)
+                .field("metadata", metadata)
+                .field("on_submit", &on_submit.is_some())
+                .field("on_cancel", &on_cancel.is_some())
+                .finish(),
             Self::Button {
                 label,
                 metadata,
@@ -355,6 +418,24 @@ impl fmt::Debug for View {
 ///
 /// A [`bool`] indicating whether both callbacks are absent or share identity.
 fn button_actions_equal(left: &Option<ButtonAction>, right: &Option<ButtonAction>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => Rc::ptr_eq(left, right),
+        _ => false,
+    }
+}
+
+/// Returns whether optional form actions represent the same callback.
+///
+/// # Arguments
+///
+/// * `left` — Left optional form action to compare.
+/// * `right` — Right optional form action to compare.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether both callbacks are absent or share identity.
+fn form_actions_equal(left: &Option<FormAction>, right: &Option<FormAction>) -> bool {
     match (left, right) {
         (None, None) => true,
         (Some(left), Some(right)) => Rc::ptr_eq(left, right),
@@ -432,6 +513,25 @@ impl PartialEq for View {
                     metadata: right_metadata,
                 },
             ) => left_children == right_children && left_metadata == right_metadata,
+            (
+                Self::Form {
+                    children: left_children,
+                    metadata: left_metadata,
+                    on_submit: left_on_submit,
+                    on_cancel: left_on_cancel,
+                },
+                Self::Form {
+                    children: right_children,
+                    metadata: right_metadata,
+                    on_submit: right_on_submit,
+                    on_cancel: right_on_cancel,
+                },
+            ) => {
+                left_children == right_children
+                    && left_metadata == right_metadata
+                    && form_actions_equal(left_on_submit, right_on_submit)
+                    && form_actions_equal(left_on_cancel, right_on_cancel)
+            }
             (
                 Self::Button {
                     label: left_label,

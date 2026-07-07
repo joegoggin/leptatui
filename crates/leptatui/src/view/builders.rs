@@ -75,6 +75,24 @@ pub fn column(children: impl IntoIterator<Item = View>) -> View {
     }
 }
 
+/// Creates a form container.
+///
+/// # Arguments
+///
+/// * `children` — Child views grouped by the form.
+///
+/// # Returns
+///
+/// A [`View::Form`] containing the provided children.
+pub fn form(children: impl IntoIterator<Item = View>) -> View {
+    View::Form {
+        children: children.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::Form),
+        on_submit: None,
+        on_cancel: None,
+    }
+}
+
 /// Creates a basic button.
 ///
 /// # Arguments

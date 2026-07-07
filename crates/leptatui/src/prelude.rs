@@ -28,12 +28,12 @@
 
 pub use crate::{
     Action, ActionState, App, AppControl, AppRoot, BorderType, Borders, Children, ChildrenFn,
-    ChildrenMut, Color, Component, Error, InputAction, KeyControl, LayoutDirection, MediaQuery,
-    Modifier, RenderCtx, Resource, ResourceState, Result, RouteState, StyleDeclarations,
-    StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
-    TuiSpacing, TuiStyle, View, ViewType, ViewportSize, block, button, column,
+    ChildrenMut, Color, Component, Error, FormAction, InputAction, KeyControl, LayoutDirection,
+    MediaQuery, Modifier, RenderCtx, Resource, ResourceState, Result, RouteState,
+    StyleDeclarations, StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue,
+    ThemeVariables, TuiSpacing, TuiStyle, View, ViewType, ViewportSize, block, button, column,
     context::{expect_context, provide_context, use_context},
-    create_action, create_resource, input, provide_route, row, text, text_area, theme_color,
+    create_action, create_resource, form, input, provide_route, row, text, text_area, theme_color,
     use_key_event, use_navigate, use_route,
     view::{component, dynamic},
 };

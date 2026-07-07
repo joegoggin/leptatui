@@ -12,6 +12,8 @@ mod stylesheet;
 pub use children::{Children, ChildrenFn, ChildrenMut};
 pub use contract::Component;
 #[doc(hidden)]
+pub use contract::FocusedControl;
+#[doc(hidden)]
 pub use key::{__with_key_handler_registry, KeyHandlerRegistry};
 pub use key::{KeyControl, use_key_event};
 pub use model::RenderCtx;

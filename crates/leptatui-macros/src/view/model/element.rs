@@ -131,6 +131,10 @@ impl Element {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::column(::std::vec![#(#children),*]) }
             }),
+            "Form" => self.expand_child_list("Form", |children| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::form(::std::vec![#(#children),*]) }
+            }),
             "Text" => self.expand_text_like("Text", |content| {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::text(#content) }
@@ -143,7 +147,7 @@ impl Element {
             _ => {
                 return Err(Error::new_spanned(
                     &self.name,
-                    "unsupported Leptatui element; expected Block, Text, Row, Column, Button, Input, TextArea, or a PascalCase component",
+                    "unsupported Leptatui element; expected Block, Text, Row, Column, Form, Button, Input, TextArea, or a PascalCase component",
                 ));
             }
         }
@@ -318,6 +322,20 @@ impl Element {
                         "view! on_press attribute is only supported on Button",
                     ));
                 }
+                "on_submit" if element_name == "Form" => AttrKind::OnSubmit,
+                "on_submit" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! on_submit attribute is only supported on Form",
+                    ));
+                }
+                "on_cancel" if element_name == "Form" => AttrKind::OnCancel,
+                "on_cancel" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! on_cancel attribute is only supported on Form",
+                    ));
+                }
                 "on_input" if matches!(element_name.as_str(), "Input" | "TextArea") => {
                     AttrKind::OnInput
                 }
@@ -331,6 +349,9 @@ impl Element {
                     let message = match element_name.as_str() {
                         "Button" => {
                             "unsupported view! attribute; expected class, id, style, or on_press"
+                        }
+                        "Form" => {
+                            "unsupported view! attribute; expected class, id, style, on_submit, or on_cancel"
                         }
                         "Input" | "TextArea" => {
                             "unsupported view! attribute; expected class, id, style, value, placeholder, or on_input"
@@ -389,6 +410,26 @@ impl Element {
 
                     quote! { (#expanded).on_press(#value) }
                 }
+                AttrKind::OnSubmit => {
+                    if attr.value.is_literal() {
+                        return Err(Error::new_spanned(
+                            &attr.name,
+                            "view! on_submit attribute must be a callback expression",
+                        ));
+                    }
+
+                    quote! { (#expanded).on_submit(#value) }
+                }
+                AttrKind::OnCancel => {
+                    if attr.value.is_literal() {
+                        return Err(Error::new_spanned(
+                            &attr.name,
+                            "view! on_cancel attribute must be a callback expression",
+                        ));
+                    }
+
+                    quote! { (#expanded).on_cancel(#value) }
+                }
                 AttrKind::InputValue => expanded,
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
                 AttrKind::OnInput => {
@@ -405,7 +446,11 @@ impl Element {
 
             if !matches!(
                 *kind,
-                AttrKind::OnPress | AttrKind::OnInput | AttrKind::Style
+                AttrKind::OnPress
+                    | AttrKind::OnSubmit
+                    | AttrKind::OnCancel
+                    | AttrKind::OnInput
+                    | AttrKind::Style
             ) && attr.value.is_unbraced_expr()
             {
                 return Err(Error::new_spanned(
@@ -601,7 +646,7 @@ impl Element {
 fn is_builtin_element(name: &Ident) -> bool {
     matches!(
         name.to_string().as_str(),
-        "Block" | "Row" | "Column" | "Text" | "Button" | "Input" | "TextArea"
+        "Block" | "Row" | "Column" | "Form" | "Text" | "Button" | "Input" | "TextArea"
     )
 }
 
@@ -632,6 +677,10 @@ mod attr_validation {
         Placeholder,
         /// Button activation callback.
         OnPress,
+        /// Form submit callback.
+        OnSubmit,
+        /// Form cancel callback.
+        OnCancel,
         /// Input value-change callback.
         OnInput,
     }

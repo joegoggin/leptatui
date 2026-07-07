@@ -275,6 +275,31 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __focused_control(
+                &self,
+            ) -> ::core::option::Option<#leptatui::__private::FocusedControl> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__focused_control()
+                })
+            }
+
+            #[doc(hidden)]
+            fn __handle_form_key(
+                &mut self,
+                key: #leptatui::__private::KeyEvent,
+            ) -> ::core::option::Option<#leptatui::KeyControl> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__handle_form_key(key)
+                })
+            }
+
+            #[doc(hidden)]
             fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &mut self.__leptatui_view;
