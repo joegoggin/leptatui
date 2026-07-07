@@ -3702,6 +3702,11 @@ fn child_constraints(
     vec![Constraint::Fill(1); children.len()]
 }
 
+/// Returns extra empty rows dropped by string-backed paragraph conversion.
+fn trailing_text_area_empty_line_rows(value: &str) -> usize {
+    usize::from(value.ends_with('\n'))
+}
+
 /// Returns minimum render heights for child views in a parent selector scope.
 fn child_min_heights(
     children: &[View],
@@ -3770,7 +3775,6 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             value,
             placeholder,
             metadata,
-            editable_state,
             ..
         } => {
             let style = resolve_style(metadata, ctx);
@@ -3782,14 +3786,9 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             let block = style.to_block_with_default_borders(Borders::ALL);
             let inner = block.inner(ctx.area());
             let content_height = line_count_height(
-                text_area_paragraph(
-                    display_value,
-                    style,
-                    editable_state.vertical_scroll(),
-                    editable_state.horizontal_scroll(),
-                    None,
-                )
-                .line_count(inner.width),
+                text_area_paragraph(display_value, style, 0, 0, None)
+                    .line_count(inner.width)
+                    .saturating_add(trailing_text_area_empty_line_rows(display_value)),
             )
             .max(1);
 

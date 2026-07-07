@@ -1776,6 +1776,23 @@ fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn text_area_min_height_counts_trailing_newline() -> Result<()> {
+    let backend = TestBackend::new(8, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let view = text_area("Ada\n");
+    let mut min_height = 0;
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = view.__min_height(&mut ctx);
+    })?;
+
+    assert_eq!(min_height, 4);
+
+    Ok(())
+}
+
 /// Verifies component boundaries backed by [`View`] report wrapped view height.
 ///
 /// # Example Under Test
