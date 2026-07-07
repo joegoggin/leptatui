@@ -805,7 +805,12 @@ impl View {
                 editable_state,
                 ..
             } if metadata.is_focused() => {
-                handle_text_area_key(value.as_str(), on_input, editable_state, key)
+                let control = handle_text_area_key(value.as_str(), on_input, editable_state, key);
+                if matches!(control, Some(KeyControl::Handled | KeyControl::Exit)) {
+                    metadata.request_scroll_into_view();
+                }
+
+                control
             }
             Self::Block { child, .. } => child.handle_focused_input_key_ref(key),
             Self::Row { children, .. }
@@ -1812,26 +1817,10 @@ fn handle_normal_mode_key(
             Some(KeyControl::Handled)
         }
         KeyCode::Up | KeyCode::Char('k') if plain_key => {
-            let cursor = match kind {
-                EditableControlKind::Input => normal_cursor(value, editable_state.cursor()),
-                EditableControlKind::TextArea => normal_cursor(
-                    value,
-                    text_area_previous_line_cursor(value, editable_state.cursor()),
-                ),
-            };
-            editable_state.set_cursor(cursor);
-            Some(KeyControl::Handled)
+            handle_normal_vertical_key(value, editable_state, kind, text_area_previous_line_cursor)
         }
         KeyCode::Down | KeyCode::Char('j') if plain_key => {
-            let cursor = match kind {
-                EditableControlKind::Input => normal_cursor(value, editable_state.cursor()),
-                EditableControlKind::TextArea => normal_cursor(
-                    value,
-                    text_area_next_line_cursor(value, editable_state.cursor()),
-                ),
-            };
-            editable_state.set_cursor(cursor);
-            Some(KeyControl::Handled)
+            handle_normal_vertical_key(value, editable_state, kind, text_area_next_line_cursor)
         }
         KeyCode::Home | KeyCode::Char('0') if plain_key => {
             let cursor = line_start(value, editable_state.cursor(), kind);
@@ -1920,6 +1909,26 @@ fn handle_normal_mode_key(
         KeyCode::Char(_) if plain_key => Some(KeyControl::Handled),
         _ => None,
     }
+}
+
+fn handle_normal_vertical_key(
+    value: &str,
+    editable_state: &mut EditableState,
+    kind: EditableControlKind,
+    move_text_area_cursor: fn(&str, usize) -> usize,
+) -> Option<KeyControl> {
+    let cursor = normal_cursor(value, editable_state.cursor());
+    let next_cursor = match kind {
+        EditableControlKind::Input => cursor,
+        EditableControlKind::TextArea => normal_cursor(value, move_text_area_cursor(value, cursor)),
+    };
+
+    if next_cursor == cursor {
+        return None;
+    }
+
+    editable_state.set_cursor(next_cursor);
+    Some(KeyControl::Handled)
 }
 
 /// Handles visual-mode movement and selection mutations.
@@ -3341,12 +3350,35 @@ fn scroll_span_into_view(
 /// Returns the focused control's vertical span within a view's render area.
 fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<VerticalSpan> {
     match view {
-        View::Button { metadata, .. }
-        | View::Input { metadata, .. }
-        | View::TextArea { metadata, .. }
+        View::Button { metadata, .. } | View::Input { metadata, .. }
             if metadata.is_focused() && metadata.scroll_into_view_requested() =>
         {
             Some(VerticalSpan::from_height(ctx.area().height))
+        }
+        View::TextArea {
+            value,
+            metadata,
+            editable_state,
+            ..
+        } if metadata.is_focused() && metadata.scroll_into_view_requested() => {
+            let style = resolve_style(metadata, ctx);
+            let area = ctx.area();
+            let inner = style
+                .to_block_with_default_borders(Borders::ALL)
+                .inner(area);
+            let top_offset = u32::from(inner.y.saturating_sub(area.y));
+            let cursor_row = u32::try_from(text_area_cursor_row(
+                value.as_str(),
+                editable_state.cursor(),
+                inner.width,
+            ))
+            .unwrap_or(u32::MAX);
+            let top = top_offset.saturating_add(cursor_row);
+
+            Some(VerticalSpan {
+                top,
+                bottom: top.saturating_add(1),
+            })
         }
         View::Block { child, metadata } => {
             let style = resolve_style(metadata, ctx);

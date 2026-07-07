@@ -90,7 +90,7 @@ pub use view::{
 #[doc(hidden)]
 /// Hidden implementation details used by generated macro code.
 pub mod __private {
-    use crate::View;
+    use crate::{StyleMetadata, View};
 
     pub use crate::component::{
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
@@ -187,7 +187,7 @@ pub mod __private {
                     metadata: previous_metadata,
                     ..
                 },
-            ) => next_metadata.set_focused(previous_metadata.is_focused()),
+            ) => reconcile_focus_metadata(next_metadata, previous_metadata),
             (
                 View::Input {
                     metadata: next_metadata,
@@ -200,7 +200,7 @@ pub mod __private {
                     ..
                 },
             ) => {
-                next_metadata.set_focused(previous_metadata.is_focused());
+                reconcile_focus_metadata(next_metadata, previous_metadata);
                 *next_editable_state = previous_editable_state.clone();
             }
             (
@@ -215,10 +215,20 @@ pub mod __private {
                     ..
                 },
             ) => {
-                next_metadata.set_focused(previous_metadata.is_focused());
+                reconcile_focus_metadata(next_metadata, previous_metadata);
                 *next_editable_state = previous_editable_state.clone();
             }
             _ => {}
+        }
+    }
+
+    fn reconcile_focus_metadata(
+        next_metadata: &mut StyleMetadata,
+        previous_metadata: &StyleMetadata,
+    ) {
+        next_metadata.set_focused(previous_metadata.is_focused());
+        if previous_metadata.scroll_into_view_requested() {
+            next_metadata.request_scroll_into_view();
         }
     }
 

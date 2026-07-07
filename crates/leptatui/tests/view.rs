@@ -407,7 +407,9 @@ fn text_area_value(view: &View) -> &str {
 
 fn scroll_offset(view: &View) -> u16 {
     match view {
-        View::Row { metadata, .. } | View::Column { metadata, .. } => metadata.scroll_offset(),
+        View::Row { metadata, .. }
+        | View::Column { metadata, .. }
+        | View::Form { metadata, .. } => metadata.scroll_offset(),
         other => panic!("expected layout view, got {other:?}"),
     }
 }
@@ -2334,6 +2336,126 @@ fn focus_scroll_request_does_not_override_later_manual_scroll() -> Result<()> {
     draw_view(&mut terminal, &view)?;
 
     assert_eq!(scroll_offset(&view), 5);
+
+    Ok(())
+}
+
+#[test]
+fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> Result<()> {
+    let width = 12;
+    let backend = TestBackend::new(width, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let notes = Rc::new(RefCell::new(String::from("one\ntwo\nthree\nfour")));
+    let build_view = |notes: &Rc<RefCell<String>>| {
+        let value = notes.borrow().clone();
+        let cursor = value.len();
+        let notes_for_input = Rc::clone(notes);
+        let mut notes_view = text_area(value).with_focus(true).on_input(move |next| {
+            *notes_for_input.borrow_mut() = next;
+            AppControl::Continue
+        });
+        editable_state_mut(&mut notes_view).set_mode(VimMode::Insert);
+        editable_state_mut(&mut notes_view).set_cursor(cursor);
+
+        column([text("Top"), notes_view, text("Bottom")])
+    };
+    let mut view = build_view(&notes);
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(scroll_offset(&view), 0);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+
+    let previous = view;
+    let mut view = build_view(&notes);
+    leptatui::__private::__reconcile_view(&mut view, &previous);
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(scroll_offset(&view), 2);
+    terminal.backend_mut().assert_cursor_position((1, 4));
+
+    Ok(())
+}
+
+#[test]
+fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> Result<()> {
+    let backend = TestBackend::new(12, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let mut input_view = input("Ada").with_focus(true);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Normal);
+    let mut view = form([
+        text("Top"),
+        input_view,
+        text("After 1"),
+        text("After 2"),
+        text("After 3"),
+    ]);
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(scroll_offset(&view), 0);
+
+    assert_eq!(
+        view.handle_event(key(KeyCode::Char('j')))?,
+        AppControl::Continue
+    );
+    assert_eq!(scroll_offset(&view), 1);
+
+    assert_eq!(
+        view.handle_event(key(KeyCode::Char('k')))?,
+        AppControl::Continue
+    );
+    assert_eq!(scroll_offset(&view), 0);
+
+    Ok(())
+}
+
+#[test]
+fn normal_mode_text_area_boundary_keys_scroll_overflowing_form() -> Result<()> {
+    let backend = TestBackend::new(12, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let mut text_area_view = text_area("one\ntwo").with_focus(true);
+    editable_state_mut(&mut text_area_view).set_mode(VimMode::Normal);
+    editable_state_mut(&mut text_area_view).set_cursor(0);
+    let mut view = form([
+        text("Top"),
+        text_area_view,
+        text("After 1"),
+        text("After 2"),
+    ]);
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(scroll_offset(&view), 0);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(form_child(&view, 1)).cursor(), 4);
+    assert_eq!(scroll_offset(&view), 0);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(form_child(&view, 1)).cursor(), 4);
+    assert_eq!(scroll_offset(&view), 1);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('k')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(form_child(&view, 1)).cursor(), 0);
+    assert_eq!(scroll_offset(&view), 1);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('k')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(form_child(&view, 1)).cursor(), 0);
+    assert_eq!(scroll_offset(&view), 0);
 
     Ok(())
 }
