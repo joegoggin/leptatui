@@ -2959,6 +2959,159 @@ fn focused_editable_controls_support_vim_mode_transitions() -> Result<()> {
     Ok(())
 }
 
+/// Verifies focused text areas support Vim normal-mode open-line commands.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("one\ntwo").with_focus(true).on_input(...)
+/// o, O
+///
+/// text_area("").with_focus(true).on_input(...)
+/// o, O
+/// ```
+///
+/// # Assertions
+///
+/// - `o` opens a blank line below the current logical line, enters insert mode,
+///   and places the cursor on that blank line.
+/// - `O` opens a blank line above the current logical line, enters insert mode,
+///   and places the cursor on that blank line.
+/// - Opening below the final line appends a trailing blank line.
+/// - Opening above the first line prepends a blank line.
+/// - Empty text areas enter insert mode without emitting a changed value.
+#[test]
+fn focused_text_area_supports_vim_open_line_commands() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut below_middle = emitting_text_area("one\ntwo", &emitted);
+    editable_state_mut(&mut below_middle).set_mode(VimMode::Normal);
+    editable_state_mut(&mut below_middle).set_cursor(1);
+
+    assert_eq!(
+        below_middle.handle_key_event(key_event(KeyCode::Char('o')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\n\ntwo")
+    );
+    assert_eq!(editable_state(&below_middle).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&below_middle).cursor(), 4);
+    assert_eq!(
+        editable_state(&below_middle).undo_stack(),
+        &[String::from("one\ntwo")]
+    );
+
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut above_middle = emitting_text_area("one\ntwo", &emitted);
+    editable_state_mut(&mut above_middle).set_mode(VimMode::Normal);
+    editable_state_mut(&mut above_middle).set_cursor(5);
+
+    above_middle.handle_key_event(key_event(KeyCode::Char('O')))?;
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\n\ntwo")
+    );
+    assert_eq!(editable_state(&above_middle).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&above_middle).cursor(), 4);
+
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut below_final = emitting_text_area("one\ntwo", &emitted);
+    editable_state_mut(&mut below_final).set_mode(VimMode::Normal);
+    editable_state_mut(&mut below_final).set_cursor(4);
+
+    below_final.handle_key_event(key_event(KeyCode::Char('o')))?;
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\ntwo\n")
+    );
+    assert_eq!(editable_state(&below_final).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&below_final).cursor(), 8);
+
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut above_first = emitting_text_area("one\ntwo", &emitted);
+    editable_state_mut(&mut above_first).set_mode(VimMode::Normal);
+    editable_state_mut(&mut above_first).set_cursor(1);
+
+    above_first.handle_key_event(key_event(KeyCode::Char('O')))?;
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("\none\ntwo")
+    );
+    assert_eq!(editable_state(&above_first).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&above_first).cursor(), 0);
+
+    above_first = reconcile_text_area_value(&above_first, "\none\ntwo", &emitted);
+    assert_eq!(
+        above_first.handle_key_event(key_event(KeyCode::Backspace))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\ntwo")
+    );
+    assert_eq!(editable_state(&above_first).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&above_first).cursor(), 0);
+
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut empty_below = emitting_text_area("", &emitted);
+    editable_state_mut(&mut empty_below).set_mode(VimMode::Normal);
+
+    empty_below.handle_key_event(key_event(KeyCode::Char('o')))?;
+    assert!(emitted.borrow().is_empty());
+    assert_eq!(editable_state(&empty_below).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&empty_below).cursor(), 0);
+
+    let mut empty_above = emitting_text_area("", &emitted);
+    editable_state_mut(&mut empty_above).set_mode(VimMode::Normal);
+
+    empty_above.handle_key_event(key_event(KeyCode::Char('O')))?;
+    assert!(emitted.borrow().is_empty());
+    assert_eq!(editable_state(&empty_above).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&empty_above).cursor(), 0);
+
+    Ok(())
+}
+
+/// Verifies focused inputs handle Vim open-line keys as no-ops.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// o, O
+/// ```
+///
+/// # Assertions
+///
+/// - `o` and `O` are handled so they do not leak to parent key handling.
+/// - Inputs do not emit values or leave normal mode for multiline-only
+///   open-line commands.
+#[test]
+fn focused_input_handles_vim_open_line_commands_without_mutation() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_input("Ada", &emitted);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(1);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('o')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).cursor(), 1);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('O')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).cursor(), 1);
+    assert!(emitted.borrow().is_empty());
+
+    Ok(())
+}
+
 /// Verifies focused inputs support Vim normal-mode movement.
 ///
 /// # Example Under Test

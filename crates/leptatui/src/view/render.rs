@@ -1745,7 +1745,12 @@ fn handle_insert_mode_key(
             '\n',
         )),
         KeyCode::Enter => Some(KeyControl::Handled),
-        KeyCode::Backspace => Some(handle_backspace_input_key(value, on_input, editable_state)),
+        KeyCode::Backspace => Some(handle_backspace_input_key(
+            value,
+            on_input,
+            editable_state,
+            kind,
+        )),
         KeyCode::Delete => Some(handle_delete_input_key(value, on_input, editable_state)),
         KeyCode::Char(character)
             if !key
@@ -1885,6 +1890,20 @@ fn handle_normal_mode_key(
         KeyCode::Char('u') if plain_key => {
             Some(handle_undo_input_key(value, on_input, editable_state))
         }
+        KeyCode::Char('o') if plain_key => Some(handle_open_line_key(
+            value,
+            on_input,
+            editable_state,
+            kind,
+            OpenLinePosition::Below,
+        )),
+        KeyCode::Char('O') if plain_key => Some(handle_open_line_key(
+            value,
+            on_input,
+            editable_state,
+            kind,
+            OpenLinePosition::Above,
+        )),
         KeyCode::Char('i') if plain_key => {
             editable_state.set_mode(VimMode::Insert);
             editable_state.set_cursor(clamp_cursor(value, editable_state.cursor()));
@@ -2739,6 +2758,66 @@ fn handle_yank_line_key(
     KeyControl::Handled
 }
 
+/// Normal-mode line placement for Vim open-line commands.
+#[derive(Clone, Copy)]
+enum OpenLinePosition {
+    /// Insert a line above the current logical line.
+    Above,
+    /// Insert a line below the current logical line.
+    Below,
+}
+
+/// Handles normal-mode `o` and `O`.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `on_input` — Optional callback that receives the opened-line value.
+/// * `editable_state` — Retained cursor, mode, and history state for the
+///   control.
+/// * `kind` — Editable control variant receiving the command.
+/// * `position` — Whether to open the new line above or below the current line.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that the open-line command was handled.
+fn handle_open_line_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    kind: EditableControlKind,
+    position: OpenLinePosition,
+) -> KeyControl {
+    if kind == EditableControlKind::Input {
+        return KeyControl::Handled;
+    }
+
+    editable_state.set_mode(VimMode::Insert);
+    editable_state.set_normal_key_pending(None);
+
+    if value.is_empty() {
+        editable_state.set_cursor(0);
+        return KeyControl::Handled;
+    }
+
+    let cursor = normal_cursor(value, editable_state.cursor());
+    let insert_at = match position {
+        OpenLinePosition::Above => text_area_line_start(value, cursor),
+        OpenLinePosition::Below => text_area_line_end(value, cursor),
+    };
+    let next_cursor = match position {
+        OpenLinePosition::Above => insert_at,
+        OpenLinePosition::Below => insert_at.saturating_add(1),
+    };
+
+    let mut next = String::with_capacity(value.len().saturating_add(1));
+    next.push_str(&value[..insert_at]);
+    next.push('\n');
+    next.push_str(&value[insert_at..]);
+
+    commit_input_value(value, on_input, editable_state, next, next_cursor)
+}
+
 /// Handles normal-mode `p`.
 ///
 /// # Arguments
@@ -3126,9 +3205,15 @@ fn handle_backspace_input_key(
     value: &str,
     on_input: &Option<InputAction>,
     editable_state: &mut EditableState,
+    kind: EditableControlKind,
 ) -> KeyControl {
     let cursor = clamp_cursor(value, editable_state.cursor());
     if cursor == 0 {
+        if kind == EditableControlKind::TextArea {
+            if let Some(next) = value.strip_prefix('\n') {
+                return commit_input_value(value, on_input, editable_state, next.to_owned(), 0);
+            }
+        }
         editable_state.set_cursor(0);
         return KeyControl::Handled;
     }
