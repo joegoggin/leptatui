@@ -232,40 +232,14 @@ impl View {
                 Ok(())
             }
             Self::Row { children, metadata } => {
-                let style = resolve_style(metadata, ctx);
-                ctx.render_widget(Block::new().style(style.to_ratatui_style()));
-                render_children(
-                    children,
-                    style.direction.unwrap_or(LayoutDirection::Row),
-                    style.inherited_values(),
-                    metadata,
-                    ctx,
-                )
+                render_layout_view(children, metadata, LayoutDirection::Row, ctx)
             }
             Self::Column { children, metadata } => {
-                let style = resolve_style(metadata, ctx);
-                ctx.render_widget(Block::new().style(style.to_ratatui_style()));
-                render_children(
-                    children,
-                    style.direction.unwrap_or(LayoutDirection::Column),
-                    style.inherited_values(),
-                    metadata,
-                    ctx,
-                )
+                render_layout_view(children, metadata, LayoutDirection::Column, ctx)
             }
             Self::Form {
                 children, metadata, ..
-            } => {
-                let style = resolve_style(metadata, ctx);
-                ctx.render_widget(Block::new().style(style.to_ratatui_style()));
-                render_children(
-                    children,
-                    style.direction.unwrap_or(LayoutDirection::Column),
-                    style.inherited_values(),
-                    metadata,
-                    ctx,
-                )
-            }
+            } => render_layout_view(children, metadata, LayoutDirection::Column, ctx),
             Self::Button {
                 label, metadata, ..
             } => {
@@ -550,7 +524,7 @@ impl View {
     /// Returns the focused control's vertical span inside this view area.
     #[doc(hidden)]
     pub fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
-        focused_button_span_for_view(self, ctx).map(VerticalSpan::into_tuple)
+        focused_control_span_for_view(self, ctx).map(VerticalSpan::into_tuple)
     }
 
     /// Activates the focused button if this view tree contains one.
@@ -2616,6 +2590,20 @@ fn handle_yank_visual_selection_key(
     KeyControl::Handled
 }
 
+/// Returns a copy of `value` with `range` replaced by `replacement`.
+fn replace_value_range(value: &str, range: Range<usize>, replacement: &str) -> String {
+    let mut next = String::with_capacity(
+        value
+            .len()
+            .saturating_sub(range.len())
+            .saturating_add(replacement.len()),
+    );
+    next.push_str(&value[..range.start]);
+    next.push_str(replacement);
+    next.push_str(&value[range.end..]);
+    next
+}
+
 /// Handles visual-mode `d` and `x`.
 fn handle_delete_visual_selection_key(
     value: &str,
@@ -2637,10 +2625,9 @@ fn handle_delete_visual_selection_key(
     } else {
         selection
     };
-    let mut next = String::with_capacity(value.len().saturating_sub(delete_range.len()));
-    next.push_str(&value[..delete_range.start]);
-    next.push_str(&value[delete_range.end..]);
-    let next_cursor = normal_cursor_after_change(&next, delete_range.start);
+    let delete_start = delete_range.start;
+    let next = replace_value_range(value, delete_range, "");
+    let next_cursor = normal_cursor_after_change(&next, delete_start);
 
     editable_state.set_normal_key_pending(None);
     editable_state.set_mode(VimMode::Normal);
@@ -3025,9 +3012,7 @@ fn handle_delete_normal_char_key(
 
     let cursor = normal_cursor(value, editable_state.cursor());
     let next_boundary = next_char_boundary(value, cursor);
-    let mut next = String::with_capacity(value.len().saturating_sub(next_boundary - cursor));
-    next.push_str(&value[..cursor]);
-    next.push_str(&value[next_boundary..]);
+    let next = replace_value_range(value, cursor..next_boundary, "");
     let next_cursor = normal_cursor_after_change(&next, cursor);
 
     commit_input_value(value, on_input, editable_state, next, next_cursor)
@@ -3068,10 +3053,9 @@ fn handle_delete_line_key(
             editable_state.set_linewise_yank_buffer(deleted_line);
 
             let delete_range = text_area_line_delete_range(value, editable_state.cursor());
-            let mut next = String::with_capacity(value.len().saturating_sub(delete_range.len()));
-            next.push_str(&value[..delete_range.start]);
-            next.push_str(&value[delete_range.end..]);
-            let next_cursor = normal_cursor_after_change(&next, delete_range.start);
+            let delete_start = delete_range.start;
+            let next = replace_value_range(value, delete_range, "");
+            let next_cursor = normal_cursor_after_change(&next, delete_start);
 
             commit_input_value(value, on_input, editable_state, next, next_cursor)
         }
@@ -3158,10 +3142,7 @@ fn handle_open_line_key(
         OpenLinePosition::Below => insert_at.saturating_add(1),
     };
 
-    let mut next = String::with_capacity(value.len().saturating_add(1));
-    next.push_str(&value[..insert_at]);
-    next.push('\n');
-    next.push_str(&value[insert_at..]);
+    let next = replace_value_range(value, insert_at..insert_at, "\n");
 
     commit_input_value(value, on_input, editable_state, next, next_cursor)
 }
@@ -3276,10 +3257,7 @@ fn handle_redo_input_key(
 /// normal-mode cursor.
 fn charwise_paste(value: &str, cursor: usize, yank_buffer: &str) -> (String, usize) {
     let insert_at = insert_after_normal_cursor(value, cursor);
-    let mut next = String::with_capacity(value.len().saturating_add(yank_buffer.len()));
-    next.push_str(&value[..insert_at]);
-    next.push_str(yank_buffer);
-    next.push_str(&value[insert_at..]);
+    let next = replace_value_range(value, insert_at..insert_at, yank_buffer);
     let next_cursor =
         normal_cursor_after_change(&next, insert_at.saturating_add(yank_buffer.len()));
 
@@ -3306,16 +3284,10 @@ fn text_area_linewise_paste(value: &str, cursor: usize, yank_buffer: &str) -> (S
     let current_end = text_area_line_end(value, cursor);
     if current_end < value.len() {
         let insert_at = current_end + 1;
-        let mut next = String::with_capacity(
-            value
-                .len()
-                .saturating_add(yank_buffer.len())
-                .saturating_add(1),
-        );
-        next.push_str(&value[..insert_at]);
-        next.push_str(yank_buffer);
-        next.push('\n');
-        next.push_str(&value[insert_at..]);
+        let mut replacement = String::with_capacity(yank_buffer.len().saturating_add(1));
+        replacement.push_str(yank_buffer);
+        replacement.push('\n');
+        let next = replace_value_range(value, insert_at..insert_at, &replacement);
         return (next, insert_at);
     }
 
@@ -3547,10 +3519,7 @@ fn handle_insert_text_key(
     inserted: &str,
 ) -> KeyControl {
     let cursor = clamp_cursor(value, editable_state.cursor());
-    let mut next = String::with_capacity(value.len().saturating_add(inserted.len()));
-    next.push_str(&value[..cursor]);
-    next.push_str(inserted);
-    next.push_str(&value[cursor..]);
+    let next = replace_value_range(value, cursor..cursor, inserted);
 
     commit_input_value(
         value,
@@ -3590,9 +3559,7 @@ fn handle_backspace_input_key(
     }
 
     let previous = previous_char_boundary(value, cursor);
-    let mut next = String::with_capacity(value.len().saturating_sub(cursor - previous));
-    next.push_str(&value[..previous]);
-    next.push_str(&value[cursor..]);
+    let next = replace_value_range(value, previous..cursor, "");
 
     commit_input_value(value, on_input, editable_state, next, previous)
 }
@@ -3620,9 +3587,7 @@ fn handle_delete_input_key(
     }
 
     let next_boundary = next_char_boundary(value, cursor);
-    let mut next = String::with_capacity(value.len().saturating_sub(next_boundary - cursor));
-    next.push_str(&value[..cursor]);
-    next.push_str(&value[next_boundary..]);
+    let next = replace_value_range(value, cursor..next_boundary, "");
 
     commit_input_value(value, on_input, editable_state, next, cursor)
 }
@@ -3802,7 +3767,7 @@ fn scroll_span_into_view(
 }
 
 /// Returns the focused control's vertical span within a view's render area.
-fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<VerticalSpan> {
+fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<VerticalSpan> {
     match view {
         View::Button { metadata, .. } | View::Input { metadata, .. }
             if metadata.is_focused() && metadata.scroll_into_view_requested() =>
@@ -3845,22 +3810,22 @@ fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Opt
                 inner,
                 style.inherited_values(),
                 metadata.clone(),
-                |ctx| focused_button_span_for_view(child, ctx),
+                |ctx| focused_control_span_for_view(child, ctx),
             )
             .map(|span| span.offset_by(top_offset))
         }
         View::Row { children, metadata } => {
-            focused_button_span_for_layout_view(children, metadata, LayoutDirection::Row, ctx)
+            focused_control_span_for_layout_view(children, metadata, LayoutDirection::Row, ctx)
         }
         View::Column { children, metadata } => {
-            focused_button_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
+            focused_control_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
         }
         View::Form {
             children, metadata, ..
-        } => focused_button_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
-        View::Dynamic(child) => child.with_view(|child| focused_button_span_for_view(child, ctx)),
+        } => focused_control_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
+        View::Dynamic(child) => child.with_view(|child| focused_control_span_for_view(child, ctx)),
         View::Component(component) => component
-            .focused_button_span(ctx)
+            .focused_control_span(ctx)
             .map(|(top, bottom)| VerticalSpan { top, bottom }),
         View::Text { .. } | View::Button { .. } | View::Input { .. } | View::TextArea { .. } => {
             None
@@ -3869,7 +3834,7 @@ fn focused_button_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Opt
 }
 
 /// Returns the focused control's vertical span inside a layout view.
-fn focused_button_span_for_layout_view(
+fn focused_control_span_for_layout_view(
     children: &[View],
     metadata: &StyleMetadata,
     default_direction: LayoutDirection,
@@ -3884,11 +3849,11 @@ fn focused_button_span_for_layout_view(
 
     match direction {
         LayoutDirection::Row => {
-            focused_button_span_in_row_children(children, style.inherited_values(), metadata, ctx)
+            focused_control_span_in_row_children(children, style.inherited_values(), metadata, ctx)
         }
         LayoutDirection::Column => {
             let min_heights = child_min_heights(children, style.inherited_values(), metadata, ctx);
-            focused_button_span_in_column_children(
+            focused_control_span_in_column_children(
                 children,
                 &min_heights,
                 style.inherited_values(),
@@ -3900,7 +3865,7 @@ fn focused_button_span_for_layout_view(
 }
 
 /// Returns the focused control's vertical span inside row children.
-fn focused_button_span_in_row_children(
+fn focused_control_span_in_row_children(
     children: &[View],
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
@@ -3916,14 +3881,14 @@ fn focused_button_span_in_row_children(
         parent_metadata.clone(),
         |ctx| {
             children.iter().zip(areas.iter()).find_map(|(child, area)| {
-                ctx.with_area(*area, |ctx| focused_button_span_for_view(child, ctx))
+                ctx.with_area(*area, |ctx| focused_control_span_for_view(child, ctx))
             })
         },
     )
 }
 
 /// Returns the focused control's vertical span inside column children.
-fn focused_button_span_in_column_children(
+fn focused_control_span_in_column_children(
     children: &[View],
     min_heights: &[u16],
     inherited_style: TuiStyle,
@@ -3946,7 +3911,7 @@ fn focused_button_span_in_column_children(
                 };
 
                 if let Some(span) =
-                    ctx.with_area(child_area, |ctx| focused_button_span_for_view(child, ctx))
+                    ctx.with_area(child_area, |ctx| focused_control_span_for_view(child, ctx))
                 {
                     return Some(span.offset_by(row));
                 }
@@ -3956,6 +3921,40 @@ fn focused_button_span_in_column_children(
 
             None
         },
+    )
+}
+
+/// Renders a styled layout view and its children.
+///
+/// # Arguments
+///
+/// * `children` — Child views to render into split areas.
+/// * `metadata` — Selector metadata for resolving layout styles.
+/// * `default_direction` — Layout direction used when style does not override it.
+/// * `ctx` — Rendering context for the layout view.
+///
+/// # Returns
+///
+/// An empty [`Result`] on success.
+///
+/// # Errors
+///
+/// Returns [`crate::app::Error::Io`] if child rendering performs terminal I/O
+/// that fails.
+fn render_layout_view(
+    children: &[View],
+    metadata: &StyleMetadata,
+    default_direction: LayoutDirection,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Result<()> {
+    let style = resolve_style(metadata, ctx);
+    ctx.render_widget(Block::new().style(style.to_ratatui_style()));
+    render_children(
+        children,
+        style.direction.unwrap_or(default_direction),
+        style.inherited_values(),
+        metadata,
+        ctx,
     )
 }
 
@@ -4043,7 +4042,7 @@ fn try_render_overflowing_column_children(
     parent_metadata.set_max_scroll_offset(max_scroll_offset);
 
     if let Some(span) = ctx.with_area(content_area, |ctx| {
-        focused_button_span_in_column_children(
+        focused_control_span_in_column_children(
             children,
             &min_heights,
             inherited_style,

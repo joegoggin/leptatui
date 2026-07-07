@@ -150,7 +150,7 @@ impl ComponentView {
 
     /// Returns the focused control's vertical span inside this component boundary.
     #[doc(hidden)]
-    pub(crate) fn focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+    pub(crate) fn focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         self.with_component(|component| component.__focused_button_span(ctx))
     }
 

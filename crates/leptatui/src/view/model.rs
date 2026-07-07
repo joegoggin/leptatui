@@ -407,53 +407,17 @@ impl fmt::Debug for View {
     }
 }
 
-/// Returns whether optional button actions represent the same callback.
+/// Returns whether optional actions represent the same callback.
 ///
 /// # Arguments
 ///
-/// * `left` — Left optional button action to compare.
-/// * `right` — Right optional button action to compare.
+/// * `left` — Left optional action to compare.
+/// * `right` — Right optional action to compare.
 ///
 /// # Returns
 ///
 /// A [`bool`] indicating whether both callbacks are absent or share identity.
-fn button_actions_equal(left: &Option<ButtonAction>, right: &Option<ButtonAction>) -> bool {
-    match (left, right) {
-        (None, None) => true,
-        (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-        _ => false,
-    }
-}
-
-/// Returns whether optional form actions represent the same callback.
-///
-/// # Arguments
-///
-/// * `left` — Left optional form action to compare.
-/// * `right` — Right optional form action to compare.
-///
-/// # Returns
-///
-/// A [`bool`] indicating whether both callbacks are absent or share identity.
-fn form_actions_equal(left: &Option<FormAction>, right: &Option<FormAction>) -> bool {
-    match (left, right) {
-        (None, None) => true,
-        (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-        _ => false,
-    }
-}
-
-/// Returns whether optional input actions represent the same callback.
-///
-/// # Arguments
-///
-/// * `left` — Left optional input action to compare.
-/// * `right` — Right optional input action to compare.
-///
-/// # Returns
-///
-/// A [`bool`] indicating whether both callbacks are absent or share identity.
-fn input_actions_equal(left: &Option<InputAction>, right: &Option<InputAction>) -> bool {
+fn actions_equal<T: ?Sized>(left: &Option<Rc<T>>, right: &Option<Rc<T>>) -> bool {
     match (left, right) {
         (None, None) => true,
         (Some(left), Some(right)) => Rc::ptr_eq(left, right),
@@ -529,8 +493,8 @@ impl PartialEq for View {
             ) => {
                 left_children == right_children
                     && left_metadata == right_metadata
-                    && form_actions_equal(left_on_submit, right_on_submit)
-                    && form_actions_equal(left_on_cancel, right_on_cancel)
+                    && actions_equal(left_on_submit, right_on_submit)
+                    && actions_equal(left_on_cancel, right_on_cancel)
             }
             (
                 Self::Button {
@@ -546,7 +510,7 @@ impl PartialEq for View {
             ) => {
                 left_label == right_label
                     && left_metadata == right_metadata
-                    && button_actions_equal(left_on_press, right_on_press)
+                    && actions_equal(left_on_press, right_on_press)
             }
             (
                 Self::Input {
@@ -567,7 +531,7 @@ impl PartialEq for View {
                 left_value == right_value
                     && left_placeholder == right_placeholder
                     && left_metadata == right_metadata
-                    && input_actions_equal(left_on_input, right_on_input)
+                    && actions_equal(left_on_input, right_on_input)
                     && left_editable_state == right_editable_state
             }
             (
@@ -589,7 +553,7 @@ impl PartialEq for View {
                 left_value == right_value
                     && left_placeholder == right_placeholder
                     && left_metadata == right_metadata
-                    && input_actions_equal(left_on_input, right_on_input)
+                    && actions_equal(left_on_input, right_on_input)
                     && left_editable_state == right_editable_state
             }
             (Self::Dynamic(left), Self::Dynamic(right)) => left.ptr_eq(right),

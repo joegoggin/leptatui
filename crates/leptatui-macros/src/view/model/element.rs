@@ -401,45 +401,21 @@ impl Element {
                     quote! { (#expanded).with_inline_style(#value) }
                 }
                 AttrKind::OnPress => {
-                    if attr.value.is_literal() {
-                        return Err(Error::new_spanned(
-                            &attr.name,
-                            "view! on_press attribute must be a callback expression",
-                        ));
-                    }
-
+                    reject_literal_callback(attr, "on_press")?;
                     quote! { (#expanded).on_press(#value) }
                 }
                 AttrKind::OnSubmit => {
-                    if attr.value.is_literal() {
-                        return Err(Error::new_spanned(
-                            &attr.name,
-                            "view! on_submit attribute must be a callback expression",
-                        ));
-                    }
-
+                    reject_literal_callback(attr, "on_submit")?;
                     quote! { (#expanded).on_submit(#value) }
                 }
                 AttrKind::OnCancel => {
-                    if attr.value.is_literal() {
-                        return Err(Error::new_spanned(
-                            &attr.name,
-                            "view! on_cancel attribute must be a callback expression",
-                        ));
-                    }
-
+                    reject_literal_callback(attr, "on_cancel")?;
                     quote! { (#expanded).on_cancel(#value) }
                 }
                 AttrKind::InputValue => expanded,
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
                 AttrKind::OnInput => {
-                    if attr.value.is_literal() {
-                        return Err(Error::new_spanned(
-                            &attr.name,
-                            "view! on_input attribute must be a callback expression",
-                        ));
-                    }
-
+                    reject_literal_callback(attr, "on_input")?;
                     quote! { (#expanded).on_input(#value) }
                 }
             };
@@ -641,6 +617,31 @@ impl Element {
 
         Ok(wrap(content.expand()))
     }
+}
+
+/// Rejects a literal callback attribute value.
+///
+/// # Arguments
+///
+/// * `attr` — Parsed callback attribute to inspect.
+/// * `attribute_name` — User-facing callback attribute name for diagnostics.
+///
+/// # Returns
+///
+/// An empty [`Result`] when the attribute value is not a literal.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the callback value is a literal.
+fn reject_literal_callback(attr: &Attr, attribute_name: &str) -> Result<()> {
+    if attr.value.is_literal() {
+        return Err(Error::new_spanned(
+            &attr.name,
+            format!("view! {attribute_name} attribute must be a callback expression"),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Returns whether an identifier is one of the built-in `view!` elements.
