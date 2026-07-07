@@ -2350,14 +2350,14 @@ fn normal_line_end(value: &str, cursor: usize, kind: EditableControlKind) -> usi
 /// A [`usize`] byte index for the normal-mode cursor.
 fn normal_cursor_from_insert(value: &str, cursor: usize) -> usize {
     let cursor = clamp_cursor(value, cursor);
-    if cursor == 0 {
-        0
+    if cursor == 0 || is_trailing_empty_line_cursor(value, cursor) {
+        cursor
     } else {
         previous_char_boundary(value, cursor)
     }
 }
 
-/// Returns a normal-mode cursor clamped to an existing character.
+/// Returns a normal-mode cursor clamped to an existing normal-mode position.
 ///
 /// # Arguments
 ///
@@ -2366,21 +2366,22 @@ fn normal_cursor_from_insert(value: &str, cursor: usize) -> usize {
 ///
 /// # Returns
 ///
-/// A [`usize`] byte index for an existing character, or zero for an empty value.
+/// A [`usize`] byte index for an existing character, the trailing empty line, or
+/// zero for an empty value.
 fn normal_cursor(value: &str, cursor: usize) -> usize {
     if value.is_empty() {
         return 0;
     }
 
     let cursor = clamp_cursor(value, cursor);
-    if cursor == value.len() {
+    if cursor == value.len() && !is_trailing_empty_line_cursor(value, cursor) {
         previous_char_boundary(value, cursor)
     } else {
         cursor
     }
 }
 
-/// Returns the cursor for the final character in a value.
+/// Returns the final normal-mode cursor position in a value.
 ///
 /// # Arguments
 ///
@@ -2388,9 +2389,15 @@ fn normal_cursor(value: &str, cursor: usize) -> usize {
 ///
 /// # Returns
 ///
-/// A [`usize`] byte index for the final character, or zero for an empty value.
+/// A [`usize`] byte index for the final character, the trailing empty line, or
+/// zero for an empty value.
 fn normal_last_char_cursor(value: &str) -> usize {
     normal_cursor(value, value.len())
+}
+
+/// Returns whether a cursor addresses the empty logical line after a final newline.
+fn is_trailing_empty_line_cursor(value: &str, cursor: usize) -> bool {
+    cursor == value.len() && value.ends_with('\n')
 }
 
 /// Returns the previous normal-mode character cursor.
@@ -2476,16 +2483,7 @@ fn cursor_after_value_replace(value: &str, cursor: usize, mode: VimMode) -> usiz
 ///
 /// A [`usize`] normal-mode cursor byte index valid for the mutated value.
 fn normal_cursor_after_change(value: &str, cursor: usize) -> usize {
-    if value.is_empty() {
-        return 0;
-    }
-
-    let cursor = clamp_cursor(value, cursor);
-    if cursor == value.len() {
-        previous_char_boundary(value, cursor)
-    } else {
-        cursor
-    }
+    normal_cursor(value, cursor)
 }
 
 /// Returns the character at a byte cursor.

@@ -3071,6 +3071,31 @@ fn focused_text_area_supports_vim_normal_mode_movement() -> Result<()> {
     Ok(())
 }
 
+/// Verifies focused text areas keep trailing blank lines reachable in normal mode.
+#[test]
+fn focused_text_area_supports_trailing_blank_line_normal_mode_movement() -> Result<()> {
+    let value = "one\ntwo\n";
+    let trailing_blank_cursor = value.len();
+    let mut view = text_area(value).with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
+    editable_state_mut(&mut view).set_cursor(trailing_blank_cursor);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).cursor(), trailing_blank_cursor);
+
+    view.handle_key_event(key_event(KeyCode::Char('k')))?;
+    assert_eq!(editable_state(&view).cursor(), 4);
+
+    view.handle_key_event(key_event(KeyCode::Char('j')))?;
+    assert_eq!(editable_state(&view).cursor(), trailing_blank_cursor);
+
+    Ok(())
+}
+
 /// Verifies focused inputs support Vim character-wise visual mode transitions.
 ///
 /// # Example Under Test
