@@ -3,7 +3,10 @@
 //! This module maps [`View`] variants to Ratatui widgets, layout splits, and
 //! component event propagation.
 
-use std::ops::Range;
+use std::{
+    ops::Range,
+    time::{Duration, Instant},
+};
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
@@ -22,9 +25,12 @@ use crate::{
 };
 
 use super::{
-    metadata::{EditableState, StyleMetadata, VimMode},
+    metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
     model::{FormAction, InputAction, View},
 };
+
+/// Maximum time allowed between insert-mode `j` and `k` escape keys.
+const INSERT_ESCAPE_TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// Resolves a view style from context stylesheets, ancestors, and inherited style values.
 ///
@@ -283,12 +289,22 @@ impl View {
                 let style = resolve_style(metadata, ctx);
                 let block = style.to_block_with_default_borders(Borders::ALL);
                 let inner = block.inner(ctx.area());
-                let display_value = if value.is_empty() {
+                let pending = pending_insert_render(value.as_str(), editable_state);
+                let display_value = if let Some(pending) = pending.as_ref() {
+                    pending.value.as_str()
+                } else if value.is_empty() {
                     placeholder.as_deref().unwrap_or("")
                 } else {
                     value.as_str()
                 };
-                let horizontal_scroll = if value.is_empty() {
+                let horizontal_scroll = if let Some(pending) = pending.as_ref() {
+                    input_horizontal_scroll(
+                        pending.value.as_str(),
+                        pending.scroll_cursor,
+                        editable_state.horizontal_scroll(),
+                        inner.width,
+                    )
+                } else if value.is_empty() {
                     0
                 } else {
                     input_horizontal_scroll(
@@ -304,19 +320,33 @@ impl View {
                         display_value,
                         style,
                         horizontal_scroll,
-                        visual_selection_range(
-                            value.as_str(),
-                            editable_state,
-                            EditableControlKind::Input,
-                        ),
+                        pending
+                            .as_ref()
+                            .and_then(|pending| pending.selection.clone())
+                            .or_else(|| {
+                                visual_selection_range(
+                                    value.as_str(),
+                                    editable_state,
+                                    EditableControlKind::Input,
+                                )
+                            }),
                     ));
                     if metadata.is_focused() {
-                        set_input_cursor(
-                            value.as_str(),
-                            editable_state.cursor(),
-                            horizontal_scroll,
-                            ctx,
-                        );
+                        if let Some(pending) = pending.as_ref() {
+                            set_input_cursor(
+                                pending.value.as_str(),
+                                pending.cursor,
+                                horizontal_scroll,
+                                ctx,
+                            );
+                        } else {
+                            set_input_cursor(
+                                value.as_str(),
+                                editable_state.cursor(),
+                                horizontal_scroll,
+                                ctx,
+                            );
+                        }
                     }
                 });
                 metadata.clear_scroll_into_view_request();
@@ -332,12 +362,23 @@ impl View {
                 let style = resolve_style(metadata, ctx);
                 let block = style.to_block_with_default_borders(Borders::ALL);
                 let inner = block.inner(ctx.area());
-                let display_value = if value.is_empty() {
+                let pending = pending_insert_render(value.as_str(), editable_state);
+                let display_value = if let Some(pending) = pending.as_ref() {
+                    pending.value.as_str()
+                } else if value.is_empty() {
                     placeholder.as_deref().unwrap_or("")
                 } else {
                     value.as_str()
                 };
-                let vertical_scroll = if value.is_empty() {
+                let vertical_scroll = if let Some(pending) = pending.as_ref() {
+                    text_area_vertical_scroll(
+                        pending.value.as_str(),
+                        pending.scroll_cursor,
+                        editable_state.vertical_scroll(),
+                        inner.height,
+                        inner.width,
+                    )
+                } else if value.is_empty() {
                     0
                 } else {
                     text_area_vertical_scroll(
@@ -355,20 +396,35 @@ impl View {
                         style,
                         vertical_scroll,
                         editable_state.horizontal_scroll(),
-                        visual_selection_range(
-                            value.as_str(),
-                            editable_state,
-                            EditableControlKind::TextArea,
-                        ),
+                        pending
+                            .as_ref()
+                            .and_then(|pending| pending.selection.clone())
+                            .or_else(|| {
+                                visual_selection_range(
+                                    value.as_str(),
+                                    editable_state,
+                                    EditableControlKind::TextArea,
+                                )
+                            }),
                     ));
                     if metadata.is_focused() {
-                        set_text_area_cursor(
-                            value.as_str(),
-                            editable_state.cursor(),
-                            vertical_scroll,
-                            editable_state.horizontal_scroll(),
-                            ctx,
-                        );
+                        if let Some(pending) = pending.as_ref() {
+                            set_text_area_pending_insert_cursor(
+                                pending.value.as_str(),
+                                pending.cursor,
+                                vertical_scroll,
+                                editable_state.horizontal_scroll(),
+                                ctx,
+                            );
+                        } else {
+                            set_text_area_cursor(
+                                value.as_str(),
+                                editable_state.cursor(),
+                                vertical_scroll,
+                                editable_state.horizontal_scroll(),
+                                ctx,
+                            );
+                        }
                     }
                 });
                 metadata.clear_scroll_into_view_request();
@@ -424,6 +480,12 @@ impl View {
         Ok(control)
     }
 
+    /// Emits any expired pending insert-mode key in this view tree.
+    #[doc(hidden)]
+    pub fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        self.flush_pending_input_at(Instant::now())
+    }
+
     /// Dispatches a key event through descendant component boundaries only.
     #[doc(hidden)]
     pub fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
@@ -434,6 +496,31 @@ impl View {
     #[doc(hidden)]
     pub fn __handle_default_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
         Ok(self.handle_default_key_event_ref(&key))
+    }
+
+    /// Emits an expired pending insert-mode key at the provided time.
+    fn flush_pending_input_at(&mut self, now: Instant) -> Option<AppControl> {
+        match self {
+            Self::Block { child, .. } => child.flush_pending_input_at(now),
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. } => flush_child_pending_input(children, now),
+            Self::Dynamic(child) => child.with_view_mut(|child| child.flush_pending_input_at(now)),
+            Self::Component(component) => component.flush_pending_input(),
+            Self::Input {
+                value,
+                on_input,
+                editable_state,
+                ..
+            }
+            | Self::TextArea {
+                value,
+                on_input,
+                editable_state,
+                ..
+            } => flush_expired_insert_key(value, on_input, editable_state, now),
+            Self::Text { .. } | Self::Button { .. } => None,
+        }
     }
 
     /// Returns the number of focusable controls in this view tree.
@@ -843,7 +930,8 @@ impl View {
                 editable_state,
                 ..
             } if metadata.is_focused() => Some(FocusedControl::Input {
-                insert_mode: editable_state.mode() == VimMode::Insert,
+                insert_mode: editable_state.mode() == VimMode::Insert
+                    && !has_active_insert_key_pending(editable_state, Instant::now()),
                 visual_mode: matches!(editable_state.mode(), VimMode::Visual | VimMode::VisualLine),
             }),
             Self::TextArea {
@@ -851,7 +939,8 @@ impl View {
                 editable_state,
                 ..
             } if metadata.is_focused() => Some(FocusedControl::TextArea {
-                insert_mode: editable_state.mode() == VimMode::Insert,
+                insert_mode: editable_state.mode() == VimMode::Insert
+                    && !has_active_insert_key_pending(editable_state, Instant::now()),
                 visual_mode: matches!(editable_state.mode(), VimMode::Visual | VimMode::VisualLine),
             }),
             Self::Block { child, .. } => child.focused_control(),
@@ -1223,6 +1312,12 @@ impl Component for View {
         View::__handle_focused_input_key(self, key)
     }
 
+    /// Emits any expired pending insert-mode key in the view tree.
+    #[doc(hidden)]
+    fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        View::__flush_pending_input(self)
+    }
+
     /// Returns the focused built-in control in the view tree, if any.
     ///
     /// # Returns
@@ -1290,6 +1385,18 @@ enum ScrollBoundary {
     Top,
     /// Last valid scroll offset for the content.
     Bottom,
+}
+
+/// Transient render state for an uncommitted pending insert-mode key.
+struct PendingInsertRender {
+    /// Display value with the pending key inserted.
+    value: String,
+    /// Byte range highlighted while the pending key is still active.
+    selection: Option<Range<usize>>,
+    /// Cursor byte index used to place the terminal cursor.
+    cursor: usize,
+    /// Cursor byte index used to scroll the pending key into view.
+    scroll_cursor: usize,
 }
 
 /// Converts a handled flag into the matching key traversal control.
@@ -1372,6 +1479,35 @@ fn form_action_control(action: &Option<FormAction>) -> KeyControl {
         .map_or(KeyControl::Handled, |action| action().into())
 }
 
+/// Returns render-only display state for a pending insert-mode key.
+fn pending_insert_render(
+    value: &str,
+    editable_state: &EditableState,
+) -> Option<PendingInsertRender> {
+    let pending = editable_state.insert_key_pending()?;
+    if editable_state.mode() != VimMode::Insert {
+        return None;
+    }
+
+    let now = Instant::now();
+    let active = !insert_key_pending_expired(pending, now);
+    let cursor = clamp_cursor(value, editable_state.cursor());
+    let pending_key = pending.key();
+    let mut display_value =
+        String::with_capacity(value.len().saturating_add(pending_key.len_utf8()));
+    display_value.push_str(&value[..cursor]);
+    display_value.push(pending_key);
+    display_value.push_str(&value[cursor..]);
+
+    let pending_end = cursor.saturating_add(pending_key.len_utf8());
+    Some(PendingInsertRender {
+        value: display_value,
+        selection: active.then_some(cursor..pending_end),
+        cursor: if active { cursor } else { pending_end },
+        scroll_cursor: pending_end,
+    })
+}
+
 /// Returns the horizontal scroll offset needed to keep an input cursor visible.
 ///
 /// # Arguments
@@ -1435,6 +1571,25 @@ fn set_text_area_cursor(
     }
 
     let (row, column) = text_area_cursor_position(value, cursor, area.width);
+    let row = row.saturating_sub(usize::from(vertical_scroll));
+    let column = column.saturating_sub(usize::from(horizontal_scroll));
+    ctx.set_cursor_position(cursor_position_in_area(area, column, row));
+}
+
+/// Sets the terminal cursor on a pending inserted text-area character.
+fn set_text_area_pending_insert_cursor(
+    value: &str,
+    cursor: usize,
+    vertical_scroll: u16,
+    horizontal_scroll: u16,
+    ctx: &mut RenderCtx<'_, '_>,
+) {
+    let area = ctx.area();
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let (row, column) = text_area_character_position(value, cursor, area.width);
     let row = row.saturating_sub(usize::from(vertical_scroll));
     let column = column.saturating_sub(usize::from(horizontal_scroll));
     ctx.set_cursor_position(cursor_position_in_area(area, column, row));
@@ -1579,6 +1734,42 @@ fn text_area_cursor_position(value: &str, cursor: usize, width: u16) -> (usize, 
     (row, column)
 }
 
+/// Returns the wrapped render row and column for the character at a byte index.
+fn text_area_character_position(value: &str, cursor: usize, width: u16) -> (usize, usize) {
+    if width == 0 {
+        return (0, 0);
+    }
+
+    let cursor = clamp_cursor(value, cursor);
+    let width = usize::from(width);
+    let mut row = 0usize;
+    let mut column = 0usize;
+
+    for (index, character) in value.char_indices() {
+        if index >= cursor {
+            if index == cursor && character != '\n' && column == width {
+                row = row.saturating_add(1);
+                column = 0;
+            }
+            break;
+        }
+
+        if character == '\n' {
+            row = row.saturating_add(1);
+            column = 0;
+            continue;
+        }
+
+        if column == width {
+            row = row.saturating_add(1);
+            column = 0;
+        }
+        column = column.saturating_add(1);
+    }
+
+    (row, column)
+}
+
 /// Handles a focused input key and returns whether default propagation stops.
 ///
 /// # Arguments
@@ -1697,10 +1888,27 @@ fn handle_insert_mode_key(
 ) -> Option<KeyControl> {
     editable_state.set_normal_key_pending(None);
 
+    let plain_key = !key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+    let now = Instant::now();
+
+    if let Some(pending) = editable_state.take_insert_key_pending() {
+        return Some(handle_pending_insert_mode_key(
+            value,
+            on_input,
+            editable_state,
+            key,
+            kind,
+            pending,
+            plain_key,
+            now,
+        ));
+    }
+
     match key.code {
         KeyCode::Esc => {
-            editable_state.set_mode(VimMode::Normal);
-            editable_state.set_cursor(normal_cursor_from_insert(value, editable_state.cursor()));
+            exit_insert_mode(value, editable_state);
             Some(KeyControl::Handled)
         }
         KeyCode::Left => {
@@ -1752,20 +1960,144 @@ fn handle_insert_mode_key(
             kind,
         )),
         KeyCode::Delete => Some(handle_delete_input_key(value, on_input, editable_state)),
-        KeyCode::Char(character)
-            if !key
-                .modifiers
-                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-        {
-            Some(handle_insert_input_key(
-                value,
-                on_input,
-                editable_state,
-                character,
-            ))
+        KeyCode::Char('j') if plain_key => {
+            editable_state.set_insert_key_pending('j', now);
+            Some(KeyControl::Handled)
         }
+        KeyCode::Char(character) if plain_key => Some(handle_insert_input_key(
+            value,
+            on_input,
+            editable_state,
+            character,
+        )),
         _ => None,
     }
+}
+
+/// Handles the second key in an insert-mode key sequence.
+fn handle_pending_insert_mode_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    key: &KeyEvent,
+    kind: EditableControlKind,
+    pending: PendingInsertKey,
+    plain_key: bool,
+    now: Instant,
+) -> KeyControl {
+    if insert_key_pending_expired(pending, now) {
+        return handle_expired_pending_insert_mode_key(
+            value,
+            on_input,
+            editable_state,
+            key,
+            kind,
+            pending.key(),
+            plain_key,
+        );
+    }
+
+    let pending_key = pending.key();
+
+    match (pending_key, key.code) {
+        ('j', KeyCode::Char('k')) if plain_key => {
+            exit_insert_mode(value, editable_state);
+            KeyControl::Handled
+        }
+        ('j', KeyCode::Char(character)) if plain_key => {
+            let mut inserted = String::with_capacity(pending_key.len_utf8() + character.len_utf8());
+            inserted.push(pending_key);
+            inserted.push(character);
+            handle_insert_text_key(value, on_input, editable_state, &inserted)
+        }
+        ('j', KeyCode::Esc) => {
+            exit_insert_mode(value, editable_state);
+            KeyControl::Handled
+        }
+        ('j', KeyCode::Backspace) => {
+            editable_state.set_cursor(clamp_cursor(value, editable_state.cursor()));
+            KeyControl::Handled
+        }
+        ('j', KeyCode::Enter) if plain_key && kind == EditableControlKind::TextArea => {
+            let mut text = String::with_capacity(pending_key.len_utf8() + 1);
+            text.push(pending_key);
+            text.push('\n');
+            handle_insert_text_key(value, on_input, editable_state, &text)
+        }
+        ('j', KeyCode::Enter) if plain_key => {
+            handle_insert_input_key(value, on_input, editable_state, pending_key)
+        }
+        ('j', _) => handle_insert_input_key(value, on_input, editable_state, pending_key),
+        _ => KeyControl::Handled,
+    }
+}
+
+/// Handles a key received after an insert-mode sequence times out.
+fn handle_expired_pending_insert_mode_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    key: &KeyEvent,
+    kind: EditableControlKind,
+    pending: char,
+    plain_key: bool,
+) -> KeyControl {
+    match key.code {
+        KeyCode::Char(character) if plain_key => {
+            let mut inserted = String::with_capacity(pending.len_utf8() + character.len_utf8());
+            inserted.push(pending);
+            inserted.push(character);
+            handle_insert_text_key(value, on_input, editable_state, &inserted)
+        }
+        KeyCode::Enter if plain_key && kind == EditableControlKind::TextArea => {
+            let mut text = String::with_capacity(pending.len_utf8() + 1);
+            text.push(pending);
+            text.push('\n');
+            handle_insert_text_key(value, on_input, editable_state, &text)
+        }
+        _ => handle_insert_input_key(value, on_input, editable_state, pending),
+    }
+}
+
+/// Returns whether a pending insert-mode key sequence has timed out.
+fn insert_key_pending_expired(pending: PendingInsertKey, now: Instant) -> bool {
+    now.saturating_duration_since(pending.started_at()) >= INSERT_ESCAPE_TIMEOUT
+}
+
+/// Returns pending insert-mode key state that is still within the timeout.
+fn active_insert_key_pending(
+    editable_state: &EditableState,
+    now: Instant,
+) -> Option<PendingInsertKey> {
+    let pending = editable_state.insert_key_pending()?;
+    (!insert_key_pending_expired(pending, now)).then_some(pending)
+}
+
+/// Returns whether the editable control has an unexpired pending insert key.
+fn has_active_insert_key_pending(editable_state: &EditableState, now: Instant) -> bool {
+    active_insert_key_pending(editable_state, now).is_some()
+}
+
+/// Emits an expired pending insert-mode key, if one exists.
+fn flush_expired_insert_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    now: Instant,
+) -> Option<AppControl> {
+    let pending = editable_state.insert_key_pending()?;
+    if !insert_key_pending_expired(pending, now) {
+        return None;
+    }
+
+    let pending = editable_state.take_insert_key_pending()?;
+    Some(handle_insert_input_key(value, on_input, editable_state, pending.key()).into())
+}
+
+/// Leaves insert mode using the same cursor placement as Esc.
+fn exit_insert_mode(value: &str, editable_state: &mut EditableState) {
+    editable_state.set_mode(VimMode::Normal);
+    editable_state.set_cursor(normal_cursor_from_insert(value, editable_state.cursor()));
 }
 
 /// Handles normal-mode movement, command sequences, and mutations.
@@ -3175,10 +3507,33 @@ fn handle_insert_input_key(
     editable_state: &mut EditableState,
     character: char,
 ) -> KeyControl {
+    let mut inserted = String::with_capacity(character.len_utf8());
+    inserted.push(character);
+    handle_insert_text_key(value, on_input, editable_state, &inserted)
+}
+
+/// Handles text insertion for a focused editable text control.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled value.
+/// * `on_input` — Optional callback that receives the inserted value.
+/// * `editable_state` — Retained cursor and scroll state for the control.
+/// * `inserted` — Text to insert at the cursor.
+///
+/// # Returns
+///
+/// A [`KeyControl`] value indicating that insertion was handled.
+fn handle_insert_text_key(
+    value: &str,
+    on_input: &Option<InputAction>,
+    editable_state: &mut EditableState,
+    inserted: &str,
+) -> KeyControl {
     let cursor = clamp_cursor(value, editable_state.cursor());
-    let mut next = String::with_capacity(value.len().saturating_add(character.len_utf8()));
+    let mut next = String::with_capacity(value.len().saturating_add(inserted.len()));
     next.push_str(&value[..cursor]);
-    next.push(character);
+    next.push_str(inserted);
     next.push_str(&value[cursor..]);
 
     commit_input_value(
@@ -3186,7 +3541,7 @@ fn handle_insert_input_key(
         on_input,
         editable_state,
         next,
-        cursor.saturating_add(character.len_utf8()),
+        cursor.saturating_add(inserted.len()),
     )
 }
 
@@ -4027,4 +4382,15 @@ fn handle_child_key_events(children: &mut [View], key: &KeyEvent) -> Result<KeyC
     }
 
     Ok(KeyControl::Pass)
+}
+
+/// Emits the first expired pending insert-mode key in child views.
+fn flush_child_pending_input(children: &mut [View], now: Instant) -> Option<AppControl> {
+    for child in children {
+        if let Some(control) = child.flush_pending_input_at(now) {
+            return Some(control);
+        }
+    }
+
+    None
 }

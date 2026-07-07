@@ -49,6 +49,12 @@ pub trait AppRoot {
         Ok(AppControl::Continue)
     }
 
+    /// Emits any expired pending input inside this root.
+    #[doc(hidden)]
+    fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        None
+    }
+
     /// Returns metadata for the focused built-in control inside this root.
     #[doc(hidden)]
     fn __focused_control(&self) -> Option<FocusedControl> {
@@ -97,6 +103,12 @@ where
     /// I/O that fails.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         Component::handle_event(self, event)
+    }
+
+    /// Forwards pending input flushing into component roots.
+    #[doc(hidden)]
+    fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        Component::__flush_pending_input(self)
     }
 
     /// Forwards focused-control metadata from component roots.

@@ -3,7 +3,7 @@
 //! This module stores the type, id, class, inline-style, focus, and scroll
 //! metadata used during style resolution and rendering.
 
-use std::cell::Cell;
+use std::{cell::Cell, time::Instant};
 
 use crate::style::TuiStyle;
 
@@ -42,6 +42,32 @@ pub enum VimMode {
     VisualLine,
 }
 
+/// Pending insert-mode key sequence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PendingInsertKey {
+    /// First key in the sequence.
+    key: char,
+    /// Time when the first key was received.
+    started_at: Instant,
+}
+
+impl PendingInsertKey {
+    /// Creates pending insert-mode key state.
+    pub(crate) fn new(key: char, started_at: Instant) -> Self {
+        Self { key, started_at }
+    }
+
+    /// Returns the pending first key.
+    pub(crate) fn key(self) -> char {
+        self.key
+    }
+
+    /// Returns when the pending key was received.
+    pub(crate) fn started_at(self) -> Instant {
+        self.started_at
+    }
+}
+
 /// Runtime state shared by editable text controls.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct EditableState {
@@ -61,6 +87,8 @@ pub struct EditableState {
     undo_stack: Vec<String>,
     /// Redo snapshots retained across reconciled redraws.
     redo_stack: Vec<String>,
+    /// First key in a pending insert-mode key sequence.
+    insert_key_pending: Option<PendingInsertKey>,
     /// First key in a pending normal-mode multi-key command.
     normal_key_pending: Option<char>,
     /// Fixed selection endpoint used by visual modes.
@@ -184,6 +212,7 @@ impl EditableState {
     /// * `mode` — Vim mode to retain.
     pub fn set_mode(&mut self, mode: VimMode) {
         self.mode = mode;
+        self.insert_key_pending = None;
         if !matches!(mode, VimMode::Visual | VimMode::VisualLine) {
             self.selection_anchor = None;
         }
@@ -272,6 +301,34 @@ impl EditableState {
     /// An [`Option`] containing the most recent redo snapshot.
     pub(crate) fn pop_redo(&mut self) -> Option<String> {
         self.redo_stack.pop()
+    }
+
+    /// Replaces the pending insert-mode sequence key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Pending first key in an insert-mode key sequence.
+    /// * `started_at` — Time when the key was received.
+    pub(crate) fn set_insert_key_pending(&mut self, key: char, started_at: Instant) {
+        self.insert_key_pending = Some(PendingInsertKey::new(key, started_at));
+    }
+
+    /// Returns the pending insert-mode sequence key.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the pending first key.
+    pub(crate) fn insert_key_pending(&self) -> Option<PendingInsertKey> {
+        self.insert_key_pending
+    }
+
+    /// Clears and returns the pending insert-mode sequence key.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the pending first key.
+    pub(crate) fn take_insert_key_pending(&mut self) -> Option<PendingInsertKey> {
+        self.insert_key_pending.take()
     }
 
     /// Replaces the pending normal-mode command key.

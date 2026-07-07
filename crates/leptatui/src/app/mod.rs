@@ -143,10 +143,19 @@ where
 
             tokio::select! {
                 event = &mut event_poll => {
-                    if let Some(event) = event?
-                        && self.root.handle_event(event)? == AppControl::Exit
-                    {
-                        break;
+                    match event? {
+                        Some(event) => {
+                            if self.root.handle_event(event)? == AppControl::Exit {
+                                break;
+                            }
+                        }
+                        None => {
+                            if let Some(control) = self.root.__flush_pending_input()
+                                && control == AppControl::Exit
+                            {
+                                break;
+                            }
+                        }
                     }
 
                     should_draw = true;

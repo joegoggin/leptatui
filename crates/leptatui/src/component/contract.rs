@@ -143,6 +143,12 @@ pub trait Component {
         None
     }
 
+    /// Emits any expired pending insert-mode key inside this component.
+    #[doc(hidden)]
+    fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        None
+    }
+
     /// Returns metadata for the focused built-in control inside this component.
     ///
     /// # Returns

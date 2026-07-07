@@ -6,6 +6,8 @@
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
+    thread,
+    time::Duration,
 };
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
@@ -727,7 +729,7 @@ fn focused_input_sets_terminal_cursor_position() -> Result<()> {
 
 /// Verifies component-backed roots expose focused editable control mode.
 #[test]
-fn app_root_reports_focused_editable_control_mode() {
+fn app_root_reports_focused_editable_control_mode() -> Result<()> {
     let normal_input = input("Ada").with_focus(true);
     assert_eq!(
         AppRoot::__focused_control(&normal_input),
@@ -743,6 +745,15 @@ fn app_root_reports_focused_editable_control_mode() {
         AppRoot::__focused_control(&insert_input),
         Some(FocusedControl::Input {
             insert_mode: true,
+            visual_mode: false,
+        })
+    );
+
+    insert_input.handle_key_event(key_event(KeyCode::Char('j')))?;
+    assert_eq!(
+        AppRoot::__focused_control(&insert_input),
+        Some(FocusedControl::Input {
+            insert_mode: false,
             visual_mode: false,
         })
     );
@@ -777,6 +788,15 @@ fn app_root_reports_focused_editable_control_mode() {
         })
     );
 
+    insert_text_area.handle_key_event(key_event(KeyCode::Char('j')))?;
+    assert_eq!(
+        AppRoot::__focused_control(&insert_text_area),
+        Some(FocusedControl::TextArea {
+            insert_mode: false,
+            visual_mode: false,
+        })
+    );
+
     let mut visual_text_area = text_area("Ada").with_focus(true);
     editable_state_mut(&mut visual_text_area).set_mode(VimMode::VisualLine);
     editable_state_mut(&mut visual_text_area).set_selection_anchor(Some(0));
@@ -793,6 +813,8 @@ fn app_root_reports_focused_editable_control_mode() {
         Some(FocusedControl::Button)
     );
     assert_eq!(AppRoot::__focused_control(&input("Ada")), None);
+
+    Ok(())
 }
 
 /// Verifies input rendering clips content around the retained cursor.
@@ -844,6 +866,56 @@ fn input_visual_selection_renders_reversed_cells() -> Result<()> {
     assert!(cell_modifiers(&terminal, 2, 1, 8).contains(Modifier::REVERSED));
     assert!(cell_modifiers(&terminal, 3, 1, 8).contains(Modifier::REVERSED));
     assert!(!cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
+
+    Ok(())
+}
+
+/// Verifies a pending insert-mode `j` renders as a reversed preview character.
+#[test]
+fn input_pending_insert_j_renders_reversed_preview() -> Result<()> {
+    let backend = TestBackend::new(8, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = input("Ada").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 4, 1, 8), "j");
+    assert!(cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
+    terminal.backend_mut().assert_cursor_position((4, 1));
+
+    Ok(())
+}
+
+/// Verifies an expired pending insert-mode `j` renders without preview styling.
+#[test]
+fn input_pending_insert_j_preview_expires_to_insert_cursor() -> Result<()> {
+    let backend = TestBackend::new(8, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = input("Ada").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    thread::sleep(Duration::from_millis(1100));
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 4, 1, 8), "j");
+    assert!(!cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
+    terminal.backend_mut().assert_cursor_position((5, 1));
+    assert_eq!(
+        AppRoot::__focused_control(&view),
+        Some(FocusedControl::Input {
+            insert_mode: true,
+            visual_mode: false,
+        })
+    );
 
     Ok(())
 }
@@ -1050,6 +1122,27 @@ fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
     assert!(!cell_modifiers(&terminal, 1, 1, 10).contains(Modifier::REVERSED));
     assert!(cell_modifiers(&terminal, 1, 2, 10).contains(Modifier::REVERSED));
     assert!(cell_modifiers(&terminal, 1, 3, 10).contains(Modifier::REVERSED));
+
+    Ok(())
+}
+
+/// Verifies a wrapped pending insert-mode `j` renders where the preview wraps.
+#[test]
+fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
+    let backend = TestBackend::new(5, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = text_area("Ada").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 1, 2, 5), "j");
+    assert!(cell_modifiers(&terminal, 1, 2, 5).contains(Modifier::REVERSED));
+    terminal.backend_mut().assert_cursor_position((1, 2));
 
     Ok(())
 }
@@ -2599,6 +2692,153 @@ fn focused_input_emits_inserted_text_through_on_input() -> Result<()> {
     Ok(())
 }
 
+/// Verifies focused inputs leave insert mode on the `jk` key sequence.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// j, k
+/// ```
+///
+/// # Assertions
+///
+/// - Both keys are handled.
+/// - No input value is emitted.
+/// - The input switches to normal mode with Esc-style cursor placement.
+#[test]
+fn focused_input_jk_returns_to_normal_mode_without_emitting_text() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_input("Ada", &emitted);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Insert);
+    assert_eq!(emitted.borrow().as_slice(), &[] as &[String]);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('k')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).cursor(), 2);
+    assert_eq!(emitted.borrow().as_slice(), &[] as &[String]);
+
+    Ok(())
+}
+
+/// Verifies a pending insert-mode `j` is inserted with the next non-escape key.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// j, x
+/// ```
+///
+/// # Assertions
+///
+/// - The first `j` waits for the next key.
+/// - The following `x` emits both inserted characters.
+/// - The input remains in insert mode.
+#[test]
+fn focused_input_pending_j_inserts_with_next_non_escape_character() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_input("Ada", &emitted);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().as_slice(), &[] as &[String]);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('x')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&view).cursor(), 5);
+    assert_eq!(emitted.borrow().as_slice(), &[String::from("Adajx")]);
+
+    Ok(())
+}
+
+/// Verifies slow insert-mode `jk` is inserted as literal text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// j, wait past timeout, k
+/// ```
+///
+/// # Assertions
+///
+/// - The first `j` waits for the next key.
+/// - The later `k` emits literal `jk`.
+/// - The input remains in insert mode.
+#[test]
+fn focused_input_slow_jk_inserts_literal_text() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_input("Ada", &emitted);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().as_slice(), &[] as &[String]);
+
+    thread::sleep(Duration::from_millis(1100));
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('k')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&view).cursor(), 5);
+    assert_eq!(emitted.borrow().as_slice(), &[String::from("Adajk")]);
+
+    Ok(())
+}
+
+/// Verifies an expired pending insert-mode `j` is emitted without another key.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true).on_input(...)
+/// j, wait past timeout, flush
+/// ```
+///
+/// # Assertions
+///
+/// - The first `j` waits for the timeout.
+/// - Flushing emits literal `j`.
+/// - A second flush has nothing to emit.
+#[test]
+fn focused_input_idle_flush_emits_expired_pending_j() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_input("Ada", &emitted);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().as_slice(), &[] as &[String]);
+
+    thread::sleep(Duration::from_millis(1100));
+
+    assert_eq!(view.__flush_pending_input(), Some(AppControl::Continue));
+    assert_eq!(editable_state(&view).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&view).cursor(), 4);
+    assert_eq!(emitted.borrow().as_slice(), &[String::from("Adaj")]);
+    assert_eq!(view.__flush_pending_input(), None);
+
+    Ok(())
+}
+
 /// Verifies focused input deletion keys emit shortened text through `on_input`.
 ///
 /// # Example Under Test
@@ -2777,6 +3017,84 @@ fn focused_text_area_emits_inserted_text_through_on_input() -> Result<()> {
     assert_eq!(
         emitted.borrow().as_slice(),
         &[String::from("Ada\nLovelace!"), String::from("Ada\n")]
+    );
+
+    Ok(())
+}
+
+/// Verifies focused text areas leave insert mode on the `jk` key sequence.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada\nLovelace").with_focus(true).on_input(...)
+/// j, k
+/// ```
+///
+/// # Assertions
+///
+/// - Both keys are handled.
+/// - No input value is emitted.
+/// - The text area switches to normal mode with Esc-style cursor placement.
+#[test]
+fn focused_text_area_jk_returns_to_normal_mode_without_emitting_text() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_text_area("Ada\nLovelace", &emitted);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Insert);
+    assert_eq!(emitted.borrow().as_slice(), &[] as &[String]);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('k')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).cursor(), 11);
+    assert_eq!(emitted.borrow().as_slice(), &[] as &[String]);
+
+    Ok(())
+}
+
+/// Verifies slow text-area insert-mode `jk` is inserted as literal text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada\nLovelace").with_focus(true).on_input(...)
+/// j, wait past timeout, k
+/// ```
+///
+/// # Assertions
+///
+/// - The first `j` waits for the next key.
+/// - The later `k` emits literal `jk`.
+/// - The text area remains in insert mode.
+#[test]
+fn focused_text_area_slow_jk_inserts_literal_text() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_text_area("Ada\nLovelace", &emitted);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().as_slice(), &[] as &[String]);
+
+    thread::sleep(Duration::from_millis(1100));
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('k')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Insert);
+    assert_eq!(editable_state(&view).cursor(), 14);
+    assert_eq!(
+        emitted.borrow().as_slice(),
+        &[String::from("Ada\nLovelacejk")]
     );
 
     Ok(())
@@ -3710,6 +4028,51 @@ fn form_esc_leaves_insert_mode_before_canceling() -> Result<()> {
         KeyControl::Handled
     );
     assert_eq!(cancels.get(), 0);
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 1);
+
+    Ok(())
+}
+
+/// Verifies `jk` leaves editable insert mode before Esc cancels a form.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([input("Ada").with_focus(true)]).on_cancel(...)
+/// j, k, Esc
+/// ```
+///
+/// # Assertions
+///
+/// - The `jk` sequence is handled by the focused input.
+/// - The `jk` sequence does not invoke the cancel callback.
+/// - A later Esc is handled by the form.
+#[test]
+fn form_jk_leaves_insert_mode_without_canceling() -> Result<()> {
+    let cancels = Rc::new(Cell::new(0));
+    let cancels_for_form = Rc::clone(&cancels);
+    let mut input_view = input("Ada").with_focus(true);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
+    let mut view = form([input_view]).on_cancel(move || {
+        cancels_for_form.set(cancels_for_form.get() + 1);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('j')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('k')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 0);
+    assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Normal);
+
     assert_eq!(
         view.handle_key_event(key_event(KeyCode::Esc))?,
         KeyControl::Handled

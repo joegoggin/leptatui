@@ -173,6 +173,12 @@ impl ComponentView {
         self.with_component_mut(|component| component.__handle_focused_input_key(key))
     }
 
+    /// Emits any expired pending insert-mode key inside this component boundary.
+    #[doc(hidden)]
+    pub(crate) fn flush_pending_input(&self) -> Option<AppControl> {
+        self.with_component_mut(|component| component.__flush_pending_input())
+    }
+
     /// Returns the focused built-in control inside this component boundary.
     ///
     /// # Returns
