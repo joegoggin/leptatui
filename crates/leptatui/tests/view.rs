@@ -11,9 +11,9 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     __private::FocusedControl, AppControl, AppRoot, Borders, Color, Component, EditableState,
-    KeyControl, LayoutDirection, MediaQuery, MiniVimMode, RenderCtx, Result, StyleMetadata,
-    StyleSelector, Stylesheet, TuiStyle, View, ViewType, block, button, column, component, dynamic,
-    form, input, row, text, text_area,
+    KeyControl, LayoutDirection, MediaQuery, RenderCtx, Result, StyleMetadata, StyleSelector,
+    Stylesheet, TuiStyle, View, ViewType, VimMode, block, button, column, component, dynamic, form,
+    input, row, text, text_area,
 };
 use ratatui::{
     Terminal,
@@ -117,7 +117,7 @@ fn editable_state_fixture() -> EditableState {
     state.set_cursor(6);
     state.set_horizontal_scroll(2);
     state.set_vertical_scroll(3);
-    state.set_mode(MiniVimMode::Normal);
+    state.set_mode(VimMode::Normal);
     state.set_yank_buffer("copied");
     state.push_undo("before");
     state.push_redo("after");
@@ -215,7 +215,7 @@ fn emitting_input(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) 
         emitted_for_input.borrow_mut().push(next);
         AppControl::Continue
     });
-    editable_state_mut(&mut view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
     view
 }
 
@@ -235,7 +235,7 @@ fn emitting_text_area(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>
         emitted_for_text_area.borrow_mut().push(next);
         AppControl::Continue
     });
-    editable_state_mut(&mut view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
     view
 }
 
@@ -727,7 +727,7 @@ fn app_root_reports_focused_editable_control_mode() {
     );
 
     let mut insert_input = input("Ada").with_focus(true);
-    editable_state_mut(&mut insert_input).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut insert_input).set_mode(VimMode::Insert);
     assert_eq!(
         AppRoot::__focused_control(&insert_input),
         Some(FocusedControl::Input { insert_mode: true })
@@ -740,7 +740,7 @@ fn app_root_reports_focused_editable_control_mode() {
     );
 
     let mut insert_text_area = text_area("Ada").with_focus(true);
-    editable_state_mut(&mut insert_text_area).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut insert_text_area).set_mode(VimMode::Insert);
     assert_eq!(
         AppRoot::__focused_control(&insert_text_area),
         Some(FocusedControl::TextArea { insert_mode: true })
@@ -1079,35 +1079,26 @@ fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
 #[test]
 fn focusing_editable_control_enters_normal_mode_without_resetting_state() -> Result<()> {
     let mut input_view = input("Ada").with_focus(true);
-    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
     editable_state_mut(&mut input_view).set_cursor(1);
     editable_state_mut(&mut input_view).set_yank_buffer("copy");
     let mut view = form([input_view, button("Save")]);
 
-    assert_eq!(
-        editable_state(form_child(&view, 0)).mode(),
-        MiniVimMode::Insert
-    );
+    assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Insert);
 
     assert_eq!(
         view.handle_key_event(key_event(KeyCode::Tab))?,
         KeyControl::Handled
     );
     assert_eq!(control_focuses(&view), vec![false, true]);
-    assert_eq!(
-        editable_state(form_child(&view, 0)).mode(),
-        MiniVimMode::Insert
-    );
+    assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Insert);
 
     assert_eq!(
         view.handle_key_event(key_event(KeyCode::Tab))?,
         KeyControl::Handled
     );
     assert_eq!(control_focuses(&view), vec![true, false]);
-    assert_eq!(
-        editable_state(form_child(&view, 0)).mode(),
-        MiniVimMode::Normal
-    );
+    assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Normal);
     assert_eq!(editable_state(form_child(&view, 0)).cursor(), 1);
     assert_eq!(editable_state(form_child(&view, 0)).yank_buffer(), "copy");
 
@@ -1295,7 +1286,7 @@ fn controlled_form_routes_submit_and_cancel_keys() -> Result<()> {
     );
     assert_eq!(
         editable_state(form_child(&input_view, 0)).mode(),
-        MiniVimMode::Normal
+        VimMode::Normal
     );
     assert_eq!(cancels.get(), 0);
 
@@ -1336,7 +1327,7 @@ fn controlled_form_routes_submit_and_cancel_keys() -> Result<()> {
     Ok(())
 }
 
-/// Verifies controlled form mini-Vim edits survive reconciled redraws.
+/// Verifies controlled form Vim edits survive reconciled redraws.
 ///
 /// # Example Under Test
 ///
@@ -1352,7 +1343,7 @@ fn controlled_form_routes_submit_and_cancel_keys() -> Result<()> {
 /// - Normal-mode text-area line deletion updates caller-owned state.
 /// - Reconciliation retains the linewise yank buffer for text-area undo.
 #[test]
-fn controlled_form_preserves_mini_vim_state_across_reconciliation() -> Result<()> {
+fn controlled_form_preserves_vim_state_across_reconciliation() -> Result<()> {
     let name = Rc::new(RefCell::new(String::from("abc")));
     let notes = Rc::new(RefCell::new(String::from("notes")));
     let submits = Rc::new(Cell::new(0));
@@ -2363,7 +2354,7 @@ fn focused_input_emits_inserted_text_through_on_input() -> Result<()> {
         emitted_for_char.borrow_mut().push(next);
         AppControl::Continue
     });
-    editable_state_mut(&mut char_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut char_view).set_mode(VimMode::Insert);
 
     assert_eq!(
         char_view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
@@ -2375,7 +2366,7 @@ fn focused_input_emits_inserted_text_through_on_input() -> Result<()> {
         emitted_for_space.borrow_mut().push(next);
         AppControl::Continue
     });
-    editable_state_mut(&mut space_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut space_view).set_mode(VimMode::Insert);
 
     assert_eq!(
         space_view.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE))?,
@@ -2413,7 +2404,7 @@ fn focused_input_emits_deletions_through_on_input() -> Result<()> {
         emitted_for_backspace.borrow_mut().push(next);
         AppControl::Continue
     });
-    editable_state_mut(&mut backspace_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut backspace_view).set_mode(VimMode::Insert);
 
     assert_eq!(
         backspace_view.handle_key_event(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))?,
@@ -2425,7 +2416,7 @@ fn focused_input_emits_deletions_through_on_input() -> Result<()> {
         emitted_for_delete.borrow_mut().push(next);
         AppControl::Continue
     });
-    editable_state_mut(&mut delete_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut delete_view).set_mode(VimMode::Insert);
     editable_state_mut(&mut delete_view).set_cursor(1);
 
     assert_eq!(
@@ -2465,7 +2456,7 @@ fn focused_input_cursor_keys_move_without_emitting_text() -> Result<()> {
         emitted_for_input.borrow_mut().push(next);
         AppControl::Continue
     });
-    editable_state_mut(&mut view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
 
     view.handle_key_event(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))?;
     assert_eq!(editable_state(&view).cursor(), 2);
@@ -2546,7 +2537,7 @@ fn focused_text_area_emits_inserted_text_through_on_input() -> Result<()> {
             emitted_for_char.borrow_mut().push(next);
             AppControl::Continue
         });
-    editable_state_mut(&mut char_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut char_view).set_mode(VimMode::Insert);
 
     assert_eq!(
         char_view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
@@ -2558,7 +2549,7 @@ fn focused_text_area_emits_inserted_text_through_on_input() -> Result<()> {
         emitted_for_enter.borrow_mut().push(next);
         AppControl::Continue
     });
-    editable_state_mut(&mut enter_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut enter_view).set_mode(VimMode::Insert);
 
     assert_eq!(
         enter_view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
@@ -2597,7 +2588,7 @@ fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> Result<
             emitted_for_backspace.borrow_mut().push(next);
             AppControl::Continue
         });
-    editable_state_mut(&mut backspace_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut backspace_view).set_mode(VimMode::Insert);
     editable_state_mut(&mut backspace_view).set_cursor(4);
 
     assert_eq!(
@@ -2612,7 +2603,7 @@ fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> Result<
             emitted_for_delete.borrow_mut().push(next);
             AppControl::Continue
         });
-    editable_state_mut(&mut delete_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut delete_view).set_mode(VimMode::Insert);
     editable_state_mut(&mut delete_view).set_cursor(3);
 
     assert_eq!(
@@ -2652,7 +2643,7 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
             emitted_for_text_area.borrow_mut().push(next);
             AppControl::Continue
         });
-    editable_state_mut(&mut view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
     editable_state_mut(&mut view).set_cursor(9);
 
     view.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))?;
@@ -2677,7 +2668,7 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
     Ok(())
 }
 
-/// Verifies editable controls support mini-Vim mode transition keys.
+/// Verifies editable controls support Vim mode transition keys.
 ///
 /// # Example Under Test
 ///
@@ -2699,16 +2690,16 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
 /// - `I` and `A` move to the line start and line end for inputs and text
 ///   areas.
 #[test]
-fn focused_editable_controls_support_mini_vim_mode_transitions() -> Result<()> {
+fn focused_editable_controls_support_vim_mode_transitions() -> Result<()> {
     let mut input_view = input("Ada").with_focus(true);
-    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Normal);
+    assert_eq!(editable_state(&input_view).mode(), VimMode::Normal);
 
-    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
     assert_eq!(
         input_view.handle_key_event(key_event(KeyCode::Esc))?,
         KeyControl::Handled
     );
-    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Normal);
+    assert_eq!(editable_state(&input_view).mode(), VimMode::Normal);
     assert_eq!(editable_state(&input_view).cursor(), 2);
 
     editable_state_mut(&mut input_view).set_cursor(1);
@@ -2716,33 +2707,33 @@ fn focused_editable_controls_support_mini_vim_mode_transitions() -> Result<()> {
         input_view.handle_key_event(key_event(KeyCode::Char('i')))?,
         KeyControl::Handled
     );
-    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Insert);
+    assert_eq!(editable_state(&input_view).mode(), VimMode::Insert);
     assert_eq!(editable_state(&input_view).cursor(), 1);
 
-    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Normal);
     editable_state_mut(&mut input_view).set_cursor(1);
     input_view.handle_key_event(key_event(KeyCode::Char('a')))?;
-    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Insert);
+    assert_eq!(editable_state(&input_view).mode(), VimMode::Insert);
     assert_eq!(editable_state(&input_view).cursor(), 2);
 
-    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Normal);
     editable_state_mut(&mut input_view).set_cursor(2);
     input_view.handle_key_event(key_event(KeyCode::Char('I')))?;
     assert_eq!(editable_state(&input_view).cursor(), 0);
 
-    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Normal);
     editable_state_mut(&mut input_view).set_cursor(0);
     input_view.handle_key_event(key_event(KeyCode::Char('A')))?;
     assert_eq!(editable_state(&input_view).cursor(), 3);
 
     let mut text_area_view = text_area("ab\ncd").with_focus(true);
-    editable_state_mut(&mut text_area_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut text_area_view).set_mode(VimMode::Normal);
     editable_state_mut(&mut text_area_view).set_cursor(4);
     text_area_view.handle_key_event(key_event(KeyCode::Char('I')))?;
-    assert_eq!(editable_state(&text_area_view).mode(), MiniVimMode::Insert);
+    assert_eq!(editable_state(&text_area_view).mode(), VimMode::Insert);
     assert_eq!(editable_state(&text_area_view).cursor(), 3);
 
-    editable_state_mut(&mut text_area_view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut text_area_view).set_mode(VimMode::Normal);
     editable_state_mut(&mut text_area_view).set_cursor(4);
     text_area_view.handle_key_event(key_event(KeyCode::Char('A')))?;
     assert_eq!(editable_state(&text_area_view).cursor(), 5);
@@ -2750,7 +2741,7 @@ fn focused_editable_controls_support_mini_vim_mode_transitions() -> Result<()> {
     Ok(())
 }
 
-/// Verifies focused inputs support mini-Vim normal-mode movement.
+/// Verifies focused inputs support Vim normal-mode movement.
 ///
 /// # Example Under Test
 ///
@@ -2766,9 +2757,9 @@ fn focused_editable_controls_support_mini_vim_mode_transitions() -> Result<()> {
 /// - Line and value boundary motions move to the first or last character.
 /// - `gg` moves the cursor back to the first character.
 #[test]
-fn focused_input_supports_mini_vim_normal_mode_movement() -> Result<()> {
+fn focused_input_supports_vim_normal_mode_movement() -> Result<()> {
     let mut view = input("one two three").with_focus(true);
-    editable_state_mut(&mut view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(0);
 
     view.handle_key_event(key_event(KeyCode::Char('l')))?;
@@ -2808,7 +2799,7 @@ fn focused_input_supports_mini_vim_normal_mode_movement() -> Result<()> {
     Ok(())
 }
 
-/// Verifies focused text areas support mini-Vim normal-mode movement.
+/// Verifies focused text areas support Vim normal-mode movement.
 ///
 /// # Example Under Test
 ///
@@ -2824,9 +2815,9 @@ fn focused_input_supports_mini_vim_normal_mode_movement() -> Result<()> {
 /// - `$` and `0` move to the current line end and start.
 /// - `G` and `gg` move to the last and first characters in the text area.
 #[test]
-fn focused_text_area_supports_mini_vim_normal_mode_movement() -> Result<()> {
+fn focused_text_area_supports_vim_normal_mode_movement() -> Result<()> {
     let mut view = text_area("one\ntwo\nthree").with_focus(true);
-    editable_state_mut(&mut view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(4);
 
     view.handle_key_event(key_event(KeyCode::Char('j')))?;
@@ -2886,10 +2877,10 @@ fn focused_text_area_supports_mini_vim_normal_mode_movement() -> Result<()> {
 /// Undo and redo history must survive controlled-value reconciliation between
 /// emitted input values.
 #[test]
-fn focused_input_supports_mini_vim_delete_yank_paste_undo_and_redo() -> Result<()> {
+fn focused_input_supports_vim_delete_yank_paste_undo_and_redo() -> Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_input("abc", &emitted);
-    editable_state_mut(&mut view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(1);
 
     assert_eq!(
@@ -2961,7 +2952,7 @@ fn focused_input_supports_mini_vim_delete_yank_paste_undo_and_redo() -> Result<(
 fn focused_text_area_supports_linewise_yank_delete_paste_undo_and_redo() -> Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_text_area("one\ntwo\nthree", &emitted);
-    editable_state_mut(&mut view).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(4);
 
     view.handle_key_event(key_event(KeyCode::Char('y')))?;
@@ -3063,7 +3054,7 @@ fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> Result<()>
     let insert_submits = Rc::new(Cell::new(0));
     let insert_submits_for_form = Rc::clone(&insert_submits);
     let mut insert_input = input("Ada").with_focus(true);
-    editable_state_mut(&mut insert_input).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut insert_input).set_mode(VimMode::Insert);
     let mut insert_view = form([insert_input]).on_submit(move || {
         insert_submits_for_form.set(insert_submits_for_form.get() + 1);
         AppControl::Continue
@@ -3078,7 +3069,7 @@ fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> Result<()>
     let normal_submits = Rc::new(Cell::new(0));
     let normal_submits_for_form = Rc::clone(&normal_submits);
     let mut normal_input = input("Ada").with_focus(true);
-    editable_state_mut(&mut normal_input).set_mode(MiniVimMode::Normal);
+    editable_state_mut(&mut normal_input).set_mode(VimMode::Normal);
     let mut normal_view = form([normal_input]).on_submit(move || {
         normal_submits_for_form.set(normal_submits_for_form.get() + 1);
         AppControl::Continue
@@ -3156,7 +3147,7 @@ fn form_esc_leaves_insert_mode_before_canceling() -> Result<()> {
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
     let mut input_view = input("Ada").with_focus(true);
-    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
     let mut view = form([input_view]).on_cancel(move || {
         cancels_for_form.set(cancels_for_form.get() + 1);
         AppControl::Continue

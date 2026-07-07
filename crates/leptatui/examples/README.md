@@ -33,7 +33,7 @@ cargo run --example controlled_form
 ```
 
 Use Tab and Shift+Tab to move focus between the input, text area, and submit
-button. Editable controls start in mini-Vim normal mode; press `i`, `a`, `I`,
+button. Editable controls start in Vim normal mode; press `i`, `a`, `I`,
 or `A` to enter insert mode. Press Esc while a form field is in normal mode to
 cancel the form. Input fields submit with Enter. Text areas insert a newline in
 insert mode with Enter and submit with Ctrl+Enter. Press `q` to quit.

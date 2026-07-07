@@ -21,7 +21,7 @@ use crate::{
 };
 
 use super::{
-    metadata::{EditableState, MiniVimMode, StyleMetadata},
+    metadata::{EditableState, StyleMetadata, VimMode},
     model::{FormAction, InputAction, View},
 };
 
@@ -740,14 +740,14 @@ impl View {
                 editable_state,
                 ..
             } if metadata.is_focused() => Some(FocusedControl::Input {
-                insert_mode: editable_state.mode() == MiniVimMode::Insert,
+                insert_mode: editable_state.mode() == VimMode::Insert,
             }),
             Self::TextArea {
                 metadata,
                 editable_state,
                 ..
             } if metadata.is_focused() => Some(FocusedControl::TextArea {
-                insert_mode: editable_state.mode() == MiniVimMode::Insert,
+                insert_mode: editable_state.mode() == VimMode::Insert,
             }),
             Self::Block { child, .. } => child.focused_control(),
             Self::Row { children, .. }
@@ -924,7 +924,7 @@ impl View {
                 let focused = *index == target;
                 metadata.set_focused(focused);
                 if focused {
-                    editable_state.set_mode(MiniVimMode::Normal);
+                    editable_state.set_mode(VimMode::Normal);
                     metadata.request_scroll_into_view();
                 } else {
                     metadata.clear_scroll_into_view_request();
@@ -1517,7 +1517,7 @@ enum EditableControlKind {
     TextArea,
 }
 
-/// Handles a focused editable-control key according to its mini-Vim mode.
+/// Handles a focused editable-control key according to its Vim mode.
 ///
 /// # Arguments
 ///
@@ -1539,8 +1539,8 @@ fn handle_editable_key(
     kind: EditableControlKind,
 ) -> Option<KeyControl> {
     match editable_state.mode() {
-        MiniVimMode::Insert => handle_insert_mode_key(value, on_input, editable_state, key, kind),
-        MiniVimMode::Normal => handle_normal_mode_key(value, on_input, editable_state, key, kind),
+        VimMode::Insert => handle_insert_mode_key(value, on_input, editable_state, key, kind),
+        VimMode::Normal => handle_normal_mode_key(value, on_input, editable_state, key, kind),
     }
 }
 
@@ -1569,7 +1569,7 @@ fn handle_insert_mode_key(
 
     match key.code {
         KeyCode::Esc => {
-            editable_state.set_mode(MiniVimMode::Normal);
+            editable_state.set_mode(VimMode::Normal);
             editable_state.set_cursor(normal_cursor_from_insert(value, editable_state.cursor()));
             Some(KeyControl::Handled)
         }
@@ -1764,22 +1764,22 @@ fn handle_normal_mode_key(
             Some(handle_undo_input_key(value, on_input, editable_state))
         }
         KeyCode::Char('i') if plain_key => {
-            editable_state.set_mode(MiniVimMode::Insert);
+            editable_state.set_mode(VimMode::Insert);
             editable_state.set_cursor(clamp_cursor(value, editable_state.cursor()));
             Some(KeyControl::Handled)
         }
         KeyCode::Char('a') if plain_key => {
-            editable_state.set_mode(MiniVimMode::Insert);
+            editable_state.set_mode(VimMode::Insert);
             editable_state.set_cursor(insert_after_normal_cursor(value, editable_state.cursor()));
             Some(KeyControl::Handled)
         }
         KeyCode::Char('I') if plain_key => {
-            editable_state.set_mode(MiniVimMode::Insert);
+            editable_state.set_mode(VimMode::Insert);
             editable_state.set_cursor(line_start(value, editable_state.cursor(), kind));
             Some(KeyControl::Handled)
         }
         KeyCode::Char('A') if plain_key => {
-            editable_state.set_mode(MiniVimMode::Insert);
+            editable_state.set_mode(VimMode::Insert);
             editable_state.set_cursor(insert_line_end(value, editable_state.cursor(), kind));
             Some(KeyControl::Handled)
         }
@@ -1999,15 +1999,15 @@ fn insert_after_normal_cursor(value: &str, cursor: usize) -> usize {
 ///
 /// * `value` — Replacement controlled editable value.
 /// * `cursor` — Cursor byte index retained before replacement.
-/// * `mode` — Mini-Vim mode that determines cursor clamping behavior.
+/// * `mode` — Vim mode that determines cursor clamping behavior.
 ///
 /// # Returns
 ///
 /// A [`usize`] byte index valid for the replacement value.
-fn cursor_after_value_replace(value: &str, cursor: usize, mode: MiniVimMode) -> usize {
+fn cursor_after_value_replace(value: &str, cursor: usize, mode: VimMode) -> usize {
     match mode {
-        MiniVimMode::Insert => clamp_cursor(value, cursor),
-        MiniVimMode::Normal => normal_cursor_after_change(value, cursor),
+        VimMode::Insert => clamp_cursor(value, cursor),
+        VimMode::Normal => normal_cursor_after_change(value, cursor),
     }
 }
 
@@ -2048,7 +2048,7 @@ fn char_at(value: &str, cursor: usize) -> Option<char> {
     value.get(cursor..)?.chars().next()
 }
 
-/// Returns whether a character participates in mini-Vim word motions.
+/// Returns whether a character participates in Vim word motions.
 ///
 /// # Arguments
 ///
@@ -2056,7 +2056,7 @@ fn char_at(value: &str, cursor: usize) -> Option<char> {
 ///
 /// # Returns
 ///
-/// A [`bool`] value indicating whether `character` belongs to a mini-Vim word.
+/// A [`bool`] value indicating whether `character` belongs to a Vim word.
 fn is_word_character(character: char) -> bool {
     !character.is_whitespace()
 }

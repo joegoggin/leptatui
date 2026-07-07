@@ -3,7 +3,7 @@
 //! This binary demonstrates controlled `Input`, `TextArea`, and `Form` views
 //! backed by Leptos signals. The editable controls emit proposed values through
 //! callbacks, and the dynamic form subtree reconciles focus, cursor, and
-//! mini-Vim state across redraws.
+//! Vim state across redraws.
 
 use leptatui::prelude::*;
 

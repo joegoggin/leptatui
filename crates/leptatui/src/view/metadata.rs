@@ -28,9 +28,9 @@ pub enum ViewType {
     TextArea,
 }
 
-/// Mini-Vim editing mode retained for editable text controls.
+/// Vim editing mode retained for editable text controls.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum MiniVimMode {
+pub enum VimMode {
     /// Text entry mode.
     Insert,
     /// Command mode.
@@ -47,8 +47,8 @@ pub struct EditableState {
     horizontal_scroll: u16,
     /// Vertical viewport offset retained across reconciled redraws.
     vertical_scroll: u16,
-    /// Mini-Vim mode retained across reconciled redraws.
-    mode: MiniVimMode,
+    /// Vim mode retained across reconciled redraws.
+    mode: VimMode,
     /// Yank buffer retained across reconciled redraws.
     yank_buffer: String,
     /// Whether the yank buffer should paste as whole logical lines.
@@ -99,12 +99,12 @@ impl EditableState {
         self.vertical_scroll
     }
 
-    /// Returns the retained mini-Vim mode.
+    /// Returns the retained Vim mode.
     ///
     /// # Returns
     ///
-    /// A [`MiniVimMode`] value.
-    pub const fn mode(&self) -> MiniVimMode {
+    /// A [`VimMode`] value.
+    pub const fn mode(&self) -> VimMode {
         self.mode
     }
 
@@ -162,12 +162,12 @@ impl EditableState {
         self.vertical_scroll = vertical_scroll;
     }
 
-    /// Replaces the retained mini-Vim mode.
+    /// Replaces the retained Vim mode.
     ///
     /// # Arguments
     ///
-    /// * `mode` — Mini-Vim mode to retain.
-    pub fn set_mode(&mut self, mode: MiniVimMode) {
+    /// * `mode` — Vim mode to retain.
+    pub fn set_mode(&mut self, mode: VimMode) {
         self.mode = mode;
     }
 
