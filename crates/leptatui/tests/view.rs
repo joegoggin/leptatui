@@ -11,9 +11,9 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     __private::FocusedControl, AppControl, AppRoot, Borders, Color, Component, EditableState,
-    KeyControl, LayoutDirection, MediaQuery, RenderCtx, Result, StyleMetadata, StyleSelector,
-    Stylesheet, TuiStyle, View, ViewType, VimMode, block, button, column, component, dynamic, form,
-    input, row, text, text_area,
+    KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleMetadata,
+    StyleSelector, Stylesheet, TuiStyle, View, ViewType, VimMode, block, button, column, component,
+    dynamic, form, input, row, text, text_area,
 };
 use ratatui::{
     Terminal,
@@ -110,14 +110,15 @@ fn editable_text_area(value: impl Into<String>) -> View {
 ///
 /// # Returns
 ///
-/// An [`EditableState`] value containing cursor, scroll, mode, yank, undo, and
-/// redo state.
+/// An [`EditableState`] value containing cursor, scroll, mode, selection, yank,
+/// undo, and redo state.
 fn editable_state_fixture() -> EditableState {
     let mut state = EditableState::new();
     state.set_cursor(6);
     state.set_horizontal_scroll(2);
     state.set_vertical_scroll(3);
-    state.set_mode(VimMode::Normal);
+    state.set_mode(VimMode::Visual);
+    state.set_selection_anchor(Some(2));
     state.set_yank_buffer("copied");
     state.push_undo("before");
     state.push_redo("after");
@@ -446,6 +447,11 @@ fn cell_colors(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> 
     (cell.fg, cell.bg)
 }
 
+fn cell_modifiers(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> Modifier {
+    let index = usize::from(y) * usize::from(width) + usize::from(x);
+    terminal.backend().buffer().content()[index].modifier
+}
+
 fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Result<()> {
     let mut render_result = Ok(());
 
@@ -723,27 +729,61 @@ fn app_root_reports_focused_editable_control_mode() {
     let normal_input = input("Ada").with_focus(true);
     assert_eq!(
         AppRoot::__focused_control(&normal_input),
-        Some(FocusedControl::Input { insert_mode: false })
+        Some(FocusedControl::Input {
+            insert_mode: false,
+            visual_mode: false,
+        })
     );
 
     let mut insert_input = input("Ada").with_focus(true);
     editable_state_mut(&mut insert_input).set_mode(VimMode::Insert);
     assert_eq!(
         AppRoot::__focused_control(&insert_input),
-        Some(FocusedControl::Input { insert_mode: true })
+        Some(FocusedControl::Input {
+            insert_mode: true,
+            visual_mode: false,
+        })
+    );
+
+    let mut visual_input = input("Ada").with_focus(true);
+    editable_state_mut(&mut visual_input).set_mode(VimMode::Visual);
+    editable_state_mut(&mut visual_input).set_selection_anchor(Some(0));
+    assert_eq!(
+        AppRoot::__focused_control(&visual_input),
+        Some(FocusedControl::Input {
+            insert_mode: false,
+            visual_mode: true,
+        })
     );
 
     let normal_text_area = text_area("Ada").with_focus(true);
     assert_eq!(
         AppRoot::__focused_control(&normal_text_area),
-        Some(FocusedControl::TextArea { insert_mode: false })
+        Some(FocusedControl::TextArea {
+            insert_mode: false,
+            visual_mode: false,
+        })
     );
 
     let mut insert_text_area = text_area("Ada").with_focus(true);
     editable_state_mut(&mut insert_text_area).set_mode(VimMode::Insert);
     assert_eq!(
         AppRoot::__focused_control(&insert_text_area),
-        Some(FocusedControl::TextArea { insert_mode: true })
+        Some(FocusedControl::TextArea {
+            insert_mode: true,
+            visual_mode: false,
+        })
+    );
+
+    let mut visual_text_area = text_area("Ada").with_focus(true);
+    editable_state_mut(&mut visual_text_area).set_mode(VimMode::VisualLine);
+    editable_state_mut(&mut visual_text_area).set_selection_anchor(Some(0));
+    assert_eq!(
+        AppRoot::__focused_control(&visual_text_area),
+        Some(FocusedControl::TextArea {
+            insert_mode: false,
+            visual_mode: true,
+        })
     );
 
     assert_eq!(
@@ -782,6 +822,26 @@ fn input_rendering_clips_and_scrolls_around_cursor() -> Result<()> {
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 1, 1, 4), "a");
     assert_eq!(cell_symbol(&terminal, 2, 1, 4), "b");
+
+    Ok(())
+}
+
+/// Verifies visual-mode input selections render selected cells in reverse video.
+#[test]
+fn input_visual_selection_renders_reversed_cells() -> Result<()> {
+    let backend = TestBackend::new(8, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = input("abcd").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Visual);
+    editable_state_mut(&mut view).set_selection_anchor(Some(1));
+    editable_state_mut(&mut view).set_cursor(2);
+
+    draw_view(&mut terminal, &view)?;
+
+    assert!(!cell_modifiers(&terminal, 1, 1, 8).contains(Modifier::REVERSED));
+    assert!(cell_modifiers(&terminal, 2, 1, 8).contains(Modifier::REVERSED));
+    assert!(cell_modifiers(&terminal, 3, 1, 8).contains(Modifier::REVERSED));
+    assert!(!cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
 
     Ok(())
 }
@@ -969,6 +1029,25 @@ fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 1, 1, 8), "a");
     assert_eq!(cell_symbol(&terminal, 1, 2, 8), "b");
+
+    Ok(())
+}
+
+/// Verifies visual-line text-area selections render selected lines in reverse video.
+#[test]
+fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
+    let backend = TestBackend::new(10, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = text_area("one\ntwo\nthree").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::VisualLine);
+    editable_state_mut(&mut view).set_selection_anchor(Some(4));
+    editable_state_mut(&mut view).set_cursor(8);
+
+    draw_view(&mut terminal, &view)?;
+
+    assert!(!cell_modifiers(&terminal, 1, 1, 10).contains(Modifier::REVERSED));
+    assert!(cell_modifiers(&terminal, 1, 2, 10).contains(Modifier::REVERSED));
+    assert!(cell_modifiers(&terminal, 1, 3, 10).contains(Modifier::REVERSED));
 
     Ok(())
 }
@@ -2853,6 +2932,162 @@ fn focused_text_area_supports_vim_normal_mode_movement() -> Result<()> {
     Ok(())
 }
 
+/// Verifies focused inputs support Vim character-wise visual mode transitions.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("abcd").with_focus(true)
+/// v, l, h, Esc
+/// ```
+///
+/// # Assertions
+///
+/// - `v` enters character-wise visual mode and anchors at the current cursor.
+/// - Normal movement keys move the cursor while preserving the anchor.
+/// - Esc returns to normal mode and clears the selection anchor.
+#[test]
+fn focused_input_supports_vim_visual_mode_transitions() -> Result<()> {
+    let mut view = input("abcd").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(1);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('v')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(editable_state(&view).mode(), VimMode::Visual);
+    assert_eq!(editable_state(&view).selection_anchor(), Some(1));
+
+    view.handle_key_event(key_event(KeyCode::Char('l')))?;
+    assert_eq!(editable_state(&view).cursor(), 2);
+    assert_eq!(editable_state(&view).selection_anchor(), Some(1));
+
+    view.handle_key_event(key_event(KeyCode::Char('h')))?;
+    assert_eq!(editable_state(&view).cursor(), 1);
+    assert_eq!(editable_state(&view).selection_anchor(), Some(1));
+
+    view.handle_key_event(key_event(KeyCode::Esc))?;
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).selection_anchor(), None);
+
+    Ok(())
+}
+
+/// Verifies character-wise visual yank and delete commands use the selection.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("abcd").with_focus(true).on_input(...)
+/// v, l, y, then v, l, d
+/// ```
+///
+/// # Assertions
+///
+/// - `y` yanks the selected characters and exits visual mode.
+/// - `d` deletes the selected characters, emits the controlled value, and
+///   records undo history.
+#[test]
+fn focused_input_supports_visual_yank_and_delete() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_input("abcd", &emitted);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(1);
+
+    view.handle_key_event(key_event(KeyCode::Char('v')))?;
+    view.handle_key_event(key_event(KeyCode::Char('l')))?;
+    view.handle_key_event(key_event(KeyCode::Char('y')))?;
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).selection_anchor(), None);
+    assert_eq!(editable_state(&view).yank_buffer(), "bc");
+    assert_eq!(editable_state(&view).cursor(), 1);
+
+    view.handle_key_event(key_event(KeyCode::Char('v')))?;
+    view.handle_key_event(key_event(KeyCode::Char('l')))?;
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('d')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().last().map(String::as_str), Some("ad"));
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).selection_anchor(), None);
+    assert_eq!(editable_state(&view).yank_buffer(), "bc");
+    assert_eq!(editable_state(&view).undo_stack(), &[String::from("abcd")]);
+
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_input("abcd", &emitted);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(1);
+    view.handle_key_event(key_event(KeyCode::Char('v')))?;
+    view.handle_key_event(key_event(KeyCode::Char('l')))?;
+    view.handle_key_event(key_event(KeyCode::Char('x')))?;
+    assert_eq!(emitted.borrow().last().map(String::as_str), Some("ad"));
+    assert_eq!(editable_state(&view).yank_buffer(), "bc");
+
+    Ok(())
+}
+
+/// Verifies visual-line text-area yank, paste, and delete work linewise.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("one\ntwo\nthree").with_focus(true).on_input(...)
+/// V, j, y, G, p
+/// V, j, d
+/// ```
+///
+/// # Assertions
+///
+/// - Visual-line `y` stores selected logical lines in the linewise yank buffer.
+/// - `p` pastes the linewise selection below the current line.
+/// - Visual-line `d` removes all selected logical lines and records undo
+///   history.
+#[test]
+fn focused_text_area_supports_visual_line_yank_paste_and_delete() -> Result<()> {
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_text_area("one\ntwo\nthree", &emitted);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(4);
+
+    view.handle_key_event(key_event(KeyCode::Char('V')))?;
+    view.handle_key_event(key_event(KeyCode::Char('j')))?;
+    view.handle_key_event(key_event(KeyCode::Char('y')))?;
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).selection_anchor(), None);
+    assert_eq!(editable_state(&view).yank_buffer(), "two\nthree");
+
+    view.handle_key_event(key_event(KeyCode::Char('G')))?;
+    view.handle_key_event(key_event(KeyCode::Char('p')))?;
+    assert_eq!(
+        emitted.borrow().last().map(String::as_str),
+        Some("one\ntwo\nthree\ntwo\nthree")
+    );
+
+    let emitted = Rc::new(RefCell::new(Vec::new()));
+    let mut view = emitting_text_area("one\ntwo\nthree", &emitted);
+    editable_state_mut(&mut view).set_mode(VimMode::Normal);
+    editable_state_mut(&mut view).set_cursor(4);
+
+    view.handle_key_event(key_event(KeyCode::Char('V')))?;
+    view.handle_key_event(key_event(KeyCode::Char('j')))?;
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('d')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(emitted.borrow().last().map(String::as_str), Some("one"));
+    assert_eq!(editable_state(&view).mode(), VimMode::Normal);
+    assert_eq!(editable_state(&view).selection_anchor(), None);
+    assert_eq!(editable_state(&view).yank_buffer(), "two\nthree");
+    assert_eq!(
+        editable_state(&view).undo_stack(),
+        &[String::from("one\ntwo\nthree")]
+    );
+
+    Ok(())
+}
+
 /// Verifies focused inputs support normal-mode mutation and history commands.
 ///
 /// # Example Under Test
@@ -3158,6 +3393,83 @@ fn form_esc_leaves_insert_mode_before_canceling() -> Result<()> {
         KeyControl::Handled
     );
     assert_eq!(cancels.get(), 0);
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 1);
+
+    Ok(())
+}
+
+/// Verifies Esc leaves editable visual modes before canceling a form.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([input("Ada").with_focus(true)]).on_cancel(...)
+/// v, Esc, Esc
+///
+/// form([text_area("one\ntwo").with_focus(true)]).on_cancel(...)
+/// V, Esc, Esc
+/// ```
+///
+/// # Assertions
+///
+/// - The first Esc is handled by the focused editable visual mode.
+/// - The first Esc does not invoke the cancel callback.
+/// - The second Esc is handled by the form and invokes cancel.
+#[test]
+fn form_esc_leaves_visual_modes_before_canceling() -> Result<()> {
+    let cancels = Rc::new(Cell::new(0));
+    let cancels_for_form = Rc::clone(&cancels);
+    let mut input_view = input("Ada").with_focus(true);
+    editable_state_mut(&mut input_view).set_mode(VimMode::Visual);
+    editable_state_mut(&mut input_view).set_selection_anchor(Some(0));
+    let mut view = form([input_view]).on_cancel(move || {
+        cancels_for_form.set(cancels_for_form.get() + 1);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 0);
+    assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Normal);
+    assert_eq!(
+        editable_state(form_child(&view, 0)).selection_anchor(),
+        None
+    );
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 1);
+
+    let cancels = Rc::new(Cell::new(0));
+    let cancels_for_form = Rc::clone(&cancels);
+    let mut text_area_view = text_area("one\ntwo").with_focus(true);
+    editable_state_mut(&mut text_area_view).set_cursor(4);
+    editable_state_mut(&mut text_area_view).set_mode(VimMode::VisualLine);
+    editable_state_mut(&mut text_area_view).set_selection_anchor(Some(4));
+    let mut view = form([text_area_view]).on_cancel(move || {
+        cancels_for_form.set(cancels_for_form.get() + 1);
+        AppControl::Continue
+    });
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 0);
+    assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Normal);
+    assert_eq!(
+        editable_state(form_child(&view, 0)).selection_anchor(),
+        None
+    );
+
     assert_eq!(
         view.handle_key_event(key_event(KeyCode::Esc))?,
         KeyControl::Handled
@@ -3811,8 +4123,8 @@ fn compares_dynamic_views_by_identity() {
 /// # Assertions
 ///
 /// - Matching editable variants preserve focus.
-/// - Matching editable variants preserve cursor, scroll, mode, yank, undo, and
-///   redo state.
+/// - Matching editable variants preserve cursor, scroll, mode, selection, yank,
+///   undo, and redo state.
 #[test]
 fn reconciliation_retains_editable_state_for_matching_controls() {
     let retained_input_state = editable_state_fixture();

@@ -18,11 +18,15 @@ pub enum FocusedControl {
     Input {
         /// Whether the input is currently in insert mode.
         insert_mode: bool,
+        /// Whether the input is currently in visual mode.
+        visual_mode: bool,
     },
     /// A multiline text area is focused.
     TextArea {
         /// Whether the text area is currently in insert mode.
         insert_mode: bool,
+        /// Whether the text area is currently in visual mode.
+        visual_mode: bool,
     },
 }
 

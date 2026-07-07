@@ -46,10 +46,18 @@ where
 /// Returns the terminal cursor style for the focused built-in control.
 fn cursor_style_for_focused_control(focused_control: Option<FocusedControl>) -> SetCursorStyle {
     match focused_control {
-        Some(FocusedControl::Input { insert_mode: true })
-        | Some(FocusedControl::TextArea { insert_mode: true }) => SetCursorStyle::BlinkingBar,
-        Some(FocusedControl::Input { insert_mode: false })
-        | Some(FocusedControl::TextArea { insert_mode: false }) => SetCursorStyle::BlinkingBlock,
+        Some(FocusedControl::Input {
+            insert_mode: true, ..
+        })
+        | Some(FocusedControl::TextArea {
+            insert_mode: true, ..
+        }) => SetCursorStyle::BlinkingBar,
+        Some(FocusedControl::Input {
+            insert_mode: false, ..
+        })
+        | Some(FocusedControl::TextArea {
+            insert_mode: false, ..
+        }) => SetCursorStyle::BlinkingBlock,
         Some(FocusedControl::Button) | None => SetCursorStyle::DefaultUserShape,
     }
 }
@@ -61,11 +69,17 @@ mod tests {
     #[test]
     fn insert_mode_editable_controls_use_blinking_bar_cursor() {
         assert_eq!(
-            cursor_style_for_focused_control(Some(FocusedControl::Input { insert_mode: true })),
+            cursor_style_for_focused_control(Some(FocusedControl::Input {
+                insert_mode: true,
+                visual_mode: false,
+            })),
             SetCursorStyle::BlinkingBar
         );
         assert_eq!(
-            cursor_style_for_focused_control(Some(FocusedControl::TextArea { insert_mode: true })),
+            cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                insert_mode: true,
+                visual_mode: false,
+            })),
             SetCursorStyle::BlinkingBar
         );
     }
@@ -73,11 +87,31 @@ mod tests {
     #[test]
     fn normal_mode_editable_controls_use_blinking_block_cursor() {
         assert_eq!(
-            cursor_style_for_focused_control(Some(FocusedControl::Input { insert_mode: false })),
+            cursor_style_for_focused_control(Some(FocusedControl::Input {
+                insert_mode: false,
+                visual_mode: false,
+            })),
             SetCursorStyle::BlinkingBlock
         );
         assert_eq!(
-            cursor_style_for_focused_control(Some(FocusedControl::TextArea { insert_mode: false })),
+            cursor_style_for_focused_control(Some(FocusedControl::Input {
+                insert_mode: false,
+                visual_mode: true,
+            })),
+            SetCursorStyle::BlinkingBlock
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                insert_mode: false,
+                visual_mode: false,
+            })),
+            SetCursorStyle::BlinkingBlock
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                insert_mode: false,
+                visual_mode: true,
+            })),
             SetCursorStyle::BlinkingBlock
         );
     }

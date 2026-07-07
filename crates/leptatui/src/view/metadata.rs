@@ -36,6 +36,10 @@ pub enum VimMode {
     /// Command mode.
     #[default]
     Normal,
+    /// Character-wise visual selection mode.
+    Visual,
+    /// Line-wise visual selection mode.
+    VisualLine,
 }
 
 /// Runtime state shared by editable text controls.
@@ -59,6 +63,8 @@ pub struct EditableState {
     redo_stack: Vec<String>,
     /// First key in a pending normal-mode multi-key command.
     normal_key_pending: Option<char>,
+    /// Fixed selection endpoint used by visual modes.
+    selection_anchor: Option<usize>,
 }
 
 impl EditableState {
@@ -106,6 +112,15 @@ impl EditableState {
     /// A [`VimMode`] value.
     pub const fn mode(&self) -> VimMode {
         self.mode
+    }
+
+    /// Returns the retained visual-mode selection anchor.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the fixed selection endpoint byte offset.
+    pub const fn selection_anchor(&self) -> Option<usize> {
+        self.selection_anchor
     }
 
     /// Returns the retained selection-free yank buffer.
@@ -169,6 +184,18 @@ impl EditableState {
     /// * `mode` — Vim mode to retain.
     pub fn set_mode(&mut self, mode: VimMode) {
         self.mode = mode;
+        if !matches!(mode, VimMode::Visual | VimMode::VisualLine) {
+            self.selection_anchor = None;
+        }
+    }
+
+    /// Replaces the retained visual-mode selection anchor.
+    ///
+    /// # Arguments
+    ///
+    /// * `selection_anchor` — Fixed selection endpoint byte offset to retain.
+    pub fn set_selection_anchor(&mut self, selection_anchor: Option<usize>) {
+        self.selection_anchor = selection_anchor;
     }
 
     /// Replaces the retained selection-free yank buffer.
