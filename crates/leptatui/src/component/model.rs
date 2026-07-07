@@ -7,7 +7,7 @@
 use ratatui::{
     Frame,
     buffer::Buffer,
-    layout::Rect,
+    layout::{Position, Rect},
     widgets::{StatefulWidget, Widget},
 };
 
@@ -149,6 +149,11 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.target.render_widget(widget, self.area);
     }
 
+    /// Sets the terminal cursor position for this render pass.
+    pub(crate) fn set_cursor_position(&mut self, position: Position) {
+        self.target.set_cursor_position(position);
+    }
+
     /// Renders a Ratatui stateful widget into the current target area.
     pub(crate) fn render_stateful_widget<W>(&mut self, widget: W, state: &mut W::State)
     where
@@ -213,9 +218,14 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         let mut selector_ancestors = self.selector_ancestors.clone();
         selector_ancestors.push(selector_ancestor);
 
+        let mut cursor_position = None;
+
         {
             let mut buffer_ctx = RenderCtx {
-                target: RenderTarget::Buffer(&mut buffer),
+                target: RenderTarget::Buffer {
+                    buffer: &mut buffer,
+                    cursor_position: &mut cursor_position,
+                },
                 area: Rect::new(0, 0, full_area.width, full_area.height),
                 viewport_size: self.viewport_size,
                 stylesheets: self.stylesheets.clone(),
@@ -237,6 +247,19 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
                     *destination = source;
                 }
             }
+        }
+
+        if let Some(position) = cursor_position
+            && position.y >= source_y
+            && position.y < source_y.saturating_add(target_area.height)
+            && position.x < target_area.width
+        {
+            self.set_cursor_position(Position {
+                x: target_area.x.saturating_add(position.x),
+                y: target_area
+                    .y
+                    .saturating_add(position.y.saturating_sub(source_y)),
+            });
         }
 
         Ok(())
@@ -321,7 +344,12 @@ enum RenderTarget<'frame, 'buffer> {
     /// Active Ratatui frame.
     Frame(&'frame mut Frame<'buffer>),
     /// Offscreen buffer used for clipping.
-    Buffer(&'frame mut Buffer),
+    Buffer {
+        /// Offscreen buffer receiving rendered widgets.
+        buffer: &'frame mut Buffer,
+        /// Cursor position requested while rendering into the buffer.
+        cursor_position: &'frame mut Option<Position>,
+    },
 }
 
 impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
@@ -329,7 +357,13 @@ impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
     fn reborrow(&mut self) -> RenderTarget<'_, 'buffer> {
         match self {
             Self::Frame(frame) => RenderTarget::Frame(frame),
-            Self::Buffer(buffer) => RenderTarget::Buffer(buffer),
+            Self::Buffer {
+                buffer,
+                cursor_position,
+            } => RenderTarget::Buffer {
+                buffer,
+                cursor_position,
+            },
         }
     }
 
@@ -340,7 +374,7 @@ impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
     {
         match self {
             Self::Frame(frame) => frame.render_widget(widget, area),
-            Self::Buffer(buffer) => widget.render(area, buffer),
+            Self::Buffer { buffer, .. } => widget.render(area, buffer),
         }
     }
 
@@ -351,7 +385,17 @@ impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
     {
         match self {
             Self::Frame(frame) => frame.render_stateful_widget(widget, area, state),
-            Self::Buffer(buffer) => widget.render(area, buffer, state),
+            Self::Buffer { buffer, .. } => widget.render(area, buffer, state),
+        }
+    }
+
+    /// Sets the requested cursor position.
+    fn set_cursor_position(&mut self, position: Position) {
+        match self {
+            Self::Frame(frame) => frame.set_cursor_position(position),
+            Self::Buffer {
+                cursor_position, ..
+            } => **cursor_position = Some(position),
         }
     }
 
@@ -359,7 +403,7 @@ impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
     fn buffer_mut(&mut self) -> &mut Buffer {
         match self {
             Self::Frame(frame) => frame.buffer_mut(),
-            Self::Buffer(buffer) => buffer,
+            Self::Buffer { buffer, .. } => buffer,
         }
     }
 }

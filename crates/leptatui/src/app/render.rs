@@ -3,6 +3,12 @@
 //! This module contains the frame draw wrapper used by the app loop to render
 //! an [`AppRoot`] into the active terminal.
 
+use std::io::stdout;
+
+use crossterm::{cursor::SetCursorStyle, execute};
+
+use crate::component::FocusedControl;
+
 use super::{AppRoot, Result, terminal::DefaultTerminal};
 
 /// Draws a root application into the terminal.
@@ -24,10 +30,67 @@ where
     R: AppRoot,
 {
     let mut render_result: Result<()> = Ok(());
+    let mut focused_control = None;
 
     terminal.draw(|frame| {
         render_result = root.render(frame);
+        focused_control = root.__focused_control();
     })?;
 
-    render_result
+    render_result?;
+    execute!(stdout(), cursor_style_for_focused_control(focused_control))?;
+
+    Ok(())
+}
+
+/// Returns the terminal cursor style for the focused built-in control.
+fn cursor_style_for_focused_control(focused_control: Option<FocusedControl>) -> SetCursorStyle {
+    match focused_control {
+        Some(FocusedControl::Input { insert_mode: true })
+        | Some(FocusedControl::TextArea { insert_mode: true }) => SetCursorStyle::BlinkingBar,
+        Some(FocusedControl::Input { insert_mode: false })
+        | Some(FocusedControl::TextArea { insert_mode: false }) => SetCursorStyle::BlinkingBlock,
+        Some(FocusedControl::Button) | None => SetCursorStyle::DefaultUserShape,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_mode_editable_controls_use_blinking_bar_cursor() {
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::Input { insert_mode: true })),
+            SetCursorStyle::BlinkingBar
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::TextArea { insert_mode: true })),
+            SetCursorStyle::BlinkingBar
+        );
+    }
+
+    #[test]
+    fn normal_mode_editable_controls_use_blinking_block_cursor() {
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::Input { insert_mode: false })),
+            SetCursorStyle::BlinkingBlock
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::TextArea { insert_mode: false })),
+            SetCursorStyle::BlinkingBlock
+        );
+    }
+
+    #[test]
+    fn non_editable_focus_uses_default_user_cursor_shape() {
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::Button)),
+            SetCursorStyle::DefaultUserShape
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(None),
+            SetCursorStyle::DefaultUserShape
+        );
+    }
 }

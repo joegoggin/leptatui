@@ -10,14 +10,15 @@ use std::{
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
-    AppControl, Color, Component, EditableState, KeyControl, LayoutDirection, MediaQuery,
-    MiniVimMode, RenderCtx, Result, StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View,
-    ViewType, block, button, column, component, dynamic, form, input, row, text, text_area,
+    __private::FocusedControl, AppControl, AppRoot, Borders, Color, Component, EditableState,
+    KeyControl, LayoutDirection, MediaQuery, MiniVimMode, RenderCtx, Result, StyleMetadata,
+    StyleSelector, Stylesheet, TuiStyle, View, ViewType, block, button, column, component, dynamic,
+    form, input, row, text, text_area,
 };
 use ratatui::{
     Terminal,
     backend::TestBackend,
-    symbols::{block as symbol_block, line as symbol_line},
+    symbols::{block as symbol_block, border as symbol_border, line as symbol_line},
 };
 
 /// Creates a key-press event for a key code.
@@ -207,13 +208,15 @@ fn ctrl_enter_key_event() -> KeyEvent {
 ///
 /// # Returns
 ///
-/// A focused [`View`] configured as an input.
+/// A focused insert-mode [`View`] configured as an input.
 fn emitting_input(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) -> View {
     let emitted_for_input = Rc::clone(emitted);
-    input(value).with_focus(true).on_input(move |next| {
+    let mut view = input(value).with_focus(true).on_input(move |next| {
         emitted_for_input.borrow_mut().push(next);
         AppControl::Continue
-    })
+    });
+    editable_state_mut(&mut view).set_mode(MiniVimMode::Insert);
+    view
 }
 
 /// Creates a focused text-area view that records emitted values.
@@ -225,13 +228,15 @@ fn emitting_input(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) 
 ///
 /// # Returns
 ///
-/// A focused [`View`] configured as a text area.
+/// A focused insert-mode [`View`] configured as a text area.
 fn emitting_text_area(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) -> View {
     let emitted_for_text_area = Rc::clone(emitted);
-    text_area(value).with_focus(true).on_input(move |next| {
+    let mut view = text_area(value).with_focus(true).on_input(move |next| {
         emitted_for_text_area.borrow_mut().push(next);
         AppControl::Continue
-    })
+    });
+    editable_state_mut(&mut view).set_mode(MiniVimMode::Insert);
+    view
 }
 
 /// Returns a reconciled input view with a new controlled value.
@@ -275,6 +280,128 @@ fn reconcile_text_area_value(
     let mut next = emitting_text_area(value, emitted);
     leptatui::__private::__reconcile_view(&mut next, previous);
     next
+}
+
+/// Creates a controlled form test view backed by shared caller-owned state.
+///
+/// # Arguments
+///
+/// * `name` — Shared controlled input value.
+/// * `notes` — Shared controlled text-area value.
+/// * `submits` — Shared form submit count.
+/// * `cancels` — Shared form cancel count.
+///
+/// # Returns
+///
+/// A [`View`] containing a form with an input, text area, and submit button.
+fn controlled_form_view(
+    name: &Rc<RefCell<String>>,
+    notes: &Rc<RefCell<String>>,
+    submits: &Rc<Cell<usize>>,
+    cancels: &Rc<Cell<usize>>,
+) -> View {
+    let name_value = name.borrow().clone();
+    let notes_value = notes.borrow().clone();
+    let name_for_input = Rc::clone(name);
+    let notes_for_text_area = Rc::clone(notes);
+    let submits_for_form = Rc::clone(submits);
+    let cancels_for_form = Rc::clone(cancels);
+
+    form([
+        input(name_value).placeholder("Name").on_input(move |next| {
+            *name_for_input.borrow_mut() = next;
+            AppControl::Continue
+        }),
+        text_area(notes_value)
+            .placeholder("Notes")
+            .on_input(move |next| {
+                *notes_for_text_area.borrow_mut() = next;
+                AppControl::Continue
+            }),
+        button("Submit"),
+    ])
+    .on_submit(move || {
+        submits_for_form.set(submits_for_form.get() + 1);
+        AppControl::Continue
+    })
+    .on_cancel(move || {
+        cancels_for_form.set(cancels_for_form.get() + 1);
+        AppControl::Continue
+    })
+}
+
+/// Returns a reconciled controlled form from the latest shared state.
+///
+/// # Arguments
+///
+/// * `previous` — Previous controlled form view.
+/// * `name` — Shared controlled input value.
+/// * `notes` — Shared controlled text-area value.
+/// * `submits` — Shared form submit count.
+/// * `cancels` — Shared form cancel count.
+///
+/// # Returns
+///
+/// A [`View`] containing the next controlled form with retained editable state.
+fn reconcile_controlled_form(
+    previous: &View,
+    name: &Rc<RefCell<String>>,
+    notes: &Rc<RefCell<String>>,
+    submits: &Rc<Cell<usize>>,
+    cancels: &Rc<Cell<usize>>,
+) -> View {
+    let mut next = controlled_form_view(name, notes, submits, cancels);
+    leptatui::__private::__reconcile_view(&mut next, previous);
+    next
+}
+
+/// Returns a child from a controlled form by index.
+///
+/// # Arguments
+///
+/// * `view` — Form view to inspect.
+/// * `index` — Child index to return.
+///
+/// # Returns
+///
+/// A [`View`] reference for the requested form child.
+fn form_child(view: &View, index: usize) -> &View {
+    match view {
+        View::Form { children, .. } => &children[index],
+        other => panic!("expected form view, got {other:?}"),
+    }
+}
+
+/// Returns the controlled value from an input view.
+///
+/// # Arguments
+///
+/// * `view` — Input view to inspect.
+///
+/// # Returns
+///
+/// A string slice containing the input's controlled value.
+fn input_value(view: &View) -> &str {
+    match view {
+        View::Input { value, .. } => value,
+        other => panic!("expected input view, got {other:?}"),
+    }
+}
+
+/// Returns the controlled value from a text-area view.
+///
+/// # Arguments
+///
+/// * `view` — Text-area view to inspect.
+///
+/// # Returns
+///
+/// A string slice containing the text area's controlled value.
+fn text_area_value(view: &View) -> &str {
+    match view {
+        View::TextArea { value, .. } => value,
+        other => panic!("expected text-area view, got {other:?}"),
+    }
 }
 
 fn scroll_offset(view: &View) -> u16 {
@@ -442,24 +569,56 @@ fn text_wraps_to_available_render_width() -> Result<()> {
 ///
 /// ```text
 /// input("Ada")
+/// width = 8, height = 3
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The input renders a default border.
+/// - The inner cells contain `A`, `d`, and `a`.
+#[test]
+fn renders_input_value() -> Result<()> {
+    let backend = TestBackend::new(8, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let view = input("Ada");
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        cell_symbol(&terminal, 0, 0, 8),
+        symbol_border::PLAIN.top_left
+    );
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "d");
+    assert_eq!(cell_symbol(&terminal, 3, 1, 8), "a");
+
+    Ok(())
+}
+
+/// Verifies input default borders can be disabled through styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_inline_style(TuiStyle::new().borders(Borders::NONE))
 /// width = 8
 /// ```
 ///
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The first three rendered cells contain `A`, `d`, and `a`.
+/// - The value starts in the first cell when borders are disabled.
 #[test]
-fn renders_input_value() -> Result<()> {
+fn input_borders_none_disables_default_border() -> Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
-    let view = input("Ada");
+    let view = input("Ada").with_inline_style(TuiStyle::new().borders(Borders::NONE));
 
     draw_view(&mut terminal, &view)?;
 
     assert_eq!(cell_symbol(&terminal, 0, 0, 8), "A");
-    assert_eq!(cell_symbol(&terminal, 1, 0, 8), "d");
-    assert_eq!(cell_symbol(&terminal, 2, 0, 8), "a");
+    assert_eq!(cell_symbol(&terminal, 3, 0, 8), " ");
 
     Ok(())
 }
@@ -470,23 +629,23 @@ fn renders_input_value() -> Result<()> {
 ///
 /// ```text
 /// input("").placeholder("Name")
-/// width = 8
+/// width = 8, height = 3
 /// ```
 ///
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The rendered cells contain the first and last placeholder characters.
+/// - The inner cells contain the first and last placeholder characters.
 #[test]
 fn renders_input_placeholder_when_value_is_empty() -> Result<()> {
-    let backend = TestBackend::new(8, 1);
+    let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = input("").placeholder("Name");
 
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "N");
-    assert_eq!(cell_symbol(&terminal, 3, 0, 8), "e");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "N");
+    assert_eq!(cell_symbol(&terminal, 4, 1, 8), "e");
 
     Ok(())
 }
@@ -508,7 +667,7 @@ fn renders_input_placeholder_when_value_is_empty() -> Result<()> {
 /// - The focused input cell uses the stylesheet background color.
 #[test]
 fn renders_focused_input_with_focus_stylesheet_rule() -> Result<()> {
-    let backend = TestBackend::new(8, 1);
+    let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = input("Ada").with_focus(true);
     let stylesheet = Stylesheet::new().rule(
@@ -525,11 +684,73 @@ fn renders_focused_input_with_focus_stylesheet_rule() -> Result<()> {
     })?;
     render_result?;
 
-    let (fg, bg) = cell_colors(&terminal, 0, 0, 8);
+    let (fg, bg) = cell_colors(&terminal, 1, 1, 8);
     assert_eq!(fg, Color::Black);
     assert_eq!(bg, Color::Yellow);
 
     Ok(())
+}
+
+/// Verifies focused inputs place the terminal cursor at the retained cursor.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true)
+/// cursor = end
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The focused input sets the terminal cursor after the rendered value.
+#[test]
+fn focused_input_sets_terminal_cursor_position() -> Result<()> {
+    let backend = TestBackend::new(8, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let view = input("Ada").with_focus(true);
+
+    draw_view(&mut terminal, &view)?;
+
+    terminal.backend_mut().assert_cursor_position((4, 1));
+
+    Ok(())
+}
+
+/// Verifies component-backed roots expose focused editable control mode.
+#[test]
+fn app_root_reports_focused_editable_control_mode() {
+    let normal_input = input("Ada").with_focus(true);
+    assert_eq!(
+        AppRoot::__focused_control(&normal_input),
+        Some(FocusedControl::Input { insert_mode: false })
+    );
+
+    let mut insert_input = input("Ada").with_focus(true);
+    editable_state_mut(&mut insert_input).set_mode(MiniVimMode::Insert);
+    assert_eq!(
+        AppRoot::__focused_control(&insert_input),
+        Some(FocusedControl::Input { insert_mode: true })
+    );
+
+    let normal_text_area = text_area("Ada").with_focus(true);
+    assert_eq!(
+        AppRoot::__focused_control(&normal_text_area),
+        Some(FocusedControl::TextArea { insert_mode: false })
+    );
+
+    let mut insert_text_area = text_area("Ada").with_focus(true);
+    editable_state_mut(&mut insert_text_area).set_mode(MiniVimMode::Insert);
+    assert_eq!(
+        AppRoot::__focused_control(&insert_text_area),
+        Some(FocusedControl::TextArea { insert_mode: true })
+    );
+
+    assert_eq!(
+        AppRoot::__focused_control(&button("Save").with_focus(true)),
+        Some(FocusedControl::Button)
+    );
+    assert_eq!(AppRoot::__focused_control(&input("Ada")), None);
 }
 
 /// Verifies input rendering clips content around the retained cursor.
@@ -538,7 +759,7 @@ fn renders_focused_input_with_focus_stylesheet_rule() -> Result<()> {
 ///
 /// ```text
 /// input("abcdef").with_focus(true)
-/// width = 4
+/// width = 4, height = 3
 /// cursor = end, then cursor = 0
 /// ```
 ///
@@ -549,18 +770,18 @@ fn renders_focused_input_with_focus_stylesheet_rule() -> Result<()> {
 /// - The second render succeeds and shows the head of the value.
 #[test]
 fn input_rendering_clips_and_scrolls_around_cursor() -> Result<()> {
-    let backend = TestBackend::new(4, 1);
+    let backend = TestBackend::new(4, 3);
     let mut terminal = Terminal::new(backend)?;
     let mut view = input("abcdef").with_focus(true);
 
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 0, 0, 4), "c");
-    assert_eq!(cell_symbol(&terminal, 3, 0, 4), "f");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 4), "e");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 4), "f");
 
     editable_state_mut(&mut view).set_cursor(0);
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 0, 0, 4), "a");
-    assert_eq!(cell_symbol(&terminal, 3, 0, 4), "d");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 4), "a");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 4), "b");
 
     Ok(())
 }
@@ -571,19 +792,51 @@ fn input_rendering_clips_and_scrolls_around_cursor() -> Result<()> {
 ///
 /// ```text
 /// text_area("One\nTwo")
+/// width = 8, height = 4
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The text area renders a default border.
+/// - The first line starts on the first inner row.
+/// - The second line starts on the second inner row.
+#[test]
+fn renders_text_area_multiline_value() -> Result<()> {
+    let backend = TestBackend::new(8, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let view = text_area("One\nTwo");
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        cell_symbol(&terminal, 0, 0, 8),
+        symbol_border::PLAIN.top_left
+    );
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "O");
+    assert_eq!(cell_symbol(&terminal, 1, 2, 8), "T");
+
+    Ok(())
+}
+
+/// Verifies text-area default borders can be disabled through styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("One\nTwo").with_inline_style(TuiStyle::new().borders(Borders::NONE))
 /// width = 8, height = 2
 /// ```
 ///
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The first line starts on the first terminal row.
-/// - The second line starts on the second terminal row.
+/// - Lines start in the first column when borders are disabled.
 #[test]
-fn renders_text_area_multiline_value() -> Result<()> {
+fn text_area_borders_none_disables_default_border() -> Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
-    let view = text_area("One\nTwo");
+    let view = text_area("One\nTwo").with_inline_style(TuiStyle::new().borders(Borders::NONE));
 
     draw_view(&mut terminal, &view)?;
 
@@ -599,23 +852,23 @@ fn renders_text_area_multiline_value() -> Result<()> {
 ///
 /// ```text
 /// text_area("").placeholder("Notes")
-/// width = 8
+/// width = 8, height = 3
 /// ```
 ///
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The rendered cells contain the first and last placeholder characters.
+/// - The inner cells contain the first and last placeholder characters.
 #[test]
 fn renders_text_area_placeholder_when_value_is_empty() -> Result<()> {
-    let backend = TestBackend::new(8, 2);
+    let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("").placeholder("Notes");
 
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "N");
-    assert_eq!(cell_symbol(&terminal, 4, 0, 8), "s");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "N");
+    assert_eq!(cell_symbol(&terminal, 5, 1, 8), "s");
 
     Ok(())
 }
@@ -637,7 +890,7 @@ fn renders_text_area_placeholder_when_value_is_empty() -> Result<()> {
 /// - The focused text-area cell uses the stylesheet background color.
 #[test]
 fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
-    let backend = TestBackend::new(8, 2);
+    let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("Ada").with_focus(true);
     let stylesheet = Stylesheet::new().rule(
@@ -654,9 +907,35 @@ fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
     })?;
     render_result?;
 
-    let (fg, bg) = cell_colors(&terminal, 0, 0, 8);
+    let (fg, bg) = cell_colors(&terminal, 1, 1, 8);
     assert_eq!(fg, Color::Black);
     assert_eq!(bg, Color::Yellow);
+
+    Ok(())
+}
+
+/// Verifies focused text areas place the terminal cursor at the retained cursor.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("one\ntwo").with_focus(true)
+/// cursor = end
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The focused text area sets the terminal cursor on the final row.
+#[test]
+fn focused_text_area_sets_terminal_cursor_position() -> Result<()> {
+    let backend = TestBackend::new(8, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let view = text_area("one\ntwo").with_focus(true);
+
+    draw_view(&mut terminal, &view)?;
+
+    terminal.backend_mut().assert_cursor_position((4, 2));
 
     Ok(())
 }
@@ -667,7 +946,7 @@ fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
 ///
 /// ```text
 /// text_area("aaa\nbbb\nccc").with_focus(true)
-/// height = 2
+/// height = 4
 /// cursor = end, then cursor = 0
 /// ```
 ///
@@ -678,18 +957,18 @@ fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
 /// - The second render succeeds and shows the head of the multiline value.
 #[test]
 fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
-    let backend = TestBackend::new(8, 2);
+    let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("aaa\nbbb\nccc").with_focus(true);
 
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "b");
-    assert_eq!(cell_symbol(&terminal, 0, 1, 8), "c");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "b");
+    assert_eq!(cell_symbol(&terminal, 1, 2, 8), "c");
 
     editable_state_mut(&mut view).set_cursor(0);
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "a");
-    assert_eq!(cell_symbol(&terminal, 0, 1, 8), "b");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "a");
+    assert_eq!(cell_symbol(&terminal, 1, 2, 8), "b");
 
     Ok(())
 }
@@ -709,13 +988,13 @@ fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
 /// - The following text view renders after the wrapped text-area rows.
 #[test]
 fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
-    let backend = TestBackend::new(6, 3);
+    let backend = TestBackend::new(6, 7);
     let mut terminal = Terminal::new(backend)?;
     let view = column(vec![text_area("Hello World"), text("End")]);
 
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(symbol_position(&terminal, "E", 6), (0, 2));
+    assert_eq!(symbol_position(&terminal, "E", 6), (0, 6));
 
     Ok(())
 }
@@ -756,7 +1035,7 @@ fn column_reserves_height_for_wrapped_text() -> Result<()> {
 /// - Tab moves focus from the input to the button.
 #[test]
 fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
-    let backend = TestBackend::new(12, 6);
+    let backend = TestBackend::new(12, 7);
     let mut terminal = Terminal::new(backend)?;
     let mut view = form([text("Title"), input("Ada"), button("Save")]);
 
@@ -765,7 +1044,7 @@ fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
     let title_position = symbol_position(&terminal, "T", 12);
     let input_position = symbol_position(&terminal, "A", 12);
     assert_eq!(title_position, (0, 0));
-    assert_eq!(input_position.0, 0);
+    assert_eq!(input_position.0, 1);
     assert!(input_position.1 > title_position.1);
     assert_eq!(view.__focusable_count(), 2);
 
@@ -779,6 +1058,58 @@ fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
         KeyControl::Handled
     );
     assert_eq!(control_focuses(&view), vec![false, true]);
+
+    Ok(())
+}
+
+/// Verifies focusing an editable control starts it in normal mode.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([input("Ada").with_focus(true), button("Save")])
+/// Tab, Tab
+/// ```
+///
+/// # Assertions
+///
+/// - Moving focus away does not discard retained editable state.
+/// - Moving focus back to the input switches it to normal mode.
+/// - Cursor and yank buffer state are preserved.
+#[test]
+fn focusing_editable_control_enters_normal_mode_without_resetting_state() -> Result<()> {
+    let mut input_view = input("Ada").with_focus(true);
+    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Insert);
+    editable_state_mut(&mut input_view).set_cursor(1);
+    editable_state_mut(&mut input_view).set_yank_buffer("copy");
+    let mut view = form([input_view, button("Save")]);
+
+    assert_eq!(
+        editable_state(form_child(&view, 0)).mode(),
+        MiniVimMode::Insert
+    );
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    assert_eq!(control_focuses(&view), vec![false, true]);
+    assert_eq!(
+        editable_state(form_child(&view, 0)).mode(),
+        MiniVimMode::Insert
+    );
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    assert_eq!(control_focuses(&view), vec![true, false]);
+    assert_eq!(
+        editable_state(form_child(&view, 0)).mode(),
+        MiniVimMode::Normal
+    );
+    assert_eq!(editable_state(form_child(&view, 0)).cursor(), 1);
+    assert_eq!(editable_state(form_child(&view, 0)).yank_buffer(), "copy");
 
     Ok(())
 }
@@ -815,6 +1146,278 @@ fn form_type_styles_apply_to_descendants() -> Result<()> {
 
     let (fg, _) = cell_colors(&terminal, 0, 0, 8);
     assert_eq!(fg, Color::Green);
+
+    Ok(())
+}
+
+/// Verifies controlled form edits update caller state and reconcile into views.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([input(name), text_area(notes), button("Submit")])
+/// Tab, A, Char('!'), reconcile, Tab, A, Enter, reconcile
+/// :focus { fg: Black, bg: Yellow }
+/// ```
+///
+/// # Assertions
+///
+/// - The form reports input, text area, and button as focusable controls.
+/// - Input edits update caller-owned state without mutating the stale view.
+/// - Reconciliation displays the latest caller-owned input value and retains
+///   focus and cursor state.
+/// - Text-area edits follow the same controlled update and reconciliation path.
+/// - The focused text area receives focus stylesheet colors after reconciliation.
+#[test]
+fn controlled_form_reconciles_values_focus_and_rendering() -> Result<()> {
+    let name = Rc::new(RefCell::new(String::from("Ada")));
+    let notes = Rc::new(RefCell::new(String::from("Notes")));
+    let submits = Rc::new(Cell::new(0));
+    let cancels = Rc::new(Cell::new(0));
+    let mut view = controlled_form_view(&name, &notes, &submits, &cancels);
+
+    assert_eq!(view.__focusable_count(), 3);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    assert_eq!(control_focuses(&view), vec![true, false, false]);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('A')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('!')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(name.borrow().as_str(), "Ada!");
+    assert_eq!(input_value(form_child(&view, 0)), "Ada");
+
+    view = reconcile_controlled_form(&view, &name, &notes, &submits, &cancels);
+
+    assert_eq!(input_value(form_child(&view, 0)), "Ada!");
+    assert_eq!(editable_state(form_child(&view, 0)).cursor(), 4);
+    assert_eq!(control_focuses(&view), vec![true, false, false]);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    assert_eq!(control_focuses(&view), vec![false, true, false]);
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Char('A')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert_eq!(notes.borrow().as_str(), "Notes\n");
+    assert_eq!(text_area_value(form_child(&view, 1)), "Notes");
+
+    view = reconcile_controlled_form(&view, &name, &notes, &submits, &cancels);
+
+    assert_eq!(text_area_value(form_child(&view, 1)), "Notes\n");
+    assert_eq!(editable_state(form_child(&view, 1)).cursor(), 6);
+    assert_eq!(control_focuses(&view), vec![false, true, false]);
+
+    let backend = TestBackend::new(20, 6);
+    let mut terminal = Terminal::new(backend)?;
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::focus(),
+        TuiStyle::new()
+            .foreground(Color::Black)
+            .background(Color::Yellow),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert!(
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.fg == Color::Black && cell.bg == Color::Yellow)
+    );
+
+    Ok(())
+}
+
+/// Verifies form-owned submit and cancel keys route around editable controls.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([input(name), text_area(notes), button("Submit")])
+/// Input focus: Enter, i, Esc, Esc
+/// TextArea focus: A, Enter, reconcile, Ctrl+Enter
+/// ```
+///
+/// # Assertions
+///
+/// - Enter submits a form when the input is focused.
+/// - Esc leaves input insert mode without canceling the form.
+/// - Esc in normal mode invokes the form cancel callback.
+/// - Plain Enter inserts a newline when the text area is in insert mode.
+/// - Ctrl+Enter submits a form when the text area is focused.
+#[test]
+fn controlled_form_routes_submit_and_cancel_keys() -> Result<()> {
+    let name = Rc::new(RefCell::new(String::from("Ada")));
+    let notes = Rc::new(RefCell::new(String::from("Notes")));
+    let submits = Rc::new(Cell::new(0));
+    let cancels = Rc::new(Cell::new(0));
+    let mut input_view = controlled_form_view(&name, &notes, &submits, &cancels);
+
+    input_view.handle_key_event(key_event(KeyCode::Tab))?;
+    assert_eq!(
+        input_view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert_eq!(submits.get(), 1);
+    assert_eq!(cancels.get(), 0);
+
+    assert_eq!(
+        input_view.handle_key_event(key_event(KeyCode::Char('i')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        input_view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        editable_state(form_child(&input_view, 0)).mode(),
+        MiniVimMode::Normal
+    );
+    assert_eq!(cancels.get(), 0);
+
+    assert_eq!(
+        input_view.handle_key_event(key_event(KeyCode::Esc))?,
+        KeyControl::Handled
+    );
+    assert_eq!(cancels.get(), 1);
+
+    let name = Rc::new(RefCell::new(String::from("Ada")));
+    let notes = Rc::new(RefCell::new(String::from("Notes")));
+    let submits = Rc::new(Cell::new(0));
+    let cancels = Rc::new(Cell::new(0));
+    let mut text_area_view = controlled_form_view(&name, &notes, &submits, &cancels);
+
+    text_area_view.handle_key_event(key_event(KeyCode::Tab))?;
+    text_area_view.handle_key_event(key_event(KeyCode::Tab))?;
+    assert_eq!(
+        text_area_view.handle_key_event(key_event(KeyCode::Char('A')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        text_area_view.handle_key_event(key_event(KeyCode::Enter))?,
+        KeyControl::Handled
+    );
+    assert_eq!(notes.borrow().as_str(), "Notes\n");
+    assert_eq!(submits.get(), 0);
+
+    text_area_view = reconcile_controlled_form(&text_area_view, &name, &notes, &submits, &cancels);
+
+    assert_eq!(
+        text_area_view.handle_key_event(ctrl_enter_key_event())?,
+        KeyControl::Handled
+    );
+    assert_eq!(notes.borrow().as_str(), "Notes\n");
+    assert_eq!(submits.get(), 1);
+
+    Ok(())
+}
+
+/// Verifies controlled form mini-Vim edits survive reconciled redraws.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Input focus: 0, l, x, reconcile, u, reconcile, Ctrl+r
+/// TextArea focus: gg, j, dd, reconcile, u
+/// ```
+///
+/// # Assertions
+///
+/// - Normal-mode input deletion updates caller-owned state.
+/// - Reconciliation retains input undo and redo history.
+/// - Normal-mode text-area line deletion updates caller-owned state.
+/// - Reconciliation retains the linewise yank buffer for text-area undo.
+#[test]
+fn controlled_form_preserves_mini_vim_state_across_reconciliation() -> Result<()> {
+    let name = Rc::new(RefCell::new(String::from("abc")));
+    let notes = Rc::new(RefCell::new(String::from("notes")));
+    let submits = Rc::new(Cell::new(0));
+    let cancels = Rc::new(Cell::new(0));
+    let mut input_view = controlled_form_view(&name, &notes, &submits, &cancels);
+
+    input_view.handle_key_event(key_event(KeyCode::Tab))?;
+    input_view.handle_key_event(key_event(KeyCode::Char('0')))?;
+    input_view.handle_key_event(key_event(KeyCode::Char('l')))?;
+    assert_eq!(
+        input_view.handle_key_event(key_event(KeyCode::Char('x')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(name.borrow().as_str(), "ac");
+
+    input_view = reconcile_controlled_form(&input_view, &name, &notes, &submits, &cancels);
+    assert_eq!(input_value(form_child(&input_view, 0)), "ac");
+    assert_eq!(
+        editable_state(form_child(&input_view, 0)).undo_stack(),
+        &[String::from("abc")]
+    );
+
+    input_view.handle_key_event(key_event(KeyCode::Char('u')))?;
+    assert_eq!(name.borrow().as_str(), "abc");
+
+    input_view = reconcile_controlled_form(&input_view, &name, &notes, &submits, &cancels);
+    assert_eq!(
+        input_view.handle_key_event(ctrl_key_event('r'))?,
+        KeyControl::Handled
+    );
+    assert_eq!(name.borrow().as_str(), "ac");
+
+    let name = Rc::new(RefCell::new(String::from("Ada")));
+    let notes = Rc::new(RefCell::new(String::from("one\ntwo\nthree")));
+    let submits = Rc::new(Cell::new(0));
+    let cancels = Rc::new(Cell::new(0));
+    let mut text_area_view = controlled_form_view(&name, &notes, &submits, &cancels);
+
+    text_area_view.handle_key_event(key_event(KeyCode::Tab))?;
+    text_area_view.handle_key_event(key_event(KeyCode::Tab))?;
+    text_area_view.handle_key_event(key_event(KeyCode::Char('g')))?;
+    text_area_view.handle_key_event(key_event(KeyCode::Char('g')))?;
+    text_area_view.handle_key_event(key_event(KeyCode::Char('j')))?;
+    assert_eq!(
+        text_area_view.handle_key_event(key_event(KeyCode::Char('d')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        text_area_view.handle_key_event(key_event(KeyCode::Char('d')))?,
+        KeyControl::Handled
+    );
+    assert_eq!(notes.borrow().as_str(), "one\nthree");
+
+    text_area_view = reconcile_controlled_form(&text_area_view, &name, &notes, &submits, &cancels);
+    assert_eq!(
+        text_area_value(form_child(&text_area_view, 1)),
+        "one\nthree"
+    );
+    assert_eq!(
+        editable_state(form_child(&text_area_view, 1)).yank_buffer(),
+        "two"
+    );
+
+    text_area_view.handle_key_event(key_event(KeyCode::Char('u')))?;
+    assert_eq!(notes.borrow().as_str(), "one\ntwo\nthree");
 
     Ok(())
 }
@@ -1760,6 +2363,7 @@ fn focused_input_emits_inserted_text_through_on_input() -> Result<()> {
         emitted_for_char.borrow_mut().push(next);
         AppControl::Continue
     });
+    editable_state_mut(&mut char_view).set_mode(MiniVimMode::Insert);
 
     assert_eq!(
         char_view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
@@ -1771,6 +2375,7 @@ fn focused_input_emits_inserted_text_through_on_input() -> Result<()> {
         emitted_for_space.borrow_mut().push(next);
         AppControl::Continue
     });
+    editable_state_mut(&mut space_view).set_mode(MiniVimMode::Insert);
 
     assert_eq!(
         space_view.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE))?,
@@ -1808,6 +2413,7 @@ fn focused_input_emits_deletions_through_on_input() -> Result<()> {
         emitted_for_backspace.borrow_mut().push(next);
         AppControl::Continue
     });
+    editable_state_mut(&mut backspace_view).set_mode(MiniVimMode::Insert);
 
     assert_eq!(
         backspace_view.handle_key_event(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))?,
@@ -1819,6 +2425,7 @@ fn focused_input_emits_deletions_through_on_input() -> Result<()> {
         emitted_for_delete.borrow_mut().push(next);
         AppControl::Continue
     });
+    editable_state_mut(&mut delete_view).set_mode(MiniVimMode::Insert);
     editable_state_mut(&mut delete_view).set_cursor(1);
 
     assert_eq!(
@@ -1858,6 +2465,7 @@ fn focused_input_cursor_keys_move_without_emitting_text() -> Result<()> {
         emitted_for_input.borrow_mut().push(next);
         AppControl::Continue
     });
+    editable_state_mut(&mut view).set_mode(MiniVimMode::Insert);
 
     view.handle_key_event(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))?;
     assert_eq!(editable_state(&view).cursor(), 2);
@@ -1892,7 +2500,7 @@ fn focused_input_cursor_keys_move_without_emitting_text() -> Result<()> {
 /// - The cell after the value remains blank.
 #[test]
 fn focused_input_without_callback_does_not_mutate_displayed_value() -> Result<()> {
-    let backend = TestBackend::new(8, 1);
+    let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let mut view = input("Ada").with_focus(true);
 
@@ -1907,9 +2515,9 @@ fn focused_input_without_callback_does_not_mutate_displayed_value() -> Result<()
     }
 
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "A");
-    assert_eq!(cell_symbol(&terminal, 2, 0, 8), "a");
-    assert_eq!(cell_symbol(&terminal, 3, 0, 8), " ");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 3, 1, 8), "a");
+    assert_eq!(cell_symbol(&terminal, 4, 1, 8), " ");
 
     Ok(())
 }
@@ -1938,6 +2546,7 @@ fn focused_text_area_emits_inserted_text_through_on_input() -> Result<()> {
             emitted_for_char.borrow_mut().push(next);
             AppControl::Continue
         });
+    editable_state_mut(&mut char_view).set_mode(MiniVimMode::Insert);
 
     assert_eq!(
         char_view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
@@ -1949,6 +2558,7 @@ fn focused_text_area_emits_inserted_text_through_on_input() -> Result<()> {
         emitted_for_enter.borrow_mut().push(next);
         AppControl::Continue
     });
+    editable_state_mut(&mut enter_view).set_mode(MiniVimMode::Insert);
 
     assert_eq!(
         enter_view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
@@ -1987,6 +2597,7 @@ fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> Result<
             emitted_for_backspace.borrow_mut().push(next);
             AppControl::Continue
         });
+    editable_state_mut(&mut backspace_view).set_mode(MiniVimMode::Insert);
     editable_state_mut(&mut backspace_view).set_cursor(4);
 
     assert_eq!(
@@ -2001,6 +2612,7 @@ fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> Result<
             emitted_for_delete.borrow_mut().push(next);
             AppControl::Continue
         });
+    editable_state_mut(&mut delete_view).set_mode(MiniVimMode::Insert);
     editable_state_mut(&mut delete_view).set_cursor(3);
 
     assert_eq!(
@@ -2040,6 +2652,7 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
             emitted_for_text_area.borrow_mut().push(next);
             AppControl::Continue
         });
+    editable_state_mut(&mut view).set_mode(MiniVimMode::Insert);
     editable_state_mut(&mut view).set_cursor(9);
 
     view.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))?;
@@ -2070,7 +2683,7 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
 ///
 /// ```text
 /// input("Ada").with_focus(true)
-/// Esc, i, a, I, A
+/// i, Esc, a, I, A
 ///
 /// text_area("ab\ncd").with_focus(true)
 /// I, A
@@ -2078,8 +2691,8 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
 ///
 /// # Assertions
 ///
-/// - Inputs start in insert mode.
-/// - Esc switches the input to normal mode and moves the cursor onto the
+/// - Inputs start in normal mode.
+/// - Esc from insert mode switches the input to normal mode and moves the cursor onto the
 ///   previous character.
 /// - `i` and `a` switch the input to insert mode at the current and next
 ///   normal-mode positions.
@@ -2088,8 +2701,9 @@ fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
 #[test]
 fn focused_editable_controls_support_mini_vim_mode_transitions() -> Result<()> {
     let mut input_view = input("Ada").with_focus(true);
-    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Insert);
+    assert_eq!(editable_state(&input_view).mode(), MiniVimMode::Normal);
 
+    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Insert);
     assert_eq!(
         input_view.handle_key_event(key_event(KeyCode::Esc))?,
         KeyControl::Handled
@@ -2448,7 +3062,9 @@ fn insert_mode_keeps_input_single_line_and_text_area_multiline() -> Result<()> {
 fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> Result<()> {
     let insert_submits = Rc::new(Cell::new(0));
     let insert_submits_for_form = Rc::clone(&insert_submits);
-    let mut insert_view = form([input("Ada").with_focus(true)]).on_submit(move || {
+    let mut insert_input = input("Ada").with_focus(true);
+    editable_state_mut(&mut insert_input).set_mode(MiniVimMode::Insert);
+    let mut insert_view = form([insert_input]).on_submit(move || {
         insert_submits_for_form.set(insert_submits_for_form.get() + 1);
         AppControl::Continue
     });
@@ -2539,7 +3155,9 @@ fn form_text_area_uses_plain_enter_for_newlines_and_ctrl_enter_for_submit() -> R
 fn form_esc_leaves_insert_mode_before_canceling() -> Result<()> {
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
-    let mut view = form([input("Ada").with_focus(true)]).on_cancel(move || {
+    let mut input_view = input("Ada").with_focus(true);
+    editable_state_mut(&mut input_view).set_mode(MiniVimMode::Insert);
+    let mut view = form([input_view]).on_cancel(move || {
         cancels_for_form.set(cancels_for_form.get() + 1);
         AppControl::Continue
     });
@@ -2607,7 +3225,7 @@ fn form_inside_component_boundary_handles_submit_key() -> Result<()> {
 /// - The cell after the first line remains blank.
 #[test]
 fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> Result<()> {
-    let backend = TestBackend::new(12, 2);
+    let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("Ada\nLovelace").with_focus(true);
 
@@ -2622,9 +3240,9 @@ fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> Resul
     }
 
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 0, 0, 12), "A");
-    assert_eq!(cell_symbol(&terminal, 2, 0, 12), "a");
-    assert_eq!(cell_symbol(&terminal, 3, 0, 12), " ");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 12), "A");
+    assert_eq!(cell_symbol(&terminal, 3, 1, 12), "a");
+    assert_eq!(cell_symbol(&terminal, 4, 1, 12), " ");
 
     Ok(())
 }
@@ -2635,7 +3253,7 @@ fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> Resul
 ///
 /// ```text
 /// component(FocusPanel { view: input("Ada").on_input(...) })
-/// Tab, Char('!')
+/// Tab, A, Char('!')
 /// ```
 ///
 /// # Assertions
@@ -2655,6 +3273,10 @@ fn focused_input_inside_component_boundary_handles_editing_keys() -> Result<()> 
 
     view.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
     assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('A'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
         KeyControl::Handled
     );
@@ -2670,7 +3292,7 @@ fn focused_input_inside_component_boundary_handles_editing_keys() -> Result<()> 
 ///
 /// ```text
 /// component(FocusPanel { view: text_area("Ada").on_input(...) })
-/// Tab, Enter
+/// Tab, A, Enter
 /// ```
 ///
 /// # Assertions
@@ -2691,6 +3313,10 @@ fn focused_text_area_inside_component_boundary_handles_editing_keys() -> Result<
     });
 
     view.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('A'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
         KeyControl::Handled

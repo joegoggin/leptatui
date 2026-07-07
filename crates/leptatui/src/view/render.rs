@@ -8,7 +8,7 @@ use std::ops::Range;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Position, Rect},
     widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
@@ -197,6 +197,8 @@ impl View {
                 ..
             } => {
                 let style = resolve_style(metadata, ctx);
+                let block = style.to_block_with_default_borders(Borders::ALL);
+                let inner = block.inner(ctx.area());
                 let display_value = if value.is_empty() {
                     placeholder.as_deref().unwrap_or("")
                 } else {
@@ -209,10 +211,21 @@ impl View {
                         value.as_str(),
                         editable_state.cursor(),
                         editable_state.horizontal_scroll(),
-                        ctx.area().width,
+                        inner.width,
                     )
                 };
-                ctx.render_widget(input_paragraph(display_value, style, horizontal_scroll));
+                ctx.render_widget(block);
+                ctx.with_area(inner, |ctx| {
+                    ctx.render_widget(input_paragraph(display_value, style, horizontal_scroll));
+                    if metadata.is_focused() {
+                        set_input_cursor(
+                            value.as_str(),
+                            editable_state.cursor(),
+                            horizontal_scroll,
+                            ctx,
+                        );
+                    }
+                });
                 metadata.clear_scroll_into_view_request();
                 Ok(())
             }
@@ -224,6 +237,8 @@ impl View {
                 ..
             } => {
                 let style = resolve_style(metadata, ctx);
+                let block = style.to_block_with_default_borders(Borders::ALL);
+                let inner = block.inner(ctx.area());
                 let display_value = if value.is_empty() {
                     placeholder.as_deref().unwrap_or("")
                 } else {
@@ -236,16 +251,28 @@ impl View {
                         value.as_str(),
                         editable_state.cursor(),
                         editable_state.vertical_scroll(),
-                        ctx.area().height,
-                        ctx.area().width,
+                        inner.height,
+                        inner.width,
                     )
                 };
-                ctx.render_widget(text_area_paragraph(
-                    display_value,
-                    style,
-                    vertical_scroll,
-                    editable_state.horizontal_scroll(),
-                ));
+                ctx.render_widget(block);
+                ctx.with_area(inner, |ctx| {
+                    ctx.render_widget(text_area_paragraph(
+                        display_value,
+                        style,
+                        vertical_scroll,
+                        editable_state.horizontal_scroll(),
+                    ));
+                    if metadata.is_focused() {
+                        set_text_area_cursor(
+                            value.as_str(),
+                            editable_state.cursor(),
+                            vertical_scroll,
+                            editable_state.horizontal_scroll(),
+                            ctx,
+                        );
+                    }
+                });
                 metadata.clear_scroll_into_view_request();
                 Ok(())
             }
@@ -874,12 +901,30 @@ impl View {
     /// * `index` — Current flattened control index during traversal.
     fn set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
         match self {
-            Self::Button { metadata, .. }
-            | Self::Input { metadata, .. }
-            | Self::TextArea { metadata, .. } => {
+            Self::Button { metadata, .. } => {
                 let focused = *index == target;
                 metadata.set_focused(focused);
                 if focused {
+                    metadata.request_scroll_into_view();
+                } else {
+                    metadata.clear_scroll_into_view_request();
+                }
+                *index += 1;
+            }
+            Self::Input {
+                metadata,
+                editable_state,
+                ..
+            }
+            | Self::TextArea {
+                metadata,
+                editable_state,
+                ..
+            } => {
+                let focused = *index == target;
+                metadata.set_focused(focused);
+                if focused {
+                    editable_state.set_mode(MiniVimMode::Normal);
                     metadata.request_scroll_into_view();
                 } else {
                     metadata.clear_scroll_into_view_request();
@@ -1233,6 +1278,54 @@ fn input_horizontal_scroll(value: &str, cursor: usize, current_scroll: u16, widt
     u16::try_from(next_scroll).unwrap_or(u16::MAX)
 }
 
+/// Sets the terminal cursor for a focused single-line input.
+fn set_input_cursor(
+    value: &str,
+    cursor: usize,
+    horizontal_scroll: u16,
+    ctx: &mut RenderCtx<'_, '_>,
+) {
+    let area = ctx.area();
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let column = char_column(value, cursor).saturating_sub(usize::from(horizontal_scroll));
+    ctx.set_cursor_position(cursor_position_in_area(area, column, 0));
+}
+
+/// Sets the terminal cursor for a focused multiline text area.
+fn set_text_area_cursor(
+    value: &str,
+    cursor: usize,
+    vertical_scroll: u16,
+    horizontal_scroll: u16,
+    ctx: &mut RenderCtx<'_, '_>,
+) {
+    let area = ctx.area();
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let (row, column) = text_area_cursor_position(value, cursor, area.width);
+    let row = row.saturating_sub(usize::from(vertical_scroll));
+    let column = column.saturating_sub(usize::from(horizontal_scroll));
+    ctx.set_cursor_position(cursor_position_in_area(area, column, row));
+}
+
+/// Returns an absolute cursor position clamped inside a render area.
+fn cursor_position_in_area(area: Rect, column: usize, row: usize) -> Position {
+    Position {
+        x: area.x.saturating_add(
+            u16::try_from(column.min(usize::from(area.width.saturating_sub(1))))
+                .unwrap_or(u16::MAX),
+        ),
+        y: area.y.saturating_add(
+            u16::try_from(row.min(usize::from(area.height.saturating_sub(1)))).unwrap_or(u16::MAX),
+        ),
+    }
+}
+
 /// Returns the vertical scroll offset needed to keep a text-area cursor visible.
 ///
 /// # Arguments
@@ -1324,8 +1417,13 @@ fn text_area_rendered_rows(value: &str, width: u16) -> usize {
 ///
 /// A [`usize`] row index containing the cursor.
 fn text_area_cursor_row(value: &str, cursor: usize, width: u16) -> usize {
+    text_area_cursor_position(value, cursor, width).0
+}
+
+/// Returns the wrapped render row and column represented by a text-area cursor.
+fn text_area_cursor_position(value: &str, cursor: usize, width: u16) -> (usize, usize) {
     if width == 0 {
-        return 0;
+        return (0, 0);
     }
 
     let cursor = clamp_cursor(value, cursor);
@@ -1351,7 +1449,7 @@ fn text_area_cursor_row(value: &str, cursor: usize, width: u16) -> usize {
         column = column.saturating_add(1);
     }
 
-    row
+    (row, column)
 }
 
 /// Handles a focused input key and returns whether default propagation stops.
@@ -3219,8 +3317,9 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
                 + vertical_padding_rows(style.padding)
         }
         View::Input { metadata, .. } => {
-            let _style = resolve_style(metadata, ctx);
-            1
+            let style = resolve_style(metadata, ctx);
+            1 + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
+                + vertical_padding_rows(style.padding)
         }
         View::TextArea {
             value,
@@ -3235,16 +3334,22 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             } else {
                 value.as_str()
             };
-            line_count_height(
+            let block = style.to_block_with_default_borders(Borders::ALL);
+            let inner = block.inner(ctx.area());
+            let content_height = line_count_height(
                 text_area_paragraph(
                     display_value,
                     style,
                     editable_state.vertical_scroll(),
                     editable_state.horizontal_scroll(),
                 )
-                .line_count(ctx.area().width),
+                .line_count(inner.width),
             )
-            .max(1)
+            .max(1);
+
+            content_height
+                + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
+                + vertical_padding_rows(style.padding)
         }
         View::Block { child, metadata } => {
             let style = resolve_style(metadata, ctx);

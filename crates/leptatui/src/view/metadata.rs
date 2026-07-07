@@ -32,9 +32,9 @@ pub enum ViewType {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum MiniVimMode {
     /// Text entry mode.
-    #[default]
     Insert,
     /// Command mode.
+    #[default]
     Normal,
 }
 
@@ -66,7 +66,7 @@ impl EditableState {
     ///
     /// # Returns
     ///
-    /// An [`EditableState`] value with zeroed cursor and scroll offsets, insert
+    /// An [`EditableState`] value with zeroed cursor and scroll offsets, normal
     /// mode, and empty history buffers.
     pub fn new() -> Self {
         Self::default()

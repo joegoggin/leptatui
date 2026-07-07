@@ -5,9 +5,10 @@ use leptatui::prelude::*;
 /// Exercises `TextArea` attributes and builder lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
+    let value = String::from("Ada\nLovelace");
     let view: View = view! {
         <TextArea
-            value={"Ada\nLovelace".to_string()}
+            value=value
             placeholder="Notes"
             on_input={|_| AppControl::Continue}
             class="field primary"

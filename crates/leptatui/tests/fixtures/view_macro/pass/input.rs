@@ -5,9 +5,10 @@ use leptatui::prelude::*;
 /// Exercises `Input` attributes and builder lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
+    let value = String::from("Ada");
     let view: View = view! {
         <Input
-            value={"Ada".to_string()}
+            value=value
             placeholder="Name"
             on_input={|_| AppControl::Continue}
             class="field primary"

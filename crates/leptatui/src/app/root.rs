@@ -7,7 +7,7 @@ use crossterm::event::Event;
 use ratatui::Frame;
 
 use crate::{
-    component::{Component, RenderCtx},
+    component::{Component, FocusedControl, RenderCtx},
     context,
 };
 
@@ -47,6 +47,12 @@ pub trait AppRoot {
     /// I/O that fails.
     fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
         Ok(AppControl::Continue)
+    }
+
+    /// Returns metadata for the focused built-in control inside this root.
+    #[doc(hidden)]
+    fn __focused_control(&self) -> Option<FocusedControl> {
+        None
     }
 }
 
@@ -91,5 +97,11 @@ where
     /// I/O that fails.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         Component::handle_event(self, event)
+    }
+
+    /// Forwards focused-control metadata from component roots.
+    #[doc(hidden)]
+    fn __focused_control(&self) -> Option<FocusedControl> {
+        Component::__focused_control(self)
     }
 }

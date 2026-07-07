@@ -450,6 +450,7 @@ impl Element {
                     | AttrKind::OnSubmit
                     | AttrKind::OnCancel
                     | AttrKind::OnInput
+                    | AttrKind::InputValue
                     | AttrKind::Style
             ) && attr.value.is_unbraced_expr()
             {
