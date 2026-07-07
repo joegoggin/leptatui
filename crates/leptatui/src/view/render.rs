@@ -1875,7 +1875,6 @@ fn handle_insert_mode_key(
             key,
             kind,
             pending,
-            plain_key,
             now,
         ));
     }
@@ -1956,9 +1955,12 @@ fn handle_pending_insert_mode_key(
     key: &KeyEvent,
     kind: EditableControlKind,
     pending: PendingInsertKey,
-    plain_key: bool,
     now: Instant,
 ) -> KeyControl {
+    let plain_key = !key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+
     if insert_key_pending_expired(pending, now) {
         return handle_expired_pending_insert_mode_key(
             value,
@@ -3549,10 +3551,10 @@ fn handle_backspace_input_key(
 ) -> KeyControl {
     let cursor = clamp_cursor(value, editable_state.cursor());
     if cursor == 0 {
-        if kind == EditableControlKind::TextArea {
-            if let Some(next) = value.strip_prefix('\n') {
-                return commit_input_value(value, on_input, editable_state, next.to_owned(), 0);
-            }
+        if kind == EditableControlKind::TextArea
+            && let Some(next) = value.strip_prefix('\n')
+        {
+            return commit_input_value(value, on_input, editable_state, next.to_owned(), 0);
         }
         editable_state.set_cursor(0);
         return KeyControl::Handled;

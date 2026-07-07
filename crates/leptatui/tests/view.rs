@@ -1771,6 +1771,41 @@ fn overflowing_column_renders_right_scrollbar() -> Result<()> {
     Ok(())
 }
 
+/// Verifies dynamic overflowing columns keep scroll metadata between refreshes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// dynamic(|| column([text("One"), text("Two"), text("Three")]))
+/// terminal size = 8x2
+/// ```
+///
+/// # Assertions
+///
+/// - Initial rendering measures overflow.
+/// - The Down key is handled by the refreshed dynamic child.
+/// - Rendering after the key shows the scrolled second row.
+#[test]
+fn dynamic_overflowing_column_scrolls_after_render() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = dynamic(|| column(vec![text("One"), text("Two"), text("Three")]));
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "O");
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Down))?,
+        KeyControl::Handled
+    );
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "T");
+    assert_eq!(cell_symbol(&terminal, 1, 0, 8), "w");
+
+    Ok(())
+}
+
 /// Verifies overflowing columns reserve width for the scrollbar.
 ///
 /// # Example Under Test

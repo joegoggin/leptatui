@@ -145,33 +145,36 @@ pub mod __private {
             (
                 View::Row {
                     children: next_children,
-                    ..
+                    metadata: next_metadata,
                 },
                 View::Row {
                     children: previous_children,
-                    ..
+                    metadata: previous_metadata,
                 },
             )
             | (
                 View::Column {
                     children: next_children,
-                    ..
+                    metadata: next_metadata,
                 },
                 View::Column {
                     children: previous_children,
-                    ..
+                    metadata: previous_metadata,
                 },
             )
             | (
                 View::Form {
                     children: next_children,
+                    metadata: next_metadata,
                     ..
                 },
                 View::Form {
                     children: previous_children,
+                    metadata: previous_metadata,
                     ..
                 },
             ) => {
+                reconcile_scroll_metadata(next_metadata, previous_metadata);
                 for (next_child, previous_child) in
                     next_children.iter_mut().zip(previous_children.iter())
                 {
@@ -236,6 +239,17 @@ pub mod __private {
         if previous_metadata.scroll_into_view_requested() {
             next_metadata.request_scroll_into_view();
         }
+    }
+
+    /// Copies layout scroll metadata that should survive view reconciliation.
+    ///
+    /// # Arguments
+    ///
+    /// * `next_metadata` — Layout metadata on the newly generated view node.
+    /// * `previous_metadata` — Layout metadata from the previous view node.
+    fn reconcile_scroll_metadata(next_metadata: &StyleMetadata, previous_metadata: &StyleMetadata) {
+        next_metadata.set_max_scroll_offset(previous_metadata.max_scroll_offset());
+        next_metadata.set_scroll_offset(previous_metadata.scroll_offset());
     }
 
     /// Returns whether the previous deferred boundary should be preserved.
