@@ -2579,7 +2579,7 @@ fn handle_yank_visual_selection_key(
     editable_state: &mut EditableState,
     kind: EditableControlKind,
 ) -> KeyControl {
-    let selection = visual_selection_range(value, editable_state, kind).unwrap_or_else(|| 0..0);
+    let selection = visual_selection_range(value, editable_state, kind).unwrap_or(0..0);
     if editable_state.mode() == VimMode::VisualLine && kind == EditableControlKind::TextArea {
         editable_state.set_linewise_yank_buffer(value[selection.clone()].to_owned());
     } else {
@@ -2613,7 +2613,7 @@ fn handle_delete_visual_selection_key(
     editable_state: &mut EditableState,
     kind: EditableControlKind,
 ) -> KeyControl {
-    let selection = visual_selection_range(value, editable_state, kind).unwrap_or_else(|| 0..0);
+    let selection = visual_selection_range(value, editable_state, kind).unwrap_or(0..0);
     let linewise =
         editable_state.mode() == VimMode::VisualLine && kind == EditableControlKind::TextArea;
     if linewise {
