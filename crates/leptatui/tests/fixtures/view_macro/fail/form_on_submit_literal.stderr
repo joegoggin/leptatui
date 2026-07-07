@@ -1,0 +1,5 @@
+error: view! on_submit attribute must be a callback expression
+ --> tests/fixtures/view_macro/fail/form_on_submit_literal.rs:8:15
+  |
+8 |         <Form on_submit="save">
+  |               ^^^^^^^^^

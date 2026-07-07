@@ -10,11 +10,13 @@ use crossterm::event::{Event, KeyEvent};
 
 use crate::{
     app::{AppControl, Result},
-    component::{Component, KeyControl, RenderCtx},
+    component::{Component, FocusedControl, KeyControl, RenderCtx},
     context::ContextScope,
 };
 
+/// Shared mutable component instance stored by a component view boundary.
 type SharedComponent = Rc<RefCell<dyn Component>>;
+/// Lazy factory that creates a shared component instance on first use.
 type ComponentFactory = Box<dyn FnOnce() -> SharedComponent>;
 
 /// Shared component boundary stored inside a render tree.
@@ -148,7 +150,7 @@ impl ComponentView {
 
     /// Returns the focused control's vertical span inside this component boundary.
     #[doc(hidden)]
-    pub(crate) fn focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+    pub(crate) fn focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         self.with_component(|component| component.__focused_button_span(ctx))
     }
 
@@ -156,6 +158,53 @@ impl ComponentView {
     #[doc(hidden)]
     pub(crate) fn activate_focused_button(&self) -> Option<AppControl> {
         self.with_component(|component| component.__activate_focused_button())
+    }
+
+    /// Handles a key on the focused input inside this component boundary, if any.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to forward to the component boundary.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the key control result when an input handles
+    /// the key.
+    #[doc(hidden)]
+    pub(crate) fn handle_focused_input_key(&self, key: KeyEvent) -> Option<KeyControl> {
+        self.with_component_mut(|component| component.__handle_focused_input_key(key))
+    }
+
+    /// Emits any expired pending insert-mode key inside this component boundary.
+    #[doc(hidden)]
+    pub(crate) fn flush_pending_input(&self) -> Option<AppControl> {
+        self.with_component_mut(|component| component.__flush_pending_input())
+    }
+
+    /// Returns the focused built-in control inside this component boundary.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing focused control metadata when a supported
+    /// built-in control is focused.
+    #[doc(hidden)]
+    pub(crate) fn focused_control(&self) -> Option<FocusedControl> {
+        self.with_component(|component| component.__focused_control())
+    }
+
+    /// Handles form-owned submit or cancel keys inside this component boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Key event to evaluate for nested form behavior.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing key traversal control when a nested form
+    /// handles the key.
+    #[doc(hidden)]
+    pub(crate) fn handle_form_key(&self, key: KeyEvent) -> Option<KeyControl> {
+        self.with_component_mut(|component| component.__handle_form_key(key))
     }
 
     /// Scrolls the first overflowing layout inside this component boundary.

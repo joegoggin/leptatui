@@ -1,0 +1,5 @@
+error: Input does not accept children
+ --> tests/fixtures/view_macro/fail/input_child.rs:8:10
+  |
+8 |         <Input value="Ada">
+  |          ^^^^^

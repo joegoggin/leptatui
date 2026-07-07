@@ -174,6 +174,19 @@ fn stylesheet_id_overrides_class_style() {
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
 
+/// Verifies selector specificity sums compound and descendant selector parts.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .panel Button:focus
+/// ```
+///
+/// # Assertions
+///
+/// - The selector has no id specificity.
+/// - The selector has two class-or-pseudo specificity units.
+/// - The selector has one type specificity unit.
 #[test]
 fn selector_css_specificity_sums_compound_and_descendant_parts() {
     let selector = StyleSelector::descendant(
@@ -187,6 +200,23 @@ fn selector_css_specificity_sums_compound_and_descendant_parts() {
     assert_eq!(selector.css_specificity(), (0, 2, 1));
 }
 
+/// Verifies descendant selector specificity overrides later class rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .panel Text
+/// .label
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved foreground color comes from the descendant rule.
+///
+/// # Why
+///
+/// Descendant selector specificity should participate in normal cascade order.
 #[test]
 fn stylesheet_descendant_specificity_overrides_later_class_rule() {
     let mut panel = StyleMetadata::new(ViewType::Block);
@@ -215,6 +245,23 @@ fn stylesheet_descendant_specificity_overrides_later_class_rule() {
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
 
+/// Verifies compound selector specificity overrides later pseudo rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Button:focus
+/// :focus
+/// ```
+///
+/// # Assertions
+///
+/// - Focused button metadata is available for stylesheet resolution.
+/// - The resolved foreground color comes from the compound rule.
+///
+/// # Why
+///
+/// Type plus pseudo specificity should outrank a pseudo-only rule.
 #[test]
 fn stylesheet_compound_specificity_overrides_later_pseudo_rule() {
     let view = button("Save").with_focus(true);
@@ -241,6 +288,19 @@ fn stylesheet_compound_specificity_overrides_later_pseudo_rule() {
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
 
+/// Verifies equal-specificity rules are resolved by source order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .primary
+/// .warning
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved foreground color comes from the later matching rule.
 #[test]
 fn stylesheet_equal_specificity_uses_source_order() {
     let view = text("Save").with_classes("primary warning");
@@ -264,6 +324,19 @@ fn stylesheet_equal_specificity_uses_source_order() {
     assert_eq!(resolved.foreground, Some(Color::Yellow));
 }
 
+/// Verifies media rules match the provided viewport size.
+///
+/// # Example Under Test
+///
+/// ```text
+/// @media (max-width: 80) { .compact }
+/// ```
+///
+/// # Assertions
+///
+/// - A viewport at width `80` resolves the media-rule color.
+/// - A viewport at width `81` resolves the base-rule color.
+/// - Resolution without a viewport ignores media rules.
 #[test]
 fn stylesheet_media_query_matches_viewport_size() {
     let view = text("Save").with_classes("compact");
@@ -304,6 +377,19 @@ fn stylesheet_media_query_matches_viewport_size() {
     assert_eq!(without_viewport.foreground, Some(Color::White));
 }
 
+/// Verifies media queries combine width and height conditions.
+///
+/// # Example Under Test
+///
+/// ```text
+/// min-width: 80 and min-height: 24 and max-height: 40
+/// ```
+///
+/// # Assertions
+///
+/// - A matching viewport resolves the media-rule background.
+/// - A too-narrow viewport does not resolve the media-rule background.
+/// - A too-tall viewport does not resolve the media-rule background.
 #[test]
 fn stylesheet_media_query_combines_width_and_height_conditions() {
     let view = text("Save");
@@ -342,6 +428,23 @@ fn stylesheet_media_query_combines_width_and_height_conditions() {
     assert_eq!(too_tall.background, None);
 }
 
+/// Verifies matching media rules keep selector specificity ordering.
+///
+/// # Example Under Test
+///
+/// ```text
+/// @media (max-width: 80) { #save }
+/// @media (max-width: 80) { .warning }
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved foreground color comes from the id selector.
+///
+/// # Why
+///
+/// Media filtering should not flatten selector specificity.
 #[test]
 fn matching_media_rules_keep_selector_specificity() {
     let view = text("Save").with_id("save").with_classes("warning");
@@ -368,6 +471,18 @@ fn matching_media_rules_keep_selector_specificity() {
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
 
+/// Verifies stylesheet direction declarations resolve into view styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .controls { direction: Column }
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved layout direction is column.
 #[test]
 fn stylesheet_direction_declaration_resolves() {
     let view = text("Controls").with_classes("controls");
@@ -386,6 +501,19 @@ fn stylesheet_direction_declaration_resolves() {
     assert_eq!(resolved.direction, Some(LayoutDirection::Column));
 }
 
+/// Verifies media rules can override layout direction by viewport.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .controls { direction: Row }
+/// @media (max-width: 60) { .controls { direction: Column } }
+/// ```
+///
+/// # Assertions
+///
+/// - The compact viewport resolves column direction.
+/// - The wide viewport resolves row direction.
 #[test]
 fn stylesheet_media_query_can_override_layout_direction() {
     let view = text("Controls").with_classes("controls");
@@ -419,6 +547,23 @@ fn stylesheet_media_query_can_override_layout_direction() {
     assert_eq!(wide.direction, Some(LayoutDirection::Row));
 }
 
+/// Verifies important stylesheet direction overrides inline direction.
+///
+/// # Example Under Test
+///
+/// ```text
+/// inline direction: Row
+/// .controls { direction: Column !important }
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved layout direction is column.
+///
+/// # Why
+///
+/// Important stylesheet declarations outrank normal inline declarations.
 #[test]
 fn stylesheet_important_direction_overrides_inline_direction() {
     let view = text("Controls")
@@ -511,6 +656,19 @@ fn inherited_text_styles_flow_to_children_unless_overridden() {
     assert_eq!(resolved.modifiers, Some(Modifier::BOLD));
 }
 
+/// Verifies important stylesheet values override normal inline styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// inline fg: Black
+/// .alert { fg: Red !important }
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved foreground color is red.
 #[test]
 fn stylesheet_important_overrides_normal_inline_style() {
     let view = text("Alert")
@@ -530,6 +688,23 @@ fn stylesheet_important_overrides_normal_inline_style() {
     assert_eq!(resolved.foreground, Some(Color::Red));
 }
 
+/// Verifies important declarations override normal higher-specificity rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Text { fg: Red !important }
+/// .alert { fg: Blue }
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved foreground color comes from the important type rule.
+///
+/// # Why
+///
+/// Importance is compared before selector specificity.
 #[test]
 fn stylesheet_important_overrides_normal_higher_specificity_rule() {
     let view = text("Alert").with_classes("alert");
@@ -548,6 +723,21 @@ fn stylesheet_important_overrides_normal_higher_specificity_rule() {
     assert_eq!(resolved.foreground, Some(Color::Red));
 }
 
+/// Verifies important rules use specificity and source order within importance.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Button:focus { fg: Green !important }
+/// :focus { fg: Yellow !important }
+/// .primary { bg: Blue !important }
+/// .danger { bg: Red !important }
+/// ```
+///
+/// # Assertions
+///
+/// - The foreground comes from the more specific important rule.
+/// - The background comes from the later equal-specificity important rule.
 #[test]
 fn stylesheet_important_rules_use_specificity_then_source_order() {
     let view = button("Save")
@@ -571,6 +761,23 @@ fn stylesheet_important_rules_use_specificity_then_source_order() {
     assert_eq!(resolved.background, Some(Color::Red));
 }
 
+/// Verifies normal declarations do not override important mixin values.
+///
+/// # Example Under Test
+///
+/// ```text
+/// @mixin urgent { fg: Red !important }
+/// .alert { @include urgent, fg: Blue }
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved foreground color remains red.
+///
+/// # Why
+///
+/// Mixin expansion should preserve declaration importance while merging.
 #[test]
 fn stylesheet_normal_declaration_does_not_override_important_mixin_value() {
     let view = text("Alert").with_classes("alert");
@@ -592,6 +799,18 @@ fn stylesheet_normal_declaration_does_not_override_important_mixin_value() {
     assert_eq!(resolved.foreground, Some(Color::Red));
 }
 
+/// Verifies stylesheet theme variables resolve against the active theme.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .status { fg: theme_color("text"), bg: theme_color("surface") }
+/// ```
+///
+/// # Assertions
+///
+/// - Light theme resolution paints black on white.
+/// - Dark theme resolution paints white on black.
 #[test]
 fn stylesheet_theme_variables_resolve_against_active_theme() {
     let view = text("Status").with_classes("status");
@@ -969,6 +1188,24 @@ fn style_declarations_merge_overlays_values() {
     );
 }
 
+/// Verifies important values ignore later normal declaration builder calls.
+///
+/// # Example Under Test
+///
+/// ```text
+/// foreground_important(Red).foreground(Blue)
+/// padding_important(1).padding(2)
+/// ```
+///
+/// # Assertions
+///
+/// - The foreground remains the important red declaration.
+/// - The padding remains the important uniform-one declaration.
+///
+/// # Why
+///
+/// Builder calls are used by stylesheet expansion and must preserve cascade
+/// importance within a declaration set.
 #[test]
 fn style_declarations_important_values_ignore_later_normal_values() {
     assert_eq!(

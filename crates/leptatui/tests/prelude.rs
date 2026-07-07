@@ -88,7 +88,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// use leptatui::prelude::*;
 /// signal(0)
 /// provide_context(String::from("from prelude"))
-/// block(column([text("from prelude"), button("OK")]))
+/// block(column([text("from prelude"), input("Ada"), text_area("Notes"), button("OK")]))
 /// ```
 ///
 /// # Assertions
@@ -96,7 +96,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// - Signals can be read, set, and updated from the prelude.
 /// - A memo can derive from a prelude signal.
 /// - Context values can be provided and read from the prelude.
-/// - View and style helpers type-check from the prelude.
+/// - View, input callback, and style helpers type-check from the prelude.
 /// - The stylesheet macro builds the expected stylesheet from prelude exports.
 #[test]
 fn prelude_exposes_reactivity_and_context() {
@@ -121,7 +121,14 @@ fn prelude_exposes_reactivity_and_context() {
             assert_eq!(expect_context::<String>(), "from prelude");
         });
 
-        let view: View = block(column([text("from prelude"), button("OK")]));
+        let input_action: InputAction = std::rc::Rc::new(|_| AppControl::Continue);
+        let input_view = input("Ada").on_input(move |next| input_action(next));
+        let view: View = block(column([
+            text("from prelude"),
+            input_view,
+            text_area("Notes"),
+            button("OK"),
+        ]));
         let _ = view;
 
         let style = TuiStyle::new()

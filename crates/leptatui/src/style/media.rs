@@ -19,6 +19,15 @@ impl ViewportSize {
 }
 
 impl From<Rect> for ViewportSize {
+    /// Creates a viewport size from a Ratatui rectangle.
+    ///
+    /// # Arguments
+    ///
+    /// * `rect` — Ratatui area whose width and height become the viewport size.
+    ///
+    /// # Returns
+    ///
+    /// A [`ViewportSize`] containing the rectangle dimensions.
     fn from(rect: Rect) -> Self {
         Self::new(rect.width, rect.height)
     }
@@ -93,6 +102,15 @@ impl MediaQuery {
         self
     }
 
+    /// Returns whether a viewport satisfies all query constraints.
+    ///
+    /// # Arguments
+    ///
+    /// * `viewport` — Root terminal viewport dimensions to test.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the query matches the viewport.
     pub(crate) fn matches(&self, viewport: ViewportSize) -> bool {
         if let Some(width) = self.min_width
             && viewport.width < width
@@ -122,6 +140,16 @@ impl MediaQuery {
     }
 }
 
+/// Combines optional lower bounds by taking the stricter maximum value.
+///
+/// # Arguments
+///
+/// * `left` — First optional lower bound.
+/// * `right` — Second optional lower bound.
+///
+/// # Returns
+///
+/// An [`Option<u16>`] containing the combined lower bound.
 fn max_bound(left: Option<u16>, right: Option<u16>) -> Option<u16> {
     match (left, right) {
         (Some(left), Some(right)) => Some(left.max(right)),
@@ -130,6 +158,16 @@ fn max_bound(left: Option<u16>, right: Option<u16>) -> Option<u16> {
     }
 }
 
+/// Combines optional upper bounds by taking the stricter minimum value.
+///
+/// # Arguments
+///
+/// * `left` — First optional upper bound.
+/// * `right` — Second optional upper bound.
+///
+/// # Returns
+///
+/// An [`Option<u16>`] containing the combined upper bound.
 fn min_bound(left: Option<u16>, right: Option<u16>) -> Option<u16> {
     match (left, right) {
         (Some(left), Some(right)) => Some(left.min(right)),

@@ -241,9 +241,23 @@ impl From<TuiStyle> for Style {
 }
 
 #[cfg(test)]
+/// Unit tests for inherited terminal UI style behavior.
 mod tests {
     use super::*;
 
+    /// Verifies inherited styles keep text values and drop surface values.
+    ///
+    /// # Example Under Test
+    ///
+    /// A [`TuiStyle`] with foreground, background, modifiers, borders,
+    /// border type, padding, and layout direction is reduced to inherited
+    /// values.
+    ///
+    /// # Assertions
+    ///
+    /// - The inherited style keeps foreground color and modifiers.
+    /// - The inherited style drops background, borders, border type, padding,
+    ///   and layout direction.
     #[test]
     fn inherited_values_keep_text_style_and_drop_surface_style() {
         let inherited = TuiStyle::new()

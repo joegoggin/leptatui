@@ -25,26 +25,47 @@ mod support;
 
 use support::{key, render_component, rendered_text};
 
+/// Button press count observed by basic macro component tests.
 static MACRO_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Setup run count observed by signal-backed macro component tests.
 static MACRO_SIGNAL_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
+/// Context value observed by generated component context tests.
 static MACRO_CONTEXT_OBSERVED: Mutex<Option<MacroLabel>> = Mutex::new(None);
+/// Parent key handler count for nested key propagation tests.
 static MACRO_PARENT_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Child key handler count for nested key propagation tests.
 static MACRO_CHILD_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Parent key handler count for pass-through key propagation tests.
 static MACRO_PASS_PARENT_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Child key handler count for pass-through key propagation tests.
 static MACRO_PASS_CHILD_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// First local key handler count for source-order dispatch tests.
 static MACRO_FIRST_KEY_HANDLER: AtomicUsize = AtomicUsize::new(0);
+/// Second local key handler count for source-order dispatch tests.
 static MACRO_SECOND_KEY_HANDLER: AtomicUsize = AtomicUsize::new(0);
+/// Third local key handler count for source-order dispatch tests.
 static MACRO_THIRD_KEY_HANDLER: AtomicUsize = AtomicUsize::new(0);
+/// Built-in default button activation count for key dispatch tests.
 static MACRO_DEFAULT_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// First wrapped button activation count for component-boundary tests.
 static MACRO_FIRST_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Second wrapped button activation count for component-boundary tests.
 static MACRO_SECOND_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Built-in button activation count for mixed child key dispatch tests.
 static MACRO_MIXED_BUILTIN_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Wrapped button activation count for mixed child key dispatch tests.
 static MACRO_MIXED_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Repeated-key handler count for key-kind filtering tests.
 static MACRO_REPEAT_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Release-key handler count for key-kind filtering tests.
 static MACRO_RELEASE_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Root route component setup count for route-switching tests.
 static MACRO_ROUTE_ROOT_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
+/// Home route component setup count for route-switching tests.
 static MACRO_ROUTE_HOME_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
+/// Counter route component setup count for route-switching tests.
 static MACRO_ROUTE_COUNTER_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
+/// Settings route component setup count for route-switching tests.
 static MACRO_ROUTE_SETTINGS_SETUP_RUNS: AtomicUsize = AtomicUsize::new(0);
 
 /// Context value used by generated component provider tests.

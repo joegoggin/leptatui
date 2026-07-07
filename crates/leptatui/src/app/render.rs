@@ -3,6 +3,12 @@
 //! This module contains the frame draw wrapper used by the app loop to render
 //! an [`AppRoot`] into the active terminal.
 
+use std::io::stdout;
+
+use crossterm::{cursor::SetCursorStyle, execute};
+
+use crate::component::FocusedControl;
+
 use super::{AppRoot, Result, terminal::DefaultTerminal};
 
 /// Draws a root application into the terminal.
@@ -24,10 +30,142 @@ where
     R: AppRoot,
 {
     let mut render_result: Result<()> = Ok(());
+    let mut focused_control = None;
 
     terminal.draw(|frame| {
         render_result = root.render(frame);
+        focused_control = root.__focused_control();
     })?;
 
-    render_result
+    render_result?;
+    execute!(stdout(), cursor_style_for_focused_control(focused_control))?;
+
+    Ok(())
+}
+
+/// Returns the terminal cursor style for the focused built-in control.
+fn cursor_style_for_focused_control(focused_control: Option<FocusedControl>) -> SetCursorStyle {
+    match focused_control {
+        Some(FocusedControl::Input {
+            insert_mode: true, ..
+        })
+        | Some(FocusedControl::TextArea {
+            insert_mode: true, ..
+        }) => SetCursorStyle::BlinkingBar,
+        Some(FocusedControl::Input {
+            insert_mode: false, ..
+        })
+        | Some(FocusedControl::TextArea {
+            insert_mode: false, ..
+        }) => SetCursorStyle::BlinkingBlock,
+        Some(FocusedControl::Button) | None => SetCursorStyle::DefaultUserShape,
+    }
+}
+
+#[cfg(test)]
+/// Unit tests for app root cursor rendering helpers.
+mod tests {
+    use super::*;
+
+    /// Verifies insert-mode editable controls request a blinking bar cursor.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// FocusedControl::Input { insert_mode: true }
+    /// FocusedControl::TextArea { insert_mode: true }
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Focused inputs in insert mode map to `SetCursorStyle::BlinkingBar`.
+    /// - Focused text areas in insert mode map to `SetCursorStyle::BlinkingBar`.
+    #[test]
+    fn insert_mode_editable_controls_use_blinking_bar_cursor() {
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::Input {
+                insert_mode: true,
+                visual_mode: false,
+            })),
+            SetCursorStyle::BlinkingBar
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                insert_mode: true,
+                visual_mode: false,
+            })),
+            SetCursorStyle::BlinkingBar
+        );
+    }
+
+    /// Verifies normal and visual editable controls request a blinking block cursor.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// FocusedControl::Input { insert_mode: false }
+    /// FocusedControl::TextArea { insert_mode: false }
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Focused inputs outside insert mode map to `SetCursorStyle::BlinkingBlock`.
+    /// - Focused text areas outside insert mode map to `SetCursorStyle::BlinkingBlock`.
+    /// - Visual mode does not change the cursor shape.
+    #[test]
+    fn normal_mode_editable_controls_use_blinking_block_cursor() {
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::Input {
+                insert_mode: false,
+                visual_mode: false,
+            })),
+            SetCursorStyle::BlinkingBlock
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::Input {
+                insert_mode: false,
+                visual_mode: true,
+            })),
+            SetCursorStyle::BlinkingBlock
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                insert_mode: false,
+                visual_mode: false,
+            })),
+            SetCursorStyle::BlinkingBlock
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                insert_mode: false,
+                visual_mode: true,
+            })),
+            SetCursorStyle::BlinkingBlock
+        );
+    }
+
+    /// Verifies non-editable focus keeps the user's default cursor shape.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// FocusedControl::Button
+    /// None
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Focused buttons map to `SetCursorStyle::DefaultUserShape`.
+    /// - Missing focused controls map to `SetCursorStyle::DefaultUserShape`.
+    #[test]
+    fn non_editable_focus_uses_default_user_cursor_shape() {
+        assert_eq!(
+            cursor_style_for_focused_control(Some(FocusedControl::Button)),
+            SetCursorStyle::DefaultUserShape
+        );
+        assert_eq!(
+            cursor_style_for_focused_control(None),
+            SetCursorStyle::DefaultUserShape
+        );
+    }
 }

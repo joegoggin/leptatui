@@ -1,0 +1,5 @@
+error: Input requires a value attribute
+ --> tests/fixtures/view_macro/fail/input_missing_value.rs:8:10
+  |
+8 |         <Input placeholder="Name" />
+  |          ^^^^^

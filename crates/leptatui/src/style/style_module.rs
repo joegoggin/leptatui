@@ -43,42 +43,105 @@ impl StyleValue {
 }
 
 impl From<Color> for StyleValue {
+    /// Creates a color style value from a literal color.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Literal color to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleValue`] containing the color.
     fn from(value: Color) -> Self {
         Self::Color(value.into())
     }
 }
 
 impl From<ThemeValue<Color>> for StyleValue {
+    /// Creates a color style value from a theme-aware color.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Theme-aware color to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleValue`] containing the color.
     fn from(value: ThemeValue<Color>) -> Self {
         Self::Color(value)
     }
 }
 
 impl From<Modifier> for StyleValue {
+    /// Creates a modifier style value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Text modifier flags to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleValue`] containing the modifier flags.
     fn from(value: Modifier) -> Self {
         Self::Modifier(value)
     }
 }
 
 impl From<Borders> for StyleValue {
+    /// Creates a border visibility style value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Border sides to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleValue`] containing the border sides.
     fn from(value: Borders) -> Self {
         Self::Borders(value)
     }
 }
 
 impl From<BorderType> for StyleValue {
+    /// Creates a border type style value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Border glyph set to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleValue`] containing the border type.
     fn from(value: BorderType) -> Self {
         Self::BorderType(value)
     }
 }
 
 impl From<TuiSpacing> for StyleValue {
+    /// Creates a spacing style value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Terminal-cell spacing to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleValue`] containing the spacing.
     fn from(value: TuiSpacing) -> Self {
         Self::Spacing(value)
     }
 }
 
 impl From<LayoutDirection> for StyleValue {
+    /// Creates a layout direction style value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Layout direction to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleValue`] containing the layout direction.
     fn from(value: LayoutDirection) -> Self {
         Self::LayoutDirection(value)
     }

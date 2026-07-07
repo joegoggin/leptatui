@@ -83,18 +83,18 @@ pub use style::{
     TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
-    ButtonAction, StyleMetadata, View, ViewType, block, button, column, component, dynamic, row,
-    text,
+    ButtonAction, EditableState, FormAction, InputAction, StyleMetadata, View, ViewType, VimMode,
+    block, button, column, component, dynamic, form, input, row, text, text_area,
 };
 
 #[doc(hidden)]
 /// Hidden implementation details used by generated macro code.
 pub mod __private {
-    use crate::View;
+    use crate::{StyleMetadata, View};
 
     pub use crate::component::{
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
-        KeyHandlerRegistry, StylesheetRegistry,
+        FocusedControl, KeyHandlerRegistry, StylesheetRegistry,
     };
     pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
     pub use crossterm::event::{Event, KeyEvent};
@@ -145,23 +145,36 @@ pub mod __private {
             (
                 View::Row {
                     children: next_children,
-                    ..
+                    metadata: next_metadata,
                 },
                 View::Row {
                     children: previous_children,
-                    ..
+                    metadata: previous_metadata,
                 },
             )
             | (
                 View::Column {
                     children: next_children,
-                    ..
+                    metadata: next_metadata,
                 },
                 View::Column {
                     children: previous_children,
+                    metadata: previous_metadata,
+                },
+            )
+            | (
+                View::Form {
+                    children: next_children,
+                    metadata: next_metadata,
+                    ..
+                },
+                View::Form {
+                    children: previous_children,
+                    metadata: previous_metadata,
                     ..
                 },
             ) => {
+                reconcile_scroll_metadata(next_metadata, previous_metadata);
                 for (next_child, previous_child) in
                     next_children.iter_mut().zip(previous_children.iter())
                 {
@@ -177,9 +190,66 @@ pub mod __private {
                     metadata: previous_metadata,
                     ..
                 },
-            ) => next_metadata.set_focused(previous_metadata.is_focused()),
+            ) => reconcile_focus_metadata(next_metadata, previous_metadata),
+            (
+                View::Input {
+                    metadata: next_metadata,
+                    editable_state: next_editable_state,
+                    ..
+                },
+                View::Input {
+                    metadata: previous_metadata,
+                    editable_state: previous_editable_state,
+                    ..
+                },
+            ) => {
+                reconcile_focus_metadata(next_metadata, previous_metadata);
+                *next_editable_state = previous_editable_state.clone();
+            }
+            (
+                View::TextArea {
+                    metadata: next_metadata,
+                    editable_state: next_editable_state,
+                    ..
+                },
+                View::TextArea {
+                    metadata: previous_metadata,
+                    editable_state: previous_editable_state,
+                    ..
+                },
+            ) => {
+                reconcile_focus_metadata(next_metadata, previous_metadata);
+                *next_editable_state = previous_editable_state.clone();
+            }
             _ => {}
         }
+    }
+
+    /// Copies focus metadata that should survive view reconciliation.
+    ///
+    /// # Arguments
+    ///
+    /// * `next_metadata` — Metadata on the newly generated view node.
+    /// * `previous_metadata` — Metadata from the previously rendered view node.
+    fn reconcile_focus_metadata(
+        next_metadata: &mut StyleMetadata,
+        previous_metadata: &StyleMetadata,
+    ) {
+        next_metadata.set_focused(previous_metadata.is_focused());
+        if previous_metadata.scroll_into_view_requested() {
+            next_metadata.request_scroll_into_view();
+        }
+    }
+
+    /// Copies layout scroll metadata that should survive view reconciliation.
+    ///
+    /// # Arguments
+    ///
+    /// * `next_metadata` — Layout metadata on the newly generated view node.
+    /// * `previous_metadata` — Layout metadata from the previous view node.
+    fn reconcile_scroll_metadata(next_metadata: &StyleMetadata, previous_metadata: &StyleMetadata) {
+        next_metadata.set_max_scroll_offset(previous_metadata.max_scroll_offset());
+        next_metadata.set_scroll_offset(previous_metadata.scroll_offset());
     }
 
     /// Returns whether the previous deferred boundary should be preserved.

@@ -1,0 +1,5 @@
+error: view! on_input attribute must be a callback expression
+ --> tests/fixtures/view_macro/fail/input_on_input_literal.rs:8:28
+  |
+8 |         <Input value="Ada" on_input="save" />
+  |                            ^^^^^^^^

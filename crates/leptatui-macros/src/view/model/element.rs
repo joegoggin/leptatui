@@ -104,6 +104,20 @@ impl Element {
     /// Returns [`syn::Error`] if attributes, children, or the element name are
     /// unsupported.
     pub(super) fn expand(&self) -> Result<TokenStream> {
+        if self.name == "Input" {
+            return self.expand_editable_text_control("Input", |value| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::input(#value) }
+            });
+        }
+
+        if self.name == "TextArea" {
+            return self.expand_editable_text_control("TextArea", |value| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::text_area(#value) }
+            });
+        }
+
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 let leptatui = crate::utils::crate_path::leptatui();
@@ -117,6 +131,10 @@ impl Element {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::column(::std::vec![#(#children),*]) }
             }),
+            "Form" => self.expand_child_list("Form", |children| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::form(::std::vec![#(#children),*]) }
+            }),
             "Text" => self.expand_text_like("Text", |content| {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::text(#content) }
@@ -129,7 +147,7 @@ impl Element {
             _ => {
                 return Err(Error::new_spanned(
                     &self.name,
-                    "unsupported Leptatui element; expected Block, Text, Row, Column, Button, or a PascalCase component",
+                    "unsupported Leptatui element; expected Block, Text, Row, Column, Form, Button, Input, TextArea, or a PascalCase component",
                 ));
             }
         }
@@ -141,6 +159,59 @@ impl Element {
                 Ok(view)
             }
         })
+    }
+
+    /// Expands a controlled editable text element.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `build` — Function that wraps the required value in a builder call.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing an editable text-control builder expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if children are present, `value` is missing,
+    /// duplicate `value` attributes are supplied, or control attributes are
+    /// invalid.
+    fn expand_editable_text_control(
+        &self,
+        element_name: &str,
+        build: impl FnOnce(TokenStream) -> TokenStream,
+    ) -> Result<TokenStream> {
+        if !self.children.is_empty() {
+            return Err(Error::new_spanned(
+                &self.name,
+                format!("{element_name} does not accept children"),
+            ));
+        }
+
+        let attrs = self.validate_attrs()?;
+        let value_attrs = attrs
+            .iter()
+            .filter(|validated| matches!(validated.kind, AttrKind::InputValue))
+            .collect::<Vec<_>>();
+        let value_attr = match value_attrs.as_slice() {
+            [value_attr] => *value_attr,
+            [] => {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    format!("{element_name} requires a value attribute"),
+                ));
+            }
+            [first, ..] => {
+                return Err(Error::new_spanned(
+                    &first.attr.name,
+                    format!("{element_name} expects exactly one value attribute"),
+                ));
+            }
+        };
+
+        let value = value_attr.attr.value.to_tokens();
+        self.expand_attrs(build(value), &attrs)
     }
 
     /// Expands a PascalCase component tag into a component constructor call.
@@ -226,6 +297,24 @@ impl Element {
                 "class" => AttrKind::Class,
                 "id" => AttrKind::Id,
                 "style" => AttrKind::Style,
+                "value" if matches!(element_name.as_str(), "Input" | "TextArea") => {
+                    AttrKind::InputValue
+                }
+                "value" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! value attribute is only supported on Input or TextArea",
+                    ));
+                }
+                "placeholder" if matches!(element_name.as_str(), "Input" | "TextArea") => {
+                    AttrKind::Placeholder
+                }
+                "placeholder" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! placeholder attribute is only supported on Input or TextArea",
+                    ));
+                }
                 "on_press" if element_name == "Button" => AttrKind::OnPress,
                 "on_press" => {
                     return Err(Error::new_spanned(
@@ -233,11 +322,43 @@ impl Element {
                         "view! on_press attribute is only supported on Button",
                     ));
                 }
-                _ => {
+                "on_submit" if element_name == "Form" => AttrKind::OnSubmit,
+                "on_submit" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "unsupported view! attribute; expected class, id, style, or button on_press",
+                        "view! on_submit attribute is only supported on Form",
                     ));
+                }
+                "on_cancel" if element_name == "Form" => AttrKind::OnCancel,
+                "on_cancel" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! on_cancel attribute is only supported on Form",
+                    ));
+                }
+                "on_input" if matches!(element_name.as_str(), "Input" | "TextArea") => {
+                    AttrKind::OnInput
+                }
+                "on_input" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! on_input attribute is only supported on Input or TextArea",
+                    ));
+                }
+                _ => {
+                    let message = match element_name.as_str() {
+                        "Button" => {
+                            "unsupported view! attribute; expected class, id, style, or on_press"
+                        }
+                        "Form" => {
+                            "unsupported view! attribute; expected class, id, style, on_submit, or on_cancel"
+                        }
+                        "Input" | "TextArea" => {
+                            "unsupported view! attribute; expected class, id, style, value, placeholder, or on_input"
+                        }
+                        _ => "unsupported view! attribute; expected class, id, or style",
+                    };
+                    return Err(Error::new_spanned(&attr.name, message));
                 }
             };
 
@@ -280,19 +401,34 @@ impl Element {
                     quote! { (#expanded).with_inline_style(#value) }
                 }
                 AttrKind::OnPress => {
-                    if attr.value.is_literal() {
-                        return Err(Error::new_spanned(
-                            &attr.name,
-                            "view! on_press attribute must be a callback expression",
-                        ));
-                    }
-
+                    reject_literal_callback(attr, "on_press")?;
                     quote! { (#expanded).on_press(#value) }
+                }
+                AttrKind::OnSubmit => {
+                    reject_literal_callback(attr, "on_submit")?;
+                    quote! { (#expanded).on_submit(#value) }
+                }
+                AttrKind::OnCancel => {
+                    reject_literal_callback(attr, "on_cancel")?;
+                    quote! { (#expanded).on_cancel(#value) }
+                }
+                AttrKind::InputValue => expanded,
+                AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
+                AttrKind::OnInput => {
+                    reject_literal_callback(attr, "on_input")?;
+                    quote! { (#expanded).on_input(#value) }
                 }
             };
 
-            if !matches!(*kind, AttrKind::OnPress | AttrKind::Style)
-                && attr.value.is_unbraced_expr()
+            if !matches!(
+                *kind,
+                AttrKind::OnPress
+                    | AttrKind::OnSubmit
+                    | AttrKind::OnCancel
+                    | AttrKind::OnInput
+                    | AttrKind::InputValue
+                    | AttrKind::Style
+            ) && attr.value.is_unbraced_expr()
             {
                 return Err(Error::new_spanned(
                     &attr.name,
@@ -483,11 +619,36 @@ impl Element {
     }
 }
 
+/// Rejects a literal callback attribute value.
+///
+/// # Arguments
+///
+/// * `attr` — Parsed callback attribute to inspect.
+/// * `attribute_name` — User-facing callback attribute name for diagnostics.
+///
+/// # Returns
+///
+/// An empty [`Result`] when the attribute value is not a literal.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the callback value is a literal.
+fn reject_literal_callback(attr: &Attr, attribute_name: &str) -> Result<()> {
+    if attr.value.is_literal() {
+        return Err(Error::new_spanned(
+            &attr.name,
+            format!("view! {attribute_name} attribute must be a callback expression"),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Returns whether an identifier is one of the built-in `view!` elements.
 fn is_builtin_element(name: &Ident) -> bool {
     matches!(
         name.to_string().as_str(),
-        "Block" | "Row" | "Column" | "Text" | "Button"
+        "Block" | "Row" | "Column" | "Form" | "Text" | "Button" | "Input" | "TextArea"
     )
 }
 
@@ -512,8 +673,18 @@ mod attr_validation {
         Id,
         /// Inline `style` override.
         Style,
+        /// Required input value.
+        InputValue,
+        /// Input placeholder text.
+        Placeholder,
         /// Button activation callback.
         OnPress,
+        /// Form submit callback.
+        OnSubmit,
+        /// Form cancel callback.
+        OnCancel,
+        /// Input value-change callback.
+        OnInput,
     }
 
     /// Attribute paired with its validated kind.

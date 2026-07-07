@@ -1,0 +1,5 @@
+error: TextArea requires a value attribute
+ --> tests/fixtures/view_macro/fail/text_area_missing_value.rs:8:10
+  |
+8 |         <TextArea placeholder="Notes" />
+  |          ^^^^^^^^

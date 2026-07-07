@@ -6,6 +6,7 @@
 use std::io::{Stdout, stdout};
 
 use crossterm::{
+    cursor::SetCursorStyle,
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -46,6 +47,7 @@ impl TerminalSession {
             return Err(error.into());
         }
         cleanup.alternate_screen = true;
+        cleanup.cursor_style = true;
 
         match Terminal::new(CrosstermBackend::new(stdout())) {
             Ok(terminal) => Ok(Self { terminal, cleanup }),
@@ -85,6 +87,8 @@ struct TerminalCleanup {
     raw_mode: bool,
     /// Whether the alternate screen is currently active.
     alternate_screen: bool,
+    /// Whether the cursor style should be restored to the user's default.
+    cursor_style: bool,
 }
 
 impl Drop for TerminalCleanup {
@@ -107,6 +111,15 @@ impl TerminalCleanup {
     /// alternate screen fails.
     fn restore(&mut self) -> std::io::Result<()> {
         let mut first_error = None;
+
+        if self.cursor_style {
+            match execute!(stdout(), SetCursorStyle::DefaultUserShape) {
+                Ok(()) => self.cursor_style = false,
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
 
         if self.raw_mode {
             match disable_raw_mode() {

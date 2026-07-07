@@ -6,6 +6,7 @@ use leptatui::prelude::*;
 fn main() {
     let styles = stylesheet! {
         Text => { fg: Color::White }
+        Form => { fg: Color::Cyan }
         .primary => { bg: Color::Blue, modifier: Modifier::BOLD }
         .primary-action => { fg: Color::Green }
         #submit => { padding: TuiSpacing::uniform(1) }
@@ -18,6 +19,10 @@ fn main() {
         .rule(
             StyleSelector::view_type(ViewType::Text),
             TuiStyle::new().foreground(Color::White),
+        )
+        .rule(
+            StyleSelector::view_type(ViewType::Form),
+            TuiStyle::new().foreground(Color::Cyan),
         )
         .rule(
             StyleSelector::class("primary"),

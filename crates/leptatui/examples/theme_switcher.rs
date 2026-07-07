@@ -3,12 +3,20 @@
 use leptatui::prelude::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Active theme mode selected by the demo.
 enum ThemeMode {
+    /// Light color palette.
     Light,
+    /// Dark color palette.
     Dark,
 }
 
 impl ThemeMode {
+    /// Returns the opposite theme mode.
+    ///
+    /// # Returns
+    ///
+    /// A [`ThemeMode`] containing the next selected mode.
     fn toggle(self) -> Self {
         match self {
             Self::Light => Self::Dark,
@@ -16,6 +24,11 @@ impl ThemeMode {
         }
     }
 
+    /// Builds the theme variables for this mode.
+    ///
+    /// # Returns
+    ///
+    /// A [`ThemeVariables`] value containing colors for stylesheet resolution.
     fn variables(self) -> ThemeVariables {
         match self {
             Self::Light => ThemeVariables::new()
@@ -36,6 +49,11 @@ impl ThemeMode {
     }
 }
 
+/// Renders the currently active theme mode.
+///
+/// # Returns
+///
+/// A [`View`] containing the active theme status text.
 #[component]
 fn ThemeStatus() -> View {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
@@ -45,6 +63,11 @@ fn ThemeStatus() -> View {
     })
 }
 
+/// Renders the interactive theme switching demo.
+///
+/// # Returns
+///
+/// A [`View`] containing themed content and toggle controls.
 #[component]
 fn ThemeDemo() -> View {
     let mode = RwSignal::new(ThemeMode::Light);
@@ -122,6 +145,16 @@ fn ThemeDemo() -> View {
     }
 }
 
+/// Runs the theme switching example.
+///
+/// # Returns
+///
+/// An empty [`Result`] on successful app shutdown.
+///
+/// # Errors
+///
+/// Returns [`Error`] if the terminal app fails to initialize, render, or
+/// process events.
 #[tokio::main]
 async fn main() -> Result<()> {
     App::new(ThemeDemo::new()).run().await

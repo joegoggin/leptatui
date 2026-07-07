@@ -40,10 +40,14 @@ impl From<AppControl> for KeyControl {
     }
 }
 
+/// Callback invoked for matching key events.
 type KeyHandlerCallback = Box<dyn FnMut(KeyEvent) -> KeyControl>;
 
+/// Registered key handler and the event kind it accepts.
 struct KeyHandler {
+    /// Key event kind required before invoking the callback.
     kind: KeyEventKind,
+    /// Callback invoked when the key kind matches.
     callback: KeyHandlerCallback,
 }
 
@@ -56,6 +60,7 @@ thread_local! {
 #[doc(hidden)]
 #[derive(Clone, Default)]
 pub struct KeyHandlerRegistry {
+    /// Registered handlers shared with generated component setup.
     handlers: Rc<RefCell<Vec<KeyHandler>>>,
 }
 
@@ -83,6 +88,12 @@ impl KeyHandlerRegistry {
         KeyControl::Pass
     }
 
+    /// Registers a callback for one key event kind.
+    ///
+    /// # Arguments
+    ///
+    /// * `kind` — Key event kind that should invoke the callback.
+    /// * `callback` — Handler callback to run for matching key events.
     fn register(&self, kind: KeyEventKind, callback: KeyHandlerCallback) {
         self.handlers
             .borrow_mut()
@@ -130,9 +141,19 @@ pub fn __with_key_handler_registry<R>(
     setup()
 }
 
+/// Scope guard that pops the active key-handler registry on drop.
 struct KeyHandlerRegistryGuard;
 
 impl KeyHandlerRegistryGuard {
+    /// Pushes a key-handler registry onto the active setup stack.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` — Registry to expose during component setup.
+    ///
+    /// # Returns
+    ///
+    /// A [`KeyHandlerRegistryGuard`] that restores the previous stack on drop.
     fn enter(registry: &KeyHandlerRegistry) -> Self {
         KEY_HANDLER_STACK.with(|stack| stack.borrow_mut().push(registry.clone()));
         Self
@@ -140,6 +161,7 @@ impl KeyHandlerRegistryGuard {
 }
 
 impl Drop for KeyHandlerRegistryGuard {
+    /// Pops the key-handler registry stack.
     fn drop(&mut self) {
         let popped = KEY_HANDLER_STACK.with(|stack| stack.borrow_mut().pop().is_some());
         debug_assert!(popped, "key handler registry stack underflow");

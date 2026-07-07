@@ -1,0 +1,5 @@
+error: view! on_cancel attribute must be a callback expression
+ --> tests/fixtures/view_macro/fail/form_on_cancel_literal.rs:8:15
+  |
+8 |         <Form on_cancel="close">
+  |               ^^^^^^^^^

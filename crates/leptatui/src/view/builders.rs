@@ -7,7 +7,7 @@ use crate::component::Component;
 
 use super::{
     component_view::ComponentView,
-    metadata::{StyleMetadata, ViewType},
+    metadata::{EditableState, StyleMetadata, ViewType},
     model::View,
 };
 
@@ -75,6 +75,24 @@ pub fn column(children: impl IntoIterator<Item = View>) -> View {
     }
 }
 
+/// Creates a form container.
+///
+/// # Arguments
+///
+/// * `children` — Child views grouped by the form.
+///
+/// # Returns
+///
+/// A [`View::Form`] containing the provided children.
+pub fn form(children: impl IntoIterator<Item = View>) -> View {
+    View::Form {
+        children: children.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::Form),
+        on_submit: None,
+        on_cancel: None,
+    }
+}
+
 /// Creates a basic button.
 ///
 /// # Arguments
@@ -89,6 +107,52 @@ pub fn button(label: impl Into<String>) -> View {
         label: label.into(),
         metadata: StyleMetadata::new(ViewType::Button),
         on_press: None,
+    }
+}
+
+/// Creates a controlled single-line input.
+///
+/// # Arguments
+///
+/// * `value` — Caller-owned value displayed by the input.
+///
+/// # Returns
+///
+/// A [`View::Input`] containing the provided value.
+pub fn input(value: impl Into<String>) -> View {
+    let value = value.into();
+    let mut editable_state = EditableState::new();
+    editable_state.set_cursor(value.len());
+
+    View::Input {
+        value,
+        placeholder: None,
+        metadata: StyleMetadata::new(ViewType::Input),
+        on_input: None,
+        editable_state,
+    }
+}
+
+/// Creates a controlled multiline text area.
+///
+/// # Arguments
+///
+/// * `value` — Caller-owned value displayed by the text area.
+///
+/// # Returns
+///
+/// A [`View::TextArea`] containing the provided value.
+pub fn text_area(value: impl Into<String>) -> View {
+    let value = value.into();
+    let mut editable_state = EditableState::new();
+    editable_state.set_cursor(value.len());
+
+    View::TextArea {
+        value,
+        placeholder: None,
+        metadata: StyleMetadata::new(ViewType::TextArea),
+        on_input: None,
+        editable_state,
     }
 }
 

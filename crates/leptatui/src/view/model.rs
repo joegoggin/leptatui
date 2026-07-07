@@ -8,12 +8,18 @@ use std::{fmt, rc::Rc};
 use super::{
     component_view::ComponentView,
     dynamic::DynamicView,
-    metadata::{StyleMetadata, ViewType},
+    metadata::{EditableState, StyleMetadata, ViewType},
 };
 use crate::app::AppControl;
 
 /// Shared callback invoked when a button is activated.
 pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
+
+/// Shared callback invoked when a form is submitted or canceled.
+pub type FormAction = Rc<dyn Fn() -> AppControl>;
+
+/// Shared callback invoked when an input proposes a new value.
+pub type InputAction = Rc<dyn Fn(String) -> AppControl>;
 
 /// Minimal renderable view tree for hand-written terminal UI.
 #[derive(Clone)]
@@ -46,6 +52,17 @@ pub enum View {
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
+    /// Grouping container for controls and submit/cancel behavior.
+    Form {
+        /// Child views grouped inside the form.
+        children: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+        /// Optional submit callback.
+        on_submit: Option<FormAction>,
+        /// Optional cancel callback.
+        on_cancel: Option<FormAction>,
+    },
     /// Basic bordered button label.
     Button {
         /// Button label to render.
@@ -54,6 +71,32 @@ pub enum View {
         metadata: StyleMetadata,
         /// Optional activation callback.
         on_press: Option<ButtonAction>,
+    },
+    /// Preparatory single-line editable text control.
+    Input {
+        /// Caller-owned value to display.
+        value: String,
+        /// Placeholder text shown when the value is empty.
+        placeholder: Option<String>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+        /// Optional controlled-value change callback.
+        on_input: Option<InputAction>,
+        /// Retained editing state for reconciled redraws.
+        editable_state: EditableState,
+    },
+    /// Preparatory multiline editable text control.
+    TextArea {
+        /// Caller-owned value to display.
+        value: String,
+        /// Placeholder text shown when the value is empty.
+        placeholder: Option<String>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+        /// Optional controlled-value change callback.
+        on_input: Option<InputAction>,
+        /// Retained editing state for reconciled redraws.
+        editable_state: EditableState,
     },
     /// Child view produced when the tree is traversed.
     Dynamic(DynamicView),
@@ -74,7 +117,10 @@ impl View {
             | Self::Text { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
-            | Self::Button { metadata, .. } => Some(metadata),
+            | Self::Form { metadata, .. }
+            | Self::Button { metadata, .. }
+            | Self::Input { metadata, .. }
+            | Self::TextArea { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -91,7 +137,10 @@ impl View {
             | Self::Text { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
-            | Self::Button { metadata, .. } => Some(metadata),
+            | Self::Form { metadata, .. }
+            | Self::Button { metadata, .. }
+            | Self::Input { metadata, .. }
+            | Self::TextArea { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -182,6 +231,89 @@ impl View {
 
         self
     }
+
+    /// Stores a submit callback on a form view.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback invoked when a focused descendant submits the
+    ///   form.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the callback when the view is a form.
+    pub fn on_submit(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
+        if let Self::Form { on_submit, .. } = &mut self {
+            *on_submit = Some(Rc::new(action));
+        }
+
+        self
+    }
+
+    /// Stores a cancel callback on a form view.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback invoked when a focused descendant cancels the form.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the callback when the view is a form.
+    pub fn on_cancel(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
+        if let Self::Form { on_cancel, .. } = &mut self {
+            *on_cancel = Some(Rc::new(action));
+        }
+
+        self
+    }
+
+    /// Stores placeholder text on an editable text control.
+    ///
+    /// # Arguments
+    ///
+    /// * `placeholder` — Text displayed when the input value is empty.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with placeholder text when the view is an editable
+    /// text control.
+    pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        match &mut self {
+            Self::Input {
+                placeholder: slot, ..
+            }
+            | Self::TextArea {
+                placeholder: slot, ..
+            } => {
+                *slot = Some(placeholder.into());
+            }
+            _ => {}
+        }
+
+        self
+    }
+
+    /// Stores a controlled-value callback on an editable text control.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback invoked with the next value when editing keys are
+    ///   pressed while this control is focused.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the callback when the view is an editable text
+    /// control.
+    pub fn on_input(mut self, action: impl Fn(String) -> AppControl + 'static) -> Self {
+        match &mut self {
+            Self::Input { on_input, .. } | Self::TextArea { on_input, .. } => {
+                *on_input = Some(Rc::new(action));
+            }
+            _ => {}
+        }
+
+        self
+    }
 }
 
 impl fmt::Debug for View {
@@ -219,6 +351,18 @@ impl fmt::Debug for View {
                 .field("children", children)
                 .field("metadata", metadata)
                 .finish(),
+            Self::Form {
+                children,
+                metadata,
+                on_submit,
+                on_cancel,
+            } => f
+                .debug_struct("Form")
+                .field("children", children)
+                .field("metadata", metadata)
+                .field("on_submit", &on_submit.is_some())
+                .field("on_cancel", &on_cancel.is_some())
+                .finish(),
             Self::Button {
                 label,
                 metadata,
@@ -229,23 +373,51 @@ impl fmt::Debug for View {
                 .field("metadata", metadata)
                 .field("on_press", &on_press.is_some())
                 .finish(),
+            Self::Input {
+                value,
+                placeholder,
+                metadata,
+                on_input,
+                editable_state,
+            } => f
+                .debug_struct("Input")
+                .field("value", value)
+                .field("placeholder", placeholder)
+                .field("metadata", metadata)
+                .field("on_input", &on_input.is_some())
+                .field("editable_state", editable_state)
+                .finish(),
+            Self::TextArea {
+                value,
+                placeholder,
+                metadata,
+                on_input,
+                editable_state,
+            } => f
+                .debug_struct("TextArea")
+                .field("value", value)
+                .field("placeholder", placeholder)
+                .field("metadata", metadata)
+                .field("on_input", &on_input.is_some())
+                .field("editable_state", editable_state)
+                .finish(),
             Self::Dynamic(_) => f.write_str("Dynamic(..)"),
             Self::Component(component) => f.debug_tuple("Component").field(component).finish(),
         }
     }
 }
 
-/// Returns whether optional button actions represent the same callback.
+/// Returns whether optional actions represent the same callback.
 ///
 /// # Arguments
 ///
-/// * `left` — Left optional button action to compare.
-/// * `right` — Right optional button action to compare.
+/// * `left` — Left optional action to compare.
+/// * `right` — Right optional action to compare.
 ///
 /// # Returns
 ///
 /// A [`bool`] indicating whether both callbacks are absent or share identity.
-fn button_actions_equal(left: &Option<ButtonAction>, right: &Option<ButtonAction>) -> bool {
+fn actions_equal<T: ?Sized>(left: &Option<Rc<T>>, right: &Option<Rc<T>>) -> bool {
     match (left, right) {
         (None, None) => true,
         (Some(left), Some(right)) => Rc::ptr_eq(left, right),
@@ -306,6 +478,25 @@ impl PartialEq for View {
                 },
             ) => left_children == right_children && left_metadata == right_metadata,
             (
+                Self::Form {
+                    children: left_children,
+                    metadata: left_metadata,
+                    on_submit: left_on_submit,
+                    on_cancel: left_on_cancel,
+                },
+                Self::Form {
+                    children: right_children,
+                    metadata: right_metadata,
+                    on_submit: right_on_submit,
+                    on_cancel: right_on_cancel,
+                },
+            ) => {
+                left_children == right_children
+                    && left_metadata == right_metadata
+                    && actions_equal(left_on_submit, right_on_submit)
+                    && actions_equal(left_on_cancel, right_on_cancel)
+            }
+            (
                 Self::Button {
                     label: left_label,
                     metadata: left_metadata,
@@ -319,7 +510,51 @@ impl PartialEq for View {
             ) => {
                 left_label == right_label
                     && left_metadata == right_metadata
-                    && button_actions_equal(left_on_press, right_on_press)
+                    && actions_equal(left_on_press, right_on_press)
+            }
+            (
+                Self::Input {
+                    value: left_value,
+                    placeholder: left_placeholder,
+                    metadata: left_metadata,
+                    on_input: left_on_input,
+                    editable_state: left_editable_state,
+                },
+                Self::Input {
+                    value: right_value,
+                    placeholder: right_placeholder,
+                    metadata: right_metadata,
+                    on_input: right_on_input,
+                    editable_state: right_editable_state,
+                },
+            ) => {
+                left_value == right_value
+                    && left_placeholder == right_placeholder
+                    && left_metadata == right_metadata
+                    && actions_equal(left_on_input, right_on_input)
+                    && left_editable_state == right_editable_state
+            }
+            (
+                Self::TextArea {
+                    value: left_value,
+                    placeholder: left_placeholder,
+                    metadata: left_metadata,
+                    on_input: left_on_input,
+                    editable_state: left_editable_state,
+                },
+                Self::TextArea {
+                    value: right_value,
+                    placeholder: right_placeholder,
+                    metadata: right_metadata,
+                    on_input: right_on_input,
+                    editable_state: right_editable_state,
+                },
+            ) => {
+                left_value == right_value
+                    && left_placeholder == right_placeholder
+                    && left_metadata == right_metadata
+                    && actions_equal(left_on_input, right_on_input)
+                    && left_editable_state == right_editable_state
             }
             (Self::Dynamic(left), Self::Dynamic(right)) => left.ptr_eq(right),
             (Self::Component(left), Self::Component(right)) => left.ptr_eq(right),

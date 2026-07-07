@@ -7,6 +7,7 @@ use super::Color;
 /// Named runtime values supplied by the active application theme.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ThemeVariables {
+    /// Named color variables keyed by stylesheet variable name.
     colors: BTreeMap<String, Color>,
 }
 
@@ -27,6 +28,19 @@ impl ThemeVariables {
         self.colors.get(name).copied()
     }
 
+    /// Returns a named color variable or panics when it is missing.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — Theme color variable name to resolve.
+    ///
+    /// # Returns
+    ///
+    /// A [`Color`] stored for the requested name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no color variable exists for `name`.
     pub(crate) fn expect_color(&self, name: &str) -> Color {
         self.get_color(name)
             .unwrap_or_else(|| panic!("missing theme color variable `{name}`"))
@@ -50,12 +64,34 @@ impl<T> ThemeValue<T> {
 }
 
 impl<T> From<T> for ThemeValue<T> {
+    /// Creates a literal theme value from a concrete value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Concrete value that does not require theme resolution.
+    ///
+    /// # Returns
+    ///
+    /// A [`ThemeValue`] containing the literal value.
     fn from(value: T) -> Self {
         Self::Literal(value)
     }
 }
 
 impl ThemeValue<Color> {
+    /// Resolves a color value against active theme variables.
+    ///
+    /// # Arguments
+    ///
+    /// * `theme` — Active theme variables used for named color lookup.
+    ///
+    /// # Returns
+    ///
+    /// A [`Color`] containing the resolved literal color.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value references a missing theme color variable.
     pub(crate) fn resolve(&self, theme: &ThemeVariables) -> Color {
         match self {
             Self::Literal(color) => *color,

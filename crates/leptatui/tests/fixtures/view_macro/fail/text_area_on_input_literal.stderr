@@ -1,0 +1,5 @@
+error: view! on_input attribute must be a callback expression
+ --> tests/fixtures/view_macro/fail/text_area_on_input_literal.rs:8:31
+  |
+8 |         <TextArea value="Ada" on_input="save" />
+  |                               ^^^^^^^^
