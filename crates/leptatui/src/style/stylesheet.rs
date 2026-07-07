@@ -271,8 +271,12 @@ impl Stylesheet {
     }
 }
 
+/// Stylesheet rule that matched a view during cascade resolution.
 struct MatchingRule<'a> {
+    /// Selector specificity used for cascade ordering.
     specificity: Specificity,
+    /// Original rule index used to break equal-specificity ties.
     source_order: usize,
+    /// Declarations applied when this rule wins a cascade slot.
     style: &'a StyleDeclarations,
 }

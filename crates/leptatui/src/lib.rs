@@ -222,6 +222,12 @@ pub mod __private {
         }
     }
 
+    /// Copies focus metadata that should survive view reconciliation.
+    ///
+    /// # Arguments
+    ///
+    /// * `next_metadata` — Metadata on the newly generated view node.
+    /// * `previous_metadata` — Metadata from the previously rendered view node.
     fn reconcile_focus_metadata(
         next_metadata: &mut StyleMetadata,
         previous_metadata: &StyleMetadata,

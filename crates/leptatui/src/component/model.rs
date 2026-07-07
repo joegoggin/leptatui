@@ -101,6 +101,18 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         render(&mut child)
     }
 
+    /// Creates a child render context that reborrows the frame target.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Terminal area assigned to the child context.
+    /// * `inherited_style` — Style values inherited by child views.
+    /// * `stylesheets` — Active stylesheet stack for child resolution.
+    /// * `selector_ancestors` — Selector metadata for ancestor matching.
+    ///
+    /// # Returns
+    ///
+    /// A [`RenderCtx`] scoped to the child area and style state.
     fn child_context(
         &mut self,
         area: Rect,

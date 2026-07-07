@@ -63,9 +63,23 @@ fn cursor_style_for_focused_control(focused_control: Option<FocusedControl>) -> 
 }
 
 #[cfg(test)]
+/// Unit tests for app root cursor rendering helpers.
 mod tests {
     use super::*;
 
+    /// Verifies insert-mode editable controls request a blinking bar cursor.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// FocusedControl::Input { insert_mode: true }
+    /// FocusedControl::TextArea { insert_mode: true }
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Focused inputs in insert mode map to `SetCursorStyle::BlinkingBar`.
+    /// - Focused text areas in insert mode map to `SetCursorStyle::BlinkingBar`.
     #[test]
     fn insert_mode_editable_controls_use_blinking_bar_cursor() {
         assert_eq!(
@@ -84,6 +98,20 @@ mod tests {
         );
     }
 
+    /// Verifies normal and visual editable controls request a blinking block cursor.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// FocusedControl::Input { insert_mode: false }
+    /// FocusedControl::TextArea { insert_mode: false }
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Focused inputs outside insert mode map to `SetCursorStyle::BlinkingBlock`.
+    /// - Focused text areas outside insert mode map to `SetCursorStyle::BlinkingBlock`.
+    /// - Visual mode does not change the cursor shape.
     #[test]
     fn normal_mode_editable_controls_use_blinking_block_cursor() {
         assert_eq!(
@@ -116,6 +144,19 @@ mod tests {
         );
     }
 
+    /// Verifies non-editable focus keeps the user's default cursor shape.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// FocusedControl::Button
+    /// None
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Focused buttons map to `SetCursorStyle::DefaultUserShape`.
+    /// - Missing focused controls map to `SetCursorStyle::DefaultUserShape`.
     #[test]
     fn non_editable_focus_uses_default_user_cursor_shape() {
         assert_eq!(

@@ -228,41 +228,63 @@ fn matches_ancestor_chain(
 /// CSS cascade specificity for stylesheet rule application.
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) struct Specificity {
+    /// Number of id selectors in the selector.
     ids: u16,
+    /// Number of class and pseudo selectors in the selector.
     classes_and_pseudos: u16,
+    /// Number of type selectors in the selector.
     types: u16,
 }
 
 impl Specificity {
+    /// Specificity for an empty selector.
     pub(crate) const ZERO: Self = Self {
         ids: 0,
         classes_and_pseudos: 0,
         types: 0,
     };
+    /// Specificity contribution from an id selector.
     const ID: Self = Self {
         ids: 1,
         classes_and_pseudos: 0,
         types: 0,
     };
+    /// Specificity contribution from a class or pseudo selector.
     const CLASS: Self = Self {
         ids: 0,
         classes_and_pseudos: 1,
         types: 0,
     };
+    /// Specificity contribution from a type selector.
     const TYPE: Self = Self {
         ids: 0,
         classes_and_pseudos: 0,
         types: 1,
     };
 
+    /// Returns the specificity components in cascade comparison order.
+    ///
+    /// # Returns
+    ///
+    /// A [`tuple`](prim@tuple) containing id, class-or-pseudo, and type counts.
     const fn as_tuple(self) -> (u16, u16, u16) {
         (self.ids, self.classes_and_pseudos, self.types)
     }
 }
 
 impl ::core::ops::Add for Specificity {
+    /// Specificity sum output type.
     type Output = Self;
 
+    /// Adds specificity components with saturating arithmetic.
+    ///
+    /// # Arguments
+    ///
+    /// * `rhs` — Specificity value to add to this value.
+    ///
+    /// # Returns
+    ///
+    /// A [`Specificity`] containing the combined selector weight.
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             ids: self.ids.saturating_add(rhs.ids),

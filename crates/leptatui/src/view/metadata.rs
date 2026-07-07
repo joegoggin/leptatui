@@ -537,6 +537,7 @@ impl StyleMetadata {
         self.clamp_scroll_offset();
     }
 
+    /// Clamps the current scroll offset to the known maximum.
     fn clamp_scroll_offset(&self) {
         let scroll_offset = self.scroll_offset.get();
         let max_scroll_offset = self.max_scroll_offset.get();

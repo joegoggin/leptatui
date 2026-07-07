@@ -66,6 +66,20 @@ impl Parse for Declaration {
     }
 }
 
+/// Parses declaration value tokens up to a style-item boundary.
+///
+/// # Arguments
+///
+/// * `input` — Macro input stream positioned at the first value token.
+///
+/// # Returns
+///
+/// A [`StyleValue`] parsed from the collected value tokens.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the declaration has no value or the collected
+/// tokens do not parse as a supported style value.
 fn parse_value(input: ParseStream<'_>) -> Result<StyleValue> {
     let mut tokens = TokenStream::new();
 
@@ -84,11 +98,29 @@ fn parse_value(input: ParseStream<'_>) -> Result<StyleValue> {
     syn::parse2(tokens)
 }
 
+/// Returns whether the input starts with an `!important` marker.
+///
+/// # Arguments
+///
+/// * `input` — Macro input stream to inspect without consuming.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether `!important` is next in the stream.
 fn starts_important(input: ParseStream<'_>) -> bool {
     let fork = input.fork();
     fork.parse::<Token![!]>().is_ok() && fork.parse::<kw::important>().is_ok()
 }
 
+/// Returns whether the input starts with a nested stylesheet rule.
+///
+/// # Arguments
+///
+/// * `input` — Macro input stream to inspect without consuming.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether a selector followed by `=>` is next.
 fn starts_nested_rule(input: ParseStream<'_>) -> bool {
     let fork = input.fork();
     fork.parse::<Selector>().is_ok() && fork.peek(Token![=>])
@@ -130,6 +162,20 @@ impl Declaration {
     }
 }
 
+/// Returns the value kind and builder methods for a declaration name.
+///
+/// # Arguments
+///
+/// * `name` — Parsed declaration property name.
+///
+/// # Returns
+///
+/// A [`tuple`](prim@tuple) containing the expected value kind, normal builder
+/// method, and important builder method.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the declaration name is unsupported.
 fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'static str)> {
     match name.to_string().as_str() {
         "fg" | "foreground" => Ok((StyleValueKind::Color, "foreground", "foreground_important")),

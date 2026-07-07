@@ -2262,6 +2262,22 @@ fn handle_normal_mode_key(
     }
 }
 
+/// Handles vertical normal-mode movement inside editable controls.
+///
+/// Returns [`None`] when the cursor cannot move within the editable control so
+/// parent containers can handle boundary scrolling.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `editable_state` — Retained cursor, mode, selection, and history state.
+/// * `kind` — Editable control variant receiving the key.
+/// * `move_text_area_cursor` — Movement function used for text-area cursor rows.
+///
+/// # Returns
+///
+/// An [`Option<KeyControl>`] indicating whether the editable control handled
+/// the movement.
 fn handle_normal_vertical_key(
     value: &str,
     editable_state: &mut EditableState,

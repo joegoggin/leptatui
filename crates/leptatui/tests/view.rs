@@ -407,6 +407,15 @@ fn text_area_value(view: &View) -> &str {
     }
 }
 
+/// Returns the scroll offset from a layout view.
+///
+/// # Arguments
+///
+/// * `view` — Row, column, or form view to inspect.
+///
+/// # Returns
+///
+/// A [`u16`] containing the current vertical scroll offset.
 fn scroll_offset(view: &View) -> u16 {
     match view {
         View::Row { metadata, .. }
@@ -416,11 +425,37 @@ fn scroll_offset(view: &View) -> u16 {
     }
 }
 
+/// Returns the position of a rendered terminal cell symbol.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered buffer.
+/// * `symbol` — Cell symbol to locate.
+/// * `width` — Terminal width used to convert buffer index to coordinates.
+///
+/// # Returns
+///
+/// A [`tuple`](prim@tuple) containing the `x` and `y` coordinates.
+///
+/// # Panics
+///
+/// Panics if no rendered cell has the requested symbol.
 fn symbol_position(terminal: &Terminal<TestBackend>, symbol: &str, width: u16) -> (u16, u16) {
     symbol_position_opt(terminal, symbol, width)
         .unwrap_or_else(|| panic!("rendered `{symbol}` cell"))
 }
 
+/// Returns the optional position of a rendered terminal cell symbol.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered buffer.
+/// * `symbol` — Cell symbol to locate.
+/// * `width` — Terminal width used to convert buffer index to coordinates.
+///
+/// # Returns
+///
+/// An [`Option`] containing the `x` and `y` coordinates when the symbol exists.
 fn symbol_position_opt(
     terminal: &Terminal<TestBackend>,
     symbol: &str,
@@ -440,22 +475,72 @@ fn symbol_position_opt(
         })
 }
 
+/// Returns the symbol rendered at a terminal coordinate.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered buffer.
+/// * `x` — Horizontal cell coordinate.
+/// * `y` — Vertical cell coordinate.
+/// * `width` — Terminal width used to convert coordinates to a buffer index.
+///
+/// # Returns
+///
+/// A string slice containing the rendered cell symbol.
 fn cell_symbol(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> &str {
     let index = usize::from(y) * usize::from(width) + usize::from(x);
     terminal.backend().buffer().content()[index].symbol()
 }
 
+/// Returns foreground and background colors at a terminal coordinate.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered buffer.
+/// * `x` — Horizontal cell coordinate.
+/// * `y` — Vertical cell coordinate.
+/// * `width` — Terminal width used to convert coordinates to a buffer index.
+///
+/// # Returns
+///
+/// A [`tuple`](prim@tuple) containing foreground and background colors.
 fn cell_colors(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> (Color, Color) {
     let index = usize::from(y) * usize::from(width) + usize::from(x);
     let cell = &terminal.backend().buffer().content()[index];
     (cell.fg, cell.bg)
 }
 
+/// Returns text modifiers at a terminal coordinate.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered buffer.
+/// * `x` — Horizontal cell coordinate.
+/// * `y` — Vertical cell coordinate.
+/// * `width` — Terminal width used to convert coordinates to a buffer index.
+///
+/// # Returns
+///
+/// A [`Modifier`] value containing the rendered cell modifiers.
 fn cell_modifiers(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> Modifier {
     let index = usize::from(y) * usize::from(width) + usize::from(x);
     terminal.backend().buffer().content()[index].modifier
 }
 
+/// Draws a view into a test terminal.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal receiving the rendered view.
+/// * `view` — View tree to render.
+///
+/// # Returns
+///
+/// An empty [`Result`] on successful terminal and view rendering.
+///
+/// # Errors
+///
+/// Returns [`leptatui::Error`] if terminal drawing or view rendering fails.
 fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Result<()> {
     let mut render_result = Ok(());
 
@@ -554,6 +639,21 @@ fn renders_text_with_resolved_stylesheet_style() -> Result<()> {
     Ok(())
 }
 
+/// Verifies text wraps to the available render width.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text("Hello World")
+/// terminal width = 6
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The view render call succeeds.
+/// - `Hello` starts on the first row.
+/// - `World` starts on the second row.
 #[test]
 fn text_wraps_to_available_render_width() -> Result<()> {
     let backend = TestBackend::new(6, 3);
@@ -1173,6 +1273,21 @@ fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
     Ok(())
 }
 
+/// Verifies columns reserve wrapped text render height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("Hello World"), text("End")])
+/// width = 6
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The view render call succeeds.
+/// - Wrapped text occupies the first two rows.
+/// - The following text view renders on the third row.
 #[test]
 fn column_reserves_height_for_wrapped_text() -> Result<()> {
     let backend = TestBackend::new(6, 3);
@@ -1587,6 +1702,20 @@ fn controlled_form_preserves_vim_state_across_reconciliation() -> Result<()> {
     Ok(())
 }
 
+/// Verifies fitting columns do not render a scrollbar.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("12345678")])
+/// terminal size = 8x1
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The view render call succeeds.
+/// - The rightmost cell remains the final text character.
 #[test]
 fn fitting_column_does_not_render_scrollbar() -> Result<()> {
     let backend = TestBackend::new(8, 1);
@@ -1605,6 +1734,21 @@ fn fitting_column_does_not_render_scrollbar() -> Result<()> {
     Ok(())
 }
 
+/// Verifies overflowing columns render a right-side scrollbar.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("One"), text("Two"), text("Three")])
+/// terminal size = 8x2
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The view render call succeeds.
+/// - The first scrollbar cell renders as the scroll thumb.
+/// - The second scrollbar cell renders as the scrollbar track.
 #[test]
 fn overflowing_column_renders_right_scrollbar() -> Result<()> {
     let backend = TestBackend::new(8, 2);
@@ -1627,6 +1771,21 @@ fn overflowing_column_renders_right_scrollbar() -> Result<()> {
     Ok(())
 }
 
+/// Verifies overflowing columns reserve width for the scrollbar.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("123456"), text("more"), text("tail")])
+/// terminal size = 6x2
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The view render call succeeds.
+/// - Text wraps before the scrollbar column.
+/// - The scrollbar thumb occupies the rightmost column.
 #[test]
 fn overflowing_column_reserves_width_for_scrollbar() -> Result<()> {
     let backend = TestBackend::new(6, 2);
@@ -1647,6 +1806,21 @@ fn overflowing_column_reserves_width_for_scrollbar() -> Result<()> {
     Ok(())
 }
 
+/// Verifies overflowing columns update the scrollbar thumb after scrolling.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("One"), text("Two"), text("Three")])
+/// PageDown
+/// ```
+///
+/// # Assertions
+///
+/// - The initial terminal draw succeeds.
+/// - PageDown is handled by the view.
+/// - The second terminal draw succeeds.
+/// - The scrollbar thumb moves from the top cell to the bottom cell.
 #[test]
 fn overflowing_column_updates_scrollbar_position() -> Result<()> {
     let backend = TestBackend::new(8, 2);
@@ -1681,6 +1855,21 @@ fn overflowing_column_updates_scrollbar_position() -> Result<()> {
     Ok(())
 }
 
+/// Verifies overflowing column scrollbars reach the bottom at max scroll.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column(Line 0..Line 9)
+/// PageDown
+/// ```
+///
+/// # Assertions
+///
+/// - The initial terminal draw succeeds.
+/// - PageDown is handled by the view.
+/// - The second terminal draw succeeds.
+/// - The scrollbar thumb reaches the bottom row.
 #[test]
 fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> Result<()> {
     let backend = TestBackend::new(8, 5);
@@ -1712,6 +1901,21 @@ fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> Result<()> {
     Ok(())
 }
 
+/// Verifies Vim `G` scrolls an overflowing column to the bottom.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column(Line 0..Line 9)
+/// G
+/// ```
+///
+/// # Assertions
+///
+/// - The initial draw succeeds.
+/// - The initial scroll offset is zero.
+/// - `G` is handled by the view.
+/// - The scroll offset moves to the bottom.
 #[test]
 fn overflowing_column_scrolls_to_bottom_with_vim_g() -> Result<()> {
     let backend = TestBackend::new(8, 5);
@@ -1731,6 +1935,21 @@ fn overflowing_column_scrolls_to_bottom_with_vim_g() -> Result<()> {
     Ok(())
 }
 
+/// Verifies Vim `gg` scrolls an overflowing column to the top.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column(Line 0..Line 9)
+/// G, g, g
+/// ```
+///
+/// # Assertions
+///
+/// - The initial draw succeeds.
+/// - `G` scrolls to the bottom.
+/// - The first `g` keeps the pending top-scroll prefix.
+/// - The second `g` scrolls to the top.
 #[test]
 fn overflowing_column_scrolls_to_top_with_vim_gg() -> Result<()> {
     let backend = TestBackend::new(8, 5);
@@ -1756,6 +1975,20 @@ fn overflowing_column_scrolls_to_top_with_vim_gg() -> Result<()> {
     Ok(())
 }
 
+/// Verifies the Vim `gg` prefix resets after an unrelated key.
+///
+/// # Example Under Test
+///
+/// ```text
+/// G, g, Down, g, g
+/// ```
+///
+/// # Assertions
+///
+/// - The initial draw succeeds.
+/// - `G` scrolls to the bottom.
+/// - `g`, `Down`, `g` leaves the scroll offset at the bottom.
+/// - A fresh `g` completes the prefix and scrolls to the top.
 #[test]
 fn vim_scroll_to_top_prefix_resets_on_unrelated_key() -> Result<()> {
     let backend = TestBackend::new(8, 5);
@@ -1778,6 +2011,21 @@ fn vim_scroll_to_top_prefix_resets_on_unrelated_key() -> Result<()> {
     Ok(())
 }
 
+/// Verifies parent backgrounds fill the bottom row after scrolling down.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("Top"), button("Launch"), text("Tail")]).surface
+/// Down
+/// ```
+///
+/// # Assertions
+///
+/// - The initial styled render succeeds.
+/// - The down key is handled by the view.
+/// - The second styled render succeeds.
+/// - Empty and occupied cells on the bottom row keep the parent background.
 #[test]
 fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down() -> Result<()> {
     let backend = TestBackend::new(12, 2);
@@ -1814,6 +2062,21 @@ fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down
     Ok(())
 }
 
+/// Verifies parent backgrounds fill the top row after scrolling up.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("Top"), button("Launch"), text("Tail")]).surface
+/// PageDown, Up
+/// ```
+///
+/// # Assertions
+///
+/// - The initial styled render succeeds.
+/// - PageDown and Up are handled by the view.
+/// - The second styled render succeeds.
+/// - Empty and occupied cells on the top row keep the parent background.
 #[test]
 fn overflowing_column_keeps_parent_background_on_top_row_after_scrolling_up() -> Result<()> {
     let backend = TestBackend::new(12, 2);
@@ -1854,6 +2117,19 @@ fn overflowing_column_keeps_parent_background_on_top_row_after_scrolling_up() ->
     Ok(())
 }
 
+/// Verifies row minimum height uses split child widths for wrapped text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// row([text("Hello World"), text("Side")])
+/// terminal width = 12
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The row minimum height accounts for wrapping inside the split child area.
 #[test]
 fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
     let backend = TestBackend::new(12, 4);
@@ -1871,6 +2147,18 @@ fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
     Ok(())
 }
 
+/// Verifies text-area minimum height counts trailing newline rows.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada\n")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The text area minimum height includes the trailing blank line and border.
 #[test]
 fn text_area_min_height_counts_trailing_newline() -> Result<()> {
     let backend = TestBackend::new(8, 5);
@@ -1922,6 +2210,22 @@ fn component_view_min_height_uses_wrapped_view_height() -> Result<()> {
     Ok(())
 }
 
+/// Verifies overflowing columns scroll rows produced by wrapped text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("Hello World"), text("Bottom")])
+/// terminal size = 7x2
+/// PageDown
+/// ```
+///
+/// # Assertions
+///
+/// - The initial render succeeds and hides the later child.
+/// - PageDown is handled by the view.
+/// - The second render succeeds.
+/// - The wrapped text row and later child become visible after scrolling.
 #[test]
 fn overflowing_column_scrolls_wrapped_text_rows() -> Result<()> {
     let backend = TestBackend::new(7, 2);
@@ -1955,6 +2259,20 @@ fn overflowing_column_scrolls_wrapped_text_rows() -> Result<()> {
     Ok(())
 }
 
+/// Verifies render contexts apply media rules using the root viewport.
+///
+/// # Example Under Test
+///
+/// ```text
+/// @media (max-width: 12) { .accent { fg: Yellow } }
+/// terminal width = 12
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The view render call succeeds.
+/// - The rendered text resolves the media-rule foreground color.
 #[test]
 fn render_context_applies_media_rules_from_root_viewport() -> Result<()> {
     let backend = TestBackend::new(12, 3);
@@ -1986,6 +2304,20 @@ fn render_context_applies_media_rules_from_root_viewport() -> Result<()> {
     Ok(())
 }
 
+/// Verifies media direction gives stacked bordered buttons enough height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// row([button("A"), button("B")]).stack
+/// @media (max-width: 12) { .stack { direction: Column } }
+/// ```
+///
+/// # Assertions
+///
+/// - The styled render succeeds.
+/// - The first bordered button renders near the top.
+/// - The second bordered button renders lower after column stacking.
 #[test]
 fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()> {
     let backend = TestBackend::new(12, 6);
@@ -2010,6 +2342,19 @@ fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()>
     Ok(())
 }
 
+/// Verifies columns reserve height for nested media-stacked bordered buttons.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("Top"), row(buttons).stack, text("End")])
+/// @media (max-width: 12) { .stack { direction: Column } }
+/// ```
+///
+/// # Assertions
+///
+/// - The styled render succeeds.
+/// - The fourth nested button renders on the expected lower row.
 #[test]
 fn column_reserves_height_for_nested_stacked_bordered_buttons() -> Result<()> {
     let backend = TestBackend::new(12, 14);
@@ -2037,6 +2382,20 @@ fn column_reserves_height_for_nested_stacked_bordered_buttons() -> Result<()> {
     Ok(())
 }
 
+/// Verifies overflowing columns can scroll to later children by default.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text rows..., row([button("Launch"), button("Quit")]).focus-actions])
+/// PageDown
+/// ```
+///
+/// # Assertions
+///
+/// - The initial styled render succeeds and hides the later button.
+/// - PageDown is handled by the view.
+/// - The second styled render succeeds and shows the later button.
 #[test]
 fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
     let backend = TestBackend::new(12, 6);
@@ -2080,6 +2439,25 @@ fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
     Ok(())
 }
 
+/// Verifies page scrolling handles stacked buttons without nested scrolling.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([block(text("Top")), row(buttons).stack, text("End")])
+/// PageDown, PageDown
+/// ```
+///
+/// # Assertions
+///
+/// - The first render shows the top block and hides the last button.
+/// - The first PageDown scrolls the parent page and reveals middle buttons.
+/// - The second PageDown keeps the top block hidden and reveals the last button.
+///
+/// # Why
+///
+/// Parent overflow should manage page scrolling when nested stacked content is
+/// taller than the viewport.
 #[test]
 fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()> {
     let backend = TestBackend::new(12, 6);
@@ -2138,6 +2516,20 @@ fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()
     Ok(())
 }
 
+/// Verifies row layout stays horizontal without a direction override.
+///
+/// # Example Under Test
+///
+/// ```text
+/// row([text("A"), text("B")])
+/// terminal width = 4
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The view render call succeeds.
+/// - The child text views render on the same row in separate columns.
 #[test]
 fn row_layout_stays_horizontal_without_direction_override() -> Result<()> {
     let backend = TestBackend::new(4, 2);
@@ -2433,6 +2825,27 @@ fn focus_scroll_request_does_not_override_later_manual_scroll() -> Result<()> {
     Ok(())
 }
 
+/// Verifies text-area editing scrolls an overflowing parent to the cursor.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("Top"), focused text_area("one\ntwo\nthree\nfour"), text("Bottom")])
+/// Enter, reconcile, render
+/// ```
+///
+/// # Assertions
+///
+/// - The initial draw succeeds with no parent scroll.
+/// - Enter is handled by the focused text area.
+/// - Reconciliation preserves editable state after the input callback updates.
+/// - The next draw scrolls the parent to show the cursor.
+/// - The terminal cursor lands on the expected row.
+///
+/// # Why
+///
+/// Controlled text-area edits can change child height and must keep the cursor
+/// visible inside overflowing parents.
 #[test]
 fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> Result<()> {
     let width = 12;
@@ -2473,6 +2886,25 @@ fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> Result<()> {
     Ok(())
 }
 
+/// Verifies normal-mode input boundary keys scroll an overflowing form.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([text("Top"), focused normal-mode input("Ada"), trailing text rows])
+/// j, k
+/// ```
+///
+/// # Assertions
+///
+/// - The initial draw succeeds with no form scroll.
+/// - `j` is handled and scrolls the form down.
+/// - `k` is handled and scrolls the form back to the top.
+///
+/// # Why
+///
+/// Single-line inputs at movement boundaries should pass normal-mode movement
+/// intent to their overflowing parent form.
 #[test]
 fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> Result<()> {
     let backend = TestBackend::new(12, 5);
@@ -2505,6 +2937,27 @@ fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> Result<()> {
     Ok(())
 }
 
+/// Verifies normal-mode text-area boundary keys scroll an overflowing form.
+///
+/// # Example Under Test
+///
+/// ```text
+/// form([text("Top"), focused normal-mode text_area("one\ntwo"), trailing text rows])
+/// j, j, k, k
+/// ```
+///
+/// # Assertions
+///
+/// - The initial draw succeeds with no form scroll.
+/// - The first `j` moves within the text area without parent scrolling.
+/// - The second `j` is handled at the boundary and scrolls the form down.
+/// - The first `k` moves within the text area without parent scrolling up.
+/// - The second `k` is handled at the boundary and scrolls the form to the top.
+///
+/// # Why
+///
+/// Multi-line text areas should only delegate normal-mode movement to the form
+/// after reaching their own vertical boundaries.
 #[test]
 fn normal_mode_text_area_boundary_keys_scroll_overflowing_form() -> Result<()> {
     let backend = TestBackend::new(12, 5);

@@ -14,7 +14,9 @@ use crate::{
     context::ContextScope,
 };
 
+/// Shared mutable component instance stored by a component view boundary.
 type SharedComponent = Rc<RefCell<dyn Component>>;
+/// Lazy factory that creates a shared component instance on first use.
 type ComponentFactory = Box<dyn FnOnce() -> SharedComponent>;
 
 /// Shared component boundary stored inside a render tree.

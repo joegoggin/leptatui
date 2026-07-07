@@ -98,6 +98,15 @@ struct ThemeRenderRoot {
 }
 
 impl Component for ThemeRenderRoot {
+    /// Provides variables from the active boolean theme flag and renders the child.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Rendering context used to attach the stylesheet and render the child.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] on successful child rendering.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let theme = if self.dark.get_untracked() {
             ThemeVariables::new()
@@ -122,6 +131,15 @@ struct ThemeSignalRoot {
 }
 
 impl Component for ThemeSignalRoot {
+    /// Provides the theme signal and renders the child with stylesheet rules.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Rendering context used to attach the stylesheet and render the child.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] on successful child rendering.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.theme);
         ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_view(&self.child))
@@ -204,6 +222,18 @@ fn component_render_scope_can_provide_and_read_context() -> Result<()> {
     Ok(())
 }
 
+/// Verifies direct theme variable context updates rendered stylesheet colors.
+///
+/// # Example Under Test
+///
+/// A `ThemeRenderRoot` provides light colors when `dark` is false and dark
+/// colors when `dark` is true.
+///
+/// # Assertions
+///
+/// - The first render succeeds and paints the themed text black on white.
+/// - Updating the signal to dark mode succeeds.
+/// - The second render succeeds and paints the themed text white on black.
 #[test]
 fn context_theme_variables_update_rendered_styles() -> Result<()> {
     let owner = Owner::new();
@@ -257,6 +287,18 @@ fn context_theme_variables_update_rendered_styles() -> Result<()> {
     Ok(())
 }
 
+/// Verifies theme signal context updates rendered stylesheet colors.
+///
+/// # Example Under Test
+///
+/// A `ThemeSignalRoot` provides a `ReadSignal<ThemeVariables>` consumed by
+/// theme-backed stylesheet declarations.
+///
+/// # Assertions
+///
+/// - The first render succeeds and resolves light theme colors.
+/// - Updating the theme signal succeeds.
+/// - The second render succeeds and resolves dark theme colors.
 #[test]
 fn context_theme_signal_updates_rendered_styles() -> Result<()> {
     let owner = Owner::new();

@@ -303,6 +303,11 @@ impl SelectorName {
 }
 
 impl ToTokens for SelectorName {
+    /// Appends this selector name as a string literal token.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` — Token stream receiving the selector literal.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.literal().to_tokens(tokens);
     }
