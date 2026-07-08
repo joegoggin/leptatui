@@ -3,13 +3,10 @@ name = "leptatui"
 version.workspace = true
 edition.workspace = true
 
-[features]
-images = ["dep:image", "dep:ratatui-image", "ratatui-image/crossterm", "ratatui-image/image-defaults"]
-
 [dependencies]
 any_spawner = { version = "0.3.0", features = ["tokio"] }
 crossterm = "0.29.0"
-image = { version = "0.25.10", default-features = false, optional = true }
+image = { version = "0.25.10", default-features = false }
 leptatui-macros = { path = "../leptatui-macros" }
 leptos = { version = "0.9.0-alpha", default-features = false, features = [
     "csr",
@@ -18,7 +15,10 @@ ratatui = { version = "0.30.0", default-features = false, features = [
     "crossterm_0_29",
     "unstable-rendered-line-info",
 ] }
-ratatui-image = { version = "11.0.6", default-features = false, optional = true }
+ratatui-image = { version = "11.0.6", default-features = false, features = [
+    "crossterm",
+    "image-defaults",
+] }
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", default-features = false, features = [
     "macros",

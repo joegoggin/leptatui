@@ -229,10 +229,10 @@ fn StandardLibraryShowcase() -> View {
                 <Text class="label">"Image"</Text>
                 <Image
                     src="crates/leptatui/examples/assets/showcase.jpg"
-                    alt="Image fallback: enable the images feature and provide a PNG at this path to render terminal graphics."
+                    alt="Image fallback: terminal graphics are unavailable in this terminal."
                 />
                 <Text class="caption">
-                    "Default builds show deterministic fallback text when image support is disabled or unavailable."
+                    "Images render automatically in terminals with supported graphics protocols; otherwise fallback text is shown."
                 </Text>
                 {move || {
                     let current_progress = progress.get_untracked();

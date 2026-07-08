@@ -52,10 +52,9 @@ progress bar in one app. Use Tab and Shift+Tab to move focus. Press `i`, `a`,
 `I`, or `A` to enter insert mode; Esc or `jk` returns to normal mode; `v` and
 `V` select text; `x`, `d`, `y`, `p`, `u`, and Ctrl+R edit in normal or visual
 mode. Use Enter to submit inputs, Ctrl+Enter to submit text areas, activate
-Advance or Reset to update progress, and press `q` to quit. Build with
-`--features images` and provide a PNG at the path shown in the example to try
-terminal graphics rendering; otherwise the `Image` view displays deterministic
-fallback text.
+Advance or Reset to update progress, and press `q` to quit. The `Image` view
+renders terminal graphics automatically when the terminal supports them and
+otherwise displays deterministic fallback text.
 
 ## Theme Switcher
 

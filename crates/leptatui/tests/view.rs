@@ -2769,7 +2769,7 @@ fn image_fallback_renders_alt_text_on_test_backend() -> Result<()> {
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The rendered fallback text matches the build's deterministic support
+/// - The rendered fallback text matches the runtime deterministic support
 ///   message.
 #[test]
 fn image_fallback_without_alt_uses_support_message() -> Result<()> {
@@ -2779,11 +2779,7 @@ fn image_fallback_without_alt_uses_support_message() -> Result<()> {
 
     draw_view(&mut terminal, &view)?;
 
-    #[cfg(feature = "images")]
     let expected = "terminal image support is unavailable";
-    #[cfg(not(feature = "images"))]
-    let expected = "image support is disabled";
-
     assert!(rendered_text(&terminal).contains(expected));
 
     Ok(())

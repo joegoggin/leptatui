@@ -1,8 +1,8 @@
-//! Optional terminal image backend support.
+//! Terminal image backend support.
 //!
-//! This module keeps image decoding and terminal graphics protocol rendering
-//! behind the `images` feature. Public image view APIs are layered on top of
-//! this crate-internal backend.
+//! This module detects terminal graphics protocol support at runtime, renders
+//! path-backed images when possible, and provides deterministic text fallback
+//! when the active terminal or render target cannot display images.
 
 use std::path::Path;
 
@@ -21,21 +21,15 @@ pub(crate) struct TerminalImageSupport {
 
 /// Concrete terminal image support state.
 #[derive(Clone, Debug)]
-#[cfg_attr(not(feature = "images"), allow(dead_code))]
 enum TerminalImageSupportInner {
-    /// The crate was built without the `images` feature.
-    #[cfg(not(feature = "images"))]
-    FeatureDisabled,
-    /// The feature is enabled but no graphics protocol was detected.
+    /// No graphics protocol was detected.
     Unavailable,
     /// A real terminal graphics protocol is available.
-    #[cfg(feature = "images")]
     Protocol(ratatui_image::picker::Picker),
 }
 
 /// Result of trying to render a terminal image.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(not(feature = "images"), allow(dead_code))]
 pub(crate) enum TerminalImageRenderOutcome {
     /// Image protocol data was written into the Ratatui buffer.
     Rendered,
@@ -45,11 +39,7 @@ pub(crate) enum TerminalImageRenderOutcome {
 
 /// Reason terminal image rendering fell back to text.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(not(feature = "images"), allow(dead_code))]
 pub(crate) enum TerminalImageFallback {
-    /// The crate was built without optional image support.
-    #[cfg(not(feature = "images"))]
-    FeatureDisabled,
     /// The current terminal does not expose a supported image protocol.
     UnsupportedTerminal,
     /// The active render target is not a real terminal frame.
@@ -62,23 +52,12 @@ pub(crate) enum TerminalImageFallback {
 
 impl Default for TerminalImageSupport {
     fn default() -> Self {
-        #[cfg(feature = "images")]
-        {
-            Self::unavailable()
-        }
-
-        #[cfg(not(feature = "images"))]
-        {
-            Self::feature_disabled()
-        }
+        Self::unavailable()
     }
 }
 
 impl TerminalImageSupport {
     /// Detects terminal image support from stdio.
-    ///
-    /// The query is intentionally feature-gated so default builds avoid image
-    /// decoding and terminal graphics protocol dependencies.
     ///
     /// # Returns
     ///
@@ -88,26 +67,12 @@ impl TerminalImageSupport {
         query_stdio()
     }
 
-    /// Returns support state for a build without image feature support.
-    ///
-    /// # Returns
-    ///
-    /// A [`TerminalImageSupport`] value that always falls back because the
-    /// crate was built without optional image dependencies.
-    #[cfg(not(feature = "images"))]
-    fn feature_disabled() -> Self {
-        Self {
-            inner: TerminalImageSupportInner::FeatureDisabled,
-        }
-    }
-
-    /// Returns support state for feature-enabled but unavailable image support.
+    /// Returns support state for unavailable image support.
     ///
     /// # Returns
     ///
     /// A [`TerminalImageSupport`] value that falls back because no supported
     /// terminal image protocol is available.
-    #[cfg_attr(not(feature = "images"), allow(dead_code))]
     fn unavailable() -> Self {
         Self {
             inner: TerminalImageSupportInner::Unavailable,
@@ -126,7 +91,6 @@ impl TerminalImageSupport {
     ///
     /// A [`TerminalImageRenderOutcome`] describing whether protocol rendering
     /// succeeded or fallback text should be used.
-    #[cfg_attr(not(feature = "images"), allow(unused_variables))]
     pub(crate) fn render_path_to_buffer(
         &self,
         path: &Path,
@@ -140,14 +104,9 @@ impl TerminalImageSupport {
         }
 
         match &self.inner {
-            #[cfg(not(feature = "images"))]
-            TerminalImageSupportInner::FeatureDisabled => {
-                TerminalImageRenderOutcome::Fallback(TerminalImageFallback::FeatureDisabled)
-            }
             TerminalImageSupportInner::Unavailable => {
                 TerminalImageRenderOutcome::Fallback(TerminalImageFallback::UnsupportedTerminal)
             }
-            #[cfg(feature = "images")]
             TerminalImageSupportInner::Protocol(picker) => {
                 render_path_with_picker(picker, path, area, buffer)
             }
@@ -204,8 +163,6 @@ impl TerminalImageFallback {
     /// A static string describing why image rendering fell back to text.
     fn message(self) -> &'static str {
         match self {
-            #[cfg(not(feature = "images"))]
-            Self::FeatureDisabled => "image support is disabled",
             Self::UnsupportedTerminal | Self::UnsupportedRenderTarget => {
                 "terminal image support is unavailable"
             }
@@ -215,17 +172,6 @@ impl TerminalImageFallback {
     }
 }
 
-#[cfg(not(feature = "images"))]
-/// Returns feature-disabled image support.
-///
-/// # Returns
-///
-/// A [`TerminalImageSupport`] value that always falls back.
-fn query_stdio() -> TerminalImageSupport {
-    TerminalImageSupport::feature_disabled()
-}
-
-#[cfg(feature = "images")]
 /// Queries stdio for supported terminal image protocols.
 ///
 /// # Returns
@@ -247,7 +193,6 @@ fn query_stdio() -> TerminalImageSupport {
     }
 }
 
-#[cfg(feature = "images")]
 /// Renders a path-backed image with a detected protocol picker.
 ///
 /// # Arguments
@@ -408,7 +353,7 @@ mod tests {
         assert!(!rendered.contains('\u{1b}'));
     }
 
-    /// Verifies feature-enabled image decoding and fit sizing are deterministic.
+    /// Verifies image decoding and fit sizing are deterministic.
     ///
     /// # Example Under Test
     ///
@@ -422,9 +367,8 @@ mod tests {
     ///
     /// - The PNG fixture writes, opens, and decodes successfully.
     /// - `Resize::Fit` returns an image matching the target pixel area.
-    #[cfg(feature = "images")]
     #[test]
-    fn feature_enabled_decode_and_fit_sizing_are_deterministic() {
+    fn decode_and_fit_sizing_are_deterministic() {
         use ratatui::layout::Size;
         use ratatui_image::{FontSize, Resize};
 

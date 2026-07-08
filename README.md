@@ -117,11 +117,10 @@ visual mode support common movement (`h`, `j`, `k`, `l`, `0`, `$`, `w`, `b`,
 `y`, `yy`, `p`), line opening (`o`, `O` for text areas), undo (`u`), and redo
 (Ctrl+R).
 
-`Image` renders a path-backed terminal image when the crate is built with the
-optional `images` feature and the active terminal exposes a supported graphics
-protocol. Otherwise it renders deterministic fallback text, preferring the
-view's `alt` text when provided. `ProgressBar` renders a gauge with a clamped
-`0.0..=1.0` value and optional `label`.
+`Image` renders a path-backed terminal image when the active terminal exposes a
+supported graphics protocol. Otherwise it renders deterministic fallback text,
+preferring the view's `alt` text when provided. `ProgressBar` renders a gauge
+with a clamped `0.0..=1.0` value and optional `label`.
 
 ```rust
 use leptatui::prelude::*;
