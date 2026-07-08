@@ -118,6 +118,10 @@ impl Element {
             });
         }
 
+        if self.name == "Image" {
+            return self.expand_image();
+        }
+
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 let leptatui = crate::utils::crate_path::leptatui();
@@ -214,6 +218,50 @@ impl Element {
         self.expand_attrs(build(value), &attrs)
     }
 
+    /// Expands a path-backed image element.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing an image builder expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if children are present, `src` is missing,
+    /// duplicate `src` attributes are supplied, or image attributes are invalid.
+    fn expand_image(&self) -> Result<TokenStream> {
+        if !self.children.is_empty() {
+            return Err(Error::new_spanned(
+                &self.name,
+                "Image does not accept children",
+            ));
+        }
+
+        let attrs = self.validate_attrs()?;
+        let source_attrs = attrs
+            .iter()
+            .filter(|validated| matches!(validated.kind, AttrKind::ImageSource))
+            .collect::<Vec<_>>();
+        let source_attr = match source_attrs.as_slice() {
+            [source_attr] => *source_attr,
+            [] => {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    "Image requires a src attribute",
+                ));
+            }
+            [first, ..] => {
+                return Err(Error::new_spanned(
+                    &first.attr.name,
+                    "Image expects exactly one src attribute",
+                ));
+            }
+        };
+
+        let source = source_attr.attr.value.to_tokens();
+        let leptatui = crate::utils::crate_path::leptatui();
+        self.expand_attrs(quote! { #leptatui::image(#source) }, &attrs)
+    }
+
     /// Expands a PascalCase component tag into a component constructor call.
     ///
     /// # Returns
@@ -297,6 +345,20 @@ impl Element {
                 "class" => AttrKind::Class,
                 "id" => AttrKind::Id,
                 "style" => AttrKind::Style,
+                "src" if element_name == "Image" => AttrKind::ImageSource,
+                "src" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! src attribute is only supported on Image",
+                    ));
+                }
+                "alt" if element_name == "Image" => AttrKind::Alt,
+                "alt" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! alt attribute is only supported on Image",
+                    ));
+                }
                 "value" if matches!(element_name.as_str(), "Input" | "TextArea") => {
                     AttrKind::InputValue
                 }
@@ -356,6 +418,9 @@ impl Element {
                         "Input" | "TextArea" => {
                             "unsupported view! attribute; expected class, id, style, value, placeholder, or on_input"
                         }
+                        "Image" => {
+                            "unsupported view! attribute; expected class, id, style, src, or alt"
+                        }
                         _ => "unsupported view! attribute; expected class, id, or style",
                     };
                     return Err(Error::new_spanned(&attr.name, message));
@@ -413,7 +478,9 @@ impl Element {
                     quote! { (#expanded).on_cancel(#value) }
                 }
                 AttrKind::InputValue => expanded,
+                AttrKind::ImageSource => expanded,
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
+                AttrKind::Alt => quote! { (#expanded).alt(#value) },
                 AttrKind::OnInput => {
                     reject_literal_callback(attr, "on_input")?;
                     quote! { (#expanded).on_input(#value) }
@@ -427,6 +494,7 @@ impl Element {
                     | AttrKind::OnCancel
                     | AttrKind::OnInput
                     | AttrKind::InputValue
+                    | AttrKind::ImageSource
                     | AttrKind::Style
             ) && attr.value.is_unbraced_expr()
             {
@@ -648,7 +716,7 @@ fn reject_literal_callback(attr: &Attr, attribute_name: &str) -> Result<()> {
 fn is_builtin_element(name: &Ident) -> bool {
     matches!(
         name.to_string().as_str(),
-        "Block" | "Row" | "Column" | "Form" | "Text" | "Button" | "Input" | "TextArea"
+        "Block" | "Row" | "Column" | "Form" | "Text" | "Button" | "Input" | "TextArea" | "Image"
     )
 }
 
@@ -675,8 +743,12 @@ mod attr_validation {
         Style,
         /// Required input value.
         InputValue,
+        /// Required image source.
+        ImageSource,
         /// Input placeholder text.
         Placeholder,
+        /// Image fallback text.
+        Alt,
         /// Button activation callback.
         OnPress,
         /// Form submit callback.

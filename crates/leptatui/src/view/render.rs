@@ -231,6 +231,18 @@ impl View {
                 ctx.render_widget(text_paragraph(content.as_str(), style));
                 Ok(())
             }
+            Self::Image {
+                source,
+                alt,
+                metadata,
+            } => {
+                let style = resolve_style(metadata, ctx);
+                let path = match source {
+                    super::model::ImageSource::Path(path) => path.as_path(),
+                };
+                ctx.render_terminal_image_path(path, alt.as_deref(), style.to_ratatui_style());
+                Ok(())
+            }
             Self::Row { children, metadata } => {
                 render_layout_view(children, metadata, LayoutDirection::Row, ctx)
             }
@@ -494,6 +506,7 @@ impl View {
                 ..
             } => flush_expired_insert_key(value, on_input, editable_state, now),
             Self::Text { .. } | Self::Button { .. } => None,
+            Self::Image { .. } => None,
         }
     }
 
@@ -624,7 +637,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => Ok(KeyControl::Pass),
+            | Self::TextArea { .. }
+            | Self::Image { .. } => Ok(KeyControl::Pass),
         }
     }
 
@@ -741,7 +755,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => false,
+            | Self::TextArea { .. }
+            | Self::Image { .. } => false,
         }
     }
 
@@ -780,7 +795,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => false,
+            | Self::TextArea { .. }
+            | Self::Image { .. } => false,
         }
     }
 
@@ -801,7 +817,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => false,
+            | Self::TextArea { .. }
+            | Self::Image { .. } => false,
         }
     }
 
@@ -815,7 +832,8 @@ impl View {
             | Self::Form { metadata, .. }
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
-            | Self::TextArea { metadata, .. } => Some(metadata),
+            | Self::TextArea { metadata, .. }
+            | Self::Image { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -886,7 +904,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => None,
+            | Self::TextArea { .. }
+            | Self::Image { .. } => None,
         }
     }
 
@@ -926,7 +945,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => None,
+            | Self::TextArea { .. }
+            | Self::Image { .. } => None,
         }
     }
 
@@ -967,7 +987,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => None,
+            | Self::TextArea { .. }
+            | Self::Image { .. } => None,
         }
     }
 
@@ -985,7 +1006,7 @@ impl View {
             | Self::Form { children, .. } => children.iter().map(Self::focusable_count).sum(),
             Self::Dynamic(child) => child.with_view(Self::focusable_count),
             Self::Component(component) => component.focusable_count(),
-            Self::Text { .. } => 0,
+            Self::Text { .. } | Self::Image { .. } => 0,
         }
     }
 
@@ -1047,7 +1068,7 @@ impl View {
                 .find_map(|child| child.focused_index_inner(index)),
             Self::Dynamic(child) => child.with_view(|child| child.focused_index_inner(index)),
             Self::Component(component) => component.focused_index_inner(index),
-            Self::Text { .. } => None,
+            Self::Text { .. } | Self::Image { .. } => None,
         }
     }
 
@@ -1111,7 +1132,7 @@ impl View {
                 child.with_view_mut(|child| child.set_focus_by_index_inner(target, index));
             }
             Self::Component(component) => component.set_focus_by_index_inner(target, index),
-            Self::Text { .. } => {}
+            Self::Text { .. } | Self::Image { .. } => {}
         }
     }
 
@@ -1140,7 +1161,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => None,
+            | Self::TextArea { .. }
+            | Self::Image { .. } => None,
         }
     }
 
@@ -1169,7 +1191,8 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => Ok(AppControl::Continue),
+            | Self::TextArea { .. }
+            | Self::Image { .. } => Ok(AppControl::Continue),
         }
     }
 }
@@ -3829,9 +3852,11 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
         View::Component(component) => component
             .focused_control_span(ctx)
             .map(|(top, bottom)| VerticalSpan { top, bottom }),
-        View::Text { .. } | View::Button { .. } | View::Input { .. } | View::TextArea { .. } => {
-            None
-        }
+        View::Text { .. }
+        | View::Button { .. }
+        | View::Input { .. }
+        | View::TextArea { .. }
+        | View::Image { .. } => None,
     }
 }
 
@@ -4306,6 +4331,7 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         View::Form {
             children, metadata, ..
         } => min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
+        View::Image { .. } => 1,
         View::Component(component) => component.min_height(ctx),
     }
 }

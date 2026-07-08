@@ -1,0 +1,5 @@
+error: Image expects exactly one src attribute
+ --> tests/fixtures/view_macro/fail/image_duplicate_src.rs:8:16
+  |
+8 |         <Image src="one.png" src="two.png" />
+  |                ^^^

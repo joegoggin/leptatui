@@ -26,6 +26,8 @@ pub enum ViewType {
     Input,
     /// Multiline editable text control.
     TextArea,
+    /// Path-backed terminal image with text fallback.
+    Image,
 }
 
 /// Vim editing mode retained for editable text controls.

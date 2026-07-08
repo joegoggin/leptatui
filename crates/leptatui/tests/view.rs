@@ -13,9 +13,9 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     __private::FocusedControl, AppControl, AppRoot, Borders, Color, Component, EditableState,
-    KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleMetadata,
-    StyleSelector, Stylesheet, TuiStyle, View, ViewType, VimMode, block, button, column, component,
-    dynamic, form, input, row, text, text_area,
+    ImageSource, KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result,
+    StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View, ViewType, VimMode, block, button,
+    column, component, dynamic, form, image, input, row, text, text_area,
 };
 use ratatui::{
     Terminal,
@@ -55,6 +55,7 @@ fn button_focuses(view: &View) -> Vec<bool> {
         View::Text { .. }
         | View::Input { .. }
         | View::TextArea { .. }
+        | View::Image { .. }
         | View::Dynamic(_)
         | View::Component(_) => Vec::new(),
     }
@@ -78,7 +79,9 @@ fn control_focuses(view: &View) -> Vec<bool> {
         View::Row { children, .. }
         | View::Column { children, .. }
         | View::Form { children, .. } => children.iter().flat_map(control_focuses).collect(),
-        View::Text { .. } | View::Dynamic(_) | View::Component(_) => Vec::new(),
+        View::Text { .. } | View::Image { .. } | View::Dynamic(_) | View::Component(_) => {
+            Vec::new()
+        }
     }
 }
 
@@ -550,6 +553,25 @@ fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Result<()> {
     })?;
 
     render_result
+}
+
+/// Returns the rendered buffer symbols as one contiguous string.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered buffer.
+///
+/// # Returns
+///
+/// A [`String`] containing every cell symbol in buffer order.
+fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect()
 }
 
 /// Verifies a block view renders its child text.
@@ -2650,6 +2672,190 @@ fn view_metadata_setters_store_selector_fields() {
     );
     assert_eq!(metadata.inline_style(), Some(style));
     assert!(metadata.is_focused());
+}
+
+/// Verifies image builders store source, fallback text, and selector metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// image("assets/logo.png")
+///     .alt("Project logo")
+///     .with_id("logo")
+///     .with_classes("media primary")
+/// ```
+///
+/// # Assertions
+///
+/// - The image source is path-backed.
+/// - Fallback text is retained.
+/// - The metadata view type is `Image`.
+/// - Standard selector metadata is retained.
+#[test]
+fn image_builder_stores_source_alt_and_selector_metadata() {
+    let style = TuiStyle::new().foreground(Color::Yellow);
+    let view = image("assets/logo.png")
+        .alt("Project logo")
+        .with_id("logo")
+        .with_classes("media primary")
+        .with_inline_style(style);
+
+    match view {
+        View::Image {
+            source,
+            alt,
+            metadata,
+        } => {
+            assert_eq!(source, ImageSource::Path("assets/logo.png".into()));
+            assert_eq!(alt.as_deref(), Some("Project logo"));
+            assert_eq!(metadata.view_type(), ViewType::Image);
+            assert_eq!(metadata.id(), Some("logo"));
+            assert_eq!(
+                metadata.classes(),
+                &[String::from("media"), String::from("primary")]
+            );
+            assert_eq!(metadata.inline_style(), Some(style));
+        }
+        other => panic!("expected image view, got {other:?}"),
+    }
+}
+
+/// Verifies image fallback rendering prefers caller-provided alt text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// image("missing.png").alt("Project logo")
+/// TestBackend
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The fallback text is rendered into the test backend.
+/// - No escape protocol bytes are written into the text buffer.
+///
+/// # Why
+///
+/// Test backends must remain deterministic even when terminal image protocols
+/// are unavailable.
+#[test]
+fn image_fallback_renders_alt_text_on_test_backend() -> Result<()> {
+    let backend = TestBackend::new(24, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png").alt("Project logo");
+
+    draw_view(&mut terminal, &view)?;
+
+    let rendered = rendered_text(&terminal);
+    assert!(rendered.contains("Project logo"));
+    assert!(!rendered.contains('\u{1b}'));
+
+    Ok(())
+}
+
+/// Verifies image fallback rendering has deterministic text without alt text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// image("missing.png")
+/// TestBackend
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The rendered fallback text matches the build's deterministic support
+///   message.
+#[test]
+fn image_fallback_without_alt_uses_support_message() -> Result<()> {
+    let backend = TestBackend::new(40, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png");
+
+    draw_view(&mut terminal, &view)?;
+
+    #[cfg(feature = "images")]
+    let expected = "terminal image support is unavailable";
+    #[cfg(not(feature = "images"))]
+    let expected = "image support is disabled";
+
+    assert!(rendered_text(&terminal).contains(expected));
+
+    Ok(())
+}
+
+/// Verifies image type styles apply to fallback text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Image { fg: Green }
+/// image("missing.png").alt("Logo")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The fallback text resolves styles through `ViewType::Image`.
+#[test]
+fn image_type_styles_apply_to_fallback_text() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png").alt("Logo");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::view_type(ViewType::Image),
+        TuiStyle::new().foreground(Color::Green),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let (fg, _) = cell_colors(&terminal, 0, 0, 8);
+    assert_eq!(fg, Color::Green);
+
+    Ok(())
+}
+
+/// Verifies image fallback text inherits parent text styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Form { fg: Green }
+/// form([image("missing.png").alt("Logo")])
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The image fallback cell inherits foreground color from the form.
+#[test]
+fn image_fallback_text_inherits_parent_text_style() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = form([image("missing.png").alt("Logo")]);
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::view_type(ViewType::Form),
+        TuiStyle::new().foreground(Color::Green),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let (fg, _) = cell_colors(&terminal, 0, 0, 8);
+    assert_eq!(fg, Color::Green);
+
+    Ok(())
 }
 
 /// Verifies tab navigation moves between static buttons.

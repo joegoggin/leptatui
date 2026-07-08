@@ -407,4 +407,47 @@ mod tests {
         assert!(rendered.contains("fallback image"));
         assert!(!rendered.contains('\u{1b}'));
     }
+
+    /// Verifies feature-enabled image decoding and fit sizing are deterministic.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// 1x1 PNG
+    /// area = 2x2 cells
+    /// font = 10x20 pixels
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The PNG fixture writes, opens, and decodes successfully.
+    /// - `Resize::Fit` returns an image matching the target pixel area.
+    #[cfg(feature = "images")]
+    #[test]
+    fn feature_enabled_decode_and_fit_sizing_are_deterministic() {
+        use ratatui::layout::Size;
+        use ratatui_image::{FontSize, Resize};
+
+        const ONE_BY_ONE_PNG: &[u8] = &[
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0,
+            5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ];
+        let path = std::env::temp_dir().join(format!(
+            "leptatui-image-decode-fit-{}.png",
+            std::process::id()
+        ));
+
+        std::fs::write(&path, ONE_BY_ONE_PNG).expect("png fixture should be written");
+        let decoded = image::ImageReader::open(&path)
+            .expect("png fixture should open")
+            .decode()
+            .expect("png fixture should decode");
+        let resized =
+            Resize::Fit(None).resize(&decoded, FontSize::new(10, 20), Size::new(2, 2), None);
+        let _ = std::fs::remove_file(path);
+
+        assert_eq!(resized.width(), 20);
+        assert_eq!(resized.height(), 40);
+    }
 }
