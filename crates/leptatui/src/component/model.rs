@@ -4,17 +4,25 @@
 //! scoped stylesheets, inherited style values, selector ancestor metadata, and
 //! helper methods for drawing widgets or child views.
 
+use std::path::Path;
+
 use ratatui::{
     Frame,
     buffer::Buffer,
     layout::{Position, Rect},
+    style::Style,
     widgets::{StatefulWidget, Widget},
 };
 
 use crate::{
     StyleMetadata,
     app::Result,
+    context,
     style::{Stylesheet, TuiStyle, ViewportSize},
+    terminal_image::{
+        TerminalImageFallback, TerminalImageRenderOutcome, TerminalImageSupport,
+        render_terminal_image_fallback,
+    },
     view::View,
 };
 
@@ -32,6 +40,8 @@ pub struct RenderCtx<'frame, 'buffer> {
     inherited_style: TuiStyle,
     /// Ancestor metadata used by descendant selector resolution.
     selector_ancestors: Vec<StyleMetadata>,
+    /// Terminal image support detected for this render pass.
+    terminal_images: TerminalImageSupport,
 }
 
 impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
@@ -53,6 +63,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             stylesheets: Vec::new(),
             inherited_style: TuiStyle::new(),
             selector_ancestors: Vec::new(),
+            terminal_images: context::use_context::<TerminalImageSupport>().unwrap_or_default(),
         }
     }
 
@@ -127,6 +138,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             stylesheets,
             inherited_style,
             selector_ancestors,
+            terminal_images: self.terminal_images.clone(),
         }
     }
 
@@ -192,6 +204,54 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         view.render(self)
     }
 
+    /// Renders a path-backed terminal image or deterministic fallback text.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Image file path to render.
+    /// * `alt` — Optional fallback text rendered when image support is
+    ///   unavailable or rendering fails.
+    /// * `fallback_style` — Ratatui style applied to fallback text.
+    ///
+    /// # Returns
+    ///
+    /// A [`TerminalImageRenderOutcome`] describing whether the image rendered
+    /// through a terminal protocol or fell back to text.
+    #[allow(dead_code)]
+    pub(crate) fn render_terminal_image_path(
+        &mut self,
+        path: &Path,
+        alt: Option<&str>,
+        fallback_style: Style,
+    ) -> TerminalImageRenderOutcome {
+        if !self.target.supports_terminal_images() {
+            let reason = TerminalImageFallback::UnsupportedRenderTarget;
+            render_terminal_image_fallback(
+                reason,
+                alt,
+                fallback_style,
+                self.area,
+                self.target.buffer_mut(),
+            );
+            return TerminalImageRenderOutcome::Fallback(reason);
+        }
+
+        let outcome =
+            self.terminal_images
+                .render_path_to_buffer(path, self.area, self.target.buffer_mut());
+        if let TerminalImageRenderOutcome::Fallback(reason) = outcome {
+            render_terminal_image_fallback(
+                reason,
+                alt,
+                fallback_style,
+                self.area,
+                self.target.buffer_mut(),
+            );
+        }
+
+        outcome
+    }
+
     /// Renders a view into an offscreen buffer and copies a clipped row slice.
     pub(crate) fn render_view_clipped(
         &mut self,
@@ -243,6 +303,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
                 stylesheets: self.stylesheets.clone(),
                 inherited_style,
                 selector_ancestors,
+                terminal_images: TerminalImageSupport::default(),
             };
             view.render(&mut buffer_ctx)?;
         }
@@ -409,6 +470,15 @@ impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
                 cursor_position, ..
             } => **cursor_position = Some(position),
         }
+    }
+
+    /// Returns whether this target can receive terminal image protocol data.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the render target is an active frame.
+    fn supports_terminal_images(&self) -> bool {
+        matches!(self, Self::Frame(_))
     }
 
     /// Returns the underlying buffer.

@@ -137,7 +137,11 @@ where
 
         loop {
             if should_draw {
-                draw_root(&mut self.root, &mut session.terminal)?;
+                draw_root(
+                    &mut self.root,
+                    &mut session.terminal,
+                    &session.terminal_images,
+                )?;
                 should_draw = false;
             }
 

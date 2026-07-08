@@ -67,6 +67,8 @@ pub mod route;
 pub mod style;
 pub mod view;
 
+mod terminal_image;
+
 extern crate self as leptatui;
 
 pub use action::{Action, ActionState, create_action};
