@@ -173,6 +173,41 @@ pub fn image(source: impl Into<ImageSource>) -> View {
     }
 }
 
+/// Creates a progress bar.
+///
+/// # Arguments
+///
+/// * `value` — Completion ratio rendered by the progress bar.
+///
+/// # Returns
+///
+/// A [`View::ProgressBar`] containing the provided value.
+pub fn progress_bar(value: f64) -> View {
+    View::ProgressBar {
+        value: progress_bar_value(value),
+        label: None,
+        metadata: StyleMetadata::new(ViewType::ProgressBar),
+    }
+}
+
+/// Returns a clamped progress bar value.
+///
+/// # Arguments
+///
+/// * `value` — Caller-provided progress value to clamp.
+///
+/// # Returns
+///
+/// A [`f64`] ratio clamped to `0.0..=1.0`, with non-finite values mapped to
+/// `0.0`.
+fn progress_bar_value(value: f64) -> f64 {
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 /// Creates a dynamic child view.
 ///
 /// # Arguments

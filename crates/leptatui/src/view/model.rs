@@ -159,6 +159,15 @@ pub enum View {
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
+    /// Gauge-style progress indicator.
+    ProgressBar {
+        /// Completion ratio requested by the caller.
+        value: f64,
+        /// Optional label rendered over the gauge.
+        label: Option<String>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
     /// Child view produced when the tree is traversed.
     Dynamic(DynamicView),
     /// Child component preserved as a tree boundary.
@@ -182,7 +191,8 @@ impl View {
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
             | Self::TextArea { metadata, .. }
-            | Self::Image { metadata, .. } => Some(metadata),
+            | Self::Image { metadata, .. }
+            | Self::ProgressBar { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -203,7 +213,8 @@ impl View {
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
             | Self::TextArea { metadata, .. }
-            | Self::Image { metadata, .. } => Some(metadata),
+            | Self::Image { metadata, .. }
+            | Self::ProgressBar { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -394,6 +405,23 @@ impl View {
 
         self
     }
+
+    /// Stores label text on a progress bar view.
+    ///
+    /// # Arguments
+    ///
+    /// * `label` — Text rendered over the progress bar gauge.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with label text when the view is a progress bar.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        if let Self::ProgressBar { label: slot, .. } = &mut self {
+            *slot = Some(label.into());
+        }
+
+        self
+    }
 }
 
 impl fmt::Debug for View {
@@ -489,6 +517,16 @@ impl fmt::Debug for View {
                 .debug_struct("Image")
                 .field("source", source)
                 .field("alt", alt)
+                .field("metadata", metadata)
+                .finish(),
+            Self::ProgressBar {
+                value,
+                label,
+                metadata,
+            } => f
+                .debug_struct("ProgressBar")
+                .field("value", value)
+                .field("label", label)
                 .field("metadata", metadata)
                 .finish(),
             Self::Dynamic(_) => f.write_str("Dynamic(..)"),
@@ -660,6 +698,22 @@ impl PartialEq for View {
             ) => {
                 left_source == right_source
                     && left_alt == right_alt
+                    && left_metadata == right_metadata
+            }
+            (
+                Self::ProgressBar {
+                    value: left_value,
+                    label: left_label,
+                    metadata: left_metadata,
+                },
+                Self::ProgressBar {
+                    value: right_value,
+                    label: right_label,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_value.to_bits() == right_value.to_bits()
+                    && left_label == right_label
                     && left_metadata == right_metadata
             }
             (Self::Dynamic(left), Self::Dynamic(right)) => left.ptr_eq(right),

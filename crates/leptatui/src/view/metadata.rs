@@ -28,6 +28,8 @@ pub enum ViewType {
     TextArea,
     /// Path-backed terminal image with text fallback.
     Image,
+    /// Progress indicator rendered as a gauge.
+    ProgressBar,
 }
 
 /// Vim editing mode retained for editable text controls.

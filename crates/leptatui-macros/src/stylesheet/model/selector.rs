@@ -225,9 +225,10 @@ impl Selector {
             "Button" => Ok(quote! { #leptatui::ViewType::Button }),
             "Input" => Ok(quote! { #leptatui::ViewType::Input }),
             "TextArea" => Ok(quote! { #leptatui::ViewType::TextArea }),
+            "ProgressBar" => Ok(quote! { #leptatui::ViewType::ProgressBar }),
             _ => Err(Error::new_spanned(
                 view_type,
-                "unsupported stylesheet type selector; expected Block, Text, Row, Column, Form, Button, Input, or TextArea",
+                "unsupported stylesheet type selector; expected Block, Text, Row, Column, Form, Button, Input, TextArea, or ProgressBar",
             )),
         }
     }

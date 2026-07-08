@@ -86,8 +86,8 @@ pub use style::{
 };
 pub use view::{
     ButtonAction, EditableState, FormAction, ImageSource, InputAction, StyleMetadata, View,
-    ViewType, VimMode, block, button, column, component, dynamic, form, image, input, row, text,
-    text_area,
+    ViewType, VimMode, block, button, column, component, dynamic, form, image, input, progress_bar,
+    row, text, text_area,
 };
 
 #[doc(hidden)]

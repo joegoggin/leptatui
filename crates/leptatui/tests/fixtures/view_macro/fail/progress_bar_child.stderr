@@ -1,0 +1,5 @@
+error: ProgressBar does not accept children
+ --> tests/fixtures/view_macro/fail/progress_bar_child.rs:8:10
+  |
+8 |         <ProgressBar value={0.5}>
+  |          ^^^^^^^^^^^

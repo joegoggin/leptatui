@@ -122,6 +122,10 @@ impl Element {
             return self.expand_image();
         }
 
+        if self.name == "ProgressBar" {
+            return self.expand_progress_bar();
+        }
+
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 let leptatui = crate::utils::crate_path::leptatui();
@@ -151,7 +155,7 @@ impl Element {
             _ => {
                 return Err(Error::new_spanned(
                     &self.name,
-                    "unsupported Leptatui element; expected Block, Text, Row, Column, Form, Button, Input, TextArea, or a PascalCase component",
+                    "unsupported Leptatui element; expected Block, Text, Row, Column, Form, Button, Input, TextArea, Image, ProgressBar, or a PascalCase component",
                 ));
             }
         }
@@ -262,6 +266,51 @@ impl Element {
         self.expand_attrs(quote! { #leptatui::image(#source) }, &attrs)
     }
 
+    /// Expands a progress bar element.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing a progress bar builder expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if children are present, `value` is missing,
+    /// duplicate `value` attributes are supplied, or progress bar attributes
+    /// are invalid.
+    fn expand_progress_bar(&self) -> Result<TokenStream> {
+        if !self.children.is_empty() {
+            return Err(Error::new_spanned(
+                &self.name,
+                "ProgressBar does not accept children",
+            ));
+        }
+
+        let attrs = self.validate_attrs()?;
+        let value_attrs = attrs
+            .iter()
+            .filter(|validated| matches!(validated.kind, AttrKind::ProgressValue))
+            .collect::<Vec<_>>();
+        let value_attr = match value_attrs.as_slice() {
+            [value_attr] => *value_attr,
+            [] => {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    "ProgressBar requires a value attribute",
+                ));
+            }
+            [first, ..] => {
+                return Err(Error::new_spanned(
+                    &first.attr.name,
+                    "ProgressBar expects exactly one value attribute",
+                ));
+            }
+        };
+
+        let value = value_attr.attr.value.to_tokens();
+        let leptatui = crate::utils::crate_path::leptatui();
+        self.expand_attrs(quote! { #leptatui::progress_bar(#value) }, &attrs)
+    }
+
     /// Expands a PascalCase component tag into a component constructor call.
     ///
     /// # Returns
@@ -362,10 +411,18 @@ impl Element {
                 "value" if matches!(element_name.as_str(), "Input" | "TextArea") => {
                     AttrKind::InputValue
                 }
+                "value" if element_name == "ProgressBar" => AttrKind::ProgressValue,
                 "value" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "view! value attribute is only supported on Input or TextArea",
+                        "view! value attribute is only supported on Input, TextArea, or ProgressBar",
+                    ));
+                }
+                "label" if element_name == "ProgressBar" => AttrKind::Label,
+                "label" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! label attribute is only supported on ProgressBar",
                     ));
                 }
                 "placeholder" if matches!(element_name.as_str(), "Input" | "TextArea") => {
@@ -420,6 +477,9 @@ impl Element {
                         }
                         "Image" => {
                             "unsupported view! attribute; expected class, id, style, src, or alt"
+                        }
+                        "ProgressBar" => {
+                            "unsupported view! attribute; expected class, id, style, value, or label"
                         }
                         _ => "unsupported view! attribute; expected class, id, or style",
                     };
@@ -479,8 +539,10 @@ impl Element {
                 }
                 AttrKind::InputValue => expanded,
                 AttrKind::ImageSource => expanded,
+                AttrKind::ProgressValue => expanded,
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
                 AttrKind::Alt => quote! { (#expanded).alt(#value) },
+                AttrKind::Label => quote! { (#expanded).label(#value) },
                 AttrKind::OnInput => {
                     reject_literal_callback(attr, "on_input")?;
                     quote! { (#expanded).on_input(#value) }
@@ -495,6 +557,7 @@ impl Element {
                     | AttrKind::OnInput
                     | AttrKind::InputValue
                     | AttrKind::ImageSource
+                    | AttrKind::ProgressValue
                     | AttrKind::Style
             ) && attr.value.is_unbraced_expr()
             {
@@ -716,7 +779,16 @@ fn reject_literal_callback(attr: &Attr, attribute_name: &str) -> Result<()> {
 fn is_builtin_element(name: &Ident) -> bool {
     matches!(
         name.to_string().as_str(),
-        "Block" | "Row" | "Column" | "Form" | "Text" | "Button" | "Input" | "TextArea" | "Image"
+        "Block"
+            | "Row"
+            | "Column"
+            | "Form"
+            | "Text"
+            | "Button"
+            | "Input"
+            | "TextArea"
+            | "Image"
+            | "ProgressBar"
     )
 }
 
@@ -745,10 +817,14 @@ mod attr_validation {
         InputValue,
         /// Required image source.
         ImageSource,
+        /// Required progress value.
+        ProgressValue,
         /// Input placeholder text.
         Placeholder,
         /// Image fallback text.
         Alt,
+        /// Progress bar label text.
+        Label,
         /// Button activation callback.
         OnPress,
         /// Form submit callback.

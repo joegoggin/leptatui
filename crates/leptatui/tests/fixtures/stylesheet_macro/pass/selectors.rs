@@ -7,6 +7,7 @@ fn main() {
     let styles = stylesheet! {
         Text => { fg: Color::White }
         Form => { fg: Color::Cyan }
+        ProgressBar => { fg: Color::Green }
         .primary => { bg: Color::Blue, modifier: Modifier::BOLD }
         .primary-action => { fg: Color::Green }
         #submit => { padding: TuiSpacing::uniform(1) }
@@ -23,6 +24,10 @@ fn main() {
         .rule(
             StyleSelector::view_type(ViewType::Form),
             TuiStyle::new().foreground(Color::Cyan),
+        )
+        .rule(
+            StyleSelector::view_type(ViewType::ProgressBar),
+            TuiStyle::new().foreground(Color::Green),
         )
         .rule(
             StyleSelector::class("primary"),

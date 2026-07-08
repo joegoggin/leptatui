@@ -1,0 +1,5 @@
+error: unsupported view! attribute; expected class, id, style, value, or label
+ --> tests/fixtures/view_macro/fail/progress_bar_unsupported_attr.rs:8:34
+  |
+8 |         <ProgressBar value={0.5} role="meter" />
+  |                                  ^^^^

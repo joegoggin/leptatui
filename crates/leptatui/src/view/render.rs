@@ -13,7 +13,7 @@ use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout, Position, Rect},
     text::{Line, Span},
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{Block, Gauge, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use crate::{
@@ -197,6 +197,24 @@ fn line_count_height(line_count: usize) -> u16 {
     u16::try_from(line_count).unwrap_or(u16::MAX)
 }
 
+/// Returns a Ratatui-safe progress ratio.
+///
+/// # Arguments
+///
+/// * `value` — Caller-provided progress value to clamp.
+///
+/// # Returns
+///
+/// A [`f64`] ratio clamped to `0.0..=1.0`, with non-finite values mapped to
+/// `0.0`.
+fn progress_bar_ratio(value: f64) -> f64 {
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 impl View {
     /// Renders this view into a context.
     ///
@@ -241,6 +259,24 @@ impl View {
                     super::model::ImageSource::Path(path) => path.as_path(),
                 };
                 ctx.render_terminal_image_path(path, alt.as_deref(), style.to_ratatui_style());
+                Ok(())
+            }
+            Self::ProgressBar {
+                value,
+                label,
+                metadata,
+            } => {
+                let style = resolve_style(metadata, ctx);
+                let ratatui_style = style.to_ratatui_style();
+                let mut gauge = Gauge::default()
+                    .ratio(progress_bar_ratio(*value))
+                    .style(ratatui_style)
+                    .gauge_style(ratatui_style);
+                if let Some(label) = label.as_deref() {
+                    gauge = gauge.label(Span::styled(label, ratatui_style));
+                }
+
+                ctx.render_widget(gauge);
                 Ok(())
             }
             Self::Row { children, metadata } => {
@@ -506,7 +542,7 @@ impl View {
                 ..
             } => flush_expired_insert_key(value, on_input, editable_state, now),
             Self::Text { .. } | Self::Button { .. } => None,
-            Self::Image { .. } => None,
+            Self::Image { .. } | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -638,7 +674,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => Ok(KeyControl::Pass),
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => Ok(KeyControl::Pass),
         }
     }
 
@@ -756,7 +793,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => false,
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => false,
         }
     }
 
@@ -796,7 +834,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => false,
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => false,
         }
     }
 
@@ -818,7 +857,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => false,
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => false,
         }
     }
 
@@ -833,7 +873,8 @@ impl View {
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
             | Self::TextArea { metadata, .. }
-            | Self::Image { metadata, .. } => Some(metadata),
+            | Self::Image { metadata, .. }
+            | Self::ProgressBar { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -905,7 +946,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => None,
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -946,7 +988,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => None,
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -988,7 +1031,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => None,
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -1006,7 +1050,7 @@ impl View {
             | Self::Form { children, .. } => children.iter().map(Self::focusable_count).sum(),
             Self::Dynamic(child) => child.with_view(Self::focusable_count),
             Self::Component(component) => component.focusable_count(),
-            Self::Text { .. } | Self::Image { .. } => 0,
+            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => 0,
         }
     }
 
@@ -1068,7 +1112,7 @@ impl View {
                 .find_map(|child| child.focused_index_inner(index)),
             Self::Dynamic(child) => child.with_view(|child| child.focused_index_inner(index)),
             Self::Component(component) => component.focused_index_inner(index),
-            Self::Text { .. } | Self::Image { .. } => None,
+            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -1132,7 +1176,7 @@ impl View {
                 child.with_view_mut(|child| child.set_focus_by_index_inner(target, index));
             }
             Self::Component(component) => component.set_focus_by_index_inner(target, index),
-            Self::Text { .. } | Self::Image { .. } => {}
+            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => {}
         }
     }
 
@@ -1162,7 +1206,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => None,
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -1192,7 +1237,8 @@ impl View {
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
-            | Self::Image { .. } => Ok(AppControl::Continue),
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => Ok(AppControl::Continue),
         }
     }
 }
@@ -3856,7 +3902,8 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
         | View::Button { .. }
         | View::Input { .. }
         | View::TextArea { .. }
-        | View::Image { .. } => None,
+        | View::Image { .. }
+        | View::ProgressBar { .. } => None,
     }
 }
 
@@ -4331,7 +4378,7 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         View::Form {
             children, metadata, ..
         } => min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
-        View::Image { .. } => 1,
+        View::Image { .. } | View::ProgressBar { .. } => 1,
         View::Component(component) => component.min_height(ctx),
     }
 }
