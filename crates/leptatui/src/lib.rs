@@ -40,6 +40,17 @@
 //! they create Leptatui [`View`] trees and [`Component`] implementations rather
 //! than Leptos DOM nodes.
 //!
+//! Standard components are available as builders such as [`input`],
+//! [`text_area`], [`form`], [`image`], and [`progress_bar`] and as PascalCase
+//! tags in [`macro@view`]. `Input` and `TextArea` are controlled editable views:
+//! callers pass the current value and handle proposed updates through
+//! `on_input`. Editable controls start in Vim-style normal mode and support
+//! insert, normal, and visual editing commands, including submit and cancel
+//! integration when they are nested in a `Form`. `Image` uses path-backed
+//! [`ImageSource`] values and falls back to deterministic text when optional
+//! image support or terminal graphics support is unavailable. `ProgressBar`
+//! renders a clamped `0.0..=1.0` gauge with an optional label.
+//!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
 //! [`context::expect_context`]. Multi-page apps can store the active page with

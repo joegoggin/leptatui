@@ -1,0 +1,264 @@
+//! Standard library showcase example.
+//!
+//! This binary demonstrates the expanded standard component library in one
+//! coherent app. It uses controlled `Input` and `TextArea` fields, `Form`
+//! submit and cancel callbacks, image fallback rendering, and a progress bar
+//! backed by Leptos signals.
+
+use leptatui::prelude::*;
+
+/// Current high-level state of the showcase form.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ShowcaseStatus {
+    /// The form contains an editable draft.
+    Editing,
+    /// The form has been submitted.
+    Submitted,
+    /// The form has been canceled.
+    Canceled,
+}
+
+impl ShowcaseStatus {
+    /// Returns the user-facing status line for the current showcase state.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — Current controlled name field value.
+    /// * `notes` — Current controlled notes field value.
+    /// * `progress` — Current progress ratio.
+    ///
+    /// # Returns
+    ///
+    /// A [`String`] describing the latest showcase state.
+    fn label(self, name: &str, notes: &str, progress: f64) -> String {
+        let percent = (progress * 100.0).round();
+
+        match self {
+            Self::Editing => format!("Editing {name}'s draft at {percent:.0}%"),
+            Self::Submitted => {
+                let line_count = notes.lines().count().max(1);
+                format!("Submitted {name} with {line_count} note line(s)")
+            }
+            Self::Canceled => String::from("Canceled the current draft"),
+        }
+    }
+}
+
+/// Returns a progress value clamped to the supported progress bar range.
+///
+/// # Arguments
+///
+/// * `value` — Candidate progress ratio.
+///
+/// # Returns
+///
+/// A [`f64`] ratio in the `0.0..=1.0` range.
+fn clamp_progress(value: f64) -> f64 {
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+/// Root component for the standard library showcase.
+///
+/// # Returns
+///
+/// A [`View`] containing form controls, image fallback, and progress state.
+#[component]
+fn StandardLibraryShowcase() -> View {
+    let name = RwSignal::new(String::from("Ada Lovelace"));
+    let notes = RwSignal::new(String::from("Sketch the first program."));
+    let status = RwSignal::new(ShowcaseStatus::Editing);
+    let progress = RwSignal::new(0.35_f64);
+
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') {
+            return KeyControl::Exit;
+        }
+
+        KeyControl::Pass
+    });
+
+    stylesheet! {
+        .showcase-shell => {
+            fg: Color::White,
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::uniform(1)
+        }
+
+        .title => {
+            fg: Color::LightCyan,
+            modifier: Modifier::BOLD
+        }
+
+        .status => { fg: Color::LightGreen }
+        .label => { fg: Color::Gray }
+        .caption => { fg: Color::DarkGray }
+        .help => { fg: Color::DarkGray }
+        .meter => { fg: Color::LightGreen, bg: Color::DarkGray }
+
+        Input => {
+            borders: Borders::ALL,
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::horizontal(1)
+        }
+
+        TextArea => {
+            borders: Borders::ALL,
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::horizontal(1)
+        }
+
+        Image => {
+            borders: Borders::ALL,
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::horizontal(1)
+        }
+
+        Button => {
+            borders: Borders::ALL,
+            border_type: BorderType::Rounded,
+            padding: TuiSpacing::horizontal(1)
+        }
+
+        Input:focus => {
+            fg: Color::Black,
+            bg: Color::Yellow,
+            modifier: Modifier::BOLD,
+            border_type: BorderType::Thick
+        }
+
+        TextArea:focus => {
+            fg: Color::Black,
+            bg: Color::Yellow,
+            modifier: Modifier::BOLD,
+            border_type: BorderType::Thick
+        }
+
+        Button:focus => {
+            fg: Color::Black,
+            bg: Color::Yellow,
+            modifier: Modifier::BOLD,
+            border_type: BorderType::Thick
+        }
+
+        @media (max-width: 60) {
+            .showcase-shell => { padding: TuiSpacing::ZERO }
+            .actions => { direction: LayoutDirection::Column }
+
+            Input => { padding: TuiSpacing::ZERO }
+            TextArea => { padding: TuiSpacing::ZERO }
+            Image => { padding: TuiSpacing::ZERO }
+            Button => { padding: TuiSpacing::ZERO }
+        }
+    }
+
+    view! {
+        <Block class="showcase-shell">
+            <Column>
+                <Text class="title">"Standard library showcase"</Text>
+                {move || {
+                    let current_name = name.get_untracked();
+                    let current_notes = notes.get_untracked();
+                    let current_progress = progress.get_untracked();
+                    text(
+                            status
+                                .get_untracked()
+                                .label(&current_name, &current_notes, current_progress),
+                        )
+                        .with_classes("status")
+                }}
+                {move || {
+                    let name_value = name.get_untracked();
+                    let notes_value = notes.get_untracked();
+
+                    view! {
+                        <Form
+                            on_submit=move || {
+                                status.set(ShowcaseStatus::Submitted);
+                                AppControl::Continue
+                            }
+                            on_cancel=move || {
+                                status.set(ShowcaseStatus::Canceled);
+                                AppControl::Continue
+                            }
+                        >
+                            <Text class="label">"Name"</Text>
+                            <Input
+                                value=name_value
+                                placeholder="Name"
+                                on_input=move |next| {
+                                    name.set(next);
+                                    status.set(ShowcaseStatus::Editing);
+                                    AppControl::Continue
+                                }
+                            />
+                            <Text class="label">"Notes"</Text>
+                            <TextArea
+                                value=notes_value
+                                placeholder="Notes"
+                                on_input=move |next| {
+                                    notes.set(next);
+                                    status.set(ShowcaseStatus::Editing);
+                                    AppControl::Continue
+                                }
+                            />
+                            <Row class="actions">
+                                <Button on_press=move || {
+                                    status.set(ShowcaseStatus::Submitted);
+                                    AppControl::Continue
+                                }>"Submit"</Button>
+                                <Button on_press=move || {
+                                    progress
+                                        .update(|value| {
+                                            *value = clamp_progress(*value + 0.1);
+                                        });
+                                    AppControl::Continue
+                                }>"Advance"</Button>
+                                <Button on_press=move || {
+                                    progress.set(0.0);
+                                    status.set(ShowcaseStatus::Editing);
+                                    AppControl::Continue
+                                }>"Reset"</Button>
+                            </Row>
+                        </Form>
+                    }
+                }}
+                <Text class="label">"Image"</Text>
+                <Image
+                    src="crates/leptatui/examples/assets/showcase.jpg"
+                    alt="Image fallback: enable the images feature and provide a PNG at this path to render terminal graphics."
+                />
+                <Text class="caption">
+                    "Default builds show deterministic fallback text when image support is disabled or unavailable."
+                </Text>
+                {move || {
+                    let current_progress = progress.get_untracked();
+                    progress_bar(current_progress)
+                        .label(format!("{:.0}% complete", current_progress * 100.0))
+                        .with_classes("meter")
+                }}
+                <Text class="help">
+                    "Tab/Shift+Tab focus. i/a/I/A insert, Esc normal/cancel, jk leaves insert, v/V select, x/d/y/p/u/Ctrl+R edit, Ctrl+Enter submits notes. Activate Advance or Reset to update progress. q quits."
+                </Text>
+            </Column>
+        </Block>
+    }
+}
+
+/// Runs the standard library showcase application.
+///
+/// # Returns
+///
+/// An empty [`Result`] when the app exits successfully.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
+/// Returns [`Error::EventTask`] if the blocking event task fails.
+#[tokio::main]
+async fn main() -> Result<()> {
+    App::new(StandardLibraryShowcase::new()).run().await
+}

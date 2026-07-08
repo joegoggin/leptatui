@@ -95,6 +95,80 @@ view! {
 }
 ```
 
+## Standard Components
+
+Leptatui's standard view set includes layout containers (`Block`, `Row`,
+`Column`), text, buttons, controlled form controls, images, and progress bars.
+All are available through `leptatui::prelude::*` as builders and through
+PascalCase `view!` tags.
+
+`Input` and `TextArea` are controlled components: pass the displayed `value`
+from caller-owned state and update that state from `on_input` when editing
+proposes a new value. Both support optional `placeholder` text. Wrap editable
+controls in `Form` to centralize submit and cancel behavior. Focused inputs
+submit with Enter; focused text areas insert a newline with Enter in insert
+mode and submit with Ctrl+Enter. Pressing Esc from editable normal mode cancels
+the nearest form when it has an `on_cancel` handler.
+
+Editable controls start in a compact Vim-style normal mode. Use `i`, `a`, `I`,
+or `A` to enter insert mode; Esc or `jk` returns to normal mode. Normal and
+visual mode support common movement (`h`, `j`, `k`, `l`, `0`, `$`, `w`, `b`,
+`e`, `gg`, `G`), selection (`v`, `V`), delete/yank/paste (`x`, `d`, `dd`,
+`y`, `yy`, `p`), line opening (`o`, `O` for text areas), undo (`u`), and redo
+(Ctrl+R).
+
+`Image` renders a path-backed terminal image when the crate is built with the
+optional `images` feature and the active terminal exposes a supported graphics
+protocol. Otherwise it renders deterministic fallback text, preferring the
+view's `alt` text when provided. `ProgressBar` renders a gauge with a clamped
+`0.0..=1.0` value and optional `label`.
+
+```rust
+use leptatui::prelude::*;
+
+#[component]
+fn StandardControls() -> View {
+    let name = RwSignal::new(String::from("Ada Lovelace"));
+    let notes = RwSignal::new(String::from("Sketch the first program."));
+    let progress = RwSignal::new(0.4);
+
+    view! {
+        <Column>
+            {move || {
+                let name_value = name.get_untracked();
+                let notes_value = notes.get_untracked();
+
+                view! {
+                    <Form on_submit=|| AppControl::Continue>
+                        <Input
+                            value=name_value
+                            placeholder="Name"
+                            on_input=move |next| {
+                                name.set(next);
+                                AppControl::Continue
+                            }
+                        />
+                        <TextArea
+                            value=notes_value
+                            placeholder="Notes"
+                            on_input=move |next| {
+                                notes.set(next);
+                                AppControl::Continue
+                            }
+                        />
+                    </Form>
+                }
+            }}
+            <Image
+                src="crates/leptatui/examples/assets/showcase.png"
+                alt="Image fallback text"
+            />
+            {move || progress_bar(progress.get_untracked()).label("Progress")}
+        </Column>
+    }
+}
+```
+
 Styles live with components. Put `stylesheet!` inside a `#[component]` body to
 register those rules for that component subtree, including descendant
 components. The same macro still returns a `Stylesheet` value for direct
@@ -600,6 +674,12 @@ Run the multi-page routing demo:
 
 ```sh
 cargo run --example multi_page_demo
+```
+
+Run the standard component showcase:
+
+```sh
+cargo run --example standard_library_showcase
 ```
 
 See `crates/leptatui/examples/README.md` for controls.
