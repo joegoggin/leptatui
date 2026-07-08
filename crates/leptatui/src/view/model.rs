@@ -73,6 +73,15 @@ impl From<String> for ImageSource {
     }
 }
 
+/// Returns a clamped progress value safe for Ratatui gauge rendering.
+pub(crate) fn clamped_progress_value(value: f64) -> f64 {
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 /// Minimal renderable view tree for hand-written terminal UI.
 #[derive(Clone)]
 pub enum View {

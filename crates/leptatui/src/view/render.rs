@@ -26,7 +26,7 @@ use crate::{
 
 use super::{
     metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
-    model::{FormAction, InputAction, View},
+    model::{FormAction, InputAction, View, clamped_progress_value},
 };
 
 /// Maximum time allowed between insert-mode `j` and `k` escape keys.
@@ -210,24 +210,6 @@ fn image_render_area(area: Rect, image_size: Option<TuiSize>) -> Rect {
     }
 }
 
-/// Returns a Ratatui-safe progress ratio.
-///
-/// # Arguments
-///
-/// * `value` — Caller-provided progress value to clamp.
-///
-/// # Returns
-///
-/// A [`f64`] ratio clamped to `0.0..=1.0`, with non-finite values mapped to
-/// `0.0`.
-fn progress_bar_ratio(value: f64) -> f64 {
-    if value.is_finite() {
-        value.clamp(0.0, 1.0)
-    } else {
-        0.0
-    }
-}
-
 impl View {
     /// Renders this view into a context.
     ///
@@ -285,7 +267,7 @@ impl View {
                 let style = resolve_style(metadata, ctx);
                 let ratatui_style = style.to_ratatui_style();
                 let mut gauge = Gauge::default()
-                    .ratio(progress_bar_ratio(*value))
+                    .ratio(clamped_progress_value(*value))
                     .style(ratatui_style)
                     .gauge_style(ratatui_style);
                 if let Some(label) = label.as_deref() {

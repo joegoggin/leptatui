@@ -224,32 +224,13 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         alt: Option<&str>,
         fallback_style: Style,
     ) -> TerminalImageRenderOutcome {
-        if !self.target.supports_terminal_images() {
-            let reason = TerminalImageFallback::UnsupportedRenderTarget;
-            render_terminal_image_fallback(
-                reason,
-                alt,
-                fallback_style,
-                self.area,
-                self.target.buffer_mut(),
-            );
-            return TerminalImageRenderOutcome::Fallback(reason);
-        }
-
-        let outcome =
-            self.terminal_images
-                .render_path_to_buffer(path, self.area, self.target.buffer_mut());
-        if let TerminalImageRenderOutcome::Fallback(reason) = outcome {
-            render_terminal_image_fallback(
-                reason,
-                alt,
-                fallback_style,
-                self.area,
-                self.target.buffer_mut(),
-            );
-        }
-
-        outcome
+        self.render_terminal_image_or_fallback(
+            alt,
+            fallback_style,
+            |terminal_images, area, buffer| {
+                terminal_images.render_path_to_buffer(path, area, buffer)
+            },
+        )
     }
 
     /// Renders a cropped segment of a path-backed terminal image.
@@ -275,36 +256,51 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         full_size: Size,
         source_y: u16,
     ) -> TerminalImageRenderOutcome {
+        self.render_terminal_image_or_fallback(
+            alt,
+            fallback_style,
+            |terminal_images, area, buffer| {
+                terminal_images
+                    .render_path_to_buffer_clipped(path, full_size, source_y, area, buffer)
+            },
+        )
+    }
+
+    /// Runs a terminal-image render operation and writes fallback text when needed.
+    fn render_terminal_image_or_fallback(
+        &mut self,
+        alt: Option<&str>,
+        fallback_style: Style,
+        render: impl FnOnce(&TerminalImageSupport, Rect, &mut Buffer) -> TerminalImageRenderOutcome,
+    ) -> TerminalImageRenderOutcome {
         if !self.target.supports_terminal_images() {
             let reason = TerminalImageFallback::UnsupportedRenderTarget;
-            render_terminal_image_fallback(
-                reason,
-                alt,
-                fallback_style,
-                self.area,
-                self.target.buffer_mut(),
-            );
+            self.render_terminal_image_fallback(reason, alt, fallback_style);
             return TerminalImageRenderOutcome::Fallback(reason);
         }
 
-        let outcome = self.terminal_images.render_path_to_buffer_clipped(
-            path,
-            full_size,
-            source_y,
-            self.area,
-            self.target.buffer_mut(),
-        );
+        let outcome = render(&self.terminal_images, self.area, self.target.buffer_mut());
         if let TerminalImageRenderOutcome::Fallback(reason) = outcome {
-            render_terminal_image_fallback(
-                reason,
-                alt,
-                fallback_style,
-                self.area,
-                self.target.buffer_mut(),
-            );
+            self.render_terminal_image_fallback(reason, alt, fallback_style);
         }
 
         outcome
+    }
+
+    /// Writes deterministic fallback text for a terminal-image render failure.
+    fn render_terminal_image_fallback(
+        &mut self,
+        reason: TerminalImageFallback,
+        alt: Option<&str>,
+        fallback_style: Style,
+    ) {
+        render_terminal_image_fallback(
+            reason,
+            alt,
+            fallback_style,
+            self.area,
+            self.target.buffer_mut(),
+        );
     }
 
     /// Renders a view into an offscreen buffer and copies a clipped row slice.

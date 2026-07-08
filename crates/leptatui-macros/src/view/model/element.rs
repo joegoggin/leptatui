@@ -190,36 +190,7 @@ impl Element {
         element_name: &str,
         build: impl FnOnce(TokenStream) -> TokenStream,
     ) -> Result<TokenStream> {
-        if !self.children.is_empty() {
-            return Err(Error::new_spanned(
-                &self.name,
-                format!("{element_name} does not accept children"),
-            ));
-        }
-
-        let attrs = self.validate_attrs()?;
-        let value_attrs = attrs
-            .iter()
-            .filter(|validated| matches!(validated.kind, AttrKind::InputValue))
-            .collect::<Vec<_>>();
-        let value_attr = match value_attrs.as_slice() {
-            [value_attr] => *value_attr,
-            [] => {
-                return Err(Error::new_spanned(
-                    &self.name,
-                    format!("{element_name} requires a value attribute"),
-                ));
-            }
-            [first, ..] => {
-                return Err(Error::new_spanned(
-                    &first.attr.name,
-                    format!("{element_name} expects exactly one value attribute"),
-                ));
-            }
-        };
-
-        let value = value_attr.attr.value.to_tokens();
-        self.expand_attrs(build(value), &attrs)
+        self.expand_required_attr_element(element_name, AttrKind::InputValue, "value", build)
     }
 
     /// Expands a path-backed image element.
@@ -233,37 +204,10 @@ impl Element {
     /// Returns [`syn::Error`] if children are present, `src` is missing,
     /// duplicate `src` attributes are supplied, or image attributes are invalid.
     fn expand_image(&self) -> Result<TokenStream> {
-        if !self.children.is_empty() {
-            return Err(Error::new_spanned(
-                &self.name,
-                "Image does not accept children",
-            ));
-        }
-
-        let attrs = self.validate_attrs()?;
-        let source_attrs = attrs
-            .iter()
-            .filter(|validated| matches!(validated.kind, AttrKind::ImageSource))
-            .collect::<Vec<_>>();
-        let source_attr = match source_attrs.as_slice() {
-            [source_attr] => *source_attr,
-            [] => {
-                return Err(Error::new_spanned(
-                    &self.name,
-                    "Image requires a src attribute",
-                ));
-            }
-            [first, ..] => {
-                return Err(Error::new_spanned(
-                    &first.attr.name,
-                    "Image expects exactly one src attribute",
-                ));
-            }
-        };
-
-        let source = source_attr.attr.value.to_tokens();
         let leptatui = crate::utils::crate_path::leptatui();
-        self.expand_attrs(quote! { #leptatui::image(#source) }, &attrs)
+        self.expand_required_attr_element("Image", AttrKind::ImageSource, "src", |source| {
+            quote! { #leptatui::image(#source) }
+        })
     }
 
     /// Expands a progress bar element.
@@ -278,37 +222,70 @@ impl Element {
     /// duplicate `value` attributes are supplied, or progress bar attributes
     /// are invalid.
     fn expand_progress_bar(&self) -> Result<TokenStream> {
+        let leptatui = crate::utils::crate_path::leptatui();
+        self.expand_required_attr_element(
+            "ProgressBar",
+            AttrKind::ProgressValue,
+            "value",
+            |value| quote! { #leptatui::progress_bar(#value) },
+        )
+    }
+
+    /// Expands a self-contained element with one required attribute.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `required_kind` — Attribute kind that must appear exactly once.
+    /// * `required_attr_name` — Attribute name to use in diagnostics.
+    /// * `build` — Function that wraps the required attribute value in a
+    ///   builder call.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the expanded builder expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if children are present, the required attribute
+    /// is missing or duplicated, or other attributes are invalid.
+    fn expand_required_attr_element(
+        &self,
+        element_name: &str,
+        required_kind: AttrKind,
+        required_attr_name: &str,
+        build: impl FnOnce(TokenStream) -> TokenStream,
+    ) -> Result<TokenStream> {
         if !self.children.is_empty() {
             return Err(Error::new_spanned(
                 &self.name,
-                "ProgressBar does not accept children",
+                format!("{element_name} does not accept children"),
             ));
         }
 
         let attrs = self.validate_attrs()?;
-        let value_attrs = attrs
+        let required_attrs = attrs
             .iter()
-            .filter(|validated| matches!(validated.kind, AttrKind::ProgressValue))
+            .filter(|validated| validated.kind == required_kind)
             .collect::<Vec<_>>();
-        let value_attr = match value_attrs.as_slice() {
-            [value_attr] => *value_attr,
+        let required_attr = match required_attrs.as_slice() {
+            [required_attr] => *required_attr,
             [] => {
                 return Err(Error::new_spanned(
                     &self.name,
-                    "ProgressBar requires a value attribute",
+                    format!("{element_name} requires a {required_attr_name} attribute"),
                 ));
             }
             [first, ..] => {
                 return Err(Error::new_spanned(
                     &first.attr.name,
-                    "ProgressBar expects exactly one value attribute",
+                    format!("{element_name} expects exactly one {required_attr_name} attribute"),
                 ));
             }
         };
 
-        let value = value_attr.attr.value.to_tokens();
-        let leptatui = crate::utils::crate_path::leptatui();
-        self.expand_attrs(quote! { #leptatui::progress_bar(#value) }, &attrs)
+        let value = required_attr.attr.value.to_tokens();
+        self.expand_attrs(build(value), &attrs)
     }
 
     /// Expands a PascalCase component tag into a component constructor call.
@@ -805,7 +782,7 @@ mod attr_validation {
     use super::Attr;
 
     /// Supported `view!` attribute kinds after validation.
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Eq, PartialEq)]
     pub(super) enum AttrKind {
         /// `class` selector metadata.
         Class,

@@ -175,20 +175,7 @@ impl TerminalImageSupport {
             );
         }
 
-        match &self.inner {
-            TerminalImageSupportInner::Unavailable => {
-                TerminalImageRenderOutcome::Fallback(TerminalImageFallback::UnsupportedTerminal)
-            }
-            TerminalImageSupportInner::Protocol(picker) => render_cached_sliced_protocol(
-                picker,
-                &self.cache,
-                path,
-                Size::new(area.width, area.height),
-                0,
-                area,
-                buffer,
-            ),
-        }
+        self.render_path_to_buffer_sized(path, Size::new(area.width, area.height), 0, area, buffer)
     }
 
     /// Renders a cropped segment of a path-backed image into a Ratatui buffer.
@@ -219,6 +206,18 @@ impl TerminalImageSupport {
             );
         }
 
+        self.render_path_to_buffer_sized(path, full_size, source_y, area, buffer)
+    }
+
+    /// Renders a path-backed image segment after size validation.
+    fn render_path_to_buffer_sized(
+        &self,
+        path: &Path,
+        full_size: Size,
+        source_y: u16,
+        area: Rect,
+        buffer: &mut Buffer,
+    ) -> TerminalImageRenderOutcome {
         match &self.inner {
             TerminalImageSupportInner::Unavailable => {
                 TerminalImageRenderOutcome::Fallback(TerminalImageFallback::UnsupportedTerminal)
