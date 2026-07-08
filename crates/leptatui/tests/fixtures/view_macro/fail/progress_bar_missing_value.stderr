@@ -1,0 +1,5 @@
+error: ProgressBar requires a value attribute
+ --> tests/fixtures/view_macro/fail/progress_bar_missing_value.rs:8:10
+  |
+8 |         <ProgressBar label="Uploading" />
+  |          ^^^^^^^^^^^

@@ -11,9 +11,9 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
-    layout::{Constraint, Layout, Position, Rect},
+    layout::{Constraint, Layout, Position, Rect, Size},
     text::{Line, Span},
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{Block, Gauge, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use crate::{
@@ -21,12 +21,12 @@ use crate::{
     app::{AppControl, Result},
     component::{Component, FocusedControl, KeyControl, RenderCtx},
     context,
-    style::{Borders, LayoutDirection, Modifier, TuiStyle},
+    style::{Borders, LayoutDirection, Modifier, TuiSize, TuiStyle},
 };
 
 use super::{
     metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
-    model::{FormAction, InputAction, View},
+    model::{FormAction, InputAction, View, clamped_progress_value},
 };
 
 /// Maximum time allowed between insert-mode `j` and `k` escape keys.
@@ -197,6 +197,19 @@ fn line_count_height(line_count: usize) -> u16 {
     u16::try_from(line_count).unwrap_or(u16::MAX)
 }
 
+/// Returns the terminal area used to render an image for the resolved style.
+fn image_render_area(area: Rect, image_size: Option<TuiSize>) -> Rect {
+    let Some(size) = image_size else {
+        return area;
+    };
+
+    Rect {
+        width: size.width.min(area.width),
+        height: size.height.min(area.height),
+        ..area
+    }
+}
+
 impl View {
     /// Renders this view into a context.
     ///
@@ -229,6 +242,39 @@ impl View {
             Self::Text { content, metadata } => {
                 let style = resolve_style(metadata, ctx);
                 ctx.render_widget(text_paragraph(content.as_str(), style));
+                Ok(())
+            }
+            Self::Image {
+                source,
+                alt,
+                metadata,
+            } => {
+                let style = resolve_style(metadata, ctx);
+                let path = match source {
+                    super::model::ImageSource::Path(path) => path.as_path(),
+                };
+                let image_area = image_render_area(ctx.area(), style.image_size);
+                ctx.with_area(image_area, |ctx| {
+                    ctx.render_terminal_image_path(path, alt.as_deref(), style.to_ratatui_style());
+                });
+                Ok(())
+            }
+            Self::ProgressBar {
+                value,
+                label,
+                metadata,
+            } => {
+                let style = resolve_style(metadata, ctx);
+                let ratatui_style = style.to_ratatui_style();
+                let mut gauge = Gauge::default()
+                    .ratio(clamped_progress_value(*value))
+                    .style(ratatui_style)
+                    .gauge_style(ratatui_style);
+                if let Some(label) = label.as_deref() {
+                    gauge = gauge.label(Span::styled(label, ratatui_style));
+                }
+
+                ctx.render_widget(gauge);
                 Ok(())
             }
             Self::Row { children, metadata } => {
@@ -409,6 +455,63 @@ impl View {
         }
     }
 
+    /// Renders a clipped terminal image segment when this view is an image.
+    pub(crate) fn render_terminal_image_clipped(
+        &self,
+        source_y: u16,
+        target_area: Rect,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> Result<bool> {
+        let Self::Image {
+            source,
+            alt,
+            metadata,
+        } = self
+        else {
+            return Ok(false);
+        };
+
+        let style = resolve_style(metadata, ctx);
+        let full_image_area = image_render_area(ctx.area(), style.image_size);
+        if source_y >= full_image_area.height {
+            return Ok(true);
+        }
+
+        let width = full_image_area.width.min(target_area.width);
+        let height = full_image_area
+            .height
+            .saturating_sub(source_y)
+            .min(target_area.height);
+        if width == 0 || height == 0 {
+            return Ok(true);
+        }
+
+        let path = match source {
+            super::model::ImageSource::Path(path) => path.as_path(),
+        };
+        let render_area = Rect {
+            x: target_area
+                .x
+                .saturating_add(full_image_area.x.saturating_sub(ctx.area().x)),
+            y: target_area.y,
+            width,
+            height,
+        };
+        let full_size = Size::new(full_image_area.width, full_image_area.height);
+
+        ctx.with_area(render_area, |ctx| {
+            ctx.render_terminal_image_path_clipped(
+                path,
+                alt.as_deref(),
+                style.to_ratatui_style(),
+                full_size,
+                source_y,
+            );
+        });
+
+        Ok(true)
+    }
+
     /// Dispatches an event through this view tree.
     ///
     /// # Arguments
@@ -494,6 +597,7 @@ impl View {
                 ..
             } => flush_expired_insert_key(value, on_input, editable_state, now),
             Self::Text { .. } | Self::Button { .. } => None,
+            Self::Image { .. } | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -624,7 +728,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => Ok(KeyControl::Pass),
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => Ok(KeyControl::Pass),
         }
     }
 
@@ -741,7 +847,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => false,
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => false,
         }
     }
 
@@ -780,7 +888,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => false,
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => false,
         }
     }
 
@@ -801,7 +911,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => false,
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => false,
         }
     }
 
@@ -815,7 +927,9 @@ impl View {
             | Self::Form { metadata, .. }
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
-            | Self::TextArea { metadata, .. } => Some(metadata),
+            | Self::TextArea { metadata, .. }
+            | Self::Image { metadata, .. }
+            | Self::ProgressBar { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -886,7 +1000,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => None,
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -926,7 +1042,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => None,
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -967,7 +1085,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => None,
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -985,7 +1105,7 @@ impl View {
             | Self::Form { children, .. } => children.iter().map(Self::focusable_count).sum(),
             Self::Dynamic(child) => child.with_view(Self::focusable_count),
             Self::Component(component) => component.focusable_count(),
-            Self::Text { .. } => 0,
+            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => 0,
         }
     }
 
@@ -1047,7 +1167,7 @@ impl View {
                 .find_map(|child| child.focused_index_inner(index)),
             Self::Dynamic(child) => child.with_view(|child| child.focused_index_inner(index)),
             Self::Component(component) => component.focused_index_inner(index),
-            Self::Text { .. } => None,
+            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -1111,7 +1231,7 @@ impl View {
                 child.with_view_mut(|child| child.set_focus_by_index_inner(target, index));
             }
             Self::Component(component) => component.set_focus_by_index_inner(target, index),
-            Self::Text { .. } => {}
+            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => {}
         }
     }
 
@@ -1140,7 +1260,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => None,
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -1169,7 +1291,9 @@ impl View {
             Self::Text { .. }
             | Self::Button { .. }
             | Self::Input { .. }
-            | Self::TextArea { .. } => Ok(AppControl::Continue),
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => Ok(AppControl::Continue),
         }
     }
 }
@@ -3829,9 +3953,12 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
         View::Component(component) => component
             .focused_control_span(ctx)
             .map(|(top, bottom)| VerticalSpan { top, bottom }),
-        View::Text { .. } | View::Button { .. } | View::Input { .. } | View::TextArea { .. } => {
-            None
-        }
+        View::Text { .. }
+        | View::Button { .. }
+        | View::Input { .. }
+        | View::TextArea { .. }
+        | View::Image { .. }
+        | View::ProgressBar { .. } => None,
     }
 }
 
@@ -4306,6 +4433,11 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         View::Form {
             children, metadata, ..
         } => min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
+        View::Image { metadata, .. } => {
+            let style = resolve_style(metadata, ctx);
+            style.image_size.map_or(1, |size| size.height)
+        }
+        View::ProgressBar { .. } => 1,
         View::Component(component) => component.min_height(ctx),
     }
 }

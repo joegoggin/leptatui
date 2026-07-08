@@ -13,9 +13,9 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     __private::FocusedControl, AppControl, AppRoot, Borders, Color, Component, EditableState,
-    KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleMetadata,
-    StyleSelector, Stylesheet, TuiStyle, View, ViewType, VimMode, block, button, column, component,
-    dynamic, form, input, row, text, text_area,
+    ImageSource, KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result,
+    StyleMetadata, StyleSelector, Stylesheet, TuiSize, TuiStyle, View, ViewType, VimMode, block,
+    button, column, component, dynamic, form, image, input, progress_bar, row, text, text_area,
 };
 use ratatui::{
     Terminal,
@@ -55,6 +55,8 @@ fn button_focuses(view: &View) -> Vec<bool> {
         View::Text { .. }
         | View::Input { .. }
         | View::TextArea { .. }
+        | View::Image { .. }
+        | View::ProgressBar { .. }
         | View::Dynamic(_)
         | View::Component(_) => Vec::new(),
     }
@@ -78,7 +80,11 @@ fn control_focuses(view: &View) -> Vec<bool> {
         View::Row { children, .. }
         | View::Column { children, .. }
         | View::Form { children, .. } => children.iter().flat_map(control_focuses).collect(),
-        View::Text { .. } | View::Dynamic(_) | View::Component(_) => Vec::new(),
+        View::Text { .. }
+        | View::Image { .. }
+        | View::ProgressBar { .. }
+        | View::Dynamic(_)
+        | View::Component(_) => Vec::new(),
     }
 }
 
@@ -550,6 +556,25 @@ fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Result<()> {
     })?;
 
     render_result
+}
+
+/// Returns the rendered buffer symbols as one contiguous string.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered buffer.
+///
+/// # Returns
+///
+/// A [`String`] containing every cell symbol in buffer order.
+fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect()
 }
 
 /// Verifies a block view renders its child text.
@@ -2650,6 +2675,481 @@ fn view_metadata_setters_store_selector_fields() {
     );
     assert_eq!(metadata.inline_style(), Some(style));
     assert!(metadata.is_focused());
+}
+
+/// Verifies image builders store source, fallback text, and selector metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// image("assets/logo.png")
+///     .alt("Project logo")
+///     .with_id("logo")
+///     .with_classes("media primary")
+/// ```
+///
+/// # Assertions
+///
+/// - The image source is path-backed.
+/// - Fallback text is retained.
+/// - The metadata view type is `Image`.
+/// - Standard selector metadata is retained.
+#[test]
+fn image_builder_stores_source_alt_and_selector_metadata() {
+    let style = TuiStyle::new().foreground(Color::Yellow);
+    let view = image("assets/logo.png")
+        .alt("Project logo")
+        .with_id("logo")
+        .with_classes("media primary")
+        .with_inline_style(style);
+
+    match view {
+        View::Image {
+            source,
+            alt,
+            metadata,
+        } => {
+            assert_eq!(source, ImageSource::Path("assets/logo.png".into()));
+            assert_eq!(alt.as_deref(), Some("Project logo"));
+            assert_eq!(metadata.view_type(), ViewType::Image);
+            assert_eq!(metadata.id(), Some("logo"));
+            assert_eq!(
+                metadata.classes(),
+                &[String::from("media"), String::from("primary")]
+            );
+            assert_eq!(metadata.inline_style(), Some(style));
+        }
+        other => panic!("expected image view, got {other:?}"),
+    }
+}
+
+/// Verifies image fallback rendering prefers caller-provided alt text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// image("missing.png").alt("Project logo")
+/// TestBackend
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The fallback text is rendered into the test backend.
+/// - No escape protocol bytes are written into the text buffer.
+///
+/// # Why
+///
+/// Test backends must remain deterministic even when terminal image protocols
+/// are unavailable.
+#[test]
+fn image_fallback_renders_alt_text_on_test_backend() -> Result<()> {
+    let backend = TestBackend::new(24, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png").alt("Project logo");
+
+    draw_view(&mut terminal, &view)?;
+
+    let rendered = rendered_text(&terminal);
+    assert!(rendered.contains("Project logo"));
+    assert!(!rendered.contains('\u{1b}'));
+
+    Ok(())
+}
+
+/// Verifies image fallback rendering has deterministic text without alt text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// image("missing.png")
+/// TestBackend
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The rendered fallback text matches the runtime deterministic support
+///   message.
+#[test]
+fn image_fallback_without_alt_uses_support_message() -> Result<()> {
+    let backend = TestBackend::new(40, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png");
+
+    draw_view(&mut terminal, &view)?;
+
+    let expected = "terminal image support is unavailable";
+    assert!(rendered_text(&terminal).contains(expected));
+
+    Ok(())
+}
+
+/// Verifies image type styles apply to fallback text.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Image { fg: Green }
+/// image("missing.png").alt("Logo")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The fallback text resolves styles through `ViewType::Image`.
+#[test]
+fn image_type_styles_apply_to_fallback_text() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png").alt("Logo");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::view_type(ViewType::Image),
+        TuiStyle::new().foreground(Color::Green),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let (fg, _) = cell_colors(&terminal, 0, 0, 8);
+    assert_eq!(fg, Color::Green);
+
+    Ok(())
+}
+
+/// Verifies image fallback text inherits parent text styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Form { fg: Green }
+/// form([image("missing.png").alt("Logo")])
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The image fallback cell inherits foreground color from the form.
+#[test]
+fn image_fallback_text_inherits_parent_text_style() -> Result<()> {
+    let backend = TestBackend::new(8, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = form([image("missing.png").alt("Logo")]);
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::view_type(ViewType::Form),
+        TuiStyle::new().foreground(Color::Green),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let (fg, _) = cell_colors(&terminal, 0, 0, 8);
+    assert_eq!(fg, Color::Green);
+
+    Ok(())
+}
+
+/// Verifies stylesheet image size controls image minimum height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .thumbnail { image_size: TuiSize::new(6, 3) }
+/// image("missing.png").with_classes("thumbnail")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The image minimum height is the stylesheet-declared image height.
+#[test]
+fn image_stylesheet_size_controls_min_height() -> Result<()> {
+    let backend = TestBackend::new(12, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png").with_classes("thumbnail");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("thumbnail"),
+        TuiStyle::new().image_size(TuiSize::new(6, 3)),
+    );
+    let mut min_height = 0;
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = ctx.__with_stylesheet(&stylesheet, |ctx| view.__min_height(ctx));
+    })?;
+
+    assert_eq!(min_height, 3);
+
+    Ok(())
+}
+
+/// Verifies stylesheet image size constrains fallback rendering.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .thumbnail { image_size: TuiSize::new(3, 1) }
+/// image("missing.png").alt("ABCDE").with_classes("thumbnail")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - Fallback text renders only inside the styled image area.
+#[test]
+fn image_stylesheet_size_constrains_fallback_area() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png").alt("ABCDE").with_classes("thumbnail");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("thumbnail"),
+        TuiStyle::new().image_size(TuiSize::new(3, 1)),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 1, 0, 8), "B");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 8), "C");
+    assert_eq!(cell_symbol(&terminal, 3, 0, 8), " ");
+    assert_eq!(cell_symbol(&terminal, 0, 1, 8), " ");
+
+    Ok(())
+}
+
+/// Verifies progress bar builders store value, label, and selector metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// progress_bar(0.5)
+///     .label("Loading")
+///     .with_id("upload")
+///     .with_classes("meter primary")
+///     .with_inline_style(yellow)
+/// ```
+///
+/// # Assertions
+///
+/// - The progress value is retained.
+/// - The optional label is retained.
+/// - The metadata view type is `ProgressBar`.
+/// - Standard selector metadata is retained.
+/// - Out-of-range builder values are clamped.
+#[test]
+fn progress_bar_builder_stores_value_label_and_selector_metadata() {
+    let style = TuiStyle::new().foreground(Color::Yellow);
+    let view = progress_bar(0.5)
+        .label("Loading")
+        .with_id("upload")
+        .with_classes("meter primary")
+        .with_inline_style(style);
+
+    match view {
+        View::ProgressBar {
+            value,
+            label,
+            metadata,
+        } => {
+            assert_eq!(value, 0.5);
+            assert_eq!(label.as_deref(), Some("Loading"));
+            assert_eq!(metadata.view_type(), ViewType::ProgressBar);
+            assert_eq!(metadata.id(), Some("upload"));
+            assert_eq!(
+                metadata.classes(),
+                &[String::from("meter"), String::from("primary")]
+            );
+            assert_eq!(metadata.inline_style(), Some(style));
+        }
+        other => panic!("expected progress bar view, got {other:?}"),
+    }
+
+    match progress_bar(1.5) {
+        View::ProgressBar { value, .. } => assert_eq!(value, 1.0),
+        other => panic!("expected progress bar view, got {other:?}"),
+    }
+
+    match progress_bar(f64::NAN) {
+        View::ProgressBar { value, .. } => assert_eq!(value, 0.0),
+        other => panic!("expected progress bar view, got {other:?}"),
+    }
+}
+
+/// Verifies empty, partial, and full progress values render as gauges.
+///
+/// # Example Under Test
+///
+/// ```text
+/// progress_bar(0.0)
+/// progress_bar(0.5)
+/// progress_bar(1.0)
+/// ```
+///
+/// # Assertions
+///
+/// - Empty progress renders without filled cells.
+/// - Partial progress renders filled cells.
+/// - Full progress fills both edges around Ratatui's centered label.
+#[test]
+fn progress_bar_renders_empty_partial_and_full_values() -> Result<()> {
+    let mut empty_terminal = Terminal::new(TestBackend::new(10, 1))?;
+    draw_view(&mut empty_terminal, &progress_bar(0.0))?;
+    assert!(!rendered_text(&empty_terminal).contains(symbol_block::FULL));
+
+    let mut partial_terminal = Terminal::new(TestBackend::new(10, 1))?;
+    draw_view(&mut partial_terminal, &progress_bar(0.5))?;
+    assert_eq!(cell_symbol(&partial_terminal, 0, 0, 10), symbol_block::FULL);
+    assert_ne!(cell_symbol(&partial_terminal, 9, 0, 10), symbol_block::FULL);
+
+    let mut full_terminal = Terminal::new(TestBackend::new(10, 1))?;
+    draw_view(&mut full_terminal, &progress_bar(1.0))?;
+    assert_eq!(cell_symbol(&full_terminal, 0, 0, 10), symbol_block::FULL);
+    assert_eq!(cell_symbol(&full_terminal, 9, 0, 10), symbol_block::FULL);
+
+    Ok(())
+}
+
+/// Verifies progress values are clamped before rendering.
+///
+/// # Example Under Test
+///
+/// ```text
+/// progress_bar(-0.5)
+/// progress_bar(1.5)
+/// progress_bar(f64::NAN)
+/// ```
+///
+/// # Assertions
+///
+/// - Underflow renders the same as `0.0`.
+/// - Overflow renders the same as `1.0`.
+/// - Non-finite progress renders the same as `0.0`.
+#[test]
+fn progress_bar_clamps_values_before_rendering() -> Result<()> {
+    let mut underflow = Terminal::new(TestBackend::new(10, 1))?;
+    let mut empty = Terminal::new(TestBackend::new(10, 1))?;
+    draw_view(&mut underflow, &progress_bar(-0.5))?;
+    draw_view(&mut empty, &progress_bar(0.0))?;
+    assert_eq!(rendered_text(&underflow), rendered_text(&empty));
+
+    let mut overflow = Terminal::new(TestBackend::new(10, 1))?;
+    let mut full = Terminal::new(TestBackend::new(10, 1))?;
+    draw_view(&mut overflow, &progress_bar(1.5))?;
+    draw_view(&mut full, &progress_bar(1.0))?;
+    assert_eq!(rendered_text(&overflow), rendered_text(&full));
+
+    let mut non_finite = Terminal::new(TestBackend::new(10, 1))?;
+    let mut empty_again = Terminal::new(TestBackend::new(10, 1))?;
+    draw_view(&mut non_finite, &progress_bar(f64::NAN))?;
+    draw_view(&mut empty_again, &progress_bar(0.0))?;
+    assert_eq!(rendered_text(&non_finite), rendered_text(&empty_again));
+
+    Ok(())
+}
+
+/// Verifies progress bar labels render over the gauge.
+///
+/// # Example Under Test
+///
+/// ```text
+/// progress_bar(0.5).label("Uploading")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The caller-provided label appears in the rendered buffer.
+#[test]
+fn progress_bar_renders_optional_label() -> Result<()> {
+    let backend = TestBackend::new(20, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = progress_bar(0.5).label("Uploading");
+
+    draw_view(&mut terminal, &view)?;
+
+    assert!(rendered_text(&terminal).contains("Uploading"));
+
+    Ok(())
+}
+
+/// Verifies progress bar type styles apply to the gauge.
+///
+/// # Example Under Test
+///
+/// ```text
+/// ProgressBar { fg: Green, bg: Blue }
+/// progress_bar(1.0).label("Done")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The gauge resolves styles through `ViewType::ProgressBar`.
+#[test]
+fn progress_bar_type_styles_apply_to_gauge() -> Result<()> {
+    let backend = TestBackend::new(12, 1);
+    let mut terminal = Terminal::new(backend)?;
+    let view = progress_bar(1.0).label("Done");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::view_type(ViewType::ProgressBar),
+        TuiStyle::new()
+            .foreground(Color::Green)
+            .background(Color::Blue),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    let (fg, bg) = cell_colors(&terminal, 0, 0, 12);
+    assert_eq!(fg, Color::Green);
+    assert_eq!(bg, Color::Blue);
+
+    Ok(())
+}
+
+/// Verifies progress bars do not participate in built-in focus traversal.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([progress_bar(0.5), button("Save")])
+/// Tab
+/// ```
+///
+/// # Assertions
+///
+/// - Only the button is counted as focusable.
+/// - Tab focuses the button and skips the progress bar.
+#[test]
+fn progress_bar_is_not_focusable() -> Result<()> {
+    let mut view = column([progress_bar(0.5), button("Save")]);
+
+    assert_eq!(view.__focusable_count(), 1);
+    assert_eq!(control_focuses(&view), vec![false]);
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    assert_eq!(control_focuses(&view), vec![true]);
+
+    Ok(())
 }
 
 /// Verifies tab navigation moves between static buttons.

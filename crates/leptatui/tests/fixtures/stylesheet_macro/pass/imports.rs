@@ -10,6 +10,7 @@ fn color_variables() -> StyleModule {
         $border: Borders::ALL;
         $border_type: BorderType::Rounded;
         $padding: TuiSpacing::uniform(1);
+        $thumbnail: TuiSize::new(24, 8);
     }
 }
 
@@ -23,7 +24,8 @@ fn button_mixins() -> StyleModule {
             bg: color_variables.$bg,
             borders: color_variables.$border,
             border_type: color_variables.$border_type,
-            padding: color_variables.$padding
+            padding: color_variables.$padding,
+            image_size: color_variables.$thumbnail
         }
 
         @mixin inverted {
@@ -46,7 +48,8 @@ fn main() {
     let base = TuiStyle::new()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .padding(TuiSpacing::uniform(1));
+        .padding(TuiSpacing::uniform(1))
+        .image_size(TuiSize::new(24, 8));
     let expected = Stylesheet::new()
         .rule(
             StyleSelector::class("submit"),

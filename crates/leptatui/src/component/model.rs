@@ -4,17 +4,25 @@
 //! scoped stylesheets, inherited style values, selector ancestor metadata, and
 //! helper methods for drawing widgets or child views.
 
+use std::path::Path;
+
 use ratatui::{
     Frame,
     buffer::Buffer,
-    layout::{Position, Rect},
+    layout::{Position, Rect, Size},
+    style::Style,
     widgets::{StatefulWidget, Widget},
 };
 
 use crate::{
     StyleMetadata,
     app::Result,
+    context,
     style::{Stylesheet, TuiStyle, ViewportSize},
+    terminal_image::{
+        TerminalImageFallback, TerminalImageRenderOutcome, TerminalImageSupport,
+        render_terminal_image_fallback,
+    },
     view::View,
 };
 
@@ -32,6 +40,8 @@ pub struct RenderCtx<'frame, 'buffer> {
     inherited_style: TuiStyle,
     /// Ancestor metadata used by descendant selector resolution.
     selector_ancestors: Vec<StyleMetadata>,
+    /// Terminal image support detected for this render pass.
+    terminal_images: TerminalImageSupport,
 }
 
 impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
@@ -53,6 +63,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             stylesheets: Vec::new(),
             inherited_style: TuiStyle::new(),
             selector_ancestors: Vec::new(),
+            terminal_images: context::use_context::<TerminalImageSupport>().unwrap_or_default(),
         }
     }
 
@@ -127,6 +138,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             stylesheets,
             inherited_style,
             selector_ancestors,
+            terminal_images: self.terminal_images.clone(),
         }
     }
 
@@ -192,6 +204,162 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         view.render(self)
     }
 
+    /// Renders a path-backed terminal image or deterministic fallback text.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Image file path to render.
+    /// * `alt` — Optional fallback text rendered when image support is
+    ///   unavailable or rendering fails.
+    /// * `fallback_style` — Ratatui style applied to fallback text.
+    ///
+    /// # Returns
+    ///
+    /// A [`TerminalImageRenderOutcome`] describing whether the image rendered
+    /// through a terminal protocol or fell back to text.
+    #[allow(dead_code)]
+    pub(crate) fn render_terminal_image_path(
+        &mut self,
+        path: &Path,
+        alt: Option<&str>,
+        fallback_style: Style,
+    ) -> TerminalImageRenderOutcome {
+        self.render_terminal_image_or_fallback(
+            alt,
+            fallback_style,
+            |terminal_images, area, buffer| {
+                terminal_images.render_path_to_buffer(path, area, buffer)
+            },
+        )
+    }
+
+    /// Renders a cropped segment of a path-backed terminal image.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Image file path to render.
+    /// * `alt` — Optional fallback text rendered when image support is
+    ///   unavailable or rendering fails.
+    /// * `fallback_style` — Ratatui style applied to fallback text.
+    /// * `full_size` — Full terminal-cell size used before clipping.
+    /// * `source_y` — Top row offset into the full image.
+    ///
+    /// # Returns
+    ///
+    /// A [`TerminalImageRenderOutcome`] describing whether the image rendered
+    /// through a terminal protocol or fell back to text.
+    pub(crate) fn render_terminal_image_path_clipped(
+        &mut self,
+        path: &Path,
+        alt: Option<&str>,
+        fallback_style: Style,
+        full_size: Size,
+        source_y: u16,
+    ) -> TerminalImageRenderOutcome {
+        if !self.target.supports_terminal_images() {
+            let reason = TerminalImageFallback::UnsupportedRenderTarget;
+            self.render_terminal_image_fallback_clipped(
+                reason,
+                alt,
+                fallback_style,
+                full_size,
+                source_y,
+            );
+            return TerminalImageRenderOutcome::Fallback(reason);
+        }
+
+        let area = self.area;
+        let terminal_images = self.terminal_images.clone();
+        let outcome = terminal_images.render_path_to_buffer_clipped(
+            path,
+            full_size,
+            source_y,
+            area,
+            self.target.buffer_mut(),
+        );
+        if let TerminalImageRenderOutcome::Fallback(reason) = outcome {
+            self.render_terminal_image_fallback_clipped(
+                reason,
+                alt,
+                fallback_style,
+                full_size,
+                source_y,
+            );
+        }
+
+        outcome
+    }
+
+    /// Runs a terminal-image render operation and writes fallback text when needed.
+    fn render_terminal_image_or_fallback(
+        &mut self,
+        alt: Option<&str>,
+        fallback_style: Style,
+        render: impl FnOnce(&TerminalImageSupport, Rect, &mut Buffer) -> TerminalImageRenderOutcome,
+    ) -> TerminalImageRenderOutcome {
+        if !self.target.supports_terminal_images() {
+            let reason = TerminalImageFallback::UnsupportedRenderTarget;
+            self.render_terminal_image_fallback(reason, alt, fallback_style);
+            return TerminalImageRenderOutcome::Fallback(reason);
+        }
+
+        let outcome = render(&self.terminal_images, self.area, self.target.buffer_mut());
+        if let TerminalImageRenderOutcome::Fallback(reason) = outcome {
+            self.render_terminal_image_fallback(reason, alt, fallback_style);
+        }
+
+        outcome
+    }
+
+    /// Writes deterministic fallback text for a terminal-image render failure.
+    fn render_terminal_image_fallback(
+        &mut self,
+        reason: TerminalImageFallback,
+        alt: Option<&str>,
+        fallback_style: Style,
+    ) {
+        render_terminal_image_fallback(
+            reason,
+            alt,
+            fallback_style,
+            self.area,
+            self.target.buffer_mut(),
+        );
+    }
+
+    /// Writes fallback text into the visible slice of a clipped image area.
+    fn render_terminal_image_fallback_clipped(
+        &mut self,
+        reason: TerminalImageFallback,
+        alt: Option<&str>,
+        fallback_style: Style,
+        full_size: Size,
+        source_y: u16,
+    ) {
+        if full_size.width == 0 || full_size.height == 0 || source_y >= full_size.height {
+            return;
+        }
+
+        let full_area = Rect::new(0, 0, full_size.width, full_size.height);
+        let mut buffer = Buffer::empty(full_area);
+        render_terminal_image_fallback(reason, alt, fallback_style, full_area, &mut buffer);
+
+        let area = self.area;
+        let width = area.width.min(full_size.width);
+        let height = area.height.min(full_size.height.saturating_sub(source_y));
+        let target = self.target.buffer_mut();
+
+        for y in 0..height {
+            for x in 0..width {
+                let source = buffer[(x, source_y.saturating_add(y))].clone();
+                let destination = (area.x.saturating_add(x), area.y.saturating_add(y));
+                if let Some(cell) = target.cell_mut(destination) {
+                    *cell = source;
+                }
+            }
+        }
+    }
+
     /// Renders a view into an offscreen buffer and copies a clipped row slice.
     pub(crate) fn render_view_clipped(
         &mut self,
@@ -204,6 +372,18 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ) -> Result<()> {
         if target_area.width == 0 || target_area.height == 0 || full_area.height == 0 {
             return Ok(());
+        }
+
+        if self.target.supports_terminal_images() && self.terminal_images.supports_protocol() {
+            let handled = self.with_area_inherited_style_and_selector_ancestor(
+                full_area,
+                inherited_style,
+                selector_ancestor.clone(),
+                |ctx| view.render_terminal_image_clipped(source_y, target_area, ctx),
+            )?;
+            if handled {
+                return Ok(());
+            }
         }
 
         let mut buffer = Buffer::empty(Rect::new(0, 0, full_area.width, full_area.height));
@@ -243,6 +423,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
                 stylesheets: self.stylesheets.clone(),
                 inherited_style,
                 selector_ancestors,
+                terminal_images: TerminalImageSupport::default(),
             };
             view.render(&mut buffer_ctx)?;
         }
@@ -409,6 +590,15 @@ impl<'frame, 'buffer> RenderTarget<'frame, 'buffer> {
                 cursor_position, ..
             } => **cursor_position = Some(position),
         }
+    }
+
+    /// Returns whether this target can receive terminal image protocol data.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the render target is an active frame.
+    fn supports_terminal_images(&self) -> bool {
+        matches!(self, Self::Frame(_))
     }
 
     /// Returns the underlying buffer.

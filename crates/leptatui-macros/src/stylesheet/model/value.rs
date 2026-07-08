@@ -40,6 +40,8 @@ pub(super) enum StyleValueKind {
     Spacing,
     /// Child layout direction.
     LayoutDirection,
+    /// Terminal-cell image render size.
+    Size,
 }
 
 impl Parse for StyleValue {
@@ -115,5 +117,6 @@ fn expand_imported_variable(
         StyleValueKind::BorderType => quote! { #module.expect_border_type(#name) },
         StyleValueKind::Spacing => quote! { #module.expect_spacing(#name) },
         StyleValueKind::LayoutDirection => quote! { #module.expect_layout_direction(#name) },
+        StyleValueKind::Size => quote! { #module.expect_size(#name) },
     })
 }

@@ -12,6 +12,8 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
+use crate::terminal_image::TerminalImageSupport;
+
 use super::Result;
 
 /// Default Crossterm-backed terminal used by the app runner.
@@ -21,6 +23,8 @@ pub(super) type DefaultTerminal = Terminal<CrosstermBackend<Stdout>>;
 pub(super) struct TerminalSession {
     /// Ratatui terminal used for all draw calls.
     pub(super) terminal: DefaultTerminal,
+    /// Terminal image support detected for this session.
+    pub(super) terminal_images: TerminalImageSupport,
     /// Cleanup guard tracking terminal modes that need restoration.
     cleanup: TerminalCleanup,
 }
@@ -49,8 +53,14 @@ impl TerminalSession {
         cleanup.alternate_screen = true;
         cleanup.cursor_style = true;
 
+        let terminal_images = TerminalImageSupport::query_stdio();
+
         match Terminal::new(CrosstermBackend::new(stdout())) {
-            Ok(terminal) => Ok(Self { terminal, cleanup }),
+            Ok(terminal) => Ok(Self {
+                terminal,
+                terminal_images,
+                cleanup,
+            }),
             Err(error) => {
                 let _ = cleanup.restore();
                 Err(error.into())

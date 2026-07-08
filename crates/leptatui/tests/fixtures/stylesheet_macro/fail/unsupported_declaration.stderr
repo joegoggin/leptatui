@@ -1,4 +1,4 @@
-error: unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, or direction
+error: unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, direction, or image_size
  --> tests/fixtures/stylesheet_macro/fail/unsupported_declaration.rs:8:19
   |
 8 |         Text => { color: Color::White }

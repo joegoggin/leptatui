@@ -5,7 +5,7 @@
 
 use ratatui::{style::Style, widgets::Block};
 
-use super::{BorderType, Borders, Color, LayoutDirection, Modifier, TuiSpacing};
+use super::{BorderType, Borders, Color, LayoutDirection, Modifier, TuiSize, TuiSpacing};
 
 /// Reusable style values for terminal UI elements.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -24,6 +24,8 @@ pub struct TuiStyle {
     pub padding: Option<TuiSpacing>,
     /// Optional child layout direction override.
     pub direction: Option<LayoutDirection>,
+    /// Optional terminal-cell image render size.
+    pub image_size: Option<TuiSize>,
 }
 
 impl Default for TuiStyle {
@@ -52,6 +54,7 @@ impl TuiStyle {
             border_type: None,
             padding: None,
             direction: None,
+            image_size: None,
         }
     }
 
@@ -153,6 +156,20 @@ impl TuiStyle {
         self
     }
 
+    /// Sets the terminal-cell image render size.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` — Width and height used when rendering image views.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] with the provided image size.
+    pub const fn image_size(mut self, size: TuiSize) -> Self {
+        self.image_size = Some(size);
+        self
+    }
+
     /// Returns the style values inherited by descendant views.
     ///
     /// Foreground color and text modifiers inherit across view boundaries.
@@ -169,6 +186,7 @@ impl TuiStyle {
             border_type: None,
             padding: None,
             direction: None,
+            image_size: None,
         }
     }
 

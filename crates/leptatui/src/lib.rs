@@ -40,6 +40,18 @@
 //! they create Leptatui [`View`] trees and [`Component`] implementations rather
 //! than Leptos DOM nodes.
 //!
+//! Standard components are available as builders such as [`input`],
+//! [`text_area`], [`form`], [`image()`], and [`progress_bar`] and as PascalCase
+//! tags in [`macro@view`]. `Input` and `TextArea` are controlled editable views:
+//! callers pass the current value and handle proposed updates through
+//! `on_input`. Editable controls start in Vim-style normal mode and support
+//! insert, normal, and visual editing commands, including submit and cancel
+//! integration when they are nested in a `Form`. `Image` uses path-backed
+//! [`ImageSource`] values, renders through supported terminal graphics
+//! protocols, and falls back to deterministic text when graphics support is
+//! unavailable. `ProgressBar` renders a clamped `0.0..=1.0` gauge with an
+//! optional label.
+//!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
 //! [`context::expect_context`]. Multi-page apps can store the active page with
@@ -67,6 +79,8 @@ pub mod route;
 pub mod style;
 pub mod view;
 
+mod terminal_image;
+
 extern crate self as leptatui;
 
 pub use action::{Action, ActionState, create_action};
@@ -80,11 +94,12 @@ pub use route::{RouteState, provide_route, use_navigate, use_route};
 pub use style::{
     BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
     StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
-    TuiSpacing, TuiStyle, ViewportSize, theme_color,
+    TuiSize, TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
-    ButtonAction, EditableState, FormAction, InputAction, StyleMetadata, View, ViewType, VimMode,
-    block, button, column, component, dynamic, form, input, row, text, text_area,
+    ButtonAction, EditableState, FormAction, ImageSource, InputAction, StyleMetadata, View,
+    ViewType, VimMode, block, button, column, component, dynamic, form, image, input, progress_bar,
+    row, text, text_area,
 };
 
 #[doc(hidden)]

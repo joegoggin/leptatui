@@ -11,6 +11,9 @@ mod model;
 mod render;
 
 pub(crate) use builders::component_factory;
-pub use builders::{block, button, column, component, dynamic, form, input, row, text, text_area};
+pub use builders::{
+    block, button, column, component, dynamic, form, image, input, progress_bar, row, text,
+    text_area,
+};
 pub use metadata::{EditableState, StyleMetadata, ViewType, VimMode};
-pub use model::{ButtonAction, FormAction, InputAction, View};
+pub use model::{ButtonAction, FormAction, ImageSource, InputAction, View};

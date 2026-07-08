@@ -8,7 +8,7 @@ use crate::component::Component;
 use super::{
     component_view::ComponentView,
     metadata::{EditableState, StyleMetadata, ViewType},
-    model::View,
+    model::{ImageSource, View, clamped_progress_value},
 };
 
 /// Creates a bordered block around a child view.
@@ -153,6 +153,40 @@ pub fn text_area(value: impl Into<String>) -> View {
         metadata: StyleMetadata::new(ViewType::TextArea),
         on_input: None,
         editable_state,
+    }
+}
+
+/// Creates a path-backed terminal image view.
+///
+/// # Arguments
+///
+/// * `source` — Image source to render.
+///
+/// # Returns
+///
+/// A [`View::Image`] containing the provided source.
+pub fn image(source: impl Into<ImageSource>) -> View {
+    View::Image {
+        source: source.into(),
+        alt: None,
+        metadata: StyleMetadata::new(ViewType::Image),
+    }
+}
+
+/// Creates a progress bar.
+///
+/// # Arguments
+///
+/// * `value` — Completion ratio rendered by the progress bar.
+///
+/// # Returns
+///
+/// A [`View::ProgressBar`] containing the provided value.
+pub fn progress_bar(value: f64) -> View {
+    View::ProgressBar {
+        value: clamped_progress_value(value),
+        label: None,
+        metadata: StyleMetadata::new(ViewType::ProgressBar),
     }
 }
 

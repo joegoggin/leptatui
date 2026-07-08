@@ -1,0 +1,5 @@
+error: ProgressBar expects exactly one value attribute
+ --> tests/fixtures/view_macro/fail/progress_bar_duplicate_value.rs:8:22
+  |
+8 |         <ProgressBar value={0.25} value={0.75} />
+  |                      ^^^^^

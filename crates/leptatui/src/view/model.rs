@@ -3,7 +3,7 @@
 //! This module defines the view enum and its equality/debug behavior used by
 //! view builders and renderers.
 
-use std::{fmt, rc::Rc};
+use std::{fmt, path::PathBuf, rc::Rc};
 
 use super::{
     component_view::ComponentView,
@@ -20,6 +20,67 @@ pub type FormAction = Rc<dyn Fn() -> AppControl>;
 
 /// Shared callback invoked when an input proposes a new value.
 pub type InputAction = Rc<dyn Fn(String) -> AppControl>;
+
+/// Source data used by an image view.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ImageSource {
+    /// Image loaded from a filesystem path.
+    Path(PathBuf),
+}
+
+impl From<PathBuf> for ImageSource {
+    /// Converts a path buffer into a path-backed image source.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Path to load when rendering the image.
+    ///
+    /// # Returns
+    ///
+    /// An [`ImageSource::Path`] containing `value`.
+    fn from(value: PathBuf) -> Self {
+        Self::Path(value)
+    }
+}
+
+impl From<&str> for ImageSource {
+    /// Converts a borrowed path into a path-backed image source.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Path to copy into the image source.
+    ///
+    /// # Returns
+    ///
+    /// An [`ImageSource::Path`] containing `value`.
+    fn from(value: &str) -> Self {
+        Self::Path(PathBuf::from(value))
+    }
+}
+
+impl From<String> for ImageSource {
+    /// Converts an owned path string into a path-backed image source.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Path string to move into the image source.
+    ///
+    /// # Returns
+    ///
+    /// An [`ImageSource::Path`] containing `value`.
+    fn from(value: String) -> Self {
+        Self::Path(PathBuf::from(value))
+    }
+}
+
+/// Returns a clamped progress value safe for Ratatui gauge rendering.
+pub(crate) fn clamped_progress_value(value: f64) -> f64 {
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
 
 /// Minimal renderable view tree for hand-written terminal UI.
 #[derive(Clone)]
@@ -98,6 +159,24 @@ pub enum View {
         /// Retained editing state for reconciled redraws.
         editable_state: EditableState,
     },
+    /// Path-backed terminal image with deterministic text fallback.
+    Image {
+        /// Image source to render.
+        source: ImageSource,
+        /// Fallback text rendered when image support is unavailable.
+        alt: Option<String>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Gauge-style progress indicator.
+    ProgressBar {
+        /// Completion ratio requested by the caller.
+        value: f64,
+        /// Optional label rendered over the gauge.
+        label: Option<String>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
     /// Child view produced when the tree is traversed.
     Dynamic(DynamicView),
     /// Child component preserved as a tree boundary.
@@ -120,7 +199,9 @@ impl View {
             | Self::Form { metadata, .. }
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
-            | Self::TextArea { metadata, .. } => Some(metadata),
+            | Self::TextArea { metadata, .. }
+            | Self::Image { metadata, .. }
+            | Self::ProgressBar { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -140,7 +221,9 @@ impl View {
             | Self::Form { metadata, .. }
             | Self::Button { metadata, .. }
             | Self::Input { metadata, .. }
-            | Self::TextArea { metadata, .. } => Some(metadata),
+            | Self::TextArea { metadata, .. }
+            | Self::Image { metadata, .. }
+            | Self::ProgressBar { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -314,6 +397,40 @@ impl View {
 
         self
     }
+
+    /// Stores fallback text on an image view.
+    ///
+    /// # Arguments
+    ///
+    /// * `alt` — Text displayed when image rendering is unavailable or fails.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with fallback text when the view is an image.
+    pub fn alt(mut self, alt: impl Into<String>) -> Self {
+        if let Self::Image { alt: slot, .. } = &mut self {
+            *slot = Some(alt.into());
+        }
+
+        self
+    }
+
+    /// Stores label text on a progress bar view.
+    ///
+    /// # Arguments
+    ///
+    /// * `label` — Text rendered over the progress bar gauge.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with label text when the view is a progress bar.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        if let Self::ProgressBar { label: slot, .. } = &mut self {
+            *slot = Some(label.into());
+        }
+
+        self
+    }
 }
 
 impl fmt::Debug for View {
@@ -400,6 +517,26 @@ impl fmt::Debug for View {
                 .field("metadata", metadata)
                 .field("on_input", &on_input.is_some())
                 .field("editable_state", editable_state)
+                .finish(),
+            Self::Image {
+                source,
+                alt,
+                metadata,
+            } => f
+                .debug_struct("Image")
+                .field("source", source)
+                .field("alt", alt)
+                .field("metadata", metadata)
+                .finish(),
+            Self::ProgressBar {
+                value,
+                label,
+                metadata,
+            } => f
+                .debug_struct("ProgressBar")
+                .field("value", value)
+                .field("label", label)
+                .field("metadata", metadata)
                 .finish(),
             Self::Dynamic(_) => f.write_str("Dynamic(..)"),
             Self::Component(component) => f.debug_tuple("Component").field(component).finish(),
@@ -555,6 +692,38 @@ impl PartialEq for View {
                     && left_metadata == right_metadata
                     && actions_equal(left_on_input, right_on_input)
                     && left_editable_state == right_editable_state
+            }
+            (
+                Self::Image {
+                    source: left_source,
+                    alt: left_alt,
+                    metadata: left_metadata,
+                },
+                Self::Image {
+                    source: right_source,
+                    alt: right_alt,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_source == right_source
+                    && left_alt == right_alt
+                    && left_metadata == right_metadata
+            }
+            (
+                Self::ProgressBar {
+                    value: left_value,
+                    label: left_label,
+                    metadata: left_metadata,
+                },
+                Self::ProgressBar {
+                    value: right_value,
+                    label: right_label,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_value.to_bits() == right_value.to_bits()
+                    && left_label == right_label
+                    && left_metadata == right_metadata
             }
             (Self::Dynamic(left), Self::Dynamic(right)) => left.ptr_eq(right),
             (Self::Component(left), Self::Component(right)) => left.ptr_eq(right),

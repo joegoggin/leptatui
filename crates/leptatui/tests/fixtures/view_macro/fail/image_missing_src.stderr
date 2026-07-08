@@ -1,0 +1,5 @@
+error: Image requires a src attribute
+ --> tests/fixtures/view_macro/fail/image_missing_src.rs:8:10
+  |
+8 |         <Image alt="Project logo" />
+  |          ^^^^^

@@ -193,9 +193,10 @@ fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'s
             "direction",
             "direction_important",
         )),
+        "image_size" => Ok((StyleValueKind::Size, "image_size", "image_size_important")),
         _ => Err(Error::new_spanned(
             name,
-            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, or direction",
+            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, direction, or image_size",
         )),
     }
 }

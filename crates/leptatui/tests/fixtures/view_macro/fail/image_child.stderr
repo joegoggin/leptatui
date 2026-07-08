@@ -1,0 +1,5 @@
+error: Image does not accept children
+ --> tests/fixtures/view_macro/fail/image_child.rs:8:10
+  |
+8 |         <Image src="assets/logo.png">
+  |          ^^^^^

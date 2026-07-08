@@ -88,7 +88,11 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// use leptatui::prelude::*;
 /// signal(0)
 /// provide_context(String::from("from prelude"))
-/// block(column([text("from prelude"), input("Ada"), text_area("Notes"), button("OK")]))
+/// block(column([
+///     form([input("Ada"), text_area("Notes")]),
+///     image("logo.png"),
+///     progress_bar(0.5),
+/// ]))
 /// ```
 ///
 /// # Assertions
@@ -96,8 +100,10 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// - Signals can be read, set, and updated from the prelude.
 /// - A memo can derive from a prelude signal.
 /// - Context values can be provided and read from the prelude.
-/// - View, input callback, and style helpers type-check from the prelude.
-/// - The stylesheet macro builds the expected stylesheet from prelude exports.
+/// - New standard-library builders, callback aliases, and source types
+///   type-check from the prelude.
+/// - The view and stylesheet macros support the new standard-library
+///   component names from prelude imports.
 #[test]
 fn prelude_exposes_reactivity_and_context() {
     Owner::new().with(|| {
@@ -121,15 +127,38 @@ fn prelude_exposes_reactivity_and_context() {
             assert_eq!(expect_context::<String>(), "from prelude");
         });
 
+        let form_action: FormAction = std::rc::Rc::new(|| AppControl::Continue);
         let input_action: InputAction = std::rc::Rc::new(|_| AppControl::Continue);
-        let input_view = input("Ada").on_input(move |next| input_action(next));
+        let input_action_for_input = std::rc::Rc::clone(&input_action);
+        let input_action_for_text_area = std::rc::Rc::clone(&input_action);
+        let form_action_for_submit = std::rc::Rc::clone(&form_action);
+        let image_source = ImageSource::from("assets/logo.png");
+        assert_eq!(image_source, ImageSource::Path("assets/logo.png".into()));
+
+        let input_view = input("Ada").on_input(move |next| input_action_for_input(next));
+        let text_area_view =
+            text_area("Notes").on_input(move |next| input_action_for_text_area(next));
+        let form_view = form([input_view, text_area_view])
+            .on_submit(move || form_action_for_submit())
+            .on_cancel(|| AppControl::Continue);
         let view: View = block(column([
             text("from prelude"),
-            input_view,
-            text_area("Notes"),
+            form_view,
+            image(image_source).alt("Project logo"),
+            progress_bar(0.5).label("Half"),
             button("OK"),
         ]));
         let _ = view;
+
+        let macro_view: View = view! {
+            <Form>
+                <Input value="Ada" />
+                <TextArea value="Notes" />
+                <Image src="assets/logo.png" alt="Project logo" />
+                <ProgressBar value={0.5} label="Half" />
+            </Form>
+        };
+        let _ = macro_view;
 
         let style = TuiStyle::new()
             .foreground(Color::LightCyan)
@@ -141,14 +170,35 @@ fn prelude_exposes_reactivity_and_context() {
         let _ = style.to_block();
 
         let stylesheet = stylesheet! {
-            Text => { fg: Color::LightCyan }
+            Form => { fg: Color::LightCyan }
+            Input => { fg: Color::White }
+            TextArea => { fg: Color::Yellow }
+            Image => { fg: Color::Green }
+            ProgressBar => { fg: Color::Blue }
         };
         assert_eq!(
             stylesheet,
-            Stylesheet::new().rule(
-                StyleSelector::view_type(ViewType::Text),
-                TuiStyle::new().foreground(Color::LightCyan),
-            )
+            Stylesheet::new()
+                .rule(
+                    StyleSelector::view_type(ViewType::Form),
+                    TuiStyle::new().foreground(Color::LightCyan),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::Input),
+                    TuiStyle::new().foreground(Color::White),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::TextArea),
+                    TuiStyle::new().foreground(Color::Yellow),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::Image),
+                    TuiStyle::new().foreground(Color::Green),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::ProgressBar),
+                    TuiStyle::new().foreground(Color::Blue),
+                )
         );
     });
 }

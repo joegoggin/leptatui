@@ -2,6 +2,7 @@
 
 use leptatui::prelude::*;
 
+/// Exercises theme variable references in stylesheet declarations.
 fn main() {
     let styles = stylesheet! {
         $text: theme_color("text");
