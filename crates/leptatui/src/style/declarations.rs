@@ -1,8 +1,8 @@
 //! Theme-aware style declarations stored by stylesheet rules.
 
 use super::{
-    BorderType, Borders, Color, LayoutDirection, Modifier, ThemeValue, ThemeVariables, TuiSpacing,
-    TuiStyle,
+    BorderType, Borders, Color, LayoutDirection, Modifier, ThemeValue, ThemeVariables, TuiSize,
+    TuiSpacing, TuiStyle,
 };
 
 /// One style declaration value plus its cascade importance.
@@ -65,6 +65,8 @@ pub struct StyleDeclarations {
     padding: Option<Declaration<TuiSpacing>>,
     /// Layout direction declaration.
     direction: Option<Declaration<LayoutDirection>>,
+    /// Image render size declaration.
+    image_size: Option<Declaration<TuiSize>>,
 }
 
 impl StyleDeclarations {
@@ -78,6 +80,7 @@ impl StyleDeclarations {
             border_type: None,
             padding: None,
             direction: None,
+            image_size: None,
         }
     }
 
@@ -320,6 +323,44 @@ impl StyleDeclarations {
         self
     }
 
+    /// Sets the normal image render size declaration.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` — Terminal-cell size for image views.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleDeclarations`] value with the image size declaration applied.
+    pub const fn image_size(mut self, size: TuiSize) -> Self {
+        if !matches!(
+            self.image_size,
+            Some(Declaration {
+                important: true,
+                ..
+            })
+        ) {
+            self.image_size = Some(Declaration::normal(size));
+        }
+
+        self
+    }
+
+    /// Sets the important image render size declaration.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` — Terminal-cell size for image views.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleDeclarations`] value with the important image size declaration applied.
+    #[doc(hidden)]
+    pub const fn image_size_important(mut self, size: TuiSize) -> Self {
+        self.image_size = Some(Declaration::important(size));
+        self
+    }
+
     /// Overlays another declaration set and returns the updated declarations.
     pub fn merge(mut self, style: &Self) -> Self {
         self.overlay(style);
@@ -393,6 +434,10 @@ impl StyleDeclarations {
             style = style.direction(direction.value);
         }
 
+        if let Some(size) = &self.image_size {
+            style = style.image_size(size.value);
+        }
+
         style
     }
 
@@ -443,6 +488,12 @@ impl StyleDeclarations {
             && matches(declaration.important)
         {
             self.set_direction(declaration.value, declaration.important);
+        }
+
+        if let Some(declaration) = &style.image_size
+            && matches(declaration.important)
+        {
+            self.set_image_size(declaration.value, declaration.important);
         }
     }
 
@@ -515,6 +566,16 @@ impl StyleDeclarations {
     fn set_direction(&mut self, direction: LayoutDirection, important: bool) {
         set_declaration(&mut self.direction, direction, important);
     }
+
+    /// Sets the image render size declaration.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` — Terminal-cell size for image views.
+    /// * `important` — Whether the declaration has important priority.
+    fn set_image_size(&mut self, size: TuiSize, important: bool) {
+        set_declaration(&mut self.image_size, size, important);
+    }
 }
 
 /// Stores a declaration while preserving existing important values.
@@ -571,6 +632,10 @@ impl From<TuiStyle> for StyleDeclarations {
 
         if let Some(direction) = style.direction {
             declarations = declarations.direction(direction);
+        }
+
+        if let Some(size) = style.image_size {
+            declarations = declarations.image_size(size);
         }
 
         declarations

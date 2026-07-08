@@ -2,8 +2,8 @@
 //!
 //! This binary demonstrates the expanded standard component library in one
 //! coherent app. It uses controlled `Input` and `TextArea` fields, `Form`
-//! submit and cancel callbacks, image fallback rendering, and a progress bar
-//! backed by Leptos signals.
+//! submit and cancel callbacks, stylesheet-sized image fallback rendering, and
+//! a progress bar backed by Leptos signals.
 
 use leptatui::prelude::*;
 
@@ -98,6 +98,9 @@ fn StandardLibraryShowcase() -> View {
         .caption => { fg: Color::DarkGray }
         .help => { fg: Color::DarkGray }
         .meter => { fg: Color::LightGreen, bg: Color::DarkGray }
+        .image-small => { image_size: TuiSize::new(24, 8) }
+        .image-medium => { image_size: TuiSize::new(36, 12) }
+        .image-large => { image_size: TuiSize::new(48, 16) }
 
         Input => {
             borders: Borders::ALL,
@@ -151,6 +154,9 @@ fn StandardLibraryShowcase() -> View {
             Input => { padding: TuiSpacing::ZERO }
             TextArea => { padding: TuiSpacing::ZERO }
             Image => { padding: TuiSpacing::ZERO }
+            .image-small => { image_size: TuiSize::new(20, 6) }
+            .image-medium => { image_size: TuiSize::new(28, 8) }
+            .image-large => { image_size: TuiSize::new(36, 10) }
             Button => { padding: TuiSpacing::ZERO }
         }
     }
@@ -226,13 +232,26 @@ fn StandardLibraryShowcase() -> View {
                         </Form>
                     }
                 }}
-                <Text class="label">"Image"</Text>
+                <Text class="label">"Image small"</Text>
                 <Image
+                    class="image-small"
+                    src="crates/leptatui/examples/assets/showcase.jpg"
+                    alt="Image fallback: terminal graphics are unavailable in this terminal."
+                />
+                <Text class="label">"Image medium"</Text>
+                <Image
+                    class="image-medium"
+                    src="crates/leptatui/examples/assets/showcase.jpg"
+                    alt="Image fallback: terminal graphics are unavailable in this terminal."
+                />
+                <Text class="label">"Image large"</Text>
+                <Image
+                    class="image-large"
                     src="crates/leptatui/examples/assets/showcase.jpg"
                     alt="Image fallback: terminal graphics are unavailable in this terminal."
                 />
                 <Text class="caption">
-                    "Images render automatically in terminals with supported graphics protocols; otherwise fallback text is shown."
+                    "Image sizes come from stylesheet classes; supported terminals render graphics and other targets show fallback text."
                 </Text>
                 {move || {
                     let current_progress = progress.get_untracked();

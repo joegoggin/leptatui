@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use super::{
-    BorderType, Borders, Color, LayoutDirection, Modifier, StyleDeclarations, ThemeValue,
+    BorderType, Borders, Color, LayoutDirection, Modifier, StyleDeclarations, ThemeValue, TuiSize,
     TuiSpacing,
 };
 
@@ -26,6 +26,8 @@ pub enum StyleValue {
     Spacing(TuiSpacing),
     /// Child layout direction.
     LayoutDirection(LayoutDirection),
+    /// Terminal-cell image render size.
+    Size(TuiSize),
 }
 
 impl StyleValue {
@@ -38,6 +40,7 @@ impl StyleValue {
             Self::BorderType(_) => "border_type",
             Self::Spacing(_) => "spacing",
             Self::LayoutDirection(_) => "layout_direction",
+            Self::Size(_) => "size",
         }
     }
 }
@@ -144,6 +147,21 @@ impl From<LayoutDirection> for StyleValue {
     /// A [`StyleValue`] containing the layout direction.
     fn from(value: LayoutDirection) -> Self {
         Self::LayoutDirection(value)
+    }
+}
+
+impl From<TuiSize> for StyleValue {
+    /// Creates an image size style value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Terminal-cell image size to store.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleValue`] containing the size.
+    fn from(value: TuiSize) -> Self {
+        Self::Size(value)
     }
 }
 
@@ -345,6 +363,25 @@ impl StyleModule {
             StyleValue::LayoutDirection(value) => *value,
             value => panic!(
                 "stylesheet module variable `${name}` is {}, expected layout_direction",
+                value.kind()
+            ),
+        }
+    }
+
+    /// Returns a size variable or panics with a stylesheet-oriented message.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — Variable name without the `$` prefix.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiSize`] value for the stored variable.
+    pub fn expect_size(&self, name: &str) -> TuiSize {
+        match self.expect_value(name) {
+            StyleValue::Size(value) => *value,
+            value => panic!(
+                "stylesheet module variable `${name}` is {}, expected size",
                 value.kind()
             ),
         }

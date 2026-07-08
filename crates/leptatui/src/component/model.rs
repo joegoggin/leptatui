@@ -9,7 +9,7 @@ use std::path::Path;
 use ratatui::{
     Frame,
     buffer::Buffer,
-    layout::{Position, Rect},
+    layout::{Position, Rect, Size},
     style::Style,
     widgets::{StatefulWidget, Widget},
 };
@@ -252,6 +252,61 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         outcome
     }
 
+    /// Renders a cropped segment of a path-backed terminal image.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Image file path to render.
+    /// * `alt` — Optional fallback text rendered when image support is
+    ///   unavailable or rendering fails.
+    /// * `fallback_style` — Ratatui style applied to fallback text.
+    /// * `full_size` — Full terminal-cell size used before clipping.
+    /// * `source_y` — Top row offset into the full image.
+    ///
+    /// # Returns
+    ///
+    /// A [`TerminalImageRenderOutcome`] describing whether the image rendered
+    /// through a terminal protocol or fell back to text.
+    pub(crate) fn render_terminal_image_path_clipped(
+        &mut self,
+        path: &Path,
+        alt: Option<&str>,
+        fallback_style: Style,
+        full_size: Size,
+        source_y: u16,
+    ) -> TerminalImageRenderOutcome {
+        if !self.target.supports_terminal_images() {
+            let reason = TerminalImageFallback::UnsupportedRenderTarget;
+            render_terminal_image_fallback(
+                reason,
+                alt,
+                fallback_style,
+                self.area,
+                self.target.buffer_mut(),
+            );
+            return TerminalImageRenderOutcome::Fallback(reason);
+        }
+
+        let outcome = self.terminal_images.render_path_to_buffer_clipped(
+            path,
+            full_size,
+            source_y,
+            self.area,
+            self.target.buffer_mut(),
+        );
+        if let TerminalImageRenderOutcome::Fallback(reason) = outcome {
+            render_terminal_image_fallback(
+                reason,
+                alt,
+                fallback_style,
+                self.area,
+                self.target.buffer_mut(),
+            );
+        }
+
+        outcome
+    }
+
     /// Renders a view into an offscreen buffer and copies a clipped row slice.
     pub(crate) fn render_view_clipped(
         &mut self,
@@ -264,6 +319,18 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ) -> Result<()> {
         if target_area.width == 0 || target_area.height == 0 || full_area.height == 0 {
             return Ok(());
+        }
+
+        if self.target.supports_terminal_images() && self.terminal_images.supports_protocol() {
+            let handled = self.with_area_inherited_style_and_selector_ancestor(
+                full_area,
+                inherited_style,
+                selector_ancestor.clone(),
+                |ctx| view.render_terminal_image_clipped(source_y, target_area, ctx),
+            )?;
+            if handled {
+                return Ok(());
+            }
         }
 
         let mut buffer = Buffer::empty(Rect::new(0, 0, full_area.width, full_area.height));

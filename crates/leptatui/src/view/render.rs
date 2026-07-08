@@ -11,7 +11,7 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
-    layout::{Constraint, Layout, Position, Rect},
+    layout::{Constraint, Layout, Position, Rect, Size},
     text::{Line, Span},
     widgets::{Block, Gauge, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
@@ -21,7 +21,7 @@ use crate::{
     app::{AppControl, Result},
     component::{Component, FocusedControl, KeyControl, RenderCtx},
     context,
-    style::{Borders, LayoutDirection, Modifier, TuiStyle},
+    style::{Borders, LayoutDirection, Modifier, TuiSize, TuiStyle},
 };
 
 use super::{
@@ -197,6 +197,19 @@ fn line_count_height(line_count: usize) -> u16 {
     u16::try_from(line_count).unwrap_or(u16::MAX)
 }
 
+/// Returns the terminal area used to render an image for the resolved style.
+fn image_render_area(area: Rect, image_size: Option<TuiSize>) -> Rect {
+    let Some(size) = image_size else {
+        return area;
+    };
+
+    Rect {
+        width: size.width.min(area.width),
+        height: size.height.min(area.height),
+        ..area
+    }
+}
+
 /// Returns a Ratatui-safe progress ratio.
 ///
 /// # Arguments
@@ -258,7 +271,10 @@ impl View {
                 let path = match source {
                     super::model::ImageSource::Path(path) => path.as_path(),
                 };
-                ctx.render_terminal_image_path(path, alt.as_deref(), style.to_ratatui_style());
+                let image_area = image_render_area(ctx.area(), style.image_size);
+                ctx.with_area(image_area, |ctx| {
+                    ctx.render_terminal_image_path(path, alt.as_deref(), style.to_ratatui_style());
+                });
                 Ok(())
             }
             Self::ProgressBar {
@@ -455,6 +471,63 @@ impl View {
             Self::Dynamic(child) => child.with_view(|child| child.render(ctx)),
             Self::Component(component) => component.render(ctx),
         }
+    }
+
+    /// Renders a clipped terminal image segment when this view is an image.
+    pub(crate) fn render_terminal_image_clipped(
+        &self,
+        source_y: u16,
+        target_area: Rect,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> Result<bool> {
+        let Self::Image {
+            source,
+            alt,
+            metadata,
+        } = self
+        else {
+            return Ok(false);
+        };
+
+        let style = resolve_style(metadata, ctx);
+        let full_image_area = image_render_area(ctx.area(), style.image_size);
+        if source_y >= full_image_area.height {
+            return Ok(true);
+        }
+
+        let width = full_image_area.width.min(target_area.width);
+        let height = full_image_area
+            .height
+            .saturating_sub(source_y)
+            .min(target_area.height);
+        if width == 0 || height == 0 {
+            return Ok(true);
+        }
+
+        let path = match source {
+            super::model::ImageSource::Path(path) => path.as_path(),
+        };
+        let render_area = Rect {
+            x: target_area
+                .x
+                .saturating_add(full_image_area.x.saturating_sub(ctx.area().x)),
+            y: target_area.y,
+            width,
+            height,
+        };
+        let full_size = Size::new(full_image_area.width, full_image_area.height);
+
+        ctx.with_area(render_area, |ctx| {
+            ctx.render_terminal_image_path_clipped(
+                path,
+                alt.as_deref(),
+                style.to_ratatui_style(),
+                full_size,
+                source_y,
+            );
+        });
+
+        Ok(true)
     }
 
     /// Dispatches an event through this view tree.
@@ -4378,7 +4451,11 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         View::Form {
             children, metadata, ..
         } => min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
-        View::Image { .. } | View::ProgressBar { .. } => 1,
+        View::Image { metadata, .. } => {
+            let style = resolve_style(metadata, ctx);
+            style.image_size.map_or(1, |size| size.height)
+        }
+        View::ProgressBar { .. } => 1,
         View::Component(component) => component.min_height(ctx),
     }
 }

@@ -6,7 +6,8 @@
 use leptatui::{
     BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
     StyleMetadata, StyleModule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
-    TuiSpacing, TuiStyle, ViewType, ViewportSize, button, stylesheet, text, theme_color,
+    TuiSize, TuiSpacing, TuiStyle, ViewType, ViewportSize, button, image, stylesheet, text,
+    theme_color,
 };
 use ratatui::{style::Style, widgets::Padding};
 
@@ -499,6 +500,36 @@ fn stylesheet_direction_declaration_resolves() {
     );
 
     assert_eq!(resolved.direction, Some(LayoutDirection::Column));
+}
+
+/// Verifies stylesheet image size declarations resolve into view styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .thumbnail { image_size: TuiSize::new(24, 8) }
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - The resolved image size is the stylesheet-declared terminal-cell size.
+#[test]
+fn stylesheet_image_size_declaration_resolves() {
+    let view = image("missing.png").with_classes("thumbnail");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("thumbnail"),
+        TuiStyle::new().image_size(TuiSize::new(24, 8)),
+    );
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.image_size, Some(TuiSize::new(24, 8)));
 }
 
 /// Verifies media rules can override layout direction by viewport.
@@ -1105,7 +1136,8 @@ fn stylesheet_macro_mixins_expand_in_source_order() {
 ///
 /// - Literal color variables are stored as color style values.
 /// - Theme color variables are returned from the color getter.
-/// - Modifier, borders, border type, and spacing variables use typed getters.
+/// - Modifier, borders, border type, spacing, direction, and size variables use
+///   typed getters.
 /// - Stored mixins can be retrieved by name.
 ///
 /// # Why
@@ -1125,6 +1157,7 @@ fn style_module_stores_typed_variables_and_mixins() {
         .variable("border_type", BorderType::Rounded)
         .variable("padding", TuiSpacing::uniform(1))
         .variable("direction", LayoutDirection::Column)
+        .variable("thumbnail", TuiSize::new(24, 8))
         .mixin("control", control.clone());
 
     assert_eq!(
@@ -1146,6 +1179,7 @@ fn style_module_stores_typed_variables_and_mixins() {
         module.expect_layout_direction("direction"),
         LayoutDirection::Column
     );
+    assert_eq!(module.expect_size("thumbnail"), TuiSize::new(24, 8));
     assert_eq!(module.expect_mixin("control"), &control);
 }
 

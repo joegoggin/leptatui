@@ -14,8 +14,8 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     __private::FocusedControl, AppControl, AppRoot, Borders, Color, Component, EditableState,
     ImageSource, KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result,
-    StyleMetadata, StyleSelector, Stylesheet, TuiStyle, View, ViewType, VimMode, block, button,
-    column, component, dynamic, form, image, input, progress_bar, row, text, text_area,
+    StyleMetadata, StyleSelector, Stylesheet, TuiSize, TuiStyle, View, ViewType, VimMode, block,
+    button, column, component, dynamic, form, image, input, progress_bar, row, text, text_area,
 };
 use ratatui::{
     Terminal,
@@ -2853,6 +2853,79 @@ fn image_fallback_text_inherits_parent_text_style() -> Result<()> {
 
     let (fg, _) = cell_colors(&terminal, 0, 0, 8);
     assert_eq!(fg, Color::Green);
+
+    Ok(())
+}
+
+/// Verifies stylesheet image size controls image minimum height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .thumbnail { image_size: TuiSize::new(6, 3) }
+/// image("missing.png").with_classes("thumbnail")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - The image minimum height is the stylesheet-declared image height.
+#[test]
+fn image_stylesheet_size_controls_min_height() -> Result<()> {
+    let backend = TestBackend::new(12, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png").with_classes("thumbnail");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("thumbnail"),
+        TuiStyle::new().image_size(TuiSize::new(6, 3)),
+    );
+    let mut min_height = 0;
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = ctx.__with_stylesheet(&stylesheet, |ctx| view.__min_height(ctx));
+    })?;
+
+    assert_eq!(min_height, 3);
+
+    Ok(())
+}
+
+/// Verifies stylesheet image size constrains fallback rendering.
+///
+/// # Example Under Test
+///
+/// ```text
+/// .thumbnail { image_size: TuiSize::new(3, 1) }
+/// image("missing.png").alt("ABCDE").with_classes("thumbnail")
+/// ```
+///
+/// # Assertions
+///
+/// - The terminal draw call succeeds.
+/// - Fallback text renders only inside the styled image area.
+#[test]
+fn image_stylesheet_size_constrains_fallback_area() -> Result<()> {
+    let backend = TestBackend::new(8, 2);
+    let mut terminal = Terminal::new(backend)?;
+    let view = image("missing.png").alt("ABCDE").with_classes("thumbnail");
+    let stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("thumbnail"),
+        TuiStyle::new().image_size(TuiSize::new(3, 1)),
+    );
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 1, 0, 8), "B");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 8), "C");
+    assert_eq!(cell_symbol(&terminal, 3, 0, 8), " ");
+    assert_eq!(cell_symbol(&terminal, 0, 1, 8), " ");
 
     Ok(())
 }

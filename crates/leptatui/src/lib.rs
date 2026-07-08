@@ -94,7 +94,7 @@ pub use route::{RouteState, provide_route, use_navigate, use_route};
 pub use style::{
     BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
     StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
-    TuiSpacing, TuiStyle, ViewportSize, theme_color,
+    TuiSize, TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
     ButtonAction, EditableState, FormAction, ImageSource, InputAction, StyleMetadata, View,
