@@ -159,7 +159,7 @@ fn StandardControls() -> View {
                 }
             }}
             <Image
-                src="crates/leptatui/examples/assets/showcase.png"
+                src="crates/leptatui/examples/assets/showcase.jpg"
                 alt="Image fallback text"
             />
             {move || progress_bar(progress.get_untracked()).label("Progress")}

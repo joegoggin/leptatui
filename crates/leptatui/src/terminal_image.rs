@@ -371,7 +371,7 @@ impl TerminalImageCache {
 mod tests {
     use std::path::Path;
 
-    use ratatui::{Terminal, backend::TestBackend, style::Style};
+    use ratatui::{Terminal, backend::TestBackend, layout::Size, style::Style};
 
     use crate::{component::RenderCtx, context};
 
@@ -473,6 +473,53 @@ mod tests {
         assert!(!rendered.contains('\u{1b}'));
     }
 
+    /// Verifies clipped fallback text starts at the requested source row.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// alt = "top\nbottom"
+    /// full_size = 16x2
+    /// source_y = 1
+    /// target = 16x1
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The visible fallback slice contains the second fallback row.
+    /// - The skipped fallback row is not rendered.
+    #[test]
+    fn clipped_fallback_starts_at_source_row() {
+        let backend = TestBackend::new(16, 1);
+        let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
+
+        terminal
+            .draw(|frame| {
+                context::hooks::__with_context_scope(|| {
+                    let mut ctx = RenderCtx::new(frame);
+                    ctx.render_terminal_image_path_clipped(
+                        Path::new("missing.png"),
+                        Some("top\nbottom"),
+                        Style::default(),
+                        Size::new(16, 2),
+                        1,
+                    );
+                });
+            })
+            .expect("rendering should succeed");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("bottom"));
+        assert!(!rendered.contains("top"));
+    }
+
     /// Verifies image decoding and fit sizing are deterministic.
     ///
     /// # Example Under Test
@@ -489,7 +536,6 @@ mod tests {
     /// - `Resize::Fit` returns an image matching the target pixel area.
     #[test]
     fn decode_and_fit_sizing_are_deterministic() {
-        use ratatui::layout::Size;
         use ratatui_image::{FontSize, Resize};
 
         /// Encoded 1x1 PNG fixture bytes.
