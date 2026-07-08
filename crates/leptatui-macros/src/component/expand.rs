@@ -66,6 +66,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         impl #ident {
             #constructors
 
+            #[doc(hidden)]
             fn __create(__leptatui_setup: impl FnOnce() -> #leptatui::View) -> Self {
                 let __leptatui_owner = #leptatui::prelude::Owner::new();
                 let __leptatui_key_handlers =

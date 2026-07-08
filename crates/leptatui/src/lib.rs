@@ -41,7 +41,7 @@
 //! than Leptos DOM nodes.
 //!
 //! Standard components are available as builders such as [`input`],
-//! [`text_area`], [`form`], [`image`], and [`progress_bar`] and as PascalCase
+//! [`text_area`], [`form`], [`image()`], and [`progress_bar`] and as PascalCase
 //! tags in [`macro@view`]. `Input` and `TextArea` are controlled editable views:
 //! callers pass the current value and handle proposed updates through
 //! `on_input`. Editable controls start in Vim-style normal mode and support

@@ -72,12 +72,31 @@ pub(crate) enum TerminalImageFallback {
 }
 
 impl Default for TerminalImageSupport {
+    /// Returns fallback-only terminal image support.
+    ///
+    /// # Returns
+    ///
+    /// A [`TerminalImageSupport`] value that reports unavailable graphics
+    /// protocol support.
     fn default() -> Self {
         Self::unavailable()
     }
 }
 
 impl fmt::Debug for TerminalImageSupport {
+    /// Formats terminal image support without exposing cached protocol data.
+    ///
+    /// # Arguments
+    ///
+    /// * `formatter` — Formatter receiving the debug representation.
+    ///
+    /// # Returns
+    ///
+    /// A [`fmt::Result`] indicating whether formatting succeeded.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] if writing to the formatter fails.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let cached_images = self
             .cache
@@ -474,6 +493,7 @@ mod tests {
         use ratatui::layout::Size;
         use ratatui_image::{FontSize, Resize};
 
+        /// Encoded 1x1 PNG fixture bytes.
         const ONE_BY_ONE_PNG: &[u8] = &[
             137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
             8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0,
