@@ -5,6 +5,8 @@
 
 use std::{fmt, path::PathBuf, rc::Rc};
 
+use ratatui::text::Text;
+
 use super::{
     component_view::ComponentView,
     dynamic::DynamicView,
@@ -96,6 +98,55 @@ pub enum View {
     Text {
         /// Text content to render.
         content: String,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// First-level semantic heading content.
+    H1 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Second-level semantic heading content.
+    H2 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Third-level semantic heading content.
+    H3 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Fourth-level semantic heading content.
+    H4 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Fifth-level semantic heading content.
+    H5 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Sixth-level semantic heading content.
+    H6 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic paragraph content.
+    Paragraph {
+        /// Rich text content to render.
+        content: Text<'static>,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
@@ -194,6 +245,13 @@ impl View {
         match self {
             Self::Block { metadata, .. }
             | Self::Text { metadata, .. }
+            | Self::H1 { metadata, .. }
+            | Self::H2 { metadata, .. }
+            | Self::H3 { metadata, .. }
+            | Self::H4 { metadata, .. }
+            | Self::H5 { metadata, .. }
+            | Self::H6 { metadata, .. }
+            | Self::Paragraph { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -216,6 +274,13 @@ impl View {
         match self {
             Self::Block { metadata, .. }
             | Self::Text { metadata, .. }
+            | Self::H1 { metadata, .. }
+            | Self::H2 { metadata, .. }
+            | Self::H3 { metadata, .. }
+            | Self::H4 { metadata, .. }
+            | Self::H5 { metadata, .. }
+            | Self::H6 { metadata, .. }
+            | Self::Paragraph { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -458,6 +523,41 @@ impl fmt::Debug for View {
                 .field("content", content)
                 .field("metadata", metadata)
                 .finish(),
+            Self::H1 { content, metadata } => f
+                .debug_struct("H1")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H2 { content, metadata } => f
+                .debug_struct("H2")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H3 { content, metadata } => f
+                .debug_struct("H3")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H4 { content, metadata } => f
+                .debug_struct("H4")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H5 { content, metadata } => f
+                .debug_struct("H5")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H6 { content, metadata } => f
+                .debug_struct("H6")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::Paragraph { content, metadata } => f
+                .debug_struct("Paragraph")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
             Self::Row { children, metadata } => f
                 .debug_struct("Row")
                 .field("children", children)
@@ -590,6 +690,76 @@ impl PartialEq for View {
                     metadata: left_metadata,
                 },
                 Self::Text {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            ) => left_content == right_content && left_metadata == right_metadata,
+            (
+                Self::H1 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H1 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H2 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H2 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H3 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H3 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H4 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H4 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H5 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H5 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H6 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H6 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::Paragraph {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::Paragraph {
                     content: right_content,
                     metadata: right_metadata,
                 },

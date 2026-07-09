@@ -5,7 +5,7 @@
 
 use std::{cell::Cell, time::Instant};
 
-use crate::style::TuiStyle;
+use crate::style::{Modifier, TuiStyle};
 
 /// Static terminal element type used by style selectors.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,6 +14,20 @@ pub enum ViewType {
     Block,
     /// Plain text view.
     Text,
+    /// First-level semantic heading view.
+    H1,
+    /// Second-level semantic heading view.
+    H2,
+    /// Third-level semantic heading view.
+    H3,
+    /// Fourth-level semantic heading view.
+    H4,
+    /// Fifth-level semantic heading view.
+    H5,
+    /// Sixth-level semantic heading view.
+    H6,
+    /// Semantic paragraph view.
+    Paragraph,
     /// Horizontal layout view.
     Row,
     /// Vertical layout view.
@@ -30,6 +44,36 @@ pub enum ViewType {
     Image,
     /// Progress indicator rendered as a gauge.
     ProgressBar,
+}
+
+impl ViewType {
+    /// Returns the low-precedence style defaults for this view type.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] containing semantic defaults applied before authored
+    /// stylesheet and inline declarations.
+    pub(crate) fn default_style(self) -> TuiStyle {
+        match self {
+            Self::H1 => TuiStyle::new().modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            Self::H2 => TuiStyle::new().modifier(Modifier::BOLD),
+            Self::H3 => TuiStyle::new().modifier(Modifier::BOLD | Modifier::ITALIC),
+            Self::H4 => TuiStyle::new().modifier(Modifier::UNDERLINED),
+            Self::H5 => TuiStyle::new().modifier(Modifier::ITALIC),
+            Self::H6 => TuiStyle::new().modifier(Modifier::DIM),
+            Self::Paragraph
+            | Self::Block
+            | Self::Text
+            | Self::Row
+            | Self::Column
+            | Self::Form
+            | Self::Button
+            | Self::Input
+            | Self::TextArea
+            | Self::Image
+            | Self::ProgressBar => TuiStyle::new(),
+        }
+    }
 }
 
 /// Vim editing mode retained for editable text controls.

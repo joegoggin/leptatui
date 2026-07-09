@@ -12,14 +12,18 @@ use std::{
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
-    __private::FocusedControl, AppControl, AppRoot, Borders, Color, Component, EditableState,
-    ImageSource, KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result,
-    StyleMetadata, StyleSelector, Stylesheet, TuiSize, TuiStyle, View, ViewType, VimMode, block,
-    button, column, component, dynamic, form, image, input, progress_bar, row, text, text_area,
+    __private::FocusedControl,
+    AppControl, AppRoot, Borders, Color, Component, EditableState, ImageSource, KeyControl,
+    LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations, StyleMetadata,
+    StyleSelector, Stylesheet, TuiSize, TuiStyle, View, ViewType, VimMode, block, button, column,
+    component, dynamic, form, h1, h2, h3, h4, h5, h6, image, input, paragraph, progress_bar, row,
+    text, text_area,
+    view::{Line, Span, Text},
 };
 use ratatui::{
     Terminal,
     backend::TestBackend,
+    style::Style,
     symbols::{block as symbol_block, border as symbol_border, line as symbol_line},
 };
 
@@ -53,6 +57,13 @@ fn button_focuses(view: &View) -> Vec<bool> {
         | View::Column { children, .. }
         | View::Form { children, .. } => children.iter().flat_map(button_focuses).collect(),
         View::Text { .. }
+        | View::H1 { .. }
+        | View::H2 { .. }
+        | View::H3 { .. }
+        | View::H4 { .. }
+        | View::H5 { .. }
+        | View::H6 { .. }
+        | View::Paragraph { .. }
         | View::Input { .. }
         | View::TextArea { .. }
         | View::Image { .. }
@@ -81,6 +92,13 @@ fn control_focuses(view: &View) -> Vec<bool> {
         | View::Column { children, .. }
         | View::Form { children, .. } => children.iter().flat_map(control_focuses).collect(),
         View::Text { .. }
+        | View::H1 { .. }
+        | View::H2 { .. }
+        | View::H3 { .. }
+        | View::H4 { .. }
+        | View::H5 { .. }
+        | View::H6 { .. }
+        | View::Paragraph { .. }
         | View::Image { .. }
         | View::ProgressBar { .. }
         | View::Dynamic(_)
@@ -694,6 +712,321 @@ fn text_wraps_to_available_render_width() -> Result<()> {
 
     assert_eq!(symbol_position(&terminal, "H", 6), (0, 0));
     assert_eq!(symbol_position(&terminal, "W", 6), (0, 1));
+
+    Ok(())
+}
+
+/// Verifies semantic text builders retain rich text and selector metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1(Text::from(Line::from([Span::raw("Guide"), Span::styled("!", yellow)])))
+/// h2("Guide") through h6("Guide")
+/// paragraph("Guide")
+/// ```
+///
+/// # Assertions
+///
+/// - Every builder creates its corresponding semantic view variant.
+/// - Every view retains the supplied rich text.
+/// - Every view stores its corresponding selector view type.
+#[test]
+fn semantic_text_builders_store_rich_text_and_metadata() {
+    let content = Text::from(Line::from(vec![
+        Span::raw("Guide"),
+        Span::styled("!", Style::new().fg(Color::Yellow)),
+    ]));
+    let views = [
+        (h1(content.clone()), ViewType::H1),
+        (h2(content.clone()), ViewType::H2),
+        (h3(content.clone()), ViewType::H3),
+        (h4(content.clone()), ViewType::H4),
+        (h5(content.clone()), ViewType::H5),
+        (h6(content.clone()), ViewType::H6),
+        (paragraph(content.clone()), ViewType::Paragraph),
+    ];
+
+    for (view, expected_type) in views {
+        let (actual_type, actual_content, metadata) = match &view {
+            View::H1 { content, metadata } => (ViewType::H1, content, metadata),
+            View::H2 { content, metadata } => (ViewType::H2, content, metadata),
+            View::H3 { content, metadata } => (ViewType::H3, content, metadata),
+            View::H4 { content, metadata } => (ViewType::H4, content, metadata),
+            View::H5 { content, metadata } => (ViewType::H5, content, metadata),
+            View::H6 { content, metadata } => (ViewType::H6, content, metadata),
+            View::Paragraph { content, metadata } => (ViewType::Paragraph, content, metadata),
+            other => panic!("expected semantic text view, got {other:?}"),
+        };
+
+        assert_eq!(actual_type, expected_type);
+        assert_eq!(actual_content, &content);
+        assert_eq!(metadata.view_type(), expected_type);
+    }
+}
+
+/// Verifies semantic text views render their documented default modifiers.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1("H1") through h6("H6")
+/// paragraph("Paragraph")
+/// ```
+///
+/// # Assertions
+///
+/// - H1 is bold and underlined.
+/// - H2 is bold.
+/// - H3 is bold and italic.
+/// - H4 is underlined.
+/// - H5 is italic.
+/// - H6 is dim.
+/// - Paragraph has no default modifier.
+#[test]
+fn semantic_text_views_render_default_modifiers() -> Result<()> {
+    let views = [
+        (h1("H1"), Modifier::BOLD | Modifier::UNDERLINED),
+        (h2("H2"), Modifier::BOLD),
+        (h3("H3"), Modifier::BOLD | Modifier::ITALIC),
+        (h4("H4"), Modifier::UNDERLINED),
+        (h5("H5"), Modifier::ITALIC),
+        (h6("H6"), Modifier::DIM),
+        (paragraph("Paragraph"), Modifier::empty()),
+    ];
+
+    for (view, expected_modifiers) in views {
+        let mut terminal = Terminal::new(TestBackend::new(12, 1))?;
+        draw_view(&mut terminal, &view)?;
+
+        assert_eq!(cell_modifiers(&terminal, 0, 0, 12), expected_modifiers);
+    }
+
+    Ok(())
+}
+
+/// Verifies semantic defaults remain below authored cascade declarations.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1("Guide")
+/// H1 { modifier: empty }
+/// .title { modifier: italic }
+/// inline modifier: dim
+/// .title { modifier: crossed-out !important }
+/// ```
+///
+/// # Assertions
+///
+/// - The H1 default resolves to bold and underlined without authored styles.
+/// - A normal type rule can remove every default modifier.
+/// - A class rule replaces the semantic default.
+/// - An inline declaration replaces a normal class rule.
+/// - An important rule replaces the inline declaration.
+#[test]
+fn semantic_defaults_have_low_cascade_precedence() {
+    let theme = Default::default();
+    let plain = h1("Guide");
+    let default_style = Stylesheet::new().resolve(
+        plain.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(
+        default_style.modifiers,
+        Some(Modifier::BOLD | Modifier::UNDERLINED)
+    );
+
+    let type_stylesheet = Stylesheet::new().rule(
+        StyleSelector::view_type(ViewType::H1),
+        TuiStyle::new().modifier(Modifier::empty()),
+    );
+    let type_style = type_stylesheet.resolve(
+        plain.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(type_style.modifiers, Some(Modifier::empty()));
+
+    let class_view = h1("Guide").with_classes("title");
+    let class_stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("title"),
+        TuiStyle::new().modifier(Modifier::ITALIC),
+    );
+    let class_style = class_stylesheet.resolve(
+        class_view.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(class_style.modifiers, Some(Modifier::ITALIC));
+
+    let inline_view = h1("Guide")
+        .with_classes("title")
+        .with_inline_style(TuiStyle::new().modifier(Modifier::DIM));
+    let inline_style = class_stylesheet.resolve(
+        inline_view.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(inline_style.modifiers, Some(Modifier::DIM));
+
+    let important_stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("title"),
+        StyleDeclarations::new().modifier_important(Modifier::CROSSED_OUT),
+    );
+    let important_style = important_stylesheet.resolve(
+        inline_view.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(important_style.modifiers, Some(Modifier::CROSSED_OUT));
+}
+
+/// Verifies semantic rendering preserves styles on rich-text spans.
+///
+/// # Example Under Test
+///
+/// ```text
+/// paragraph([yellow reversed "Rich ", plain "body"])
+/// terminal width = 5
+/// ```
+///
+/// # Assertions
+///
+/// - The first span retains its yellow foreground and reversed modifier.
+/// - The second span wraps to the second row.
+/// - The second span does not inherit the first span's reversed modifier.
+#[test]
+fn semantic_rendering_preserves_rich_text_span_styles() -> Result<()> {
+    let content = Text::from(Line::from(vec![
+        Span::styled(
+            "Rich ",
+            Style::new()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::REVERSED),
+        ),
+        Span::raw("body"),
+    ]));
+    let view = paragraph(content);
+    let mut terminal = Terminal::new(TestBackend::new(5, 2))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_colors(&terminal, 0, 0, 5).0, Color::Yellow);
+    assert!(cell_modifiers(&terminal, 0, 0, 5).contains(Modifier::REVERSED));
+    assert_eq!(symbol_position(&terminal, "b", 5), (0, 1));
+    assert!(!cell_modifiers(&terminal, 0, 1, 5).contains(Modifier::REVERSED));
+
+    Ok(())
+}
+
+/// Verifies every semantic text variant wraps and reports its wrapped height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1("One Two") through h6("One Two")
+/// paragraph("One Two")
+/// terminal width = 4
+/// ```
+///
+/// # Assertions
+///
+/// - Every semantic view reports a two-row minimum height.
+/// - Every semantic view renders `Two` on the second row.
+#[test]
+fn semantic_text_variants_wrap_and_report_intrinsic_height() -> Result<()> {
+    let views = [
+        h1("One Two"),
+        h2("One Two"),
+        h3("One Two"),
+        h4("One Two"),
+        h5("One Two"),
+        h6("One Two"),
+        paragraph("One Two"),
+    ];
+
+    for view in views {
+        let mut terminal = Terminal::new(TestBackend::new(4, 2))?;
+        let mut min_height = 0;
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            min_height = view.__min_height(&mut ctx);
+        })?;
+        draw_view(&mut terminal, &view)?;
+
+        assert_eq!(min_height, 2);
+        assert_eq!(symbol_position(&terminal, "T", 4), (0, 1));
+    }
+
+    Ok(())
+}
+
+/// Verifies semantic text uses Unicode display width during layout.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([paragraph("界界界"), text("End")])
+/// terminal width = 4
+/// ```
+///
+/// # Assertions
+///
+/// - Two double-width characters fit on the first row.
+/// - The third character wraps to the second row.
+/// - The following text view renders after both paragraph rows.
+#[test]
+fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()> {
+    let view = column([paragraph("界界界"), text("End")]);
+    let mut terminal = Terminal::new(TestBackend::new(4, 3))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 4), "界");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 4), "界");
+    assert_eq!(cell_symbol(&terminal, 0, 1, 4), "界");
+    assert_eq!(symbol_position(&terminal, "E", 4), (0, 2));
+
+    Ok(())
+}
+
+/// Verifies semantic text clips overflow and tolerates zero-width split areas.
+///
+/// # Example Under Test
+///
+/// ```text
+/// paragraph("One Two") in a 4x1 terminal
+/// row([paragraph("A"), paragraph("B")]) in a 1x1 terminal
+/// ```
+///
+/// # Assertions
+///
+/// - Content beyond the one-row render area is clipped.
+/// - Rendering a row that assigns zero width to one child succeeds.
+/// - The narrow row reports a one-row minimum height.
+#[test]
+fn semantic_text_clips_overflow_and_handles_zero_width_splits() -> Result<()> {
+    let mut clipped = Terminal::new(TestBackend::new(4, 1))?;
+    draw_view(&mut clipped, &paragraph("One Two"))?;
+    assert_eq!(symbol_position(&clipped, "O", 4), (0, 0));
+    assert!(symbol_position_opt(&clipped, "T", 4).is_none());
+
+    let narrow_view = row([paragraph("A"), paragraph("B")]);
+    let mut narrow = Terminal::new(TestBackend::new(1, 1))?;
+    let mut min_height = 0;
+    narrow.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = narrow_view.__min_height(&mut ctx);
+    })?;
+    draw_view(&mut narrow, &narrow_view)?;
+    assert_eq!(min_height, 1);
 
     Ok(())
 }

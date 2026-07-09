@@ -89,6 +89,8 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// signal(0)
 /// provide_context(String::from("from prelude"))
 /// block(column([
+///     h1("Guide"),
+///     paragraph("Overview"),
 ///     form([input("Ada"), text_area("Notes")]),
 ///     image("logo.png"),
 ///     progress_bar(0.5),
@@ -143,6 +145,13 @@ fn prelude_exposes_reactivity_and_context() {
             .on_cancel(|| AppControl::Continue);
         let view: View = block(column([
             text("from prelude"),
+            h1("Guide"),
+            h2("Section"),
+            h3("Subsection"),
+            h4("Topic"),
+            h5("Detail"),
+            h6("Note"),
+            paragraph("Overview"),
             form_view,
             image(image_source).alt("Project logo"),
             progress_bar(0.5).label("Half"),

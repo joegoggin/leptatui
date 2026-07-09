@@ -51,6 +51,10 @@
 //! protocols, and falls back to deterministic text when graphics support is
 //! unavailable. `ProgressBar` renders a clamped `0.0..=1.0` gauge with an
 //! optional label.
+//! Semantic headings are available through [`h1`] through [`h6`], and
+//! [`paragraph`] creates unmodified body text. These semantic views accept
+//! owned Ratatui rich text, wrap to the available width, and contribute their
+//! wrapped height to parent layouts.
 //!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
@@ -98,8 +102,8 @@ pub use style::{
 };
 pub use view::{
     ButtonAction, EditableState, FormAction, ImageSource, InputAction, StyleMetadata, View,
-    ViewType, VimMode, block, button, column, component, dynamic, form, image, input, progress_bar,
-    row, text, text_area,
+    ViewType, VimMode, block, button, column, component, dynamic, form, h1, h2, h3, h4, h5, h6,
+    image, input, paragraph, progress_bar, row, text, text_area,
 };
 
 #[doc(hidden)]

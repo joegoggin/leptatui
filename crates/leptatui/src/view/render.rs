@@ -12,7 +12,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout, Position, Rect, Size},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, Gauge, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
@@ -64,6 +64,22 @@ fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle 
 /// Returns a paragraph configured for Leptatui text rendering.
 fn text_paragraph<'a>(content: &'a str, style: TuiStyle) -> Paragraph<'a> {
     Paragraph::new(content)
+        .style(style.to_ratatui_style())
+        .wrap(Wrap { trim: false })
+}
+
+/// Returns a paragraph configured for wrapped semantic rich-text rendering.
+///
+/// # Arguments
+///
+/// * `content` — Owned rich text to clone into the paragraph.
+/// * `style` — Resolved view style applied beneath line and span styles.
+///
+/// # Returns
+///
+/// A [`Paragraph`] configured for width-aware semantic text rendering.
+fn semantic_paragraph(content: &Text<'static>, style: TuiStyle) -> Paragraph<'static> {
+    Paragraph::new(content.clone())
         .style(style.to_ratatui_style())
         .wrap(Wrap { trim: false })
 }
@@ -242,6 +258,17 @@ impl View {
             Self::Text { content, metadata } => {
                 let style = resolve_style(metadata, ctx);
                 ctx.render_widget(text_paragraph(content.as_str(), style));
+                Ok(())
+            }
+            Self::H1 { content, metadata }
+            | Self::H2 { content, metadata }
+            | Self::H3 { content, metadata }
+            | Self::H4 { content, metadata }
+            | Self::H5 { content, metadata }
+            | Self::H6 { content, metadata }
+            | Self::Paragraph { content, metadata } => {
+                let style = resolve_style(metadata, ctx);
+                ctx.render_widget(semantic_paragraph(content, style));
                 Ok(())
             }
             Self::Image {
@@ -596,7 +623,15 @@ impl View {
                 editable_state,
                 ..
             } => flush_expired_insert_key(value, on_input, editable_state, now),
-            Self::Text { .. } | Self::Button { .. } => None,
+            Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
+            | Self::Button { .. } => None,
             Self::Image { .. } | Self::ProgressBar { .. } => None,
         }
     }
@@ -726,6 +761,13 @@ impl View {
             Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_key_event_ref(key)),
             Self::Component(component) => component.dispatch_key_event(*key),
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -845,6 +887,13 @@ impl View {
             }
             Self::Component(component) => component.scroll_first_overflowing(delta),
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -886,6 +935,13 @@ impl View {
                 child.with_view_mut(|child| child.scroll_first_overflowing_to(boundary))
             }
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -909,6 +965,13 @@ impl View {
             Self::Dynamic(child) => child.with_view(Self::has_overflowing_scroll_target),
             Self::Component(component) => component.has_overflowing_scroll_target(),
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -922,6 +985,13 @@ impl View {
         match self {
             Self::Block { metadata, .. }
             | Self::Text { metadata, .. }
+            | Self::H1 { metadata, .. }
+            | Self::H2 { metadata, .. }
+            | Self::H3 { metadata, .. }
+            | Self::H4 { metadata, .. }
+            | Self::H5 { metadata, .. }
+            | Self::H6 { metadata, .. }
+            | Self::Paragraph { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -998,6 +1068,13 @@ impl View {
             }
             Self::Component(component) => component.handle_focused_input_key(*key),
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1040,6 +1117,13 @@ impl View {
             Self::Dynamic(child) => child.with_view(Self::focused_control),
             Self::Component(component) => component.focused_control(),
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1083,6 +1167,13 @@ impl View {
             Self::Dynamic(child) => child.with_view_mut(|child| child.handle_form_key_ref(key)),
             Self::Component(component) => component.handle_form_key(*key),
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1105,7 +1196,16 @@ impl View {
             | Self::Form { children, .. } => children.iter().map(Self::focusable_count).sum(),
             Self::Dynamic(child) => child.with_view(Self::focusable_count),
             Self::Component(component) => component.focusable_count(),
-            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => 0,
+            Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => 0,
         }
     }
 
@@ -1167,7 +1267,16 @@ impl View {
                 .find_map(|child| child.focused_index_inner(index)),
             Self::Dynamic(child) => child.with_view(|child| child.focused_index_inner(index)),
             Self::Component(component) => component.focused_index_inner(index),
-            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => None,
+            Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
         }
     }
 
@@ -1231,7 +1340,16 @@ impl View {
                 child.with_view_mut(|child| child.set_focus_by_index_inner(target, index));
             }
             Self::Component(component) => component.set_focus_by_index_inner(target, index),
-            Self::Text { .. } | Self::Image { .. } | Self::ProgressBar { .. } => {}
+            Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => {}
         }
     }
 
@@ -1258,6 +1376,13 @@ impl View {
             Self::Dynamic(child) => child.with_view(Self::activate_focused_button),
             Self::Component(component) => component.activate_focused_button(),
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1289,6 +1414,13 @@ impl View {
             Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_event_ref(event)),
             Self::Component(component) => component.handle_event(event.clone()),
             Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -3954,6 +4086,13 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
             .focused_control_span(ctx)
             .map(|(top, bottom)| VerticalSpan { top, bottom }),
         View::Text { .. }
+        | View::H1 { .. }
+        | View::H2 { .. }
+        | View::H3 { .. }
+        | View::H4 { .. }
+        | View::H5 { .. }
+        | View::H6 { .. }
+        | View::Paragraph { .. }
         | View::Button { .. }
         | View::Input { .. }
         | View::TextArea { .. }
@@ -4373,6 +4512,16 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         View::Text { content, metadata } => {
             let style = resolve_style(metadata, ctx);
             line_count_height(text_paragraph(content.as_str(), style).line_count(ctx.area().width))
+        }
+        View::H1 { content, metadata }
+        | View::H2 { content, metadata }
+        | View::H3 { content, metadata }
+        | View::H4 { content, metadata }
+        | View::H5 { content, metadata }
+        | View::H6 { content, metadata }
+        | View::Paragraph { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            line_count_height(semantic_paragraph(content, style).line_count(ctx.area().width))
         }
         View::Dynamic(child) => child.with_view(|child| min_height_for_view(child, ctx)),
         View::Button { metadata, .. } => {

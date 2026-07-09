@@ -3,6 +3,8 @@
 //! This module provides the public helper functions re-exported by
 //! [`mod@crate::view`] and [`crate::prelude`].
 
+use ratatui::text::Text;
+
 use crate::component::Component;
 
 use super::{
@@ -40,6 +42,118 @@ pub fn text(content: impl Into<String>) -> View {
     View::Text {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::Text),
+    }
+}
+
+/// Creates a first-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H1`] containing the provided content.
+pub fn h1(content: impl Into<Text<'static>>) -> View {
+    View::H1 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H1),
+    }
+}
+
+/// Creates a second-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H2`] containing the provided content.
+pub fn h2(content: impl Into<Text<'static>>) -> View {
+    View::H2 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H2),
+    }
+}
+
+/// Creates a third-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H3`] containing the provided content.
+pub fn h3(content: impl Into<Text<'static>>) -> View {
+    View::H3 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H3),
+    }
+}
+
+/// Creates a fourth-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H4`] containing the provided content.
+pub fn h4(content: impl Into<Text<'static>>) -> View {
+    View::H4 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H4),
+    }
+}
+
+/// Creates a fifth-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H5`] containing the provided content.
+pub fn h5(content: impl Into<Text<'static>>) -> View {
+    View::H5 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H5),
+    }
+}
+
+/// Creates a sixth-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H6`] containing the provided content.
+pub fn h6(content: impl Into<Text<'static>>) -> View {
+    View::H6 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H6),
+    }
+}
+
+/// Creates a semantic paragraph.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::Paragraph`] containing the provided content.
+pub fn paragraph(content: impl Into<Text<'static>>) -> View {
+    View::Paragraph {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::Paragraph),
     }
 }
 
