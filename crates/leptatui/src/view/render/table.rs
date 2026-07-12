@@ -6,13 +6,13 @@
 use ratatui::{
     layout::{Alignment, Rect},
     text::{Line, Text},
-    widgets::Paragraph,
+    widgets::{Block, Paragraph},
 };
 
 use crate::{
     app::Result,
     component::RenderCtx,
-    style::TuiStyle,
+    style::{Color, TuiStyle},
     view::{
         metadata::StyleMetadata,
         model::{CellAlignment, View},
@@ -36,6 +36,8 @@ struct RenderedTableCell {
 struct RenderedTableRow {
     /// Cells present in the source row before normalization.
     cells: Vec<RenderedTableCell>,
+    /// Section or row background painted beneath the row cells.
+    background: Option<Color>,
 }
 
 /// Resolved semantic table data shared by rendering and measurement.
@@ -69,6 +71,7 @@ fn collect_table_rows(sections: &[View], ctx: &mut RenderCtx<'_, '_>) -> Vec<Ren
             _ => continue,
         };
         let section_style = resolve_style(metadata, ctx);
+        let section_background = section_style.background;
         let area = ctx.area();
         let section_rows = ctx.with_area_inherited_style_and_selector_ancestor(
             area,
@@ -76,7 +79,7 @@ fn collect_table_rows(sections: &[View], ctx: &mut RenderCtx<'_, '_>) -> Vec<Ren
             metadata.clone(),
             |ctx| {
                 rows.iter()
-                    .filter_map(|row| collect_table_row(row, ctx))
+                    .filter_map(|row| collect_table_row(row, section_background, ctx))
                     .collect::<Vec<_>>()
             },
         );
@@ -91,16 +94,22 @@ fn collect_table_rows(sections: &[View], ctx: &mut RenderCtx<'_, '_>) -> Vec<Ren
 /// # Arguments
 ///
 /// * `row` — Candidate table-row view.
+/// * `section_background` — Optional section surface color beneath the row.
 /// * `ctx` — Rendering context carrying the section's inherited style.
 ///
 /// # Returns
 ///
 /// An [`Option`] containing a render-ready row when `row` is a table row.
-fn collect_table_row(row: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<RenderedTableRow> {
+fn collect_table_row(
+    row: &View,
+    section_background: Option<Color>,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<RenderedTableRow> {
     let View::TableRow { cells, metadata } = row else {
         return None;
     };
     let row_style = resolve_style(metadata, ctx);
+    let background = row_style.background.or(section_background);
     let area = ctx.area();
     let cells = ctx.with_area_inherited_style_and_selector_ancestor(
         area,
@@ -114,7 +123,7 @@ fn collect_table_row(row: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<Rendered
         },
     );
 
-    Some(RenderedTableRow { cells })
+    Some(RenderedTableRow { cells, background })
 }
 
 /// Collects a semantic table cell or an empty placeholder for an invalid child.
@@ -422,6 +431,9 @@ pub(super) fn render_table_view(
         ..area
     };
     let border_style = table_style.to_ratatui_style();
+    ctx.with_area(table_area, |ctx| {
+        ctx.render_widget(Block::new().style(border_style));
+    });
     let mut y = table_area.y;
     let bottom = table_area.y.saturating_add(table_area.height);
     ctx.with_area(
@@ -444,6 +456,20 @@ pub(super) fn render_table_view(
         }
         let requested_height = table_row_height(row, &widths);
         let rendered_height = requested_height.min(bottom.saturating_sub(y));
+        if let Some(background) = row.background {
+            ctx.with_area(
+                Rect {
+                    y,
+                    height: rendered_height,
+                    ..table_area
+                },
+                |ctx| {
+                    ctx.render_widget(
+                        Block::new().style(ratatui::style::Style::new().bg(background)),
+                    );
+                },
+            );
+        }
         let mut x = table_area.x;
         ctx.with_area(
             Rect {

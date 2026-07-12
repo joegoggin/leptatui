@@ -219,9 +219,10 @@ fn render_code_block_view(
         provisional_inner.width,
         style,
     );
-    let required_height = line_count_height(content.lines.len()).max(1)
-        + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
-        + vertical_padding_rows(style.padding);
+    let required_height = line_count_height(content.lines.len())
+        .max(1)
+        .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+        .saturating_add(vertical_padding_rows(style.padding));
     let mut visible_style = style;
     if area.height < required_height {
         let mut borders = style.borders.unwrap_or(Borders::ALL);
@@ -5379,8 +5380,8 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             .max(1);
 
             content_height
-                + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
-                + vertical_padding_rows(style.padding)
+                .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+                .saturating_add(vertical_padding_rows(style.padding))
         }
         View::OrderedList {
             items,

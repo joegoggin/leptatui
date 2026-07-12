@@ -98,7 +98,9 @@ view! {
 ## Standard Components
 
 Leptatui's standard view set includes layout containers (`Block`, `Row`,
-`Column`), text, buttons, controlled form controls, images, and progress bars.
+`Column`), plain and semantic text, nested lists, responsive tables,
+syntax-highlighted code blocks, buttons, controlled form controls, images, and
+progress bars.
 All are available through `leptatui::prelude::*` as builders and through
 PascalCase `view!` tags.
 
@@ -121,6 +123,12 @@ visual mode support common movement (`h`, `j`, `k`, `l`, `0`, `$`, `w`, `b`,
 supported graphics protocol. Otherwise it renders deterministic fallback text,
 preferring the view's `alt` text when provided. `ProgressBar` renders a gauge
 with a clamped `0.0..=1.0` value and optional `label`.
+
+Semantic document views include `H1` through `H6`, `Paragraph`, ordered and
+unordered lists, responsive tables, and `CodeBlock`. Lists contain `ListItem`
+children, while tables use `TableHead` or `TableBody`, `TableRow`, and
+`TableCell`. Code blocks support `language`, `line_numbers`, and `syntax_theme`
+configuration.
 
 ```rust
 use leptatui::prelude::*;

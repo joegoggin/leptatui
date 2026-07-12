@@ -1430,6 +1430,43 @@ fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()>
     Ok(())
 }
 
+/// Verifies code-block height saturates when source exceeds terminal row limits.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("\n" repeated u16::MAX times)
+/// terminal size = 4x1
+/// ```
+///
+/// # Assertions
+///
+/// - The code block reports [`u16::MAX`] as its intrinsic height.
+/// - Rendering the oversized source succeeds without arithmetic overflow.
+///
+/// # Why
+///
+/// Adding code-block borders to an already saturated content height must not
+/// panic in debug builds or wrap in release builds.
+#[test]
+fn code_block_height_saturates_beyond_terminal_row_limit() -> Result<()> {
+    let view = code_block("\n".repeat(usize::from(u16::MAX)));
+    let mut terminal = Terminal::new(TestBackend::new(4, 1))?;
+    let mut min_height = 0;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = view.__min_height(&mut ctx);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(min_height, u16::MAX);
+
+    Ok(())
+}
+
 /// Verifies table headers, borders, and cell alignments render semantically.
 ///
 /// # Example Under Test
@@ -1509,6 +1546,99 @@ fn semantic_table_styles_override_header_defaults_and_style_cells() -> Result<()
 
     assert!(!cell_modifiers(&terminal, 1, 1, 7).contains(Modifier::BOLD));
     assert_eq!(cell_colors(&terminal, 1, 1, 7).0, Color::Green);
+
+    Ok(())
+}
+
+/// Verifies table background styles fill populated and normalized cells.
+///
+/// # Example Under Test
+///
+/// ```text
+/// table([row(["A"]), row(["B", "C"])]).background(Blue)
+/// ```
+///
+/// # Assertions
+///
+/// - A populated cell retains the table background.
+/// - A normalized empty trailing cell retains the table background.
+///
+/// # Why
+///
+/// Background colors are surface styles rather than inherited text styles, so
+/// the table renderer must paint the grid area before rendering its cells.
+#[test]
+fn semantic_table_background_fills_grid_cells() -> Result<()> {
+    let view = table([table_body([
+        table_row([table_cell("A")]),
+        table_row([table_cell("B"), table_cell("C")]),
+    ])])
+    .with_inline_style(TuiStyle::new().background(Color::Blue));
+    let mut terminal = Terminal::new(TestBackend::new(5, 5))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_colors(&terminal, 1, 1, 5).1, Color::Blue);
+    assert_eq!(cell_colors(&terminal, 3, 1, 5).1, Color::Blue);
+
+    Ok(())
+}
+
+/// Verifies table section, row, and cell backgrounds use structural precedence.
+///
+/// # Example Under Test
+///
+/// ```text
+/// TableHead { bg: Blue }
+/// .accent-row { bg: Green }
+/// .accent-cell { bg: Yellow }
+/// ```
+///
+/// # Assertions
+///
+/// - Header cells retain the table-head background.
+/// - Body cells retain an explicit table-row background.
+/// - An explicit table-cell background overrides its row background.
+///
+/// # Why
+///
+/// Backgrounds are surface styles rather than inherited text styles, so table
+/// layout must retain them while flattening sections and rows for rendering.
+#[test]
+fn semantic_table_structural_backgrounds_respect_precedence() -> Result<()> {
+    let view = table([
+        table_head([table_row([table_cell("H"), table_cell("I")])]),
+        table_body([
+            table_row([table_cell("A"), table_cell("B").with_classes("accent-cell")])
+                .with_classes("accent-row"),
+        ]),
+    ]);
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::view_type(ViewType::TableHead),
+            TuiStyle::new().background(Color::Blue),
+        )
+        .rule(
+            StyleSelector::class("accent-row"),
+            TuiStyle::new().background(Color::Green),
+        )
+        .rule(
+            StyleSelector::class("accent-cell"),
+            TuiStyle::new().background(Color::Yellow),
+        );
+    let mut terminal = Terminal::new(TestBackend::new(5, 5))?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert_eq!(cell_colors(&terminal, 1, 1, 5).1, Color::Blue);
+    assert_eq!(cell_colors(&terminal, 3, 1, 5).1, Color::Blue);
+    assert_eq!(cell_colors(&terminal, 1, 3, 5).1, Color::Green);
+    assert_eq!(cell_colors(&terminal, 3, 3, 5).1, Color::Yellow);
 
     Ok(())
 }
