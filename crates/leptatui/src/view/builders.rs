@@ -157,6 +157,55 @@ pub fn paragraph(content: impl Into<Text<'static>>) -> View {
     }
 }
 
+/// Creates a semantic ordered list.
+///
+/// # Arguments
+///
+/// * `items` — List-item views to number from one.
+///
+/// # Returns
+///
+/// A [`View::OrderedList`] containing the provided items.
+pub fn ordered_list(items: impl IntoIterator<Item = View>) -> View {
+    View::OrderedList {
+        items: items.into_iter().collect(),
+        start: 1,
+        metadata: StyleMetadata::new(ViewType::OrderedList),
+    }
+}
+
+/// Creates a semantic unordered list.
+///
+/// # Arguments
+///
+/// * `items` — List-item views to mark with hyphens.
+///
+/// # Returns
+///
+/// A [`View::UnorderedList`] containing the provided items.
+pub fn unordered_list(items: impl IntoIterator<Item = View>) -> View {
+    View::UnorderedList {
+        items: items.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::UnorderedList),
+    }
+}
+
+/// Creates a semantic list item containing vertically stacked document blocks.
+///
+/// # Arguments
+///
+/// * `children` — Document blocks contained by the list item.
+///
+/// # Returns
+///
+/// A [`View::ListItem`] containing the provided children.
+pub fn list_item(children: impl IntoIterator<Item = View>) -> View {
+    View::ListItem {
+        children: children.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::ListItem),
+    }
+}
+
 /// Creates a horizontal row.
 ///
 /// # Arguments

@@ -52,7 +52,9 @@
 //! unavailable. `ProgressBar` renders a clamped `0.0..=1.0` gauge with an
 //! optional label.
 //! Semantic headings are available through [`h1`] through [`h6`], and
-//! [`paragraph`] creates unmodified body text. These semantic views accept
+//! [`paragraph`] creates unmodified body text. [`ordered_list`] and
+//! [`unordered_list`] group block-oriented [`list_item`] values with terminal
+//! markers. These semantic views accept
 //! owned Ratatui rich text, wrap to the available width, and contribute their
 //! wrapped height to parent layouts.
 //!
@@ -103,7 +105,8 @@ pub use style::{
 pub use view::{
     ButtonAction, EditableState, FormAction, ImageSource, InputAction, StyleMetadata, View,
     ViewType, VimMode, block, button, column, component, dynamic, form, h1, h2, h3, h4, h5, h6,
-    image, input, paragraph, progress_bar, row, text, text_area,
+    image, input, list_item, ordered_list, paragraph, progress_bar, row, text, text_area,
+    unordered_list,
 };
 
 #[doc(hidden)]
@@ -194,6 +197,44 @@ pub mod __private {
                 },
             ) => {
                 reconcile_scroll_metadata(next_metadata, previous_metadata);
+                for (next_child, previous_child) in
+                    next_children.iter_mut().zip(previous_children.iter())
+                {
+                    __reconcile_view(next_child, previous_child);
+                }
+            }
+            (
+                View::OrderedList {
+                    items: next_items, ..
+                },
+                View::OrderedList {
+                    items: previous_items,
+                    ..
+                },
+            )
+            | (
+                View::UnorderedList {
+                    items: next_items, ..
+                },
+                View::UnorderedList {
+                    items: previous_items,
+                    ..
+                },
+            ) => {
+                for (next_item, previous_item) in next_items.iter_mut().zip(previous_items.iter()) {
+                    __reconcile_view(next_item, previous_item);
+                }
+            }
+            (
+                View::ListItem {
+                    children: next_children,
+                    ..
+                },
+                View::ListItem {
+                    children: previous_children,
+                    ..
+                },
+            ) => {
                 for (next_child, previous_child) in
                     next_children.iter_mut().zip(previous_children.iter())
                 {

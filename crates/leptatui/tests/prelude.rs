@@ -91,6 +91,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// block(column([
 ///     h1("Guide"),
 ///     paragraph("Overview"),
+///     ordered_list([list_item([paragraph("First")])]),
 ///     form([input("Ada"), text_area("Notes")]),
 ///     image("logo.png"),
 ///     progress_bar(0.5),
@@ -152,6 +153,12 @@ fn prelude_exposes_reactivity_and_context() {
             h5("Detail"),
             h6("Note"),
             paragraph("Overview"),
+            ordered_list([
+                list_item([paragraph("First")]),
+                list_item([paragraph("Second")]),
+            ])
+            .start(3),
+            unordered_list([list_item([paragraph("Nested")])]),
             form_view,
             image(image_source).alt("Project logo"),
             progress_bar(0.5).label("Half"),

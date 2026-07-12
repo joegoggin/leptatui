@@ -150,6 +150,29 @@ pub enum View {
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
+    /// Semantic numbered list containing block list items.
+    OrderedList {
+        /// List-item views rendered in marker order.
+        items: Vec<View>,
+        /// Decimal value used for the first item marker.
+        start: usize,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic hyphen-marked list containing block list items.
+    UnorderedList {
+        /// List-item views rendered in source order.
+        items: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic list item containing vertically stacked document blocks.
+    ListItem {
+        /// Document blocks contained by this item.
+        children: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
     /// Horizontally arranged children.
     Row {
         /// Child views divided across the row.
@@ -252,6 +275,9 @@ impl View {
             | Self::H5 { metadata, .. }
             | Self::H6 { metadata, .. }
             | Self::Paragraph { metadata, .. }
+            | Self::OrderedList { metadata, .. }
+            | Self::UnorderedList { metadata, .. }
+            | Self::ListItem { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -281,6 +307,9 @@ impl View {
             | Self::H5 { metadata, .. }
             | Self::H6 { metadata, .. }
             | Self::Paragraph { metadata, .. }
+            | Self::OrderedList { metadata, .. }
+            | Self::UnorderedList { metadata, .. }
+            | Self::ListItem { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -358,6 +387,24 @@ impl View {
     pub fn with_focus(mut self, focused: bool) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_focused(focused);
+        }
+
+        self
+    }
+
+    /// Sets the first decimal marker on an ordered-list view.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` — Non-negative value used for the first item marker.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the provided start when the view is an ordered
+    /// list.
+    pub fn start(mut self, start: usize) -> Self {
+        if let Self::OrderedList { start: current, .. } = &mut self {
+            *current = start;
         }
 
         self
@@ -558,6 +605,26 @@ impl fmt::Debug for View {
                 .field("content", content)
                 .field("metadata", metadata)
                 .finish(),
+            Self::OrderedList {
+                items,
+                start,
+                metadata,
+            } => f
+                .debug_struct("OrderedList")
+                .field("items", items)
+                .field("start", start)
+                .field("metadata", metadata)
+                .finish(),
+            Self::UnorderedList { items, metadata } => f
+                .debug_struct("UnorderedList")
+                .field("items", items)
+                .field("metadata", metadata)
+                .finish(),
+            Self::ListItem { children, metadata } => f
+                .debug_struct("ListItem")
+                .field("children", children)
+                .field("metadata", metadata)
+                .finish(),
             Self::Row { children, metadata } => f
                 .debug_struct("Row")
                 .field("children", children)
@@ -694,6 +761,42 @@ impl PartialEq for View {
                     metadata: right_metadata,
                 },
             ) => left_content == right_content && left_metadata == right_metadata,
+            (
+                Self::OrderedList {
+                    items: left_items,
+                    start: left_start,
+                    metadata: left_metadata,
+                },
+                Self::OrderedList {
+                    items: right_items,
+                    start: right_start,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_items == right_items
+                    && left_start == right_start
+                    && left_metadata == right_metadata
+            }
+            (
+                Self::UnorderedList {
+                    items: left_items,
+                    metadata: left_metadata,
+                },
+                Self::UnorderedList {
+                    items: right_items,
+                    metadata: right_metadata,
+                },
+            ) => left_items == right_items && left_metadata == right_metadata,
+            (
+                Self::ListItem {
+                    children: left_children,
+                    metadata: left_metadata,
+                },
+                Self::ListItem {
+                    children: right_children,
+                    metadata: right_metadata,
+                },
+            ) => left_children == right_children && left_metadata == right_metadata,
             (
                 Self::H1 {
                     content: left_content,

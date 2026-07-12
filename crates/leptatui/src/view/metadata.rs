@@ -28,6 +28,12 @@ pub enum ViewType {
     H6,
     /// Semantic paragraph view.
     Paragraph,
+    /// Semantic ordered-list view.
+    OrderedList,
+    /// Semantic unordered-list view.
+    UnorderedList,
+    /// Semantic list-item view.
+    ListItem,
     /// Horizontal layout view.
     Row,
     /// Vertical layout view.
@@ -62,6 +68,9 @@ impl ViewType {
             Self::H5 => TuiStyle::new().modifier(Modifier::ITALIC),
             Self::H6 => TuiStyle::new().modifier(Modifier::DIM),
             Self::Paragraph
+            | Self::OrderedList
+            | Self::UnorderedList
+            | Self::ListItem
             | Self::Block
             | Self::Text
             | Self::Row
