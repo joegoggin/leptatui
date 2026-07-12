@@ -1,0 +1,5 @@
+error: OrderedList only accepts ListItem children
+ --> tests/fixtures/view_macro/fail/ordered_list_invalid_child.rs:8:23
+  |
+8 |         <OrderedList><Paragraph>"Not an item"</Paragraph></OrderedList>
+  |                       ^^^^^^^^^

@@ -5,12 +5,27 @@
 
 use std::{fmt, path::PathBuf, rc::Rc};
 
+use ratatui::text::Text;
+
 use super::{
+    code_block::{SyntaxTheme, highlighted_source_lines},
     component_view::ComponentView,
     dynamic::DynamicView,
     metadata::{EditableState, StyleMetadata, ViewType},
 };
 use crate::app::AppControl;
+
+/// Horizontal alignment applied to wrapped table-cell content.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CellAlignment {
+    /// Aligns cell content to the left edge.
+    #[default]
+    Left,
+    /// Centers cell content within the allocated column width.
+    Center,
+    /// Aligns cell content to the right edge.
+    Right,
+}
 
 /// Shared callback invoked when a button is activated.
 pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
@@ -96,6 +111,130 @@ pub enum View {
     Text {
         /// Text content to render.
         content: String,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// First-level semantic heading content.
+    H1 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Second-level semantic heading content.
+    H2 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Third-level semantic heading content.
+    H3 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Fourth-level semantic heading content.
+    H4 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Fifth-level semantic heading content.
+    H5 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Sixth-level semantic heading content.
+    H6 {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic paragraph content.
+    Paragraph {
+        /// Rich text content to render.
+        content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Bordered source code with retained syntax-highlighted logical lines.
+    CodeBlock {
+        /// Original source used when highlighting configuration changes.
+        source: String,
+        /// Caller-supplied language token shown in the block title.
+        language: Option<String>,
+        /// Whether one-based logical line numbers are displayed.
+        line_numbers: bool,
+        /// Bundled syntax theme used to color recognized source.
+        syntax_theme: SyntaxTheme,
+        /// Highlighted logical source lines retained between render frames.
+        highlighted_lines: Vec<ratatui::text::Line<'static>>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic numbered list containing block list items.
+    OrderedList {
+        /// List-item views rendered in marker order.
+        items: Vec<View>,
+        /// Decimal value used for the first item marker.
+        start: usize,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic hyphen-marked list containing block list items.
+    UnorderedList {
+        /// List-item views rendered in source order.
+        items: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic list item containing vertically stacked document blocks.
+    ListItem {
+        /// Document blocks contained by this item.
+        children: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic table containing header and body sections.
+    Table {
+        /// Table-section views rendered in source order.
+        sections: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic table header containing rows.
+    TableHead {
+        /// Header-row views rendered in source order.
+        rows: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic table body containing rows.
+    TableBody {
+        /// Body-row views rendered in source order.
+        rows: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic table row containing cells.
+    TableRow {
+        /// Cell views rendered in column order.
+        cells: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic rich-text table cell.
+    TableCell {
+        /// Rich text content rendered inside the cell.
+        content: Text<'static>,
+        /// Horizontal alignment for each wrapped content line.
+        alignment: CellAlignment,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
@@ -194,6 +333,22 @@ impl View {
         match self {
             Self::Block { metadata, .. }
             | Self::Text { metadata, .. }
+            | Self::H1 { metadata, .. }
+            | Self::H2 { metadata, .. }
+            | Self::H3 { metadata, .. }
+            | Self::H4 { metadata, .. }
+            | Self::H5 { metadata, .. }
+            | Self::H6 { metadata, .. }
+            | Self::Paragraph { metadata, .. }
+            | Self::CodeBlock { metadata, .. }
+            | Self::OrderedList { metadata, .. }
+            | Self::UnorderedList { metadata, .. }
+            | Self::ListItem { metadata, .. }
+            | Self::Table { metadata, .. }
+            | Self::TableHead { metadata, .. }
+            | Self::TableBody { metadata, .. }
+            | Self::TableRow { metadata, .. }
+            | Self::TableCell { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -216,6 +371,22 @@ impl View {
         match self {
             Self::Block { metadata, .. }
             | Self::Text { metadata, .. }
+            | Self::H1 { metadata, .. }
+            | Self::H2 { metadata, .. }
+            | Self::H3 { metadata, .. }
+            | Self::H4 { metadata, .. }
+            | Self::H5 { metadata, .. }
+            | Self::H6 { metadata, .. }
+            | Self::Paragraph { metadata, .. }
+            | Self::CodeBlock { metadata, .. }
+            | Self::OrderedList { metadata, .. }
+            | Self::UnorderedList { metadata, .. }
+            | Self::ListItem { metadata, .. }
+            | Self::Table { metadata, .. }
+            | Self::TableHead { metadata, .. }
+            | Self::TableBody { metadata, .. }
+            | Self::TableRow { metadata, .. }
+            | Self::TableCell { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -293,6 +464,122 @@ impl View {
     pub fn with_focus(mut self, focused: bool) -> Self {
         if let Some(metadata) = self.style_metadata_mut() {
             metadata.set_focused(focused);
+        }
+
+        self
+    }
+
+    /// Sets the first decimal marker on an ordered-list view.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` — Non-negative value used for the first item marker.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the provided start when the view is an ordered
+    /// list.
+    pub fn start(mut self, start: usize) -> Self {
+        if let Self::OrderedList { start: current, .. } = &mut self {
+            *current = start;
+        }
+
+        self
+    }
+
+    /// Sets the horizontal alignment on a table-cell view.
+    ///
+    /// # Arguments
+    ///
+    /// * `alignment` — Alignment applied to every wrapped content line.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the provided alignment when the view is a table
+    /// cell.
+    pub fn alignment(mut self, alignment: CellAlignment) -> Self {
+        if let Self::TableCell {
+            alignment: current, ..
+        } = &mut self
+        {
+            *current = alignment;
+        }
+
+        self
+    }
+
+    /// Sets the language token on a code-block view.
+    ///
+    /// The supplied token is shown in the border title and selects a bundled
+    /// syntect grammar by extension, name, or alias. Unknown tokens retain
+    /// plain source text.
+    ///
+    /// # Arguments
+    ///
+    /// * `language` — Grammar token or alias to select and display.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with highlighted lines when it is a code block.
+    pub fn language(mut self, language: impl Into<String>) -> Self {
+        if let Self::CodeBlock {
+            source,
+            language: current,
+            syntax_theme,
+            highlighted_lines,
+            ..
+        } = &mut self
+        {
+            *current = Some(language.into());
+            *highlighted_lines =
+                highlighted_source_lines(source, current.as_deref(), *syntax_theme);
+        }
+
+        self
+    }
+
+    /// Sets line-number visibility on a code-block view.
+    ///
+    /// # Arguments
+    ///
+    /// * `line_numbers` — Whether to display one-based logical line numbers.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the requested gutter visibility when it is a
+    /// code block.
+    pub fn line_numbers(mut self, line_numbers: bool) -> Self {
+        if let Self::CodeBlock {
+            line_numbers: current,
+            ..
+        } = &mut self
+        {
+            *current = line_numbers;
+        }
+
+        self
+    }
+
+    /// Sets the bundled syntax theme on a code-block view.
+    ///
+    /// # Arguments
+    ///
+    /// * `syntax_theme` — Dark or light bundled theme selection.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with refreshed highlighting when it is a code block.
+    pub fn syntax_theme(mut self, syntax_theme: SyntaxTheme) -> Self {
+        if let Self::CodeBlock {
+            source,
+            language,
+            syntax_theme: current,
+            highlighted_lines,
+            ..
+        } = &mut self
+        {
+            *current = syntax_theme;
+            *highlighted_lines = highlighted_source_lines(source, language.as_deref(), *current);
         }
 
         self
@@ -458,6 +745,107 @@ impl fmt::Debug for View {
                 .field("content", content)
                 .field("metadata", metadata)
                 .finish(),
+            Self::H1 { content, metadata } => f
+                .debug_struct("H1")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H2 { content, metadata } => f
+                .debug_struct("H2")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H3 { content, metadata } => f
+                .debug_struct("H3")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H4 { content, metadata } => f
+                .debug_struct("H4")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H5 { content, metadata } => f
+                .debug_struct("H5")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::H6 { content, metadata } => f
+                .debug_struct("H6")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::Paragraph { content, metadata } => f
+                .debug_struct("Paragraph")
+                .field("content", content)
+                .field("metadata", metadata)
+                .finish(),
+            Self::CodeBlock {
+                source,
+                language,
+                line_numbers,
+                syntax_theme,
+                highlighted_lines,
+                metadata,
+            } => f
+                .debug_struct("CodeBlock")
+                .field("source", source)
+                .field("language", language)
+                .field("line_numbers", line_numbers)
+                .field("syntax_theme", syntax_theme)
+                .field("highlighted_lines", highlighted_lines)
+                .field("metadata", metadata)
+                .finish(),
+            Self::OrderedList {
+                items,
+                start,
+                metadata,
+            } => f
+                .debug_struct("OrderedList")
+                .field("items", items)
+                .field("start", start)
+                .field("metadata", metadata)
+                .finish(),
+            Self::UnorderedList { items, metadata } => f
+                .debug_struct("UnorderedList")
+                .field("items", items)
+                .field("metadata", metadata)
+                .finish(),
+            Self::ListItem { children, metadata } => f
+                .debug_struct("ListItem")
+                .field("children", children)
+                .field("metadata", metadata)
+                .finish(),
+            Self::Table { sections, metadata } => f
+                .debug_struct("Table")
+                .field("sections", sections)
+                .field("metadata", metadata)
+                .finish(),
+            Self::TableHead { rows, metadata } => f
+                .debug_struct("TableHead")
+                .field("rows", rows)
+                .field("metadata", metadata)
+                .finish(),
+            Self::TableBody { rows, metadata } => f
+                .debug_struct("TableBody")
+                .field("rows", rows)
+                .field("metadata", metadata)
+                .finish(),
+            Self::TableRow { cells, metadata } => f
+                .debug_struct("TableRow")
+                .field("cells", cells)
+                .field("metadata", metadata)
+                .finish(),
+            Self::TableCell {
+                content,
+                alignment,
+                metadata,
+            } => f
+                .debug_struct("TableCell")
+                .field("content", content)
+                .field("alignment", alignment)
+                .field("metadata", metadata)
+                .finish(),
             Self::Row { children, metadata } => f
                 .debug_struct("Row")
                 .field("children", children)
@@ -590,6 +978,193 @@ impl PartialEq for View {
                     metadata: left_metadata,
                 },
                 Self::Text {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            ) => left_content == right_content && left_metadata == right_metadata,
+            (
+                Self::CodeBlock {
+                    source: left_source,
+                    language: left_language,
+                    line_numbers: left_line_numbers,
+                    syntax_theme: left_syntax_theme,
+                    highlighted_lines: left_highlighted_lines,
+                    metadata: left_metadata,
+                },
+                Self::CodeBlock {
+                    source: right_source,
+                    language: right_language,
+                    line_numbers: right_line_numbers,
+                    syntax_theme: right_syntax_theme,
+                    highlighted_lines: right_highlighted_lines,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_source == right_source
+                    && left_language == right_language
+                    && left_line_numbers == right_line_numbers
+                    && left_syntax_theme == right_syntax_theme
+                    && left_highlighted_lines == right_highlighted_lines
+                    && left_metadata == right_metadata
+            }
+            (
+                Self::OrderedList {
+                    items: left_items,
+                    start: left_start,
+                    metadata: left_metadata,
+                },
+                Self::OrderedList {
+                    items: right_items,
+                    start: right_start,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_items == right_items
+                    && left_start == right_start
+                    && left_metadata == right_metadata
+            }
+            (
+                Self::UnorderedList {
+                    items: left_items,
+                    metadata: left_metadata,
+                },
+                Self::UnorderedList {
+                    items: right_items,
+                    metadata: right_metadata,
+                },
+            ) => left_items == right_items && left_metadata == right_metadata,
+            (
+                Self::ListItem {
+                    children: left_children,
+                    metadata: left_metadata,
+                },
+                Self::ListItem {
+                    children: right_children,
+                    metadata: right_metadata,
+                },
+            ) => left_children == right_children && left_metadata == right_metadata,
+            (
+                Self::Table {
+                    sections: left_sections,
+                    metadata: left_metadata,
+                },
+                Self::Table {
+                    sections: right_sections,
+                    metadata: right_metadata,
+                },
+            ) => left_sections == right_sections && left_metadata == right_metadata,
+            (
+                Self::TableHead {
+                    rows: left_rows,
+                    metadata: left_metadata,
+                },
+                Self::TableHead {
+                    rows: right_rows,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::TableBody {
+                    rows: left_rows,
+                    metadata: left_metadata,
+                },
+                Self::TableBody {
+                    rows: right_rows,
+                    metadata: right_metadata,
+                },
+            ) => left_rows == right_rows && left_metadata == right_metadata,
+            (
+                Self::TableRow {
+                    cells: left_cells,
+                    metadata: left_metadata,
+                },
+                Self::TableRow {
+                    cells: right_cells,
+                    metadata: right_metadata,
+                },
+            ) => left_cells == right_cells && left_metadata == right_metadata,
+            (
+                Self::TableCell {
+                    content: left_content,
+                    alignment: left_alignment,
+                    metadata: left_metadata,
+                },
+                Self::TableCell {
+                    content: right_content,
+                    alignment: right_alignment,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_content == right_content
+                    && left_alignment == right_alignment
+                    && left_metadata == right_metadata
+            }
+            (
+                Self::H1 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H1 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H2 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H2 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H3 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H3 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H4 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H4 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H5 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H5 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::H6 {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::H6 {
+                    content: right_content,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::Paragraph {
+                    content: left_content,
+                    metadata: left_metadata,
+                },
+                Self::Paragraph {
                     content: right_content,
                     metadata: right_metadata,
                 },

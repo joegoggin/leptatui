@@ -89,6 +89,11 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// signal(0)
 /// provide_context(String::from("from prelude"))
 /// block(column([
+///     h1("Guide"),
+///     paragraph("Overview"),
+///     ordered_list([list_item([paragraph("First")])]),
+///     table([table_body([table_row([table_cell("Ready")])])]),
+///     code_block("fn main() {}").language("rust"),
 ///     form([input("Ada"), text_area("Notes")]),
 ///     image("logo.png"),
 ///     progress_bar(0.5),
@@ -143,6 +148,30 @@ fn prelude_exposes_reactivity_and_context() {
             .on_cancel(|| AppControl::Continue);
         let view: View = block(column([
             text("from prelude"),
+            h1("Guide"),
+            h2("Section"),
+            h3("Subsection"),
+            h4("Topic"),
+            h5("Detail"),
+            h6("Note"),
+            paragraph("Overview"),
+            ordered_list([
+                list_item([paragraph("First")]),
+                list_item([paragraph("Second")]),
+            ])
+            .start(3),
+            unordered_list([list_item([paragraph("Nested")])]),
+            table([
+                table_head([table_row([table_cell("Name"), table_cell("Status")])]),
+                table_body([table_row([
+                    table_cell("Parser"),
+                    table_cell("Ready").alignment(CellAlignment::Right),
+                ])]),
+            ]),
+            code_block("fn main() {}")
+                .language("rust")
+                .line_numbers(true)
+                .syntax_theme(SyntaxTheme::Light),
             form_view,
             image(image_source).alt("Project logo"),
             progress_bar(0.5).label("Half"),
@@ -151,12 +180,31 @@ fn prelude_exposes_reactivity_and_context() {
         let _ = view;
 
         let macro_view: View = view! {
-            <Form>
-                <Input value="Ada" />
-                <TextArea value="Notes" />
-                <Image src="assets/logo.png" alt="Project logo" />
-                <ProgressBar value={0.5} label="Half" />
-            </Form>
+            <Column>
+                <H1>"Guide"</H1>
+                <Paragraph>"Overview"</Paragraph>
+                <OrderedList start=3>
+                    <ListItem>
+                        <Paragraph>"First"</Paragraph>
+                    </ListItem>
+                </OrderedList>
+                <Table>
+                    <TableBody>
+                        <TableRow>
+                            <TableCell alignment=CellAlignment::Right>"Ready"</TableCell>
+                        </TableRow>
+                    </TableBody>
+                </Table>
+                <CodeBlock language="rust" line_numbers=true syntax_theme=SyntaxTheme::Light>
+                    "fn main() {}"
+                </CodeBlock>
+                <Form>
+                    <Input value="Ada" />
+                    <TextArea value="Notes" />
+                    <Image src="assets/logo.png" alt="Project logo" />
+                    <ProgressBar value=0.5 label="Half" />
+                </Form>
+            </Column>
         };
         let _ = macro_view;
 
@@ -170,6 +218,15 @@ fn prelude_exposes_reactivity_and_context() {
         let _ = style.to_block();
 
         let stylesheet = stylesheet! {
+            H1 => { modifier: Modifier::BOLD }
+            Paragraph => { fg: Color::Gray }
+            OrderedList => { fg: Color::LightRed }
+            ListItem => { fg: Color::LightGreen }
+            Table => { fg: Color::LightBlue }
+            TableBody => { fg: Color::LightCyan }
+            TableRow => { fg: Color::LightMagenta }
+            TableCell => { fg: Color::LightYellow }
+            CodeBlock => { bg: Color::DarkGray }
             Form => { fg: Color::LightCyan }
             Input => { fg: Color::White }
             TextArea => { fg: Color::Yellow }
@@ -179,6 +236,42 @@ fn prelude_exposes_reactivity_and_context() {
         assert_eq!(
             stylesheet,
             Stylesheet::new()
+                .rule(
+                    StyleSelector::view_type(ViewType::H1),
+                    TuiStyle::new().modifier(Modifier::BOLD),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::Paragraph),
+                    TuiStyle::new().foreground(Color::Gray),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::OrderedList),
+                    TuiStyle::new().foreground(Color::LightRed),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::ListItem),
+                    TuiStyle::new().foreground(Color::LightGreen),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::Table),
+                    TuiStyle::new().foreground(Color::LightBlue),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::TableBody),
+                    TuiStyle::new().foreground(Color::LightCyan),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::TableRow),
+                    TuiStyle::new().foreground(Color::LightMagenta),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::TableCell),
+                    TuiStyle::new().foreground(Color::LightYellow),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::CodeBlock),
+                    TuiStyle::new().background(Color::DarkGray),
+                )
                 .rule(
                     StyleSelector::view_type(ViewType::Form),
                     TuiStyle::new().foreground(Color::LightCyan),

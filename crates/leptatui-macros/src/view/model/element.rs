@@ -101,9 +101,29 @@ impl Element {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if attributes, children, or the element name are
-    /// unsupported.
+    /// Returns [`syn::Error`] if attributes, children, ancestry, or the element
+    /// name are unsupported.
     pub(super) fn expand(&self) -> Result<TokenStream> {
+        self.expand_with_parent(None)
+    }
+
+    /// Expands this element with its direct semantic parent context.
+    ///
+    /// # Arguments
+    ///
+    /// * `parent` — Direct parent tag name, or [`None`] for a root element.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing view builder calls for this element.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if attributes, children, ancestry, or the element
+    /// name are unsupported.
+    fn expand_with_parent(&self, parent: Option<&str>) -> Result<TokenStream> {
+        self.validate_ancestry(parent)?;
+
         if self.name == "Input" {
             return self.expand_editable_text_control("Input", |value| {
                 let leptatui = crate::utils::crate_path::leptatui();
@@ -147,6 +167,94 @@ impl Element {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::text(#content) }
             }),
+            "H1" => self.expand_text_like("H1", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::h1(#content) }
+            }),
+            "H2" => self.expand_text_like("H2", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::h2(#content) }
+            }),
+            "H3" => self.expand_text_like("H3", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::h3(#content) }
+            }),
+            "H4" => self.expand_text_like("H4", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::h4(#content) }
+            }),
+            "H5" => self.expand_text_like("H5", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::h5(#content) }
+            }),
+            "H6" => self.expand_text_like("H6", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::h6(#content) }
+            }),
+            "Paragraph" => self.expand_text_like("Paragraph", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::paragraph(#content) }
+            }),
+            "CodeBlock" => self.expand_text_like("CodeBlock", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::code_block(#content) }
+            }),
+            "OrderedList" => self.expand_element_child_list(
+                "OrderedList",
+                &["ListItem"],
+                |children| {
+                    let leptatui = crate::utils::crate_path::leptatui();
+                    quote! { #leptatui::ordered_list(::std::vec![#(#children),*]) }
+                },
+            ),
+            "UnorderedList" => self.expand_element_child_list(
+                "UnorderedList",
+                &["ListItem"],
+                |children| {
+                    let leptatui = crate::utils::crate_path::leptatui();
+                    quote! { #leptatui::unordered_list(::std::vec![#(#children),*]) }
+                },
+            ),
+            "ListItem" => self.expand_child_list("ListItem", |children| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::list_item(::std::vec![#(#children),*]) }
+            }),
+            "Table" => self.expand_element_child_list(
+                "Table",
+                &["TableHead", "TableBody"],
+                |children| {
+                    let leptatui = crate::utils::crate_path::leptatui();
+                    quote! { #leptatui::table(::std::vec![#(#children),*]) }
+                },
+            ),
+            "TableHead" => self.expand_element_child_list(
+                "TableHead",
+                &["TableRow"],
+                |children| {
+                    let leptatui = crate::utils::crate_path::leptatui();
+                    quote! { #leptatui::table_head(::std::vec![#(#children),*]) }
+                },
+            ),
+            "TableBody" => self.expand_element_child_list(
+                "TableBody",
+                &["TableRow"],
+                |children| {
+                    let leptatui = crate::utils::crate_path::leptatui();
+                    quote! { #leptatui::table_body(::std::vec![#(#children),*]) }
+                },
+            ),
+            "TableRow" => self.expand_element_child_list(
+                "TableRow",
+                &["TableCell"],
+                |children| {
+                    let leptatui = crate::utils::crate_path::leptatui();
+                    quote! { #leptatui::table_row(::std::vec![#(#children),*]) }
+                },
+            ),
+            "TableCell" => self.expand_text_like("TableCell", |content| {
+                let leptatui = crate::utils::crate_path::leptatui();
+                quote! { #leptatui::table_cell(#content) }
+            }),
             "Button" => self.expand_text_like("Button", |content| {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::button(#content) }
@@ -155,7 +263,7 @@ impl Element {
             _ => {
                 return Err(Error::new_spanned(
                     &self.name,
-                    "unsupported Leptatui element; expected Block, Text, Row, Column, Form, Button, Input, TextArea, Image, ProgressBar, or a PascalCase component",
+                    "unsupported Leptatui element; expected a built-in view tag or a PascalCase component",
                 ));
             }
         }
@@ -167,6 +275,45 @@ impl Element {
                 Ok(view)
             }
         })
+    }
+
+    /// Validates the direct parent required by structural document elements.
+    ///
+    /// # Arguments
+    ///
+    /// * `parent` — Direct parent tag name, or [`None`] for a root element.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] when the element has valid ancestry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] when a list item, table section, row, or cell is
+    /// used outside its required semantic container.
+    fn validate_ancestry(&self, parent: Option<&str>) -> Result<()> {
+        let (expected, valid) = match self.name.to_string().as_str() {
+            "ListItem" => (
+                "OrderedList or UnorderedList",
+                matches!(parent, Some("OrderedList" | "UnorderedList")),
+            ),
+            "TableHead" | "TableBody" => ("Table", parent == Some("Table")),
+            "TableRow" => (
+                "TableHead or TableBody",
+                matches!(parent, Some("TableHead" | "TableBody")),
+            ),
+            "TableCell" => ("TableRow", parent == Some("TableRow")),
+            _ => return Ok(()),
+        };
+
+        if valid {
+            return Ok(());
+        }
+
+        Err(Error::new_spanned(
+            &self.name,
+            format!("{} must be a direct child of {expected}", self.name),
+        ))
     }
 
     /// Expands a controlled editable text element.
@@ -441,6 +588,41 @@ impl Element {
                         "view! on_input attribute is only supported on Input or TextArea",
                     ));
                 }
+                "start" if element_name == "OrderedList" => AttrKind::Start,
+                "start" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! start attribute is only supported on OrderedList",
+                    ));
+                }
+                "alignment" if element_name == "TableCell" => AttrKind::Alignment,
+                "alignment" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! alignment attribute is only supported on TableCell",
+                    ));
+                }
+                "language" if element_name == "CodeBlock" => AttrKind::Language,
+                "language" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! language attribute is only supported on CodeBlock",
+                    ));
+                }
+                "line_numbers" if element_name == "CodeBlock" => AttrKind::LineNumbers,
+                "line_numbers" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! line_numbers attribute is only supported on CodeBlock",
+                    ));
+                }
+                "syntax_theme" if element_name == "CodeBlock" => AttrKind::SyntaxTheme,
+                "syntax_theme" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! syntax_theme attribute is only supported on CodeBlock",
+                    ));
+                }
                 _ => {
                     let message = match element_name.as_str() {
                         "Button" => {
@@ -457,6 +639,15 @@ impl Element {
                         }
                         "ProgressBar" => {
                             "unsupported view! attribute; expected class, id, style, value, or label"
+                        }
+                        "OrderedList" => {
+                            "unsupported view! attribute; expected class, id, style, or start"
+                        }
+                        "TableCell" => {
+                            "unsupported view! attribute; expected class, id, style, or alignment"
+                        }
+                        "CodeBlock" => {
+                            "unsupported view! attribute; expected class, id, style, language, line_numbers, or syntax_theme"
                         }
                         _ => "unsupported view! attribute; expected class, id, or style",
                     };
@@ -483,8 +674,25 @@ impl Element {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if `style` or `on_press` receives a literal.
+    /// Returns [`syn::Error`] for duplicate attributes, invalid callback
+    /// literals, string literals used for typed configuration, or unbraced
+    /// values where braces are required.
     fn expand_attrs(&self, view: TokenStream, attrs: &[ValidatedAttr<'_>]) -> Result<TokenStream> {
+        for (index, current) in attrs.iter().enumerate() {
+            if let Some(duplicate) = attrs[index + 1..]
+                .iter()
+                .find(|candidate| candidate.kind == current.kind)
+            {
+                return Err(Error::new_spanned(
+                    &duplicate.attr.name,
+                    format!(
+                        "{} expects at most one {} attribute",
+                        self.name, duplicate.attr.name
+                    ),
+                ));
+            }
+        }
+
         let mut expanded = view;
 
         for ValidatedAttr { attr, kind } in attrs {
@@ -520,6 +728,23 @@ impl Element {
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
                 AttrKind::Alt => quote! { (#expanded).alt(#value) },
                 AttrKind::Label => quote! { (#expanded).label(#value) },
+                AttrKind::Start => {
+                    reject_literal_typed_attr(attr, "start", "usize")?;
+                    quote! { (#expanded).start(#value) }
+                }
+                AttrKind::Alignment => {
+                    reject_literal_typed_attr(attr, "alignment", "CellAlignment")?;
+                    quote! { (#expanded).alignment(#value) }
+                }
+                AttrKind::Language => quote! { (#expanded).language(#value) },
+                AttrKind::LineNumbers => {
+                    reject_literal_typed_attr(attr, "line_numbers", "bool")?;
+                    quote! { (#expanded).line_numbers(#value) }
+                }
+                AttrKind::SyntaxTheme => {
+                    reject_literal_typed_attr(attr, "syntax_theme", "SyntaxTheme")?;
+                    quote! { (#expanded).syntax_theme(#value) }
+                }
                 AttrKind::OnInput => {
                     reject_literal_callback(attr, "on_input")?;
                     quote! { (#expanded).on_input(#value) }
@@ -536,6 +761,11 @@ impl Element {
                     | AttrKind::ImageSource
                     | AttrKind::ProgressValue
                     | AttrKind::Style
+                    | AttrKind::Start
+                    | AttrKind::Alignment
+                    | AttrKind::Language
+                    | AttrKind::LineNumbers
+                    | AttrKind::SyntaxTheme
             ) && attr.value.is_unbraced_expr()
             {
                 return Err(Error::new_spanned(
@@ -616,6 +846,66 @@ impl Element {
         Ok(wrap(expanded))
     }
 
+    /// Expands a non-empty list of specifically named element children.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` — Parent tag name used in diagnostics and ancestry.
+    /// * `allowed_children` — Direct child tag names accepted by the parent.
+    /// * `wrap` — Function wrapping expanded children in a builder call.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the wrapped child list.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the parent is empty or contains a child with
+    /// an unsupported kind.
+    fn expand_element_child_list(
+        &self,
+        element_name: &str,
+        allowed_children: &[&str],
+        wrap: impl FnOnce(Vec<TokenStream>) -> TokenStream,
+    ) -> Result<TokenStream> {
+        if self.children.is_empty() {
+            return Err(Error::new_spanned(
+                &self.name,
+                format!("{element_name} expects at least one child element"),
+            ));
+        }
+
+        let mut expanded = Vec::with_capacity(self.children.len());
+        for child in &self.children {
+            let Child::Element(child) = child else {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    format!(
+                        "{element_name} only accepts {} children",
+                        allowed_children.join(" or ")
+                    ),
+                ));
+            };
+
+            if !allowed_children
+                .iter()
+                .any(|allowed| child.name == *allowed)
+            {
+                return Err(Error::new_spanned(
+                    &child.name,
+                    format!(
+                        "{element_name} only accepts {} children",
+                        allowed_children.join(" or ")
+                    ),
+                ));
+            }
+
+            expanded.push(child.expand_with_parent(Some(element_name))?);
+        }
+
+        Ok(wrap(expanded))
+    }
+
     /// Expands a child position that expects a view-compatible value.
     ///
     /// # Arguments
@@ -675,7 +965,10 @@ impl Element {
         let leptatui = crate::utils::crate_path::leptatui();
 
         match child {
-            Child::Element(child) => child.expand().map(Some),
+            Child::Element(child) => {
+                let parent = self.name.to_string();
+                child.expand_with_parent(Some(&parent)).map(Some)
+            }
             Child::Text(TextContent::Expr(expr))
                 if matches!(expr.as_ref(), syn::Expr::Closure(_)) =>
             {
@@ -752,6 +1045,32 @@ fn reject_literal_callback(attr: &Attr, attribute_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Rejects a string literal for an attribute requiring a typed expression.
+///
+/// # Arguments
+///
+/// * `attr` — Parsed typed attribute to inspect.
+/// * `attribute_name` — User-facing attribute name for diagnostics.
+/// * `expected_type` — Rust type required by the corresponding builder.
+///
+/// # Returns
+///
+/// An empty [`Result`] when the value is an expression.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the value is a string literal.
+fn reject_literal_typed_attr(attr: &Attr, attribute_name: &str, expected_type: &str) -> Result<()> {
+    if attr.value.is_literal() {
+        return Err(Error::new_spanned(
+            &attr.name,
+            format!("view! {attribute_name} attribute must be a {expected_type} expression"),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Returns whether an identifier is one of the built-in `view!` elements.
 fn is_builtin_element(name: &Ident) -> bool {
     matches!(
@@ -761,6 +1080,22 @@ fn is_builtin_element(name: &Ident) -> bool {
             | "Column"
             | "Form"
             | "Text"
+            | "H1"
+            | "H2"
+            | "H3"
+            | "H4"
+            | "H5"
+            | "H6"
+            | "Paragraph"
+            | "CodeBlock"
+            | "OrderedList"
+            | "UnorderedList"
+            | "ListItem"
+            | "Table"
+            | "TableHead"
+            | "TableBody"
+            | "TableRow"
+            | "TableCell"
             | "Button"
             | "Input"
             | "TextArea"
@@ -802,6 +1137,16 @@ mod attr_validation {
         Alt,
         /// Progress bar label text.
         Label,
+        /// Ordered-list starting marker.
+        Start,
+        /// Table-cell horizontal alignment.
+        Alignment,
+        /// Code-block syntax language.
+        Language,
+        /// Code-block line-number visibility.
+        LineNumbers,
+        /// Code-block highlighting theme.
+        SyntaxTheme,
         /// Button activation callback.
         OnPress,
         /// Form submit callback.

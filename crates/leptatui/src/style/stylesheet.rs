@@ -1,8 +1,8 @@
 //! Stylesheet rule storage and resolution.
 //!
 //! This module stores ordered style rules and resolves them against view
-//! selector metadata, ancestor metadata, inherited styles, inline style
-//! overrides, and CSS-like declaration importance.
+//! selector metadata, ancestor metadata, inherited styles, semantic defaults,
+//! inline style overrides, and CSS-like declaration importance.
 
 use crate::{MediaQuery, StyleDeclarations, ThemeVariables, ViewportSize, view::StyleMetadata};
 
@@ -145,9 +145,10 @@ impl Stylesheet {
 
     /// Resolves the style for a view.
     ///
-    /// Starts with inherited style values, overlays matching normal rules using
-    /// CSS selector specificity and source order, overlays any inline style
-    /// stored in the view metadata, then overlays matching important rules.
+    /// Starts with inherited style values, overlays low-precedence defaults for
+    /// the view type, overlays matching normal rules using CSS selector
+    /// specificity and source order, overlays any inline style stored in the
+    /// view metadata, then overlays matching important rules.
     ///
     /// # Arguments
     ///
@@ -220,6 +221,9 @@ impl Stylesheet {
         theme: &ThemeVariables,
     ) -> TuiStyle {
         let mut resolved = StyleDeclarations::from(inherited);
+        resolved.overlay_normal(&StyleDeclarations::from(
+            metadata.view_type().default_style(),
+        ));
         let rules = Self::matching_rules(stylesheets, metadata, ancestors, viewport);
 
         for rule in &rules {

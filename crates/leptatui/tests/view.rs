@@ -12,14 +12,19 @@ use std::{
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
-    __private::FocusedControl, AppControl, AppRoot, Borders, Color, Component, EditableState,
-    ImageSource, KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result,
-    StyleMetadata, StyleSelector, Stylesheet, TuiSize, TuiStyle, View, ViewType, VimMode, block,
-    button, column, component, dynamic, form, image, input, progress_bar, row, text, text_area,
+    __private::FocusedControl,
+    AppControl, AppRoot, Borders, CellAlignment, Color, Component, EditableState, ImageSource,
+    KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations,
+    StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme, TuiSize, TuiStyle, View, ViewType,
+    VimMode, block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4, h5, h6,
+    image, input, list_item, ordered_list, paragraph, progress_bar, row, table, table_body,
+    table_cell, table_head, table_row, text, text_area, unordered_list,
+    view::{Line, Span, Text},
 };
 use ratatui::{
     Terminal,
     backend::TestBackend,
+    style::Style,
     symbols::{block as symbol_block, border as symbol_border, line as symbol_line},
 };
 
@@ -51,8 +56,28 @@ fn button_focuses(view: &View) -> Vec<bool> {
         View::Block { child, .. } => button_focuses(child),
         View::Row { children, .. }
         | View::Column { children, .. }
-        | View::Form { children, .. } => children.iter().flat_map(button_focuses).collect(),
+        | View::Form { children, .. }
+        | View::OrderedList {
+            items: children, ..
+        }
+        | View::UnorderedList {
+            items: children, ..
+        }
+        | View::ListItem { children, .. } => children.iter().flat_map(button_focuses).collect(),
         View::Text { .. }
+        | View::H1 { .. }
+        | View::H2 { .. }
+        | View::H3 { .. }
+        | View::H4 { .. }
+        | View::H5 { .. }
+        | View::H6 { .. }
+        | View::Paragraph { .. }
+        | View::CodeBlock { .. }
+        | View::Table { .. }
+        | View::TableHead { .. }
+        | View::TableBody { .. }
+        | View::TableRow { .. }
+        | View::TableCell { .. }
         | View::Input { .. }
         | View::TextArea { .. }
         | View::Image { .. }
@@ -79,8 +104,28 @@ fn control_focuses(view: &View) -> Vec<bool> {
         View::Block { child, .. } => control_focuses(child),
         View::Row { children, .. }
         | View::Column { children, .. }
-        | View::Form { children, .. } => children.iter().flat_map(control_focuses).collect(),
+        | View::Form { children, .. }
+        | View::OrderedList {
+            items: children, ..
+        }
+        | View::UnorderedList {
+            items: children, ..
+        }
+        | View::ListItem { children, .. } => children.iter().flat_map(control_focuses).collect(),
         View::Text { .. }
+        | View::H1 { .. }
+        | View::H2 { .. }
+        | View::H3 { .. }
+        | View::H4 { .. }
+        | View::H5 { .. }
+        | View::H6 { .. }
+        | View::Paragraph { .. }
+        | View::CodeBlock { .. }
+        | View::Table { .. }
+        | View::TableHead { .. }
+        | View::TableBody { .. }
+        | View::TableRow { .. }
+        | View::TableCell { .. }
         | View::Image { .. }
         | View::ProgressBar { .. }
         | View::Dynamic(_)
@@ -694,6 +739,1256 @@ fn text_wraps_to_available_render_width() -> Result<()> {
 
     assert_eq!(symbol_position(&terminal, "H", 6), (0, 0));
     assert_eq!(symbol_position(&terminal, "W", 6), (0, 1));
+
+    Ok(())
+}
+
+/// Verifies semantic text builders retain rich text and selector metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1(Text::from(Line::from([Span::raw("Guide"), Span::styled("!", yellow)])))
+/// h2("Guide") through h6("Guide")
+/// paragraph("Guide")
+/// ```
+///
+/// # Assertions
+///
+/// - Every builder creates its corresponding semantic view variant.
+/// - Every view retains the supplied rich text.
+/// - Every view stores its corresponding selector view type.
+#[test]
+fn semantic_text_builders_store_rich_text_and_metadata() {
+    let content = Text::from(Line::from(vec![
+        Span::raw("Guide"),
+        Span::styled("!", Style::new().fg(Color::Yellow)),
+    ]));
+    let views = [
+        (h1(content.clone()), ViewType::H1),
+        (h2(content.clone()), ViewType::H2),
+        (h3(content.clone()), ViewType::H3),
+        (h4(content.clone()), ViewType::H4),
+        (h5(content.clone()), ViewType::H5),
+        (h6(content.clone()), ViewType::H6),
+        (paragraph(content.clone()), ViewType::Paragraph),
+    ];
+
+    for (view, expected_type) in views {
+        let (actual_type, actual_content, metadata) = match &view {
+            View::H1 { content, metadata } => (ViewType::H1, content, metadata),
+            View::H2 { content, metadata } => (ViewType::H2, content, metadata),
+            View::H3 { content, metadata } => (ViewType::H3, content, metadata),
+            View::H4 { content, metadata } => (ViewType::H4, content, metadata),
+            View::H5 { content, metadata } => (ViewType::H5, content, metadata),
+            View::H6 { content, metadata } => (ViewType::H6, content, metadata),
+            View::Paragraph { content, metadata } => (ViewType::Paragraph, content, metadata),
+            other => panic!("expected semantic text view, got {other:?}"),
+        };
+
+        assert_eq!(actual_type, expected_type);
+        assert_eq!(actual_content, &content);
+        assert_eq!(metadata.view_type(), expected_type);
+    }
+}
+
+/// Verifies semantic text views render their documented default modifiers.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1("H1") through h6("H6")
+/// paragraph("Paragraph")
+/// ```
+///
+/// # Assertions
+///
+/// - H1 is bold and underlined.
+/// - H2 is bold.
+/// - H3 is bold and italic.
+/// - H4 is underlined.
+/// - H5 is italic.
+/// - H6 is dim.
+/// - Paragraph has no default modifier.
+#[test]
+fn semantic_text_views_render_default_modifiers() -> Result<()> {
+    let views = [
+        (h1("H1"), Modifier::BOLD | Modifier::UNDERLINED),
+        (h2("H2"), Modifier::BOLD),
+        (h3("H3"), Modifier::BOLD | Modifier::ITALIC),
+        (h4("H4"), Modifier::UNDERLINED),
+        (h5("H5"), Modifier::ITALIC),
+        (h6("H6"), Modifier::DIM),
+        (paragraph("Paragraph"), Modifier::empty()),
+    ];
+
+    for (view, expected_modifiers) in views {
+        let mut terminal = Terminal::new(TestBackend::new(12, 1))?;
+        draw_view(&mut terminal, &view)?;
+
+        assert_eq!(cell_modifiers(&terminal, 0, 0, 12), expected_modifiers);
+    }
+
+    Ok(())
+}
+
+/// Verifies semantic defaults remain below authored cascade declarations.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1("Guide")
+/// H1 { modifier: empty }
+/// .title { modifier: italic }
+/// inline modifier: dim
+/// .title { modifier: crossed-out !important }
+/// ```
+///
+/// # Assertions
+///
+/// - The H1 default resolves to bold and underlined without authored styles.
+/// - A normal type rule can remove every default modifier.
+/// - A class rule replaces the semantic default.
+/// - An inline declaration replaces a normal class rule.
+/// - An important rule replaces the inline declaration.
+#[test]
+fn semantic_defaults_have_low_cascade_precedence() {
+    let theme = Default::default();
+    let plain = h1("Guide");
+    let default_style = Stylesheet::new().resolve(
+        plain.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(
+        default_style.modifiers,
+        Some(Modifier::BOLD | Modifier::UNDERLINED)
+    );
+
+    let type_stylesheet = Stylesheet::new().rule(
+        StyleSelector::view_type(ViewType::H1),
+        TuiStyle::new().modifier(Modifier::empty()),
+    );
+    let type_style = type_stylesheet.resolve(
+        plain.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(type_style.modifiers, Some(Modifier::empty()));
+
+    let class_view = h1("Guide").with_classes("title");
+    let class_stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("title"),
+        TuiStyle::new().modifier(Modifier::ITALIC),
+    );
+    let class_style = class_stylesheet.resolve(
+        class_view.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(class_style.modifiers, Some(Modifier::ITALIC));
+
+    let inline_view = h1("Guide")
+        .with_classes("title")
+        .with_inline_style(TuiStyle::new().modifier(Modifier::DIM));
+    let inline_style = class_stylesheet.resolve(
+        inline_view.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(inline_style.modifiers, Some(Modifier::DIM));
+
+    let important_stylesheet = Stylesheet::new().rule(
+        StyleSelector::class("title"),
+        StyleDeclarations::new().modifier_important(Modifier::CROSSED_OUT),
+    );
+    let important_style = important_stylesheet.resolve(
+        inline_view.style_metadata().expect("H1 metadata"),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    assert_eq!(important_style.modifiers, Some(Modifier::CROSSED_OUT));
+}
+
+/// Verifies semantic rendering preserves styles on rich-text spans.
+///
+/// # Example Under Test
+///
+/// ```text
+/// paragraph([yellow reversed "Rich ", plain "body"])
+/// terminal width = 5
+/// ```
+///
+/// # Assertions
+///
+/// - The first span retains its yellow foreground and reversed modifier.
+/// - The second span wraps to the second row.
+/// - The second span does not inherit the first span's reversed modifier.
+#[test]
+fn semantic_rendering_preserves_rich_text_span_styles() -> Result<()> {
+    let content = Text::from(Line::from(vec![
+        Span::styled(
+            "Rich ",
+            Style::new()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::REVERSED),
+        ),
+        Span::raw("body"),
+    ]));
+    let view = paragraph(content);
+    let mut terminal = Terminal::new(TestBackend::new(5, 2))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_colors(&terminal, 0, 0, 5).0, Color::Yellow);
+    assert!(cell_modifiers(&terminal, 0, 0, 5).contains(Modifier::REVERSED));
+    assert_eq!(symbol_position(&terminal, "b", 5), (0, 1));
+    assert!(!cell_modifiers(&terminal, 0, 1, 5).contains(Modifier::REVERSED));
+
+    Ok(())
+}
+
+/// Verifies every semantic text variant wraps and reports its wrapped height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1("One Two") through h6("One Two")
+/// paragraph("One Two")
+/// terminal width = 4
+/// ```
+///
+/// # Assertions
+///
+/// - Every semantic view reports a two-row minimum height.
+/// - Every semantic view renders `Two` on the second row.
+#[test]
+fn semantic_text_variants_wrap_and_report_intrinsic_height() -> Result<()> {
+    let views = [
+        h1("One Two"),
+        h2("One Two"),
+        h3("One Two"),
+        h4("One Two"),
+        h5("One Two"),
+        h6("One Two"),
+        paragraph("One Two"),
+    ];
+
+    for view in views {
+        let mut terminal = Terminal::new(TestBackend::new(4, 2))?;
+        let mut min_height = 0;
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            min_height = view.__min_height(&mut ctx);
+        })?;
+        draw_view(&mut terminal, &view)?;
+
+        assert_eq!(min_height, 2);
+        assert_eq!(symbol_position(&terminal, "T", 4), (0, 1));
+    }
+
+    Ok(())
+}
+
+/// Verifies semantic text uses Unicode display width during layout.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([paragraph("界界界"), text("End")])
+/// terminal width = 4
+/// ```
+///
+/// # Assertions
+///
+/// - Two double-width characters fit on the first row.
+/// - The third character wraps to the second row.
+/// - The following text view renders after both paragraph rows.
+#[test]
+fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()> {
+    let view = column([paragraph("界界界"), text("End")]);
+    let mut terminal = Terminal::new(TestBackend::new(4, 3))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 4), "界");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 4), "界");
+    assert_eq!(cell_symbol(&terminal, 0, 1, 4), "界");
+    assert_eq!(symbol_position(&terminal, "E", 4), (0, 2));
+
+    Ok(())
+}
+
+/// Verifies semantic text clips overflow and tolerates zero-width split areas.
+///
+/// # Example Under Test
+///
+/// ```text
+/// paragraph("One Two") in a 4x1 terminal
+/// row([paragraph("A"), paragraph("B")]) in a 1x1 terminal
+/// ```
+///
+/// # Assertions
+///
+/// - Content beyond the one-row render area is clipped.
+/// - Rendering a row that assigns zero width to one child succeeds.
+/// - The narrow row reports a one-row minimum height.
+#[test]
+fn semantic_text_clips_overflow_and_handles_zero_width_splits() -> Result<()> {
+    let mut clipped = Terminal::new(TestBackend::new(4, 1))?;
+    draw_view(&mut clipped, &paragraph("One Two"))?;
+    assert_eq!(symbol_position(&clipped, "O", 4), (0, 0));
+    assert!(symbol_position_opt(&clipped, "T", 4).is_none());
+
+    let narrow_view = row([paragraph("A"), paragraph("B")]);
+    let mut narrow = Terminal::new(TestBackend::new(1, 1))?;
+    let mut min_height = 0;
+    narrow.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = narrow_view.__min_height(&mut ctx);
+    })?;
+    draw_view(&mut narrow, &narrow_view)?;
+    assert_eq!(min_height, 1);
+
+    Ok(())
+}
+
+/// Verifies semantic list builders store items, starts, and selector metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// ordered_list([list_item([])]).start(3)
+/// unordered_list([list_item([paragraph("Body")])])
+/// ```
+///
+/// # Assertions
+///
+/// - Ordered lists retain their items, configured start, and ordered-list type.
+/// - Unordered lists retain their items and unordered-list type.
+/// - List items retain block children and list-item type.
+#[test]
+fn semantic_list_builders_store_items_starts_and_metadata() {
+    let ordered = ordered_list([list_item([])]).start(3);
+    let View::OrderedList {
+        items,
+        start,
+        metadata,
+    } = &ordered
+    else {
+        panic!("expected ordered-list view, got {ordered:?}");
+    };
+    assert_eq!(*start, 3);
+    assert_eq!(metadata.view_type(), ViewType::OrderedList);
+    assert_eq!(items.len(), 1);
+    let View::ListItem { children, metadata } = &items[0] else {
+        panic!("expected list-item view, got {:?}", items[0]);
+    };
+    assert!(children.is_empty());
+    assert_eq!(metadata.view_type(), ViewType::ListItem);
+
+    let unordered = unordered_list([list_item([paragraph("Body")])]);
+    let View::UnorderedList { items, metadata } = &unordered else {
+        panic!("expected unordered-list view, got {unordered:?}");
+    };
+    assert_eq!(metadata.view_type(), ViewType::UnorderedList);
+    assert_eq!(items.len(), 1);
+}
+
+/// Verifies semantic table builders store structure, rich text, and alignment.
+///
+/// # Example Under Test
+///
+/// ```text
+/// table([table_head([table_row([table_cell("Name")])])])
+/// table_cell(rich_text).alignment(CellAlignment::Right)
+/// ```
+///
+/// # Assertions
+///
+/// - Every builder stores its corresponding semantic view type.
+/// - Table cells retain rich text.
+/// - Cells default to left alignment and accept an explicit alignment.
+#[test]
+fn semantic_table_builders_store_structure_content_and_alignment() {
+    let rich = Text::from(Line::from(vec![
+        Span::raw("Na"),
+        Span::styled("me", Style::new().fg(Color::Yellow)),
+    ]));
+    let view = table([table_head([table_row([table_cell(rich.clone())])])]);
+    let View::Table { sections, metadata } = &view else {
+        panic!("expected table view, got {view:?}");
+    };
+    assert_eq!(metadata.view_type(), ViewType::Table);
+    let View::TableHead { rows, metadata } = &sections[0] else {
+        panic!("expected table-head view, got {:?}", sections[0]);
+    };
+    assert_eq!(metadata.view_type(), ViewType::TableHead);
+    let View::TableRow { cells, metadata } = &rows[0] else {
+        panic!("expected table-row view, got {:?}", rows[0]);
+    };
+    assert_eq!(metadata.view_type(), ViewType::TableRow);
+    let View::TableCell {
+        content,
+        alignment,
+        metadata,
+    } = &cells[0]
+    else {
+        panic!("expected table-cell view, got {:?}", cells[0]);
+    };
+    assert_eq!(content, &rich);
+    assert_eq!(*alignment, CellAlignment::Left);
+    assert_eq!(metadata.view_type(), ViewType::TableCell);
+
+    let aligned = table_cell("Ready").alignment(CellAlignment::Right);
+    let View::TableCell { alignment, .. } = aligned else {
+        panic!("expected aligned table cell");
+    };
+    assert_eq!(alignment, CellAlignment::Right);
+
+    let body = table_body([]);
+    let View::TableBody { metadata, .. } = body else {
+        panic!("expected table-body view");
+    };
+    assert_eq!(metadata.view_type(), ViewType::TableBody);
+}
+
+/// Verifies code-block builders retain source, highlighting, and display options.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("fn main() {}")
+///     .language("rs")
+///     .line_numbers(true)
+///     .syntax_theme(SyntaxTheme::Light)
+/// ```
+///
+/// # Assertions
+///
+/// - Code blocks default to the dark theme with line numbers disabled.
+/// - The configured language token and light theme are retained.
+/// - The `rs` alias selects syntax highlighting instead of plain source spans.
+/// - Code-block metadata uses [`ViewType::CodeBlock`].
+#[test]
+fn code_block_builder_retains_highlighted_lines_and_options() {
+    let default = code_block("fn main() {}");
+    let View::CodeBlock {
+        line_numbers,
+        syntax_theme,
+        ..
+    } = default
+    else {
+        panic!("expected code-block view");
+    };
+    assert!(!line_numbers);
+    assert_eq!(syntax_theme, SyntaxTheme::Dark);
+
+    let configured = code_block("fn main() {}")
+        .language("rs")
+        .line_numbers(true)
+        .syntax_theme(SyntaxTheme::Light);
+    let View::CodeBlock {
+        source,
+        language,
+        line_numbers,
+        syntax_theme,
+        highlighted_lines,
+        metadata,
+    } = configured
+    else {
+        panic!("expected configured code-block view");
+    };
+    assert_eq!(source, "fn main() {}");
+    assert_eq!(language.as_deref(), Some("rs"));
+    assert!(line_numbers);
+    assert_eq!(syntax_theme, SyntaxTheme::Light);
+    assert!(
+        highlighted_lines[0]
+            .spans
+            .iter()
+            .any(|span| span.style.fg.is_some())
+    );
+    assert_eq!(metadata.view_type(), ViewType::CodeBlock);
+}
+
+/// Verifies aliases share highlighting and unknown languages fall back to plain source.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("let value = 1;").language("rust")
+/// code_block("let value = 1;").language("rs")
+/// code_block("let value = 1;").language("not-a-language")
+/// ```
+///
+/// # Assertions
+///
+/// - `rust` and `rs` produce the same retained syntax spans.
+/// - An unknown token retains one unstyled span containing the complete source.
+#[test]
+fn code_block_recognizes_aliases_and_falls_back_for_unknown_languages() {
+    let rust = code_block("let value = 1;").language("rust");
+    let alias = code_block("let value = 1;").language("rs");
+    let unknown = code_block("let value = 1;").language("not-a-language");
+
+    let View::CodeBlock {
+        highlighted_lines: rust_lines,
+        ..
+    } = rust
+    else {
+        panic!("expected Rust code block");
+    };
+    let View::CodeBlock {
+        highlighted_lines: alias_lines,
+        ..
+    } = alias
+    else {
+        panic!("expected alias code block");
+    };
+    let View::CodeBlock {
+        highlighted_lines: unknown_lines,
+        ..
+    } = unknown
+    else {
+        panic!("expected fallback code block");
+    };
+
+    assert_eq!(rust_lines, alias_lines);
+    assert_eq!(unknown_lines.len(), 1);
+    assert_eq!(unknown_lines[0].spans.len(), 1);
+    assert_eq!(unknown_lines[0].spans[0].content, "let value = 1;");
+    assert_eq!(unknown_lines[0].spans[0].style, Style::default());
+}
+
+/// Verifies code-block themes produce distinct syntax colors.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("fn main() {}").language("rust")
+/// code_block("fn main() {}").language("rust").syntax_theme(SyntaxTheme::Light)
+/// ```
+///
+/// # Assertions
+///
+/// - Both themes retain highlighted spans.
+/// - At least one corresponding syntax span has a different foreground or background color.
+#[test]
+fn code_block_dark_and_light_themes_produce_distinct_colors() {
+    let dark = code_block("fn main() {}\nlet value = true;").language("rust");
+    let light = dark.clone().syntax_theme(SyntaxTheme::Light);
+    let View::CodeBlock {
+        highlighted_lines: dark_lines,
+        ..
+    } = dark
+    else {
+        panic!("expected dark code block");
+    };
+    let View::CodeBlock {
+        highlighted_lines: light_lines,
+        ..
+    } = light
+    else {
+        panic!("expected light code block");
+    };
+
+    assert!(dark_lines.iter().any(|line| !line.spans.is_empty()));
+    assert!(light_lines.iter().any(|line| !line.spans.is_empty()));
+    assert!(dark_lines
+        .iter()
+        .flat_map(|line| &line.spans)
+        .zip(light_lines.iter().flat_map(|line| &line.spans))
+        .any(|(dark, light)| dark.style.fg != light.style.fg || dark.style.bg != light.style.bg));
+}
+
+/// Verifies language titles and logical-line gutters render inside the border.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("one\ntwo").language("txt").line_numbers(true)
+/// terminal size = 12x4
+/// ```
+///
+/// # Assertions
+///
+/// - The language token appears in the top border title.
+/// - One-based numbers and the rule separator render on both logical lines.
+/// - Source content begins after the gutter.
+#[test]
+fn code_block_renders_language_title_and_line_number_gutter() -> Result<()> {
+    let view = code_block("one\ntwo").language("txt").line_numbers(true);
+    let mut terminal = Terminal::new(TestBackend::new(12, 4))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 1, 0, 12), "t");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 12), "1");
+    assert_eq!(cell_symbol(&terminal, 3, 1, 12), "│");
+    assert_eq!(cell_symbol(&terminal, 5, 1, 12), "o");
+    assert_eq!(cell_symbol(&terminal, 1, 2, 12), "2");
+    assert_eq!(cell_symbol(&terminal, 5, 2, 12), "t");
+
+    Ok(())
+}
+
+/// Verifies wrapped code preserves syntax styles and reserves document height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([code_block("let value = true;").language("rust"), text("End")])
+/// terminal width = 10
+/// ```
+///
+/// # Assertions
+///
+/// - The code block reports its wrapped content height plus both borders.
+/// - Syntax-colored source continues onto later visual rows.
+/// - The following document child begins after the code block's bottom border.
+#[test]
+fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_height() -> Result<()> {
+    let code = code_block("let value = true;").language("rust");
+    let mut measured = Terminal::new(TestBackend::new(10, 8))?;
+    let mut code_height = 0;
+    measured.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        code_height = code.__min_height(&mut ctx);
+    })?;
+    assert_eq!(code_height, 5);
+
+    let document = column([code, text("End")]);
+    let mut terminal = Terminal::new(TestBackend::new(10, 6))?;
+    draw_view(&mut terminal, &document)?;
+
+    assert!(symbol_position(&terminal, "=", 10).1 >= 1);
+    assert_eq!(symbol_position(&terminal, "E", 10), (0, 5));
+    assert_eq!(cell_symbol(&terminal, 0, 4, 10), "└");
+
+    Ok(())
+}
+
+/// Verifies empty, Unicode, narrow, and clipped code blocks render safely.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("")
+/// code_block("界界A") at width 5
+/// code_block("abcdef") at widths 0 through 2 and height 2
+/// ```
+///
+/// # Assertions
+///
+/// - Empty source contributes one content row between borders.
+/// - Double-width Unicode wraps only at grapheme boundaries.
+/// - Zero and extremely narrow widths do not panic during measurement or rendering.
+/// - A two-row viewport clips the bottom border without failing.
+#[test]
+fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()> {
+    let empty = code_block("");
+    let mut empty_terminal = Terminal::new(TestBackend::new(4, 3))?;
+    let mut empty_height = 0;
+    empty_terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        empty_height = empty.__min_height(&mut ctx);
+    })?;
+    assert_eq!(empty_height, 3);
+
+    let unicode = code_block("界界A");
+    let mut unicode_terminal = Terminal::new(TestBackend::new(5, 4))?;
+    draw_view(&mut unicode_terminal, &unicode)?;
+    assert_eq!(cell_symbol(&unicode_terminal, 1, 1, 5), "界");
+    assert_eq!(cell_symbol(&unicode_terminal, 1, 2, 5), "界");
+    assert_eq!(cell_symbol(&unicode_terminal, 3, 2, 5), "A");
+
+    for width in 0..=2 {
+        let view = code_block("abcdef");
+        let mut terminal = Terminal::new(TestBackend::new(width, 2))?;
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            let _ = view.__min_height(&mut ctx);
+            render_result = view.render(&mut ctx);
+        })?;
+        render_result?;
+    }
+
+    let clipped = code_block("abcdef");
+    let mut clipped_terminal = Terminal::new(TestBackend::new(6, 2))?;
+    draw_view(&mut clipped_terminal, &clipped)?;
+    assert_eq!(cell_symbol(&clipped_terminal, 0, 0, 6), "┌");
+    assert_eq!(cell_symbol(&clipped_terminal, 0, 1, 6), "│");
+    assert!(symbol_position_opt(&clipped_terminal, "└", 6).is_none());
+
+    Ok(())
+}
+
+/// Verifies code-block height saturates when source exceeds terminal row limits.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("\n" repeated u16::MAX times)
+/// terminal size = 4x1
+/// ```
+///
+/// # Assertions
+///
+/// - The code block reports [`u16::MAX`] as its intrinsic height.
+/// - Rendering the oversized source succeeds without arithmetic overflow.
+///
+/// # Why
+///
+/// Adding code-block borders to an already saturated content height must not
+/// panic in debug builds or wrap in release builds.
+#[test]
+fn code_block_height_saturates_beyond_terminal_row_limit() -> Result<()> {
+    let view = code_block("\n".repeat(usize::from(u16::MAX)));
+    let mut terminal = Terminal::new(TestBackend::new(4, 1))?;
+    let mut min_height = 0;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = view.__min_height(&mut ctx);
+        render_result = view.render(&mut ctx);
+    })?;
+    render_result?;
+
+    assert_eq!(min_height, u16::MAX);
+
+    Ok(())
+}
+
+/// Verifies table headers, borders, and cell alignments render semantically.
+///
+/// # Example Under Test
+///
+/// ```text
+/// table([
+///     table_head([table_row(["Name", "Status"])]),
+///     table_body([table_row([center "A", right "OK"])]),
+/// ])
+/// terminal size = 13x5
+/// ```
+///
+/// # Assertions
+///
+/// - Plain outer borders and intersections frame both rows.
+/// - Header text uses the bold semantic default.
+/// - Centered and right-aligned cells use their allocated column widths.
+#[test]
+fn semantic_table_renders_borders_bold_header_and_alignment() -> Result<()> {
+    let view = table([
+        table_head([table_row([table_cell("Name"), table_cell("Status")])]),
+        table_body([table_row([
+            table_cell("A").alignment(CellAlignment::Center),
+            table_cell("OK").alignment(CellAlignment::Right),
+        ])]),
+    ]);
+    let mut terminal = Terminal::new(TestBackend::new(13, 5))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 13), "┌");
+    assert_eq!(cell_symbol(&terminal, 5, 0, 13), "┬");
+    assert_eq!(cell_symbol(&terminal, 12, 4, 13), "┘");
+    assert!(cell_modifiers(&terminal, 1, 1, 13).contains(Modifier::BOLD));
+    assert_eq!(symbol_position(&terminal, "A", 13), (3, 3));
+    assert_eq!(symbol_position(&terminal, "O", 13), (10, 3));
+
+    Ok(())
+}
+
+/// Verifies table selector styles cascade through sections and cells.
+///
+/// # Example Under Test
+///
+/// ```text
+/// TableHead { modifier: empty }
+/// .status { fg: Green }
+/// table_head([table_row([table_cell("Ready").with_classes("status")])])
+/// ```
+///
+/// # Assertions
+///
+/// - An authored table-head type rule removes the bold semantic default.
+/// - A table-cell class rule colors its rich text content.
+#[test]
+fn semantic_table_styles_override_header_defaults_and_style_cells() -> Result<()> {
+    let view = table([table_head([table_row([
+        table_cell("Ready").with_classes("status")
+    ])])]);
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::view_type(ViewType::TableHead),
+            TuiStyle::new().modifier(Modifier::empty()),
+        )
+        .rule(
+            StyleSelector::class("status"),
+            TuiStyle::new().foreground(Color::Green),
+        );
+    let mut terminal = Terminal::new(TestBackend::new(7, 3))?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert!(!cell_modifiers(&terminal, 1, 1, 7).contains(Modifier::BOLD));
+    assert_eq!(cell_colors(&terminal, 1, 1, 7).0, Color::Green);
+
+    Ok(())
+}
+
+/// Verifies table background styles fill populated and normalized cells.
+///
+/// # Example Under Test
+///
+/// ```text
+/// table([row(["A"]), row(["B", "C"])]).background(Blue)
+/// ```
+///
+/// # Assertions
+///
+/// - A populated cell retains the table background.
+/// - A normalized empty trailing cell retains the table background.
+///
+/// # Why
+///
+/// Background colors are surface styles rather than inherited text styles, so
+/// the table renderer must paint the grid area before rendering its cells.
+#[test]
+fn semantic_table_background_fills_grid_cells() -> Result<()> {
+    let view = table([table_body([
+        table_row([table_cell("A")]),
+        table_row([table_cell("B"), table_cell("C")]),
+    ])])
+    .with_inline_style(TuiStyle::new().background(Color::Blue));
+    let mut terminal = Terminal::new(TestBackend::new(5, 5))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_colors(&terminal, 1, 1, 5).1, Color::Blue);
+    assert_eq!(cell_colors(&terminal, 3, 1, 5).1, Color::Blue);
+
+    Ok(())
+}
+
+/// Verifies table section, row, and cell backgrounds use structural precedence.
+///
+/// # Example Under Test
+///
+/// ```text
+/// TableHead { bg: Blue }
+/// .accent-row { bg: Green }
+/// .accent-cell { bg: Yellow }
+/// ```
+///
+/// # Assertions
+///
+/// - Header cells retain the table-head background.
+/// - Body cells retain an explicit table-row background.
+/// - An explicit table-cell background overrides its row background.
+///
+/// # Why
+///
+/// Backgrounds are surface styles rather than inherited text styles, so table
+/// layout must retain them while flattening sections and rows for rendering.
+#[test]
+fn semantic_table_structural_backgrounds_respect_precedence() -> Result<()> {
+    let view = table([
+        table_head([table_row([table_cell("H"), table_cell("I")])]),
+        table_body([
+            table_row([table_cell("A"), table_cell("B").with_classes("accent-cell")])
+                .with_classes("accent-row"),
+        ]),
+    ]);
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::view_type(ViewType::TableHead),
+            TuiStyle::new().background(Color::Blue),
+        )
+        .rule(
+            StyleSelector::class("accent-row"),
+            TuiStyle::new().background(Color::Green),
+        )
+        .rule(
+            StyleSelector::class("accent-cell"),
+            TuiStyle::new().background(Color::Yellow),
+        );
+    let mut terminal = Terminal::new(TestBackend::new(5, 5))?;
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert_eq!(cell_colors(&terminal, 1, 1, 5).1, Color::Blue);
+    assert_eq!(cell_colors(&terminal, 3, 1, 5).1, Color::Blue);
+    assert_eq!(cell_colors(&terminal, 1, 3, 5).1, Color::Green);
+    assert_eq!(cell_colors(&terminal, 3, 3, 5).1, Color::Yellow);
+
+    Ok(())
+}
+
+/// Verifies content-aware columns shrink and wrapped cells determine row height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// table_body([table_row(["abcdef", "界界"])])
+/// terminal size = 9x4
+/// ```
+///
+/// # Assertions
+///
+/// - Both preferred columns shrink to three content cells.
+/// - ASCII and double-width Unicode content wrap to a second row.
+/// - The bottom border follows the tallest wrapped cell.
+#[test]
+fn semantic_table_shrinks_columns_and_wraps_unicode_cells() -> Result<()> {
+    let view = table([table_body([table_row([
+        table_cell("abcdef"),
+        table_cell("界界"),
+    ])])]);
+    let mut terminal = Terminal::new(TestBackend::new(9, 4))?;
+    let mut min_height = 0;
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = view.__min_height(&mut ctx);
+    })?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 9), "┌");
+    assert_eq!(cell_symbol(&terminal, 4, 0, 9), "┬");
+    assert_eq!(cell_symbol(&terminal, 8, 0, 9), "┐");
+    assert_eq!(symbol_position(&terminal, "a", 9), (1, 1));
+    assert_eq!(symbol_position(&terminal, "d", 9), (1, 2));
+    assert_eq!(cell_symbol(&terminal, 5, 1, 9), "界");
+    assert_eq!(cell_symbol(&terminal, 5, 2, 9), "界");
+    assert_eq!(cell_symbol(&terminal, 0, 3, 9), "└");
+    assert_eq!(min_height, 4);
+
+    Ok(())
+}
+
+/// Verifies uneven rows normalize to the widest row's column count.
+///
+/// # Example Under Test
+///
+/// ```text
+/// table_body([row(["A"]), row(["B", "C", "D"])])
+/// terminal size = 7x5
+/// ```
+///
+/// # Assertions
+///
+/// - The first row receives two empty trailing cells.
+/// - The extra cells in the second row expand the shared grid to three columns.
+/// - All vertical separators remain aligned between rows.
+#[test]
+fn semantic_table_normalizes_missing_and_extra_cells() -> Result<()> {
+    let view = table([table_body([
+        table_row([table_cell("A")]),
+        table_row([table_cell("B"), table_cell("C"), table_cell("D")]),
+    ])]);
+    let mut terminal = Terminal::new(TestBackend::new(7, 5))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 7), "┌");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 7), "┬");
+    assert_eq!(cell_symbol(&terminal, 4, 0, 7), "┬");
+    assert_eq!(cell_symbol(&terminal, 6, 0, 7), "┐");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 7), "│");
+    assert_eq!(cell_symbol(&terminal, 4, 1, 7), "│");
+    assert_eq!(cell_symbol(&terminal, 6, 1, 7), "│");
+    assert_eq!(symbol_position(&terminal, "D", 7), (5, 3));
+
+    Ok(())
+}
+
+/// Verifies narrow tables clip only columns that cannot receive content width.
+///
+/// # Example Under Test
+///
+/// ```text
+/// table_body([row(["A", "B", "C"])])
+/// terminal widths = 5, 0, 1, and 2
+/// ```
+///
+/// # Assertions
+///
+/// - A five-cell viewport retains two one-cell columns and their borders.
+/// - The trailing third column is clipped.
+/// - Viewports too narrow for one bordered content cell render and measure
+///   without panicking.
+#[test]
+fn semantic_table_clips_columns_and_handles_zero_width() -> Result<()> {
+    let view = table([table_body([table_row([
+        table_cell("A"),
+        table_cell("B"),
+        table_cell("C"),
+    ])])]);
+    let mut narrow = Terminal::new(TestBackend::new(5, 3))?;
+    draw_view(&mut narrow, &view)?;
+    assert_eq!(cell_symbol(&narrow, 0, 0, 5), "┌");
+    assert_eq!(cell_symbol(&narrow, 2, 0, 5), "┬");
+    assert_eq!(cell_symbol(&narrow, 4, 0, 5), "┐");
+    assert!(symbol_position_opt(&narrow, "C", 5).is_none());
+
+    for width in 0..=2 {
+        let mut terminal = Terminal::new(TestBackend::new(width, 1))?;
+        let mut min_height = 1;
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            min_height = view.__min_height(&mut ctx);
+            render_result = view.render(&mut ctx);
+        })?;
+        render_result?;
+        assert_eq!(min_height, 0);
+    }
+
+    Ok(())
+}
+
+/// Verifies tables report document height and clip vertically at the viewport.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([table([row(["A"])]), text("End")])
+/// terminal size = 3x4
+/// table([row(["abcdef"])]) in a 3x2 terminal
+/// ```
+///
+/// # Assertions
+///
+/// - A following document block begins after the table's bottom border.
+/// - A short viewport renders only the visible top border and first content row.
+/// - Vertical clipping does not render a partial bottom boundary or panic.
+#[test]
+fn semantic_table_reserves_document_height_and_clips_vertically() -> Result<()> {
+    let document = column([
+        table([table_body([table_row([table_cell("A")])])]),
+        text("End"),
+    ]);
+    let mut document_terminal = Terminal::new(TestBackend::new(3, 4))?;
+    draw_view(&mut document_terminal, &document)?;
+    assert_eq!(symbol_position(&document_terminal, "E", 3), (0, 3));
+
+    let clipped = table([table_body([table_row([table_cell("abcdef")])])]);
+    let mut clipped_terminal = Terminal::new(TestBackend::new(3, 2))?;
+    draw_view(&mut clipped_terminal, &clipped)?;
+    assert_eq!(cell_symbol(&clipped_terminal, 0, 0, 3), "┌");
+    assert_eq!(cell_symbol(&clipped_terminal, 0, 1, 3), "│");
+    assert!(symbol_position_opt(&clipped_terminal, "└", 3).is_none());
+
+    Ok(())
+}
+
+/// Verifies ordered markers use configured values and align across digit widths.
+///
+/// # Example Under Test
+///
+/// ```text
+/// ordered_list(["Nine", "Ten"]).start(9)
+/// terminal size = 12x2
+/// ```
+///
+/// # Assertions
+///
+/// - Markers render as `9.` and `10.` beginning at the requested value.
+/// - The shorter marker is right-aligned to the longer marker.
+/// - Both item contents begin in the same terminal column.
+#[test]
+fn ordered_list_starts_and_aligns_multi_digit_markers() -> Result<()> {
+    let view = ordered_list([
+        list_item([paragraph("Nine")]),
+        list_item([paragraph("Ten")]),
+    ])
+    .start(9);
+    let mut terminal = Terminal::new(TestBackend::new(12, 2))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 12), " ");
+    assert_eq!(cell_symbol(&terminal, 1, 0, 12), "9");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 12), ".");
+    assert_eq!(cell_symbol(&terminal, 0, 1, 12), "1");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 12), "0");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 12), ".");
+    assert_eq!(symbol_position(&terminal, "N", 12), (4, 0));
+    assert_eq!(symbol_position(&terminal, "T", 12), (4, 1));
+
+    Ok(())
+}
+
+/// Verifies list blocks wrap beneath content and preserve empty marker rows.
+///
+/// # Example Under Test
+///
+/// ```text
+/// unordered_list([
+///     list_item([paragraph("Alpha Beta"), paragraph("Tail")]),
+///     list_item([]),
+/// ])
+/// terminal size = 8x4
+/// ```
+///
+/// # Assertions
+///
+/// - Unordered items render `-` markers.
+/// - Wrapped continuation text and later blocks align with item content.
+/// - An empty item still consumes one marker row.
+#[test]
+fn unordered_list_wraps_mixed_blocks_and_renders_empty_items() -> Result<()> {
+    let view = unordered_list([
+        list_item([paragraph("Alpha Beta"), paragraph("Tail")]),
+        list_item([]),
+    ]);
+    let mut terminal = Terminal::new(TestBackend::new(8, 4))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "-");
+    assert_eq!(symbol_position(&terminal, "A", 8), (2, 0));
+    assert_eq!(symbol_position(&terminal, "B", 8), (2, 1));
+    assert_eq!(symbol_position(&terminal, "T", 8), (2, 2));
+    assert_eq!(cell_symbol(&terminal, 0, 3, 8), "-");
+
+    Ok(())
+}
+
+/// Verifies recursive lists indent by two cells at every nesting level.
+///
+/// # Example Under Test
+///
+/// ```text
+/// ordered_list([list_item([
+///     paragraph("Parent"),
+///     unordered_list([list_item([
+///         paragraph("Child"),
+///         ordered_list([list_item([paragraph("Grandchild")])]),
+///     ])]),
+/// ])])
+/// ```
+///
+/// # Assertions
+///
+/// - The parent ordered marker starts at column zero.
+/// - The nested unordered marker starts at column two.
+/// - The recursively nested ordered marker starts at column four.
+/// - Nested content renders after each local marker gutter.
+#[test]
+fn nested_lists_indent_two_cells_per_level() -> Result<()> {
+    let view = ordered_list([list_item([
+        paragraph("Parent"),
+        unordered_list([list_item([
+            paragraph("Child"),
+            ordered_list([list_item([paragraph("Grandchild")])]),
+        ])]),
+    ])]);
+    let mut terminal = Terminal::new(TestBackend::new(18, 3))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 18), "1");
+    assert_eq!(symbol_position(&terminal, "P", 18), (3, 0));
+    assert_eq!(cell_symbol(&terminal, 2, 1, 18), "-");
+    assert_eq!(symbol_position(&terminal, "C", 18), (4, 1));
+    assert_eq!(cell_symbol(&terminal, 4, 2, 18), "1");
+    assert_eq!(cell_symbol(&terminal, 5, 2, 18), ".");
+    assert_eq!(symbol_position(&terminal, "G", 18), (7, 2));
+
+    Ok(())
+}
+
+/// Verifies list measurement tolerates clipped and zero-width content areas.
+///
+/// # Example Under Test
+///
+/// ```text
+/// unordered_list([list_item([paragraph("Wrapped")])]) in a 1x1 terminal
+/// row([unordered_list(...), unordered_list(...)]) in a 1x1 terminal
+/// ```
+///
+/// # Assertions
+///
+/// - A one-cell list renders its marker while clipping content.
+/// - A row assigning zero width to one list renders without panicking.
+/// - The narrow row reports a positive intrinsic height.
+#[test]
+fn semantic_lists_handle_narrow_and_zero_width_content() -> Result<()> {
+    let mut narrow = Terminal::new(TestBackend::new(1, 1))?;
+    draw_view(
+        &mut narrow,
+        &unordered_list([list_item([paragraph("Wrapped")])]),
+    )?;
+    assert_eq!(cell_symbol(&narrow, 0, 0, 1), "-");
+
+    let split_view = row([
+        unordered_list([list_item([paragraph("A")])]),
+        unordered_list([list_item([paragraph("B")])]),
+    ]);
+    let mut split = Terminal::new(TestBackend::new(1, 1))?;
+    let mut min_height = 0;
+    split.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        min_height = split_view.__min_height(&mut ctx);
+    })?;
+    draw_view(&mut split, &split_view)?;
+    assert!(min_height >= 1);
+
+    Ok(())
+}
+
+/// Verifies list intrinsic height participates in parent overflow scrolling.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([ordered_list(["First", "Second", "Third"])])
+/// terminal size = 8x2
+/// PageDown
+/// ```
+///
+/// # Assertions
+///
+/// - The initial viewport clips the third list item.
+/// - PageDown is handled by the parent column.
+/// - The scrolled viewport reveals the third list item.
+#[test]
+fn semantic_list_height_scrolls_inside_parent_column() -> Result<()> {
+    let mut view = column([ordered_list([
+        list_item([paragraph("First")]),
+        list_item([paragraph("Second")]),
+        list_item([paragraph("Third")]),
+    ])]);
+    let mut terminal = Terminal::new(TestBackend::new(8, 2))?;
+
+    draw_view(&mut terminal, &view)?;
+    assert!(symbol_position_opt(&terminal, "T", 8).is_none());
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_view(&mut terminal, &view)?;
+    assert!(symbol_position_opt(&terminal, "T", 8).is_some());
 
     Ok(())
 }

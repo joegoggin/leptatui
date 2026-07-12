@@ -3,12 +3,15 @@
 //! This module provides the public helper functions re-exported by
 //! [`mod@crate::view`] and [`crate::prelude`].
 
+use ratatui::text::Text;
+
 use crate::component::Component;
 
 use super::{
+    code_block::{SyntaxTheme, highlighted_source_lines},
     component_view::ComponentView,
     metadata::{EditableState, StyleMetadata, ViewType},
-    model::{ImageSource, View, clamped_progress_value},
+    model::{CellAlignment, ImageSource, View, clamped_progress_value},
 };
 
 /// Creates a bordered block around a child view.
@@ -40,6 +43,274 @@ pub fn text(content: impl Into<String>) -> View {
     View::Text {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::Text),
+    }
+}
+
+/// Creates a first-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H1`] containing the provided content.
+pub fn h1(content: impl Into<Text<'static>>) -> View {
+    View::H1 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H1),
+    }
+}
+
+/// Creates a second-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H2`] containing the provided content.
+pub fn h2(content: impl Into<Text<'static>>) -> View {
+    View::H2 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H2),
+    }
+}
+
+/// Creates a third-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H3`] containing the provided content.
+pub fn h3(content: impl Into<Text<'static>>) -> View {
+    View::H3 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H3),
+    }
+}
+
+/// Creates a fourth-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H4`] containing the provided content.
+pub fn h4(content: impl Into<Text<'static>>) -> View {
+    View::H4 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H4),
+    }
+}
+
+/// Creates a fifth-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H5`] containing the provided content.
+pub fn h5(content: impl Into<Text<'static>>) -> View {
+    View::H5 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H5),
+    }
+}
+
+/// Creates a sixth-level semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::H6`] containing the provided content.
+pub fn h6(content: impl Into<Text<'static>>) -> View {
+    View::H6 {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::H6),
+    }
+}
+
+/// Creates a semantic paragraph.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+///
+/// # Returns
+///
+/// A [`View::Paragraph`] containing the provided content.
+pub fn paragraph(content: impl Into<Text<'static>>) -> View {
+    View::Paragraph {
+        content: content.into(),
+        metadata: StyleMetadata::new(ViewType::Paragraph),
+    }
+}
+
+/// Creates a bordered syntax-highlighted code block.
+///
+/// The source is retained as logical lines. Supplying a recognized language
+/// later through [`View::language`] highlights those lines once rather than on
+/// every render frame.
+///
+/// # Arguments
+///
+/// * `source` — Source code displayed inside the block.
+///
+/// # Returns
+///
+/// A [`View::CodeBlock`] using the dark theme with line numbers disabled.
+pub fn code_block(source: impl Into<String>) -> View {
+    let source = source.into();
+    View::CodeBlock {
+        highlighted_lines: highlighted_source_lines(&source, None, SyntaxTheme::Dark),
+        source,
+        language: None,
+        line_numbers: false,
+        syntax_theme: SyntaxTheme::Dark,
+        metadata: StyleMetadata::new(ViewType::CodeBlock),
+    }
+}
+
+/// Creates a semantic ordered list.
+///
+/// # Arguments
+///
+/// * `items` — List-item views to number from one.
+///
+/// # Returns
+///
+/// A [`View::OrderedList`] containing the provided items.
+pub fn ordered_list(items: impl IntoIterator<Item = View>) -> View {
+    View::OrderedList {
+        items: items.into_iter().collect(),
+        start: 1,
+        metadata: StyleMetadata::new(ViewType::OrderedList),
+    }
+}
+
+/// Creates a semantic unordered list.
+///
+/// # Arguments
+///
+/// * `items` — List-item views to mark with hyphens.
+///
+/// # Returns
+///
+/// A [`View::UnorderedList`] containing the provided items.
+pub fn unordered_list(items: impl IntoIterator<Item = View>) -> View {
+    View::UnorderedList {
+        items: items.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::UnorderedList),
+    }
+}
+
+/// Creates a semantic list item containing vertically stacked document blocks.
+///
+/// # Arguments
+///
+/// * `children` — Document blocks contained by the list item.
+///
+/// # Returns
+///
+/// A [`View::ListItem`] containing the provided children.
+pub fn list_item(children: impl IntoIterator<Item = View>) -> View {
+    View::ListItem {
+        children: children.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::ListItem),
+    }
+}
+
+/// Creates a semantic table from header and body sections.
+///
+/// # Arguments
+///
+/// * `sections` — Table-head and table-body views rendered in source order.
+///
+/// # Returns
+///
+/// A [`View::Table`] containing the provided sections.
+pub fn table(sections: impl IntoIterator<Item = View>) -> View {
+    View::Table {
+        sections: sections.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::Table),
+    }
+}
+
+/// Creates a semantic table header.
+///
+/// # Arguments
+///
+/// * `rows` — Table-row views rendered with the header's bold default style.
+///
+/// # Returns
+///
+/// A [`View::TableHead`] containing the provided rows.
+pub fn table_head(rows: impl IntoIterator<Item = View>) -> View {
+    View::TableHead {
+        rows: rows.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::TableHead),
+    }
+}
+
+/// Creates a semantic table body.
+///
+/// # Arguments
+///
+/// * `rows` — Table-row views rendered in source order.
+///
+/// # Returns
+///
+/// A [`View::TableBody`] containing the provided rows.
+pub fn table_body(rows: impl IntoIterator<Item = View>) -> View {
+    View::TableBody {
+        rows: rows.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::TableBody),
+    }
+}
+
+/// Creates a semantic table row.
+///
+/// # Arguments
+///
+/// * `cells` — Table-cell views rendered in column order.
+///
+/// # Returns
+///
+/// A [`View::TableRow`] containing the provided cells.
+pub fn table_row(cells: impl IntoIterator<Item = View>) -> View {
+    View::TableRow {
+        cells: cells.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::TableRow),
+    }
+}
+
+/// Creates a semantic table cell with left-aligned rich text.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content rendered inside the cell.
+///
+/// # Returns
+///
+/// A [`View::TableCell`] containing the provided content and default
+/// [`CellAlignment::Left`] alignment.
+pub fn table_cell(content: impl Into<Text<'static>>) -> View {
+    View::TableCell {
+        content: content.into(),
+        alignment: CellAlignment::Left,
+        metadata: StyleMetadata::new(ViewType::TableCell),
     }
 }
 
