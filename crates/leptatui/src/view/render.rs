@@ -11,10 +11,11 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
-    layout::{Constraint, Layout, Position, Rect, Size},
+    layout::{Alignment, Constraint, Layout, Position, Rect, Size},
     text::{Line, Span, Text},
     widgets::{Block, Gauge, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::{
     ThemeVariables,
@@ -26,7 +27,7 @@ use crate::{
 
 use super::{
     metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
-    model::{FormAction, InputAction, View, clamped_progress_value},
+    model::{CellAlignment, FormAction, InputAction, View, clamped_progress_value},
 };
 
 /// Maximum time allowed between insert-mode `j` and `k` escape keys.
@@ -34,6 +35,23 @@ const INSERT_ESCAPE_TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// Horizontal indentation applied to each recursively nested list.
 const LIST_NEST_INDENT: u16 = 2;
+
+/// Render-ready table cell with its resolved text style.
+#[derive(Clone)]
+struct RenderedTableCell {
+    /// Rich text rendered inside the cell.
+    content: Text<'static>,
+    /// Horizontal alignment applied after wrapping.
+    alignment: CellAlignment,
+    /// Fully resolved style for the cell text.
+    style: TuiStyle,
+}
+
+/// Render-ready table row containing source-order cells.
+struct RenderedTableRow {
+    /// Cells present in the source row before normalization.
+    cells: Vec<RenderedTableCell>,
+}
 
 /// Resolves a view style from context stylesheets, ancestors, and inherited style values.
 ///
@@ -283,6 +301,11 @@ impl View {
             Self::ListItem { children, metadata } => {
                 render_layout_view(children, metadata, LayoutDirection::Column, ctx)
             }
+            Self::Table { sections, metadata } => render_table_view(sections, metadata, ctx),
+            Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. } => Ok(()),
             Self::Image {
                 source,
                 alt,
@@ -651,7 +674,13 @@ impl View {
             | Self::H6 { .. }
             | Self::Paragraph { .. }
             | Self::Button { .. } => None,
-            Self::Image { .. } | Self::ProgressBar { .. } => None,
+            Self::Image { .. }
+            | Self::ProgressBar { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. } => None,
         }
     }
 
@@ -798,6 +827,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => Ok(KeyControl::Pass),
         }
     }
@@ -930,6 +964,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => false,
         }
     }
@@ -984,6 +1023,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => false,
         }
     }
@@ -1020,6 +1064,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => false,
         }
     }
@@ -1046,6 +1095,11 @@ impl View {
             | Self::Input { metadata, .. }
             | Self::TextArea { metadata, .. }
             | Self::Image { metadata, .. }
+            | Self::Table { metadata, .. }
+            | Self::TableHead { metadata, .. }
+            | Self::TableBody { metadata, .. }
+            | Self::TableRow { metadata, .. }
+            | Self::TableCell { metadata, .. }
             | Self::ProgressBar { metadata, .. } => Some(metadata),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
@@ -1133,6 +1187,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => None,
         }
     }
@@ -1189,6 +1248,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => None,
         }
     }
@@ -1247,6 +1311,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => None,
         }
     }
@@ -1281,6 +1350,11 @@ impl View {
             | Self::H6 { .. }
             | Self::Paragraph { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => 0,
         }
     }
@@ -1359,6 +1433,11 @@ impl View {
             | Self::H6 { .. }
             | Self::Paragraph { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => None,
         }
     }
@@ -1439,6 +1518,11 @@ impl View {
             | Self::H6 { .. }
             | Self::Paragraph { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => {}
         }
     }
@@ -1484,6 +1568,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => None,
         }
     }
@@ -1529,6 +1618,11 @@ impl View {
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
+            | Self::Table { .. }
+            | Self::TableHead { .. }
+            | Self::TableBody { .. }
+            | Self::TableRow { .. }
+            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => Ok(AppControl::Continue),
         }
     }
@@ -4212,6 +4306,11 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
         | View::Input { .. }
         | View::TextArea { .. }
         | View::Image { .. }
+        | View::Table { .. }
+        | View::TableHead { .. }
+        | View::TableBody { .. }
+        | View::TableRow { .. }
+        | View::TableCell { .. }
         | View::ProgressBar { .. } => None,
     }
 }
@@ -4422,6 +4521,500 @@ fn focused_control_span_in_column_children(
 
             None
         },
+    )
+}
+
+/// Collects semantic table rows and resolves nested section, row, and cell styles.
+///
+/// # Arguments
+///
+/// * `sections` — Table sections to traverse in source order.
+/// * `ctx` — Rendering context carrying the table's inherited style.
+///
+/// # Returns
+///
+/// A [`Vec`] containing render-ready rows from valid table sections.
+fn collect_table_rows(sections: &[View], ctx: &mut RenderCtx<'_, '_>) -> Vec<RenderedTableRow> {
+    let mut rendered_rows = Vec::new();
+
+    for section in sections {
+        let (rows, metadata) = match section {
+            View::TableHead { rows, metadata } | View::TableBody { rows, metadata } => {
+                (rows, metadata)
+            }
+            _ => continue,
+        };
+        let section_style = resolve_style(metadata, ctx);
+        let area = ctx.area();
+        let section_rows = ctx.with_area_inherited_style_and_selector_ancestor(
+            area,
+            section_style.inherited_values(),
+            metadata.clone(),
+            |ctx| {
+                rows.iter()
+                    .filter_map(|row| collect_table_row(row, ctx))
+                    .collect::<Vec<_>>()
+            },
+        );
+        rendered_rows.extend(section_rows);
+    }
+
+    rendered_rows
+}
+
+/// Collects one semantic table row and resolves its cell styles.
+///
+/// # Arguments
+///
+/// * `row` — Candidate table-row view.
+/// * `ctx` — Rendering context carrying the section's inherited style.
+///
+/// # Returns
+///
+/// An [`Option`] containing a render-ready row when `row` is a table row.
+fn collect_table_row(row: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<RenderedTableRow> {
+    let View::TableRow { cells, metadata } = row else {
+        return None;
+    };
+    let row_style = resolve_style(metadata, ctx);
+    let area = ctx.area();
+    let cells = ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        row_style.inherited_values(),
+        metadata.clone(),
+        |ctx| {
+            cells
+                .iter()
+                .map(|cell| collect_table_cell(cell, ctx))
+                .collect()
+        },
+    );
+
+    Some(RenderedTableRow { cells })
+}
+
+/// Collects a semantic table cell or an empty placeholder for an invalid child.
+///
+/// # Arguments
+///
+/// * `cell` — Candidate table-cell view.
+/// * `ctx` — Rendering context carrying the row's inherited style.
+///
+/// # Returns
+///
+/// A [`RenderedTableCell`] preserving the source column position.
+fn collect_table_cell(cell: &View, ctx: &mut RenderCtx<'_, '_>) -> RenderedTableCell {
+    if let View::TableCell {
+        content,
+        alignment,
+        metadata,
+    } = cell
+    {
+        return RenderedTableCell {
+            content: content.clone(),
+            alignment: *alignment,
+            style: resolve_style(metadata, ctx),
+        };
+    }
+
+    RenderedTableCell {
+        content: Text::default(),
+        alignment: CellAlignment::Left,
+        style: ctx.inherited_style(),
+    }
+}
+
+/// Allocates visible table-column widths within the viewport budget.
+///
+/// Columns begin at their widest logical content line. When those preferred
+/// widths exceed the viewport, the widest columns are capped evenly without
+/// reducing any visible column below one content cell. Trailing columns that
+/// cannot receive a content cell plus their border are omitted.
+///
+/// # Arguments
+///
+/// * `rows` — Render-ready table rows used for preferred-width measurement.
+/// * `available_width` — Total viewport width including table borders.
+///
+/// # Returns
+///
+/// A [`Vec`] containing one content width for each visible leading column.
+fn table_column_widths(rows: &[RenderedTableRow], available_width: u16) -> Vec<u16> {
+    let column_count = rows.iter().map(|row| row.cells.len()).max().unwrap_or(0);
+    let visible_count = column_count.min(usize::from(available_width.saturating_sub(1) / 2));
+    if visible_count == 0 {
+        return Vec::new();
+    }
+
+    let preferred = (0..visible_count)
+        .map(|column| {
+            rows.iter()
+                .filter_map(|row| row.cells.get(column))
+                .map(|cell| u16::try_from(cell.content.width()).unwrap_or(u16::MAX))
+                .max()
+                .unwrap_or(1)
+                .max(1)
+        })
+        .collect::<Vec<_>>();
+    let border_width = u16::try_from(visible_count.saturating_add(1)).unwrap_or(u16::MAX);
+    let content_budget = available_width.saturating_sub(border_width);
+    let preferred_total = preferred.iter().copied().map(u32::from).sum::<u32>();
+    if preferred_total <= u32::from(content_budget) {
+        return preferred;
+    }
+
+    let max_preferred = preferred.iter().copied().max().unwrap_or(1);
+    let mut low = 1u16;
+    let mut high = max_preferred;
+    while low < high {
+        let midpoint = low + (high - low).div_ceil(2);
+        let total = preferred
+            .iter()
+            .map(|width| u32::from((*width).min(midpoint)))
+            .sum::<u32>();
+        if total <= u32::from(content_budget) {
+            low = midpoint;
+        } else {
+            high = midpoint.saturating_sub(1);
+        }
+    }
+
+    let mut widths = preferred
+        .iter()
+        .map(|width| (*width).min(low))
+        .collect::<Vec<_>>();
+    let used = widths.iter().copied().map(u32::from).sum::<u32>();
+    let mut remaining = u32::from(content_budget).saturating_sub(used);
+    for (width, preferred_width) in widths.iter_mut().zip(preferred.iter()) {
+        if remaining == 0 {
+            break;
+        }
+        if *width < *preferred_width {
+            *width = width.saturating_add(1);
+            remaining -= 1;
+        }
+    }
+
+    widths
+}
+
+/// Returns the wrapped height of a normalized table row.
+///
+/// # Arguments
+///
+/// * `row` — Row whose existing cells should be measured.
+/// * `widths` — Allocated widths for visible normalized columns.
+///
+/// # Returns
+///
+/// A [`u16`] height of at least one terminal row.
+fn table_row_height(row: &RenderedTableRow, widths: &[u16]) -> u16 {
+    widths
+        .iter()
+        .enumerate()
+        .filter_map(|(column, width)| {
+            row.cells
+                .get(column)
+                .map(|cell| line_count_height(wrapped_table_cell_text(cell, *width).lines.len()))
+        })
+        .max()
+        .unwrap_or(1)
+        .max(1)
+}
+
+/// Wraps table-cell rich text without splitting double-width graphemes.
+///
+/// Ratatui's general paragraph wrapper can place an indivisible wide grapheme
+/// across a narrow area boundary. Table cells pre-wrap at grapheme boundaries
+/// so content never overwrites the following column separator.
+///
+/// # Arguments
+///
+/// * `cell` — Render-ready cell containing rich text and its resolved style.
+/// * `width` — Allocated terminal-cell width for the column.
+///
+/// # Returns
+///
+/// A [`Text`] value whose logical lines all fit within `width`.
+fn wrapped_table_cell_text(cell: &RenderedTableCell, width: u16) -> Text<'static> {
+    let width = usize::from(width);
+    if width == 0 {
+        return Text::default();
+    }
+
+    let base_style = cell.style.to_ratatui_style();
+    let mut wrapped = Vec::new();
+    for source_line in &cell.content.lines {
+        let mut spans = Vec::new();
+        let mut line_width = 0usize;
+        for grapheme in source_line.styled_graphemes(base_style) {
+            let grapheme_width = UnicodeWidthStr::width(grapheme.symbol);
+            if grapheme_width > width {
+                if !spans.is_empty() {
+                    wrapped.push(Line::from(std::mem::take(&mut spans)));
+                    line_width = 0;
+                }
+                continue;
+            }
+            if line_width.saturating_add(grapheme_width) > width && !spans.is_empty() {
+                wrapped.push(Line::from(std::mem::take(&mut spans)));
+                line_width = 0;
+            }
+            spans.push(Span::styled(grapheme.symbol.to_owned(), grapheme.style));
+            line_width = line_width.saturating_add(grapheme_width);
+        }
+        wrapped.push(Line::from(spans));
+    }
+
+    if wrapped.is_empty() {
+        wrapped.push(Line::default());
+    }
+
+    Text::from(wrapped)
+}
+
+/// Creates one horizontal border line for a responsive table.
+///
+/// # Arguments
+///
+/// * `widths` — Visible content widths between border intersections.
+/// * `position` — Whether the line is the top, middle, or bottom boundary.
+///
+/// # Returns
+///
+/// A [`String`] containing plain Unicode terminal border glyphs.
+fn table_border_line(widths: &[u16], position: TableBorderPosition) -> String {
+    let (left, intersection, right) = match position {
+        TableBorderPosition::Top => ('┌', '┬', '┐'),
+        TableBorderPosition::Middle => ('├', '┼', '┤'),
+        TableBorderPosition::Bottom => ('└', '┴', '┘'),
+    };
+    let mut line = String::from(left);
+    for (index, width) in widths.iter().enumerate() {
+        line.push_str(&"─".repeat(usize::from(*width)));
+        line.push(if index + 1 == widths.len() {
+            right
+        } else {
+            intersection
+        });
+    }
+
+    line
+}
+
+/// Creates a vertical table border spanning a row's rendered height.
+///
+/// # Arguments
+///
+/// * `height` — Number of terminal rows to fill.
+///
+/// # Returns
+///
+/// A [`Text`] value containing one vertical border glyph per line.
+fn table_vertical_border(height: u16) -> Text<'static> {
+    Text::from(vec![Line::raw("│"); usize::from(height)])
+}
+
+/// Position of a horizontal table border within the rendered grid.
+#[derive(Clone, Copy)]
+enum TableBorderPosition {
+    /// First boundary above all rows.
+    Top,
+    /// Shared boundary between two rows.
+    Middle,
+    /// Final boundary below all rows.
+    Bottom,
+}
+
+/// Converts public table-cell alignment into Ratatui paragraph alignment.
+///
+/// # Arguments
+///
+/// * `alignment` — Public cell alignment value.
+///
+/// # Returns
+///
+/// The corresponding Ratatui [`Alignment`] value.
+fn ratatui_cell_alignment(alignment: CellAlignment) -> Alignment {
+    match alignment {
+        CellAlignment::Left => Alignment::Left,
+        CellAlignment::Center => Alignment::Center,
+        CellAlignment::Right => Alignment::Right,
+    }
+}
+
+/// Renders a semantic table with responsive columns and variable-height rows.
+///
+/// # Arguments
+///
+/// * `sections` — Header and body sections to render.
+/// * `metadata` — Selector metadata for the table container.
+/// * `ctx` — Rendering context containing the available viewport.
+///
+/// # Returns
+///
+/// An empty [`Result`] on success.
+fn render_table_view(
+    sections: &[View],
+    metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Result<()> {
+    let table_style = resolve_style(metadata, ctx);
+    let area = ctx.area();
+    let rows = ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        table_style.inherited_values(),
+        metadata.clone(),
+        |ctx| collect_table_rows(sections, ctx),
+    );
+    let widths = table_column_widths(&rows, area.width);
+    if widths.is_empty() || rows.is_empty() || area.height == 0 {
+        return Ok(());
+    }
+
+    let table_width = widths
+        .iter()
+        .copied()
+        .fold(
+            u16::try_from(widths.len().saturating_add(1)).unwrap_or(u16::MAX),
+            u16::saturating_add,
+        )
+        .min(area.width);
+    let table_area = Rect {
+        width: table_width,
+        ..area
+    };
+    let border_style = table_style.to_ratatui_style();
+    let mut y = table_area.y;
+    let bottom = table_area.y.saturating_add(table_area.height);
+    ctx.with_area(
+        Rect {
+            height: 1,
+            ..table_area
+        },
+        |ctx| {
+            ctx.render_widget(
+                Paragraph::new(table_border_line(&widths, TableBorderPosition::Top))
+                    .style(border_style),
+            );
+        },
+    );
+    y = y.saturating_add(1);
+
+    for (row_index, row) in rows.iter().enumerate() {
+        if y >= bottom {
+            break;
+        }
+        let requested_height = table_row_height(row, &widths);
+        let rendered_height = requested_height.min(bottom.saturating_sub(y));
+        let mut x = table_area.x;
+        ctx.with_area(
+            Rect {
+                x,
+                y,
+                width: 1,
+                height: rendered_height,
+            },
+            |ctx| {
+                ctx.render_widget(
+                    Paragraph::new(table_vertical_border(rendered_height)).style(border_style),
+                );
+            },
+        );
+        x = x.saturating_add(1);
+
+        for (column, width) in widths.iter().copied().enumerate() {
+            if let Some(cell) = row.cells.get(column) {
+                let cell_area = Rect {
+                    x,
+                    y,
+                    width,
+                    height: rendered_height,
+                };
+                ctx.with_area(cell_area, |ctx| {
+                    ctx.render_widget(
+                        Paragraph::new(wrapped_table_cell_text(cell, width))
+                            .style(cell.style.to_ratatui_style())
+                            .alignment(ratatui_cell_alignment(cell.alignment)),
+                    );
+                });
+            }
+            x = x.saturating_add(width);
+            ctx.with_area(
+                Rect {
+                    x,
+                    y,
+                    width: 1,
+                    height: rendered_height,
+                },
+                |ctx| {
+                    ctx.render_widget(
+                        Paragraph::new(table_vertical_border(rendered_height)).style(border_style),
+                    );
+                },
+            );
+            x = x.saturating_add(1);
+        }
+        y = y.saturating_add(rendered_height);
+        if rendered_height < requested_height || y >= bottom {
+            break;
+        }
+
+        let position = if row_index + 1 == rows.len() {
+            TableBorderPosition::Bottom
+        } else {
+            TableBorderPosition::Middle
+        };
+        ctx.with_area(
+            Rect {
+                y,
+                height: 1,
+                ..table_area
+            },
+            |ctx| {
+                ctx.render_widget(
+                    Paragraph::new(table_border_line(&widths, position)).style(border_style),
+                );
+            },
+        );
+        y = y.saturating_add(1);
+    }
+
+    Ok(())
+}
+
+/// Returns the intrinsic height of a semantic table.
+///
+/// # Arguments
+///
+/// * `sections` — Header and body sections to measure.
+/// * `metadata` — Selector metadata for the table container.
+/// * `ctx` — Rendering context containing the available width.
+///
+/// # Returns
+///
+/// A [`u16`] height including horizontal row boundaries.
+fn min_height_for_table_view(
+    sections: &[View],
+    metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> u16 {
+    let table_style = resolve_style(metadata, ctx);
+    let area = ctx.area();
+    let rows = ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        table_style.inherited_values(),
+        metadata.clone(),
+        |ctx| collect_table_rows(sections, ctx),
+    );
+    let widths = table_column_widths(&rows, area.width);
+    if widths.is_empty() || rows.is_empty() {
+        return 0;
+    }
+
+    rows.iter().map(|row| table_row_height(row, &widths)).fold(
+        u16::try_from(rows.len().saturating_add(1)).unwrap_or(u16::MAX),
+        u16::saturating_add,
     )
 }
 
@@ -5103,6 +5696,11 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         View::ListItem { children, metadata } => {
             min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
         }
+        View::Table { sections, metadata } => min_height_for_table_view(sections, metadata, ctx),
+        View::TableHead { .. }
+        | View::TableBody { .. }
+        | View::TableRow { .. }
+        | View::TableCell { .. } => 0,
         View::Dynamic(child) => child.with_view(|child| min_height_for_view(child, ctx)),
         View::Button { metadata, .. } => {
             let style = resolve_style(metadata, ctx);

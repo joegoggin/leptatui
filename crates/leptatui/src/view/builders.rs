@@ -10,7 +10,7 @@ use crate::component::Component;
 use super::{
     component_view::ComponentView,
     metadata::{EditableState, StyleMetadata, ViewType},
-    model::{ImageSource, View, clamped_progress_value},
+    model::{CellAlignment, ImageSource, View, clamped_progress_value},
 };
 
 /// Creates a bordered block around a child view.
@@ -203,6 +203,88 @@ pub fn list_item(children: impl IntoIterator<Item = View>) -> View {
     View::ListItem {
         children: children.into_iter().collect(),
         metadata: StyleMetadata::new(ViewType::ListItem),
+    }
+}
+
+/// Creates a semantic table from header and body sections.
+///
+/// # Arguments
+///
+/// * `sections` — Table-head and table-body views rendered in source order.
+///
+/// # Returns
+///
+/// A [`View::Table`] containing the provided sections.
+pub fn table(sections: impl IntoIterator<Item = View>) -> View {
+    View::Table {
+        sections: sections.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::Table),
+    }
+}
+
+/// Creates a semantic table header.
+///
+/// # Arguments
+///
+/// * `rows` — Table-row views rendered with the header's bold default style.
+///
+/// # Returns
+///
+/// A [`View::TableHead`] containing the provided rows.
+pub fn table_head(rows: impl IntoIterator<Item = View>) -> View {
+    View::TableHead {
+        rows: rows.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::TableHead),
+    }
+}
+
+/// Creates a semantic table body.
+///
+/// # Arguments
+///
+/// * `rows` — Table-row views rendered in source order.
+///
+/// # Returns
+///
+/// A [`View::TableBody`] containing the provided rows.
+pub fn table_body(rows: impl IntoIterator<Item = View>) -> View {
+    View::TableBody {
+        rows: rows.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::TableBody),
+    }
+}
+
+/// Creates a semantic table row.
+///
+/// # Arguments
+///
+/// * `cells` — Table-cell views rendered in column order.
+///
+/// # Returns
+///
+/// A [`View::TableRow`] containing the provided cells.
+pub fn table_row(cells: impl IntoIterator<Item = View>) -> View {
+    View::TableRow {
+        cells: cells.into_iter().collect(),
+        metadata: StyleMetadata::new(ViewType::TableRow),
+    }
+}
+
+/// Creates a semantic table cell with left-aligned rich text.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content rendered inside the cell.
+///
+/// # Returns
+///
+/// A [`View::TableCell`] containing the provided content and default
+/// [`CellAlignment::Left`] alignment.
+pub fn table_cell(content: impl Into<Text<'static>>) -> View {
+    View::TableCell {
+        content: content.into(),
+        alignment: CellAlignment::Left,
+        metadata: StyleMetadata::new(ViewType::TableCell),
     }
 }
 

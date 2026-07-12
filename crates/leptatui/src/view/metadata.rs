@@ -34,6 +34,16 @@ pub enum ViewType {
     UnorderedList,
     /// Semantic list-item view.
     ListItem,
+    /// Semantic table view.
+    Table,
+    /// Semantic table-head view.
+    TableHead,
+    /// Semantic table-body view.
+    TableBody,
+    /// Semantic table-row view.
+    TableRow,
+    /// Semantic table-cell view.
+    TableCell,
     /// Horizontal layout view.
     Row,
     /// Vertical layout view.
@@ -62,7 +72,7 @@ impl ViewType {
     pub(crate) fn default_style(self) -> TuiStyle {
         match self {
             Self::H1 => TuiStyle::new().modifier(Modifier::BOLD | Modifier::UNDERLINED),
-            Self::H2 => TuiStyle::new().modifier(Modifier::BOLD),
+            Self::H2 | Self::TableHead => TuiStyle::new().modifier(Modifier::BOLD),
             Self::H3 => TuiStyle::new().modifier(Modifier::BOLD | Modifier::ITALIC),
             Self::H4 => TuiStyle::new().modifier(Modifier::UNDERLINED),
             Self::H5 => TuiStyle::new().modifier(Modifier::ITALIC),
@@ -71,6 +81,10 @@ impl ViewType {
             | Self::OrderedList
             | Self::UnorderedList
             | Self::ListItem
+            | Self::Table
+            | Self::TableBody
+            | Self::TableRow
+            | Self::TableCell
             | Self::Block
             | Self::Text
             | Self::Row

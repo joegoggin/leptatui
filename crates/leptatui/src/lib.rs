@@ -54,7 +54,8 @@
 //! Semantic headings are available through [`h1`] through [`h6`], and
 //! [`paragraph`] creates unmodified body text. [`ordered_list`] and
 //! [`unordered_list`] group block-oriented [`list_item`] values with terminal
-//! markers. These semantic views accept
+//! markers. [`table`] groups semantic table sections, rows, and aligned cells
+//! into a bordered responsive grid. These semantic views accept
 //! owned Ratatui rich text, wrap to the available width, and contribute their
 //! wrapped height to parent layouts.
 //!
@@ -103,10 +104,10 @@ pub use style::{
     TuiSize, TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
-    ButtonAction, EditableState, FormAction, ImageSource, InputAction, StyleMetadata, View,
-    ViewType, VimMode, block, button, column, component, dynamic, form, h1, h2, h3, h4, h5, h6,
-    image, input, list_item, ordered_list, paragraph, progress_bar, row, text, text_area,
-    unordered_list,
+    ButtonAction, CellAlignment, EditableState, FormAction, ImageSource, InputAction,
+    StyleMetadata, View, ViewType, VimMode, block, button, column, component, dynamic, form, h1,
+    h2, h3, h4, h5, h6, image, input, list_item, ordered_list, paragraph, progress_bar, row, table,
+    table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
 };
 
 #[doc(hidden)]
@@ -223,6 +224,52 @@ pub mod __private {
             ) => {
                 for (next_item, previous_item) in next_items.iter_mut().zip(previous_items.iter()) {
                     __reconcile_view(next_item, previous_item);
+                }
+            }
+            (
+                View::Table {
+                    sections: next_children,
+                    ..
+                },
+                View::Table {
+                    sections: previous_children,
+                    ..
+                },
+            )
+            | (
+                View::TableHead {
+                    rows: next_children,
+                    ..
+                },
+                View::TableHead {
+                    rows: previous_children,
+                    ..
+                },
+            )
+            | (
+                View::TableBody {
+                    rows: next_children,
+                    ..
+                },
+                View::TableBody {
+                    rows: previous_children,
+                    ..
+                },
+            )
+            | (
+                View::TableRow {
+                    cells: next_children,
+                    ..
+                },
+                View::TableRow {
+                    cells: previous_children,
+                    ..
+                },
+            ) => {
+                for (next_child, previous_child) in
+                    next_children.iter_mut().zip(previous_children.iter())
+                {
+                    __reconcile_view(next_child, previous_child);
                 }
             }
             (

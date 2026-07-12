@@ -1407,6 +1407,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "trybuild",
+ "unicode-width",
 ]
 
 [[package]]

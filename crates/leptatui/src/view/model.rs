@@ -14,6 +14,18 @@ use super::{
 };
 use crate::app::AppControl;
 
+/// Horizontal alignment applied to wrapped table-cell content.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CellAlignment {
+    /// Aligns cell content to the left edge.
+    #[default]
+    Left,
+    /// Centers cell content within the allocated column width.
+    Center,
+    /// Aligns cell content to the right edge.
+    Right,
+}
+
 /// Shared callback invoked when a button is activated.
 pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
 
@@ -173,6 +185,43 @@ pub enum View {
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
+    /// Semantic table containing header and body sections.
+    Table {
+        /// Table-section views rendered in source order.
+        sections: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic table header containing rows.
+    TableHead {
+        /// Header-row views rendered in source order.
+        rows: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic table body containing rows.
+    TableBody {
+        /// Body-row views rendered in source order.
+        rows: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic table row containing cells.
+    TableRow {
+        /// Cell views rendered in column order.
+        cells: Vec<View>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Semantic rich-text table cell.
+    TableCell {
+        /// Rich text content rendered inside the cell.
+        content: Text<'static>,
+        /// Horizontal alignment for each wrapped content line.
+        alignment: CellAlignment,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
     /// Horizontally arranged children.
     Row {
         /// Child views divided across the row.
@@ -278,6 +327,11 @@ impl View {
             | Self::OrderedList { metadata, .. }
             | Self::UnorderedList { metadata, .. }
             | Self::ListItem { metadata, .. }
+            | Self::Table { metadata, .. }
+            | Self::TableHead { metadata, .. }
+            | Self::TableBody { metadata, .. }
+            | Self::TableRow { metadata, .. }
+            | Self::TableCell { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -310,6 +364,11 @@ impl View {
             | Self::OrderedList { metadata, .. }
             | Self::UnorderedList { metadata, .. }
             | Self::ListItem { metadata, .. }
+            | Self::Table { metadata, .. }
+            | Self::TableHead { metadata, .. }
+            | Self::TableBody { metadata, .. }
+            | Self::TableRow { metadata, .. }
+            | Self::TableCell { metadata, .. }
             | Self::Row { metadata, .. }
             | Self::Column { metadata, .. }
             | Self::Form { metadata, .. }
@@ -405,6 +464,27 @@ impl View {
     pub fn start(mut self, start: usize) -> Self {
         if let Self::OrderedList { start: current, .. } = &mut self {
             *current = start;
+        }
+
+        self
+    }
+
+    /// Sets the horizontal alignment on a table-cell view.
+    ///
+    /// # Arguments
+    ///
+    /// * `alignment` — Alignment applied to every wrapped content line.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the provided alignment when the view is a table
+    /// cell.
+    pub fn alignment(mut self, alignment: CellAlignment) -> Self {
+        if let Self::TableCell {
+            alignment: current, ..
+        } = &mut self
+        {
+            *current = alignment;
         }
 
         self
@@ -625,6 +705,36 @@ impl fmt::Debug for View {
                 .field("children", children)
                 .field("metadata", metadata)
                 .finish(),
+            Self::Table { sections, metadata } => f
+                .debug_struct("Table")
+                .field("sections", sections)
+                .field("metadata", metadata)
+                .finish(),
+            Self::TableHead { rows, metadata } => f
+                .debug_struct("TableHead")
+                .field("rows", rows)
+                .field("metadata", metadata)
+                .finish(),
+            Self::TableBody { rows, metadata } => f
+                .debug_struct("TableBody")
+                .field("rows", rows)
+                .field("metadata", metadata)
+                .finish(),
+            Self::TableRow { cells, metadata } => f
+                .debug_struct("TableRow")
+                .field("cells", cells)
+                .field("metadata", metadata)
+                .finish(),
+            Self::TableCell {
+                content,
+                alignment,
+                metadata,
+            } => f
+                .debug_struct("TableCell")
+                .field("content", content)
+                .field("alignment", alignment)
+                .field("metadata", metadata)
+                .finish(),
             Self::Row { children, metadata } => f
                 .debug_struct("Row")
                 .field("children", children)
@@ -797,6 +907,62 @@ impl PartialEq for View {
                     metadata: right_metadata,
                 },
             ) => left_children == right_children && left_metadata == right_metadata,
+            (
+                Self::Table {
+                    sections: left_sections,
+                    metadata: left_metadata,
+                },
+                Self::Table {
+                    sections: right_sections,
+                    metadata: right_metadata,
+                },
+            ) => left_sections == right_sections && left_metadata == right_metadata,
+            (
+                Self::TableHead {
+                    rows: left_rows,
+                    metadata: left_metadata,
+                },
+                Self::TableHead {
+                    rows: right_rows,
+                    metadata: right_metadata,
+                },
+            )
+            | (
+                Self::TableBody {
+                    rows: left_rows,
+                    metadata: left_metadata,
+                },
+                Self::TableBody {
+                    rows: right_rows,
+                    metadata: right_metadata,
+                },
+            ) => left_rows == right_rows && left_metadata == right_metadata,
+            (
+                Self::TableRow {
+                    cells: left_cells,
+                    metadata: left_metadata,
+                },
+                Self::TableRow {
+                    cells: right_cells,
+                    metadata: right_metadata,
+                },
+            ) => left_cells == right_cells && left_metadata == right_metadata,
+            (
+                Self::TableCell {
+                    content: left_content,
+                    alignment: left_alignment,
+                    metadata: left_metadata,
+                },
+                Self::TableCell {
+                    content: right_content,
+                    alignment: right_alignment,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_content == right_content
+                    && left_alignment == right_alignment
+                    && left_metadata == right_metadata
+            }
             (
                 Self::H1 {
                     content: left_content,

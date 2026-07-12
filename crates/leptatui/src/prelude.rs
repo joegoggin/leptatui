@@ -23,21 +23,22 @@
 //! }
 //! ```
 //!
-//! Semantic document builders include headings, paragraphs, and nested ordered
-//! or unordered lists composed from list items. Low-level render metadata and
+//! Semantic document builders include headings, paragraphs, nested ordered or
+//! unordered lists, and responsive tables. Low-level render metadata and
 //! generated-code hooks stay outside the default import.
 
 pub use crate::{
-    Action, ActionState, App, AppControl, AppRoot, BorderType, Borders, Children, ChildrenFn,
-    ChildrenMut, Color, Component, Error, FormAction, ImageSource, InputAction, KeyControl,
-    LayoutDirection, MediaQuery, Modifier, RenderCtx, Resource, ResourceState, Result, RouteState,
-    StyleDeclarations, StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue,
-    ThemeVariables, TuiSize, TuiSpacing, TuiStyle, View, ViewType, ViewportSize, block, button,
-    column,
+    Action, ActionState, App, AppControl, AppRoot, BorderType, Borders, CellAlignment, Children,
+    ChildrenFn, ChildrenMut, Color, Component, Error, FormAction, ImageSource, InputAction,
+    KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Resource, ResourceState, Result,
+    RouteState, StyleDeclarations, StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet,
+    ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, View, ViewType, ViewportSize, block,
+    button, column,
     context::{expect_context, provide_context, use_context},
     create_action, create_resource, form, h1, h2, h3, h4, h5, h6, image, input, list_item,
-    ordered_list, paragraph, progress_bar, provide_route, row, text, text_area, theme_color,
-    unordered_list, use_key_event, use_navigate, use_route,
+    ordered_list, paragraph, progress_bar, provide_route, row, table, table_body, table_cell,
+    table_head, table_row, text, text_area, theme_color, unordered_list, use_key_event,
+    use_navigate, use_route,
     view::{component, dynamic},
 };
 

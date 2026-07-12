@@ -92,6 +92,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 ///     h1("Guide"),
 ///     paragraph("Overview"),
 ///     ordered_list([list_item([paragraph("First")])]),
+///     table([table_body([table_row([table_cell("Ready")])])]),
 ///     form([input("Ada"), text_area("Notes")]),
 ///     image("logo.png"),
 ///     progress_bar(0.5),
@@ -159,6 +160,13 @@ fn prelude_exposes_reactivity_and_context() {
             ])
             .start(3),
             unordered_list([list_item([paragraph("Nested")])]),
+            table([
+                table_head([table_row([table_cell("Name"), table_cell("Status")])]),
+                table_body([table_row([
+                    table_cell("Parser"),
+                    table_cell("Ready").alignment(CellAlignment::Right),
+                ])]),
+            ]),
             form_view,
             image(image_source).alt("Project logo"),
             progress_bar(0.5).label("Half"),
