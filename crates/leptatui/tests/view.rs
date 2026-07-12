@@ -15,10 +15,10 @@ use leptatui::{
     __private::FocusedControl,
     AppControl, AppRoot, Borders, CellAlignment, Color, Component, EditableState, ImageSource,
     KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations,
-    StyleMetadata, StyleSelector, Stylesheet, TuiSize, TuiStyle, View, ViewType, VimMode, block,
-    button, column, component, dynamic, form, h1, h2, h3, h4, h5, h6, image, input, list_item,
-    ordered_list, paragraph, progress_bar, row, table, table_body, table_cell, table_head,
-    table_row, text, text_area, unordered_list,
+    StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme, TuiSize, TuiStyle, View, ViewType,
+    VimMode, block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4, h5, h6,
+    image, input, list_item, ordered_list, paragraph, progress_bar, row, table, table_body,
+    table_cell, table_head, table_row, text, text_area, unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{
@@ -72,6 +72,7 @@ fn button_focuses(view: &View) -> Vec<bool> {
         | View::H5 { .. }
         | View::H6 { .. }
         | View::Paragraph { .. }
+        | View::CodeBlock { .. }
         | View::Table { .. }
         | View::TableHead { .. }
         | View::TableBody { .. }
@@ -119,6 +120,7 @@ fn control_focuses(view: &View) -> Vec<bool> {
         | View::H5 { .. }
         | View::H6 { .. }
         | View::Paragraph { .. }
+        | View::CodeBlock { .. }
         | View::Table { .. }
         | View::TableHead { .. }
         | View::TableBody { .. }
@@ -1154,6 +1156,278 @@ fn semantic_table_builders_store_structure_content_and_alignment() {
         panic!("expected table-body view");
     };
     assert_eq!(metadata.view_type(), ViewType::TableBody);
+}
+
+/// Verifies code-block builders retain source, highlighting, and display options.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("fn main() {}")
+///     .language("rs")
+///     .line_numbers(true)
+///     .syntax_theme(SyntaxTheme::Light)
+/// ```
+///
+/// # Assertions
+///
+/// - Code blocks default to the dark theme with line numbers disabled.
+/// - The configured language token and light theme are retained.
+/// - The `rs` alias selects syntax highlighting instead of plain source spans.
+/// - Code-block metadata uses [`ViewType::CodeBlock`].
+#[test]
+fn code_block_builder_retains_highlighted_lines_and_options() {
+    let default = code_block("fn main() {}");
+    let View::CodeBlock {
+        line_numbers,
+        syntax_theme,
+        ..
+    } = default
+    else {
+        panic!("expected code-block view");
+    };
+    assert!(!line_numbers);
+    assert_eq!(syntax_theme, SyntaxTheme::Dark);
+
+    let configured = code_block("fn main() {}")
+        .language("rs")
+        .line_numbers(true)
+        .syntax_theme(SyntaxTheme::Light);
+    let View::CodeBlock {
+        source,
+        language,
+        line_numbers,
+        syntax_theme,
+        highlighted_lines,
+        metadata,
+    } = configured
+    else {
+        panic!("expected configured code-block view");
+    };
+    assert_eq!(source, "fn main() {}");
+    assert_eq!(language.as_deref(), Some("rs"));
+    assert!(line_numbers);
+    assert_eq!(syntax_theme, SyntaxTheme::Light);
+    assert!(
+        highlighted_lines[0]
+            .spans
+            .iter()
+            .any(|span| span.style.fg.is_some())
+    );
+    assert_eq!(metadata.view_type(), ViewType::CodeBlock);
+}
+
+/// Verifies aliases share highlighting and unknown languages fall back to plain source.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("let value = 1;").language("rust")
+/// code_block("let value = 1;").language("rs")
+/// code_block("let value = 1;").language("not-a-language")
+/// ```
+///
+/// # Assertions
+///
+/// - `rust` and `rs` produce the same retained syntax spans.
+/// - An unknown token retains one unstyled span containing the complete source.
+#[test]
+fn code_block_recognizes_aliases_and_falls_back_for_unknown_languages() {
+    let rust = code_block("let value = 1;").language("rust");
+    let alias = code_block("let value = 1;").language("rs");
+    let unknown = code_block("let value = 1;").language("not-a-language");
+
+    let View::CodeBlock {
+        highlighted_lines: rust_lines,
+        ..
+    } = rust
+    else {
+        panic!("expected Rust code block");
+    };
+    let View::CodeBlock {
+        highlighted_lines: alias_lines,
+        ..
+    } = alias
+    else {
+        panic!("expected alias code block");
+    };
+    let View::CodeBlock {
+        highlighted_lines: unknown_lines,
+        ..
+    } = unknown
+    else {
+        panic!("expected fallback code block");
+    };
+
+    assert_eq!(rust_lines, alias_lines);
+    assert_eq!(unknown_lines.len(), 1);
+    assert_eq!(unknown_lines[0].spans.len(), 1);
+    assert_eq!(unknown_lines[0].spans[0].content, "let value = 1;");
+    assert_eq!(unknown_lines[0].spans[0].style, Style::default());
+}
+
+/// Verifies code-block themes produce distinct syntax colors.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("fn main() {}").language("rust")
+/// code_block("fn main() {}").language("rust").syntax_theme(SyntaxTheme::Light)
+/// ```
+///
+/// # Assertions
+///
+/// - Both themes retain highlighted spans.
+/// - At least one corresponding syntax span has a different foreground or background color.
+#[test]
+fn code_block_dark_and_light_themes_produce_distinct_colors() {
+    let dark = code_block("fn main() {}\nlet value = true;").language("rust");
+    let light = dark.clone().syntax_theme(SyntaxTheme::Light);
+    let View::CodeBlock {
+        highlighted_lines: dark_lines,
+        ..
+    } = dark
+    else {
+        panic!("expected dark code block");
+    };
+    let View::CodeBlock {
+        highlighted_lines: light_lines,
+        ..
+    } = light
+    else {
+        panic!("expected light code block");
+    };
+
+    assert!(dark_lines.iter().any(|line| !line.spans.is_empty()));
+    assert!(light_lines.iter().any(|line| !line.spans.is_empty()));
+    assert!(dark_lines
+        .iter()
+        .flat_map(|line| &line.spans)
+        .zip(light_lines.iter().flat_map(|line| &line.spans))
+        .any(|(dark, light)| dark.style.fg != light.style.fg || dark.style.bg != light.style.bg));
+}
+
+/// Verifies language titles and logical-line gutters render inside the border.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("one\ntwo").language("txt").line_numbers(true)
+/// terminal size = 12x4
+/// ```
+///
+/// # Assertions
+///
+/// - The language token appears in the top border title.
+/// - One-based numbers and the rule separator render on both logical lines.
+/// - Source content begins after the gutter.
+#[test]
+fn code_block_renders_language_title_and_line_number_gutter() -> Result<()> {
+    let view = code_block("one\ntwo").language("txt").line_numbers(true);
+    let mut terminal = Terminal::new(TestBackend::new(12, 4))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 1, 0, 12), "t");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 12), "1");
+    assert_eq!(cell_symbol(&terminal, 3, 1, 12), "│");
+    assert_eq!(cell_symbol(&terminal, 5, 1, 12), "o");
+    assert_eq!(cell_symbol(&terminal, 1, 2, 12), "2");
+    assert_eq!(cell_symbol(&terminal, 5, 2, 12), "t");
+
+    Ok(())
+}
+
+/// Verifies wrapped code preserves syntax styles and reserves document height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([code_block("let value = true;").language("rust"), text("End")])
+/// terminal width = 10
+/// ```
+///
+/// # Assertions
+///
+/// - The code block reports its wrapped content height plus both borders.
+/// - Syntax-colored source continues onto later visual rows.
+/// - The following document child begins after the code block's bottom border.
+#[test]
+fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_height() -> Result<()> {
+    let code = code_block("let value = true;").language("rust");
+    let mut measured = Terminal::new(TestBackend::new(10, 8))?;
+    let mut code_height = 0;
+    measured.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        code_height = code.__min_height(&mut ctx);
+    })?;
+    assert_eq!(code_height, 5);
+
+    let document = column([code, text("End")]);
+    let mut terminal = Terminal::new(TestBackend::new(10, 6))?;
+    draw_view(&mut terminal, &document)?;
+
+    assert!(symbol_position(&terminal, "=", 10).1 >= 1);
+    assert_eq!(symbol_position(&terminal, "E", 10), (0, 5));
+    assert_eq!(cell_symbol(&terminal, 0, 4, 10), "└");
+
+    Ok(())
+}
+
+/// Verifies empty, Unicode, narrow, and clipped code blocks render safely.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("")
+/// code_block("界界A") at width 5
+/// code_block("abcdef") at widths 0 through 2 and height 2
+/// ```
+///
+/// # Assertions
+///
+/// - Empty source contributes one content row between borders.
+/// - Double-width Unicode wraps only at grapheme boundaries.
+/// - Zero and extremely narrow widths do not panic during measurement or rendering.
+/// - A two-row viewport clips the bottom border without failing.
+#[test]
+fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()> {
+    let empty = code_block("");
+    let mut empty_terminal = Terminal::new(TestBackend::new(4, 3))?;
+    let mut empty_height = 0;
+    empty_terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        empty_height = empty.__min_height(&mut ctx);
+    })?;
+    assert_eq!(empty_height, 3);
+
+    let unicode = code_block("界界A");
+    let mut unicode_terminal = Terminal::new(TestBackend::new(5, 4))?;
+    draw_view(&mut unicode_terminal, &unicode)?;
+    assert_eq!(cell_symbol(&unicode_terminal, 1, 1, 5), "界");
+    assert_eq!(cell_symbol(&unicode_terminal, 1, 2, 5), "界");
+    assert_eq!(cell_symbol(&unicode_terminal, 3, 2, 5), "A");
+
+    for width in 0..=2 {
+        let view = code_block("abcdef");
+        let mut terminal = Terminal::new(TestBackend::new(width, 2))?;
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            let _ = view.__min_height(&mut ctx);
+            render_result = view.render(&mut ctx);
+        })?;
+        render_result?;
+    }
+
+    let clipped = code_block("abcdef");
+    let mut clipped_terminal = Terminal::new(TestBackend::new(6, 2))?;
+    draw_view(&mut clipped_terminal, &clipped)?;
+    assert_eq!(cell_symbol(&clipped_terminal, 0, 0, 6), "┌");
+    assert_eq!(cell_symbol(&clipped_terminal, 0, 1, 6), "│");
+    assert!(symbol_position_opt(&clipped_terminal, "└", 6).is_none());
+
+    Ok(())
 }
 
 /// Verifies table headers, borders, and cell alignments render semantically.

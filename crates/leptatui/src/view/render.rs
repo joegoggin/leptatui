@@ -105,6 +105,161 @@ fn semantic_paragraph(content: &Text<'static>, style: TuiStyle) -> Paragraph<'st
         .wrap(Wrap { trim: false })
 }
 
+/// Wraps retained code lines for the available inner width.
+///
+/// Syntax spans are split only at grapheme boundaries. When line numbers are
+/// enabled, each logical line begins with a right-aligned `number │ ` gutter
+/// and continuation rows receive an equally wide blank gutter.
+///
+/// # Arguments
+///
+/// * `lines` — Retained highlighted logical source lines.
+/// * `line_numbers` — Whether the logical-line gutter is enabled.
+/// * `width` — Available terminal-cell width inside the code-block border.
+/// * `style` — Resolved code-block style inherited by unstyled content.
+///
+/// # Returns
+///
+/// A Ratatui [`Text`] containing width-aware visual rows.
+fn wrapped_code_text(
+    lines: &[Line<'static>],
+    line_numbers: bool,
+    width: u16,
+    style: TuiStyle,
+) -> Text<'static> {
+    let digits = lines.len().max(1).to_string().len();
+    let gutter_width = if line_numbers {
+        u16::try_from(digits.saturating_add(3)).unwrap_or(u16::MAX)
+    } else {
+        0
+    };
+    let code_width = width.saturating_sub(gutter_width);
+    let base_style = style.to_ratatui_style();
+    let mut visual_lines = Vec::new();
+
+    for (index, line) in lines.iter().enumerate() {
+        let wrapped = wrap_code_line(line, code_width, base_style);
+        for (visual_index, wrapped_line) in wrapped.into_iter().enumerate() {
+            if line_numbers {
+                let gutter = if visual_index == 0 {
+                    format!("{:>digits$} │ ", index.saturating_add(1))
+                } else {
+                    " ".repeat(digits.saturating_add(3))
+                };
+                let mut spans = vec![Span::styled(gutter, base_style)];
+                spans.extend(wrapped_line.spans);
+                visual_lines.push(Line::from(spans));
+            } else {
+                visual_lines.push(wrapped_line);
+            }
+        }
+    }
+
+    Text::from(visual_lines)
+}
+
+/// Wraps one highlighted logical code line at grapheme boundaries.
+///
+/// # Arguments
+///
+/// * `line` — Highlighted logical line to wrap.
+/// * `width` — Available code-content width excluding the gutter.
+/// * `base_style` — Resolved style inherited beneath syntax spans.
+///
+/// # Returns
+///
+/// A non-empty [`Vec`] of visual [`Line`] values.
+fn wrap_code_line(
+    line: &Line<'static>,
+    width: u16,
+    base_style: ratatui::style::Style,
+) -> Vec<Line<'static>> {
+    let width = usize::from(width);
+    if width == 0 {
+        return vec![Line::default()];
+    }
+
+    let mut wrapped = Vec::new();
+    let mut spans = Vec::new();
+    let mut line_width = 0usize;
+    for grapheme in line.styled_graphemes(base_style) {
+        let grapheme_width = UnicodeWidthStr::width(grapheme.symbol);
+        if grapheme_width > width {
+            if !spans.is_empty() {
+                wrapped.push(Line::from(std::mem::take(&mut spans)));
+                line_width = 0;
+            }
+            continue;
+        }
+        if line_width.saturating_add(grapheme_width) > width && !spans.is_empty() {
+            wrapped.push(Line::from(std::mem::take(&mut spans)));
+            line_width = 0;
+        }
+        spans.push(Span::styled(grapheme.symbol.to_owned(), grapheme.style));
+        line_width = line_width.saturating_add(grapheme_width);
+    }
+    wrapped.push(Line::from(spans));
+    wrapped
+}
+
+/// Renders a bordered syntax-highlighted code block.
+///
+/// # Arguments
+///
+/// * `language` — Optional caller-supplied token shown in the border title.
+/// * `line_numbers` — Whether the logical-line gutter is enabled.
+/// * `highlighted_lines` — Retained highlighted logical source lines.
+/// * `metadata` — Selector metadata used to resolve block styling.
+/// * `ctx` — Rendering context containing the target area.
+///
+/// # Returns
+///
+/// An empty [`Result`] on success.
+fn render_code_block_view(
+    language: Option<&str>,
+    line_numbers: bool,
+    highlighted_lines: &[Line<'static>],
+    metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Result<()> {
+    let style = resolve_style(metadata, ctx);
+    let area = ctx.area();
+    let provisional_block = style.to_block_with_default_borders(Borders::ALL);
+    let provisional_inner = provisional_block.inner(area);
+    let content = wrapped_code_text(
+        highlighted_lines,
+        line_numbers,
+        provisional_inner.width,
+        style,
+    );
+    let required_height = line_count_height(content.lines.len()).max(1)
+        + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
+        + vertical_padding_rows(style.padding);
+    let mut visible_style = style;
+    if area.height < required_height {
+        let mut borders = style.borders.unwrap_or(Borders::ALL);
+        borders.remove(Borders::BOTTOM);
+        visible_style.borders = Some(borders);
+    }
+    let block = visible_style.to_block_with_default_borders(Borders::ALL);
+    let block = if let Some(language) = language {
+        block.title(language.to_owned())
+    } else {
+        block
+    };
+    let inner = block.inner(area);
+    ctx.render_widget(block);
+    ctx.with_area_inherited_style_and_selector_ancestor(
+        inner,
+        style.inherited_values(),
+        metadata.clone(),
+        |ctx| {
+            ctx.render_widget(Paragraph::new(content).style(style.to_ratatui_style()));
+        },
+    );
+    Ok(())
+}
+
 /// Returns a paragraph configured for single-line editable control rendering.
 ///
 /// # Arguments
@@ -292,6 +447,19 @@ impl View {
                 ctx.render_widget(semantic_paragraph(content, style));
                 Ok(())
             }
+            Self::CodeBlock {
+                language,
+                line_numbers,
+                highlighted_lines,
+                metadata,
+                ..
+            } => render_code_block_view(
+                language.as_deref(),
+                *line_numbers,
+                highlighted_lines,
+                metadata,
+                ctx,
+            ),
             Self::OrderedList {
                 items,
                 start,
@@ -673,6 +841,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. } => None,
             Self::Image { .. }
             | Self::ProgressBar { .. }
@@ -823,6 +992,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -960,6 +1130,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1019,6 +1190,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1060,6 +1232,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1085,6 +1258,7 @@ impl View {
             | Self::H5 { metadata, .. }
             | Self::H6 { metadata, .. }
             | Self::Paragraph { metadata, .. }
+            | Self::CodeBlock { metadata, .. }
             | Self::OrderedList { metadata, .. }
             | Self::UnorderedList { metadata, .. }
             | Self::ListItem { metadata, .. }
@@ -1183,6 +1357,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1244,6 +1419,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1307,6 +1483,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1349,6 +1526,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Image { .. }
             | Self::Table { .. }
             | Self::TableHead { .. }
@@ -1432,6 +1610,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Image { .. }
             | Self::Table { .. }
             | Self::TableHead { .. }
@@ -1517,6 +1696,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Image { .. }
             | Self::Table { .. }
             | Self::TableHead { .. }
@@ -1564,6 +1744,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -1614,6 +1795,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
@@ -4302,6 +4484,7 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
         | View::H5 { .. }
         | View::H6 { .. }
         | View::Paragraph { .. }
+        | View::CodeBlock { .. }
         | View::Button { .. }
         | View::Input { .. }
         | View::TextArea { .. }
@@ -5684,6 +5867,27 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         | View::Paragraph { content, metadata } => {
             let style = resolve_style(metadata, ctx);
             line_count_height(semantic_paragraph(content, style).line_count(ctx.area().width))
+        }
+        View::CodeBlock {
+            line_numbers,
+            highlighted_lines,
+            metadata,
+            ..
+        } => {
+            let style = resolve_style(metadata, ctx);
+            let inner = style
+                .to_block_with_default_borders(Borders::ALL)
+                .inner(ctx.area());
+            let content_height = line_count_height(
+                wrapped_code_text(highlighted_lines, *line_numbers, inner.width, style)
+                    .lines
+                    .len(),
+            )
+            .max(1);
+
+            content_height
+                + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
+                + vertical_padding_rows(style.padding)
         }
         View::OrderedList {
             items,

@@ -93,6 +93,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 ///     paragraph("Overview"),
 ///     ordered_list([list_item([paragraph("First")])]),
 ///     table([table_body([table_row([table_cell("Ready")])])]),
+///     code_block("fn main() {}").language("rust"),
 ///     form([input("Ada"), text_area("Notes")]),
 ///     image("logo.png"),
 ///     progress_bar(0.5),
@@ -167,6 +168,10 @@ fn prelude_exposes_reactivity_and_context() {
                     table_cell("Ready").alignment(CellAlignment::Right),
                 ])]),
             ]),
+            code_block("fn main() {}")
+                .language("rust")
+                .line_numbers(true)
+                .syntax_theme(SyntaxTheme::Light),
             form_view,
             image(image_source).alt("Project logo"),
             progress_bar(0.5).label("Half"),

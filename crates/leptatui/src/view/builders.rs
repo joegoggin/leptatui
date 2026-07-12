@@ -8,6 +8,7 @@ use ratatui::text::Text;
 use crate::component::Component;
 
 use super::{
+    code_block::{SyntaxTheme, highlighted_source_lines},
     component_view::ComponentView,
     metadata::{EditableState, StyleMetadata, ViewType},
     model::{CellAlignment, ImageSource, View, clamped_progress_value},
@@ -154,6 +155,31 @@ pub fn paragraph(content: impl Into<Text<'static>>) -> View {
     View::Paragraph {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::Paragraph),
+    }
+}
+
+/// Creates a bordered syntax-highlighted code block.
+///
+/// The source is retained as logical lines. Supplying a recognized language
+/// later through [`View::language`] highlights those lines once rather than on
+/// every render frame.
+///
+/// # Arguments
+///
+/// * `source` — Source code displayed inside the block.
+///
+/// # Returns
+///
+/// A [`View::CodeBlock`] using the dark theme with line numbers disabled.
+pub fn code_block(source: impl Into<String>) -> View {
+    let source = source.into();
+    View::CodeBlock {
+        highlighted_lines: highlighted_source_lines(&source, None, SyntaxTheme::Dark),
+        source,
+        language: None,
+        line_numbers: false,
+        syntax_theme: SyntaxTheme::Dark,
+        metadata: StyleMetadata::new(ViewType::CodeBlock),
     }
 }
 

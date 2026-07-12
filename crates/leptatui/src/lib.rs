@@ -52,7 +52,9 @@
 //! unavailable. `ProgressBar` renders a clamped `0.0..=1.0` gauge with an
 //! optional label.
 //! Semantic headings are available through [`h1`] through [`h6`], and
-//! [`paragraph`] creates unmodified body text. [`ordered_list`] and
+//! [`paragraph`] creates unmodified body text. [`code_block`] creates a
+//! bordered, width-aware source view with optional bundled syntax highlighting
+//! and line numbers. [`ordered_list`] and
 //! [`unordered_list`] group block-oriented [`list_item`] values with terminal
 //! markers. [`table`] groups semantic table sections, rows, and aligned cells
 //! into a bordered responsive grid. These semantic views accept
@@ -105,9 +107,10 @@ pub use style::{
 };
 pub use view::{
     ButtonAction, CellAlignment, EditableState, FormAction, ImageSource, InputAction,
-    StyleMetadata, View, ViewType, VimMode, block, button, column, component, dynamic, form, h1,
-    h2, h3, h4, h5, h6, image, input, list_item, ordered_list, paragraph, progress_bar, row, table,
-    table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
+    StyleMetadata, SyntaxTheme, View, ViewType, VimMode, block, button, code_block, column,
+    component, dynamic, form, h1, h2, h3, h4, h5, h6, image, input, list_item, ordered_list,
+    paragraph, progress_bar, row, table, table_body, table_cell, table_head, table_row, text,
+    text_area, unordered_list,
 };
 
 #[doc(hidden)]

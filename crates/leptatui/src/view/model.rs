@@ -8,6 +8,7 @@ use std::{fmt, path::PathBuf, rc::Rc};
 use ratatui::text::Text;
 
 use super::{
+    code_block::{SyntaxTheme, highlighted_source_lines},
     component_view::ComponentView,
     dynamic::DynamicView,
     metadata::{EditableState, StyleMetadata, ViewType},
@@ -159,6 +160,21 @@ pub enum View {
     Paragraph {
         /// Rich text content to render.
         content: Text<'static>,
+        /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Bordered source code with retained syntax-highlighted logical lines.
+    CodeBlock {
+        /// Original source used when highlighting configuration changes.
+        source: String,
+        /// Caller-supplied language token shown in the block title.
+        language: Option<String>,
+        /// Whether one-based logical line numbers are displayed.
+        line_numbers: bool,
+        /// Bundled syntax theme used to color recognized source.
+        syntax_theme: SyntaxTheme,
+        /// Highlighted logical source lines retained between render frames.
+        highlighted_lines: Vec<ratatui::text::Line<'static>>,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
@@ -324,6 +340,7 @@ impl View {
             | Self::H5 { metadata, .. }
             | Self::H6 { metadata, .. }
             | Self::Paragraph { metadata, .. }
+            | Self::CodeBlock { metadata, .. }
             | Self::OrderedList { metadata, .. }
             | Self::UnorderedList { metadata, .. }
             | Self::ListItem { metadata, .. }
@@ -361,6 +378,7 @@ impl View {
             | Self::H5 { metadata, .. }
             | Self::H6 { metadata, .. }
             | Self::Paragraph { metadata, .. }
+            | Self::CodeBlock { metadata, .. }
             | Self::OrderedList { metadata, .. }
             | Self::UnorderedList { metadata, .. }
             | Self::ListItem { metadata, .. }
@@ -485,6 +503,83 @@ impl View {
         } = &mut self
         {
             *current = alignment;
+        }
+
+        self
+    }
+
+    /// Sets the language token on a code-block view.
+    ///
+    /// The supplied token is shown in the border title and selects a bundled
+    /// syntect grammar by extension, name, or alias. Unknown tokens retain
+    /// plain source text.
+    ///
+    /// # Arguments
+    ///
+    /// * `language` — Grammar token or alias to select and display.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with highlighted lines when it is a code block.
+    pub fn language(mut self, language: impl Into<String>) -> Self {
+        if let Self::CodeBlock {
+            source,
+            language: current,
+            syntax_theme,
+            highlighted_lines,
+            ..
+        } = &mut self
+        {
+            *current = Some(language.into());
+            *highlighted_lines =
+                highlighted_source_lines(source, current.as_deref(), *syntax_theme);
+        }
+
+        self
+    }
+
+    /// Sets line-number visibility on a code-block view.
+    ///
+    /// # Arguments
+    ///
+    /// * `line_numbers` — Whether to display one-based logical line numbers.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with the requested gutter visibility when it is a
+    /// code block.
+    pub fn line_numbers(mut self, line_numbers: bool) -> Self {
+        if let Self::CodeBlock {
+            line_numbers: current,
+            ..
+        } = &mut self
+        {
+            *current = line_numbers;
+        }
+
+        self
+    }
+
+    /// Sets the bundled syntax theme on a code-block view.
+    ///
+    /// # Arguments
+    ///
+    /// * `syntax_theme` — Dark or light bundled theme selection.
+    ///
+    /// # Returns
+    ///
+    /// A [`View`] updated with refreshed highlighting when it is a code block.
+    pub fn syntax_theme(mut self, syntax_theme: SyntaxTheme) -> Self {
+        if let Self::CodeBlock {
+            source,
+            language,
+            syntax_theme: current,
+            highlighted_lines,
+            ..
+        } = &mut self
+        {
+            *current = syntax_theme;
+            *highlighted_lines = highlighted_source_lines(source, language.as_deref(), *current);
         }
 
         self
@@ -685,6 +780,22 @@ impl fmt::Debug for View {
                 .field("content", content)
                 .field("metadata", metadata)
                 .finish(),
+            Self::CodeBlock {
+                source,
+                language,
+                line_numbers,
+                syntax_theme,
+                highlighted_lines,
+                metadata,
+            } => f
+                .debug_struct("CodeBlock")
+                .field("source", source)
+                .field("language", language)
+                .field("line_numbers", line_numbers)
+                .field("syntax_theme", syntax_theme)
+                .field("highlighted_lines", highlighted_lines)
+                .field("metadata", metadata)
+                .finish(),
             Self::OrderedList {
                 items,
                 start,
@@ -871,6 +982,31 @@ impl PartialEq for View {
                     metadata: right_metadata,
                 },
             ) => left_content == right_content && left_metadata == right_metadata,
+            (
+                Self::CodeBlock {
+                    source: left_source,
+                    language: left_language,
+                    line_numbers: left_line_numbers,
+                    syntax_theme: left_syntax_theme,
+                    highlighted_lines: left_highlighted_lines,
+                    metadata: left_metadata,
+                },
+                Self::CodeBlock {
+                    source: right_source,
+                    language: right_language,
+                    line_numbers: right_line_numbers,
+                    syntax_theme: right_syntax_theme,
+                    highlighted_lines: right_highlighted_lines,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_source == right_source
+                    && left_language == right_language
+                    && left_line_numbers == right_line_numbers
+                    && left_syntax_theme == right_syntax_theme
+                    && left_highlighted_lines == right_highlighted_lines
+                    && left_metadata == right_metadata
+            }
             (
                 Self::OrderedList {
                     items: left_items,

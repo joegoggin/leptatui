@@ -28,6 +28,8 @@ pub enum ViewType {
     H6,
     /// Semantic paragraph view.
     Paragraph,
+    /// Syntax-highlighted code-block view.
+    CodeBlock,
     /// Semantic ordered-list view.
     OrderedList,
     /// Semantic unordered-list view.
@@ -78,6 +80,7 @@ impl ViewType {
             Self::H5 => TuiStyle::new().modifier(Modifier::ITALIC),
             Self::H6 => TuiStyle::new().modifier(Modifier::DIM),
             Self::Paragraph
+            | Self::CodeBlock
             | Self::OrderedList
             | Self::UnorderedList
             | Self::ListItem
