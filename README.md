@@ -681,6 +681,12 @@ Run the standard component showcase:
 cargo run --example standard_library_showcase
 ```
 
+Run the semantic document component showcase:
+
+```sh
+cargo run --example document_showcase
+```
+
 See `crates/leptatui/examples/README.md` for controls.
 
 ## Commands

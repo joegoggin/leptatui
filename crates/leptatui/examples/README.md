@@ -56,6 +56,19 @@ Advance or Reset to update progress, and press `q` to quit. The `Image` view
 renders terminal graphics automatically when the terminal supports them and
 otherwise displays deterministic fallback text.
 
+## Document Showcase
+
+Run the semantic document component showcase:
+
+```sh
+cargo run --example document_showcase
+```
+
+The showcase combines all six heading levels, paragraphs, nested ordered and
+unordered lists, a responsive table with aligned cells, and a
+syntax-highlighted code block with line numbers. Scroll with `j`/`k`, Page Up
+and Page Down, `gg`, or `G`. Press `q` to quit.
+
 ## Theme Switcher
 
 Run the context-backed light/dark theme example:
