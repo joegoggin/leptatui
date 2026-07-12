@@ -1,0 +1,5 @@
+error: TableBody only accepts TableRow children
+ --> tests/fixtures/view_macro/fail/table_section_invalid_child.rs:9:25
+  |
+9 |             <TableBody><TableCell>"Invalid"</TableCell></TableBody>
+  |                         ^^^^^^^^^

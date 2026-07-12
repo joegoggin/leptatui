@@ -219,6 +219,22 @@ impl Selector {
         match view_type.to_string().as_str() {
             "Block" => Ok(quote! { #leptatui::ViewType::Block }),
             "Text" => Ok(quote! { #leptatui::ViewType::Text }),
+            "H1" => Ok(quote! { #leptatui::ViewType::H1 }),
+            "H2" => Ok(quote! { #leptatui::ViewType::H2 }),
+            "H3" => Ok(quote! { #leptatui::ViewType::H3 }),
+            "H4" => Ok(quote! { #leptatui::ViewType::H4 }),
+            "H5" => Ok(quote! { #leptatui::ViewType::H5 }),
+            "H6" => Ok(quote! { #leptatui::ViewType::H6 }),
+            "Paragraph" => Ok(quote! { #leptatui::ViewType::Paragraph }),
+            "CodeBlock" => Ok(quote! { #leptatui::ViewType::CodeBlock }),
+            "OrderedList" => Ok(quote! { #leptatui::ViewType::OrderedList }),
+            "UnorderedList" => Ok(quote! { #leptatui::ViewType::UnorderedList }),
+            "ListItem" => Ok(quote! { #leptatui::ViewType::ListItem }),
+            "Table" => Ok(quote! { #leptatui::ViewType::Table }),
+            "TableHead" => Ok(quote! { #leptatui::ViewType::TableHead }),
+            "TableBody" => Ok(quote! { #leptatui::ViewType::TableBody }),
+            "TableRow" => Ok(quote! { #leptatui::ViewType::TableRow }),
+            "TableCell" => Ok(quote! { #leptatui::ViewType::TableCell }),
             "Row" => Ok(quote! { #leptatui::ViewType::Row }),
             "Column" => Ok(quote! { #leptatui::ViewType::Column }),
             "Form" => Ok(quote! { #leptatui::ViewType::Form }),
@@ -229,7 +245,7 @@ impl Selector {
             "ProgressBar" => Ok(quote! { #leptatui::ViewType::ProgressBar }),
             _ => Err(Error::new_spanned(
                 view_type,
-                "unsupported stylesheet type selector; expected Block, Text, Row, Column, Form, Button, Input, TextArea, Image, or ProgressBar",
+                "unsupported stylesheet type selector; expected a built-in Leptatui view type",
             )),
         }
     }

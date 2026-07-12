@@ -180,12 +180,31 @@ fn prelude_exposes_reactivity_and_context() {
         let _ = view;
 
         let macro_view: View = view! {
-            <Form>
-                <Input value="Ada" />
-                <TextArea value="Notes" />
-                <Image src="assets/logo.png" alt="Project logo" />
-                <ProgressBar value={0.5} label="Half" />
-            </Form>
+            <Column>
+                <H1>"Guide"</H1>
+                <Paragraph>"Overview"</Paragraph>
+                <OrderedList start=3>
+                    <ListItem>
+                        <Paragraph>"First"</Paragraph>
+                    </ListItem>
+                </OrderedList>
+                <Table>
+                    <TableBody>
+                        <TableRow>
+                            <TableCell alignment=CellAlignment::Right>"Ready"</TableCell>
+                        </TableRow>
+                    </TableBody>
+                </Table>
+                <CodeBlock language="rust" line_numbers=true syntax_theme=SyntaxTheme::Light>
+                    "fn main() {}"
+                </CodeBlock>
+                <Form>
+                    <Input value="Ada" />
+                    <TextArea value="Notes" />
+                    <Image src="assets/logo.png" alt="Project logo" />
+                    <ProgressBar value=0.5 label="Half" />
+                </Form>
+            </Column>
         };
         let _ = macro_view;
 
@@ -199,6 +218,15 @@ fn prelude_exposes_reactivity_and_context() {
         let _ = style.to_block();
 
         let stylesheet = stylesheet! {
+            H1 => { modifier: Modifier::BOLD }
+            Paragraph => { fg: Color::Gray }
+            OrderedList => { fg: Color::LightRed }
+            ListItem => { fg: Color::LightGreen }
+            Table => { fg: Color::LightBlue }
+            TableBody => { fg: Color::LightCyan }
+            TableRow => { fg: Color::LightMagenta }
+            TableCell => { fg: Color::LightYellow }
+            CodeBlock => { bg: Color::DarkGray }
             Form => { fg: Color::LightCyan }
             Input => { fg: Color::White }
             TextArea => { fg: Color::Yellow }
@@ -208,6 +236,42 @@ fn prelude_exposes_reactivity_and_context() {
         assert_eq!(
             stylesheet,
             Stylesheet::new()
+                .rule(
+                    StyleSelector::view_type(ViewType::H1),
+                    TuiStyle::new().modifier(Modifier::BOLD),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::Paragraph),
+                    TuiStyle::new().foreground(Color::Gray),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::OrderedList),
+                    TuiStyle::new().foreground(Color::LightRed),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::ListItem),
+                    TuiStyle::new().foreground(Color::LightGreen),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::Table),
+                    TuiStyle::new().foreground(Color::LightBlue),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::TableBody),
+                    TuiStyle::new().foreground(Color::LightCyan),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::TableRow),
+                    TuiStyle::new().foreground(Color::LightMagenta),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::TableCell),
+                    TuiStyle::new().foreground(Color::LightYellow),
+                )
+                .rule(
+                    StyleSelector::view_type(ViewType::CodeBlock),
+                    TuiStyle::new().background(Color::DarkGray),
+                )
                 .rule(
                     StyleSelector::view_type(ViewType::Form),
                     TuiStyle::new().foreground(Color::LightCyan),

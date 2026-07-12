@@ -1,0 +1,5 @@
+error: ListItem must be a direct child of OrderedList or UnorderedList
+ --> tests/fixtures/view_macro/fail/list_item_invalid_parent.rs:9:14
+  |
+9 |             <ListItem><Paragraph>"Orphan"</Paragraph></ListItem>
+  |              ^^^^^^^^

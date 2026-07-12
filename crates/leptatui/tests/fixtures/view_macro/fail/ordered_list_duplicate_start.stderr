@@ -1,0 +1,5 @@
+error: OrderedList expects at most one start attribute
+ --> tests/fixtures/view_macro/fail/ordered_list_duplicate_start.rs:8:30
+  |
+8 |         <OrderedList start=1 start={2}>
+  |                              ^^^^^

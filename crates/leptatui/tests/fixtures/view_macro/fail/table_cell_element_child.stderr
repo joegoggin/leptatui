@@ -1,0 +1,5 @@
+error: TableCell expects text content, not child elements
+  --> tests/fixtures/view_macro/fail/table_cell_element_child.rs:10:28
+   |
+10 |                 <TableRow><TableCell><Paragraph>"Nested"</Paragraph></TableCell></TableRow>
+   |                            ^^^^^^^^^

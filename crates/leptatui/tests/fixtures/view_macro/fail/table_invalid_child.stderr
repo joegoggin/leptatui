@@ -1,0 +1,5 @@
+error: Table only accepts TableHead or TableBody children
+ --> tests/fixtures/view_macro/fail/table_invalid_child.rs:9:14
+  |
+9 |             <TableRow><TableCell>"Invalid"</TableCell></TableRow>
+  |              ^^^^^^^^
