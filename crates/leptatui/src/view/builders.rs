@@ -162,7 +162,8 @@ pub fn paragraph(content: impl Into<Text<'static>>) -> View {
 ///
 /// The source is retained as logical lines. Supplying a recognized language
 /// later through [`View::language`] highlights those lines once rather than on
-/// every render frame.
+/// every render frame. The selected syntax theme fills the block interior unless
+/// an authored code-block background overrides it.
 ///
 /// # Arguments
 ///

@@ -4,14 +4,11 @@
 //! semantic headings, paragraphs, lists, tables, highlighted code blocks, and
 //! styled inline spans exposed by [`crate::view`]. Readable styled-block or
 //! text fallbacks retain CommonMark content without dedicated semantic views.
-//! In-memory readers are infallible, while explicit file readers finish UTF-8
-//! filesystem loading before returning a view. Only the table extension is
-//! enabled beyond core CommonMark.
+//! In-memory and explicit file readers are infallible; file failures become
+//! path-aware semantic fallback content. Only the table extension is enabled
+//! beyond core CommonMark.
 
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::{
@@ -64,20 +61,6 @@ impl MarkdownOptions {
     }
 }
 
-/// Errors returned while loading Markdown files.
-#[derive(Debug, thiserror::Error)]
-pub enum MarkdownError {
-    /// Reading or decoding a Markdown file failed.
-    #[error("failed to read Markdown file `{path}`: {source}", path = .path.display())]
-    Read {
-        /// Path supplied to the Markdown file reader.
-        path: PathBuf,
-        /// Underlying filesystem or UTF-8 decoding error.
-        #[source]
-        source: io::Error,
-    },
-}
-
 /// Converts CommonMark source into a scrollable semantic document view.
 ///
 /// Uses [`MarkdownOptions::default`] and performs no filesystem access.
@@ -88,7 +71,8 @@ pub enum MarkdownError {
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing semantic document blocks in source order.
+/// A [`View::Column`] containing semantic document blocks separated by empty
+/// terminal rows in source order.
 pub fn markdown(source: impl AsRef<str>) -> View {
     markdown_with_options(source, MarkdownOptions::default())
 }
@@ -104,7 +88,8 @@ pub fn markdown(source: impl AsRef<str>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing semantic document blocks in source order.
+/// A [`View::Column`] containing semantic document blocks separated by empty
+/// terminal rows in source order.
 pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) -> View {
     let mut parser = Parser::new_ext(source.as_ref(), Options::ENABLE_TABLES);
     column(parse_blocks(&mut parser, None, options))
@@ -121,12 +106,9 @@ pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) 
 ///
 /// # Returns
 ///
-/// A [`Result`](std::result::Result) containing the parsed document view.
-///
-/// # Errors
-///
-/// Returns [`MarkdownError::Read`] if the path cannot be read as a UTF-8 file.
-pub fn markdown_file(path: impl AsRef<Path>) -> Result<View, MarkdownError> {
+/// A [`View::Column`] containing the parsed document or a path-aware fallback
+/// paragraph when the file cannot be read as UTF-8.
+pub fn markdown_file(path: impl AsRef<Path>) -> View {
     markdown_file_with_options(path, MarkdownOptions::default())
 }
 
@@ -143,9 +125,8 @@ pub fn markdown_file(path: impl AsRef<Path>) -> Result<View, MarkdownError> {
 /// let view = markdown_file_with_options(
 ///     "README.md",
 ///     MarkdownOptions::default().syntax_theme(SyntaxTheme::Light),
-/// )?;
+/// );
 /// # let _ = view;
-/// # Ok::<(), leptatui::MarkdownError>(())
 /// ```
 ///
 /// # Arguments
@@ -155,21 +136,17 @@ pub fn markdown_file(path: impl AsRef<Path>) -> Result<View, MarkdownError> {
 ///
 /// # Returns
 ///
-/// A [`Result`](std::result::Result) containing the parsed document view.
-///
-/// # Errors
-///
-/// Returns [`MarkdownError::Read`] if the path cannot be read as a UTF-8 file.
-pub fn markdown_file_with_options(
-    path: impl AsRef<Path>,
-    options: MarkdownOptions,
-) -> Result<View, MarkdownError> {
+/// A [`View::Column`] containing the parsed document or a path-aware fallback
+/// paragraph when the file cannot be read as UTF-8.
+pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptions) -> View {
     let path = path.as_ref();
-    let source = fs::read_to_string(path).map_err(|source| MarkdownError::Read {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    Ok(markdown_with_options(source, options))
+    match fs::read_to_string(path) {
+        Ok(source) => markdown_with_options(source, options),
+        Err(error) => column([paragraph(format!(
+            "failed to read Markdown file `{}`: {error}",
+            path.display()
+        ))]),
+    }
 }
 
 /// Accumulates owned rich-text lines while parsing inline Markdown events.
@@ -328,7 +305,8 @@ impl Default for InlineText {
 ///
 /// # Returns
 ///
-/// A [`Vec`] containing converted semantic views in event order.
+/// A [`Vec`] containing converted semantic views with empty paragraphs between
+/// blocks in event order.
 fn parse_blocks<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     end: Option<TagEnd>,
@@ -385,7 +363,33 @@ fn parse_blocks<'a>(
     }
 
     flush_inline_paragraph(&mut inline, &mut views);
-    views
+    separate_blocks(views)
+}
+
+/// Inserts one empty terminal row between Markdown blocks.
+///
+/// CommonMark blank lines delimit blocks without producing parser events. An
+/// empty semantic paragraph restores that document spacing while keeping the
+/// surrounding column's existing measurement and scrolling behavior.
+///
+/// # Arguments
+///
+/// * `blocks` — Parsed Markdown blocks in source order.
+///
+/// # Returns
+///
+/// A [`Vec`] containing the blocks separated by empty paragraphs.
+fn separate_blocks(blocks: Vec<View>) -> Vec<View> {
+    let mut separated = Vec::with_capacity(blocks.len().saturating_mul(2).saturating_sub(1));
+
+    for block in blocks {
+        if !separated.is_empty() {
+            separated.push(paragraph(""));
+        }
+        separated.push(block);
+    }
+
+    separated
 }
 
 /// Wraps parsed quote children in a visible, wrap-aware terminal prefix.
@@ -876,7 +880,8 @@ fn skip_until<'a>(events: &mut impl Iterator<Item = Event<'a>>, end: TagEnd) {
 #[cfg(test)]
 mod tests {
     use std::{
-        error::Error as _,
+        io,
+        path::PathBuf,
         sync::atomic::{AtomicU64, Ordering},
     };
 
@@ -949,24 +954,36 @@ mod tests {
         (metadata.scroll_offset(), metadata.max_scroll_offset())
     }
 
-    /// Verifies a Markdown reader error retains its path and I/O source.
+    /// Renders a view into fixed terminal rows for fallback assertions.
     ///
     /// # Arguments
     ///
-    /// * `error` — Reader error returned for the failing path.
-    /// * `expected_path` — Exact path expected in the public error variant.
+    /// * `view` — View tree to render.
+    /// * `width` — Test terminal width in cells.
+    /// * `height` — Test terminal height in cells.
     ///
     /// # Returns
     ///
-    /// An [`io::Error`] containing the preserved underlying failure.
-    fn assert_markdown_read_error(error: MarkdownError, expected_path: &Path) -> io::Error {
-        let diagnostic = error.to_string();
-        assert!(diagnostic.contains(&expected_path.display().to_string()));
-        assert!(error.source().is_some());
+    /// A [`Vec`] containing rendered terminal symbols grouped by row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] if terminal or view rendering fails.
+    fn rendered_view_lines(view: &View, width: u16, height: u16) -> Result<Vec<String>> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height))?;
+        let mut render_result = Ok(());
 
-        let MarkdownError::Read { path, source } = error;
-        assert_eq!(path, expected_path);
-        source
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            render_result = view.render(&mut ctx);
+        })?;
+        render_result?;
+
+        let cells = terminal.backend().buffer().content();
+        Ok(cells
+            .chunks(usize::from(width))
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect())
+            .collect())
     }
 
     /// Renders Markdown into fixed terminal rows for fallback assertions.
@@ -985,21 +1002,7 @@ mod tests {
     ///
     /// Returns [`crate::Error`] if terminal or view rendering fails.
     fn rendered_markdown_lines(source: &str, width: u16, height: u16) -> Result<Vec<String>> {
-        let view = markdown(source);
-        let mut terminal = Terminal::new(TestBackend::new(width, height))?;
-        let mut render_result = Ok(());
-
-        terminal.draw(|frame| {
-            let mut ctx = RenderCtx::new(frame);
-            render_result = view.render(&mut ctx);
-        })?;
-        render_result?;
-
-        let cells = terminal.backend().buffer().content();
-        Ok(cells
-            .chunks(usize::from(width))
-            .map(|row| row.iter().map(|cell| cell.symbol()).collect())
-            .collect())
+        rendered_view_lines(&markdown(source), width, height)
     }
 
     /// Verifies in-memory Markdown readers apply default and custom options.
@@ -1060,14 +1063,13 @@ mod tests {
         fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
         fs::write(&fixture_path, source).expect("Markdown fixture should be written");
 
-        let default = markdown_file(&fixture_path).expect("default file reader should succeed");
+        let default = markdown_file(&fixture_path);
         assert_eq!(default, markdown(source));
 
         let options = MarkdownOptions::default()
             .syntax_theme(SyntaxTheme::Light)
             .line_numbers(true);
-        let configured = markdown_file_with_options(&fixture_path, options)
-            .expect("configured file reader should succeed");
+        let configured = markdown_file_with_options(&fixture_path, options);
         assert_eq!(
             parsed_code_block_options(&configured),
             (true, SyntaxTheme::Light)
@@ -1076,7 +1078,7 @@ mod tests {
         fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
     }
 
-    /// Verifies Markdown file errors retain path-aware I/O diagnostics.
+    /// Verifies Markdown file failures become path-aware semantic fallbacks.
     ///
     /// # Example Under Test
     ///
@@ -1088,13 +1090,14 @@ mod tests {
     ///
     /// # Assertions
     ///
-    /// - Missing paths report [`io::ErrorKind::NotFound`].
-    /// - Directory paths return their platform I/O failure instead of parsing.
-    /// - Invalid UTF-8 reports [`io::ErrorKind::InvalidData`].
-    /// - Every error retains the exact path, includes it in display output, and chains its cause.
+    /// - Missing paths produce a paragraph containing the path and not-found error.
+    /// - Directory paths produce a paragraph containing their platform I/O failure.
+    /// - Invalid UTF-8 produces a paragraph containing the path and decoding error.
+    /// - Every failure remains inside a scrollable document column.
+    /// - The missing-file fallback renders visibly without propagating an error.
     /// - The fixture directory is removed after verification.
     #[test]
-    fn markdown_file_errors_preserve_paths_and_io_causes() {
+    fn markdown_file_failures_render_path_aware_fallbacks() {
         let fixture_dir = markdown_fixture_dir("errors");
         let directory_path = fixture_dir.join("directory.md");
         let invalid_utf8_path = fixture_dir.join("invalid-utf8.md");
@@ -1103,23 +1106,38 @@ mod tests {
         fs::write(&invalid_utf8_path, [0xff, 0xfe])
             .expect("invalid UTF-8 fixture should be written");
 
-        let missing = markdown_file(&missing_path).expect_err("missing path should fail");
+        let expected_fallback = |path: &Path, error: &io::Error| {
+            column([paragraph(format!(
+                "failed to read Markdown file `{}`: {error}",
+                path.display()
+            ))])
+        };
+
+        let missing_error =
+            fs::read_to_string(&missing_path).expect_err("missing fixture should fail to read");
+        assert_eq!(missing_error.kind(), io::ErrorKind::NotFound);
+        let missing = markdown_file(&missing_path);
+        assert_eq!(missing, expected_fallback(&missing_path, &missing_error));
+        let rendered = rendered_view_lines(&missing, 120, 2)
+            .expect("missing-file fallback should render without failure")
+            .concat();
+        assert!(rendered.contains("failed to read Markdown file"));
+        assert!(rendered.contains("missing.md"));
+
+        let directory_error =
+            fs::read_to_string(&directory_path).expect_err("directory fixture should fail to read");
+        assert_ne!(directory_error.kind(), io::ErrorKind::NotFound);
         assert_eq!(
-            assert_markdown_read_error(missing, &missing_path).kind(),
-            io::ErrorKind::NotFound
+            markdown_file(&directory_path),
+            expected_fallback(&directory_path, &directory_error)
         );
 
-        let directory = markdown_file(&directory_path).expect_err("directory path should fail");
-        assert_ne!(
-            assert_markdown_read_error(directory, &directory_path).kind(),
-            io::ErrorKind::NotFound
-        );
-
-        let invalid_utf8 =
-            markdown_file(&invalid_utf8_path).expect_err("invalid UTF-8 should fail");
+        let invalid_utf8_error = fs::read_to_string(&invalid_utf8_path)
+            .expect_err("invalid UTF-8 fixture should fail to read");
+        assert_eq!(invalid_utf8_error.kind(), io::ErrorKind::InvalidData);
         assert_eq!(
-            assert_markdown_read_error(invalid_utf8, &invalid_utf8_path).kind(),
-            io::ErrorKind::InvalidData
+            markdown_file_with_options(&invalid_utf8_path, MarkdownOptions::default()),
+            expected_fallback(&invalid_utf8_path, &invalid_utf8_error)
         );
 
         fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
@@ -1229,6 +1247,7 @@ mod tests {
     /// - Parsing succeeds without a fallible API.
     /// - H1 through H6 appear in source order.
     /// - Every heading retains its text content.
+    /// - Empty separator paragraphs retain one terminal row between headings.
     #[test]
     fn markdown_maps_all_heading_levels() {
         let source = concat!(
@@ -1242,14 +1261,14 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column([
+            column(separate_blocks(vec![
                 h1("One"),
                 h2("Two"),
                 h3("Three"),
                 h4("Four"),
                 h5("Five"),
                 h6("Six"),
-            ]),
+            ])),
         );
     }
 
@@ -1285,6 +1304,36 @@ mod tests {
         );
     }
 
+    /// Verifies Markdown blocks retain a blank terminal row between them.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// One
+    ///
+    /// Two
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Parsing inserts one empty semantic paragraph between the blocks.
+    /// - Rendering retains the empty row between the visible paragraph rows.
+    #[test]
+    fn markdown_separates_blocks_with_blank_terminal_rows() -> Result<()> {
+        let source = "One\n\nTwo\n";
+
+        assert_eq!(
+            markdown(source),
+            column([paragraph("One"), paragraph(""), paragraph("Two")]),
+        );
+        assert_eq!(
+            rendered_markdown_lines(source, 8, 3)?,
+            ["One     ", "        ", "Two     "],
+        );
+
+        Ok(())
+    }
+
     /// Verifies fenced Markdown code selects highlighting from its first info token.
     ///
     /// # Example Under Test
@@ -1309,6 +1358,7 @@ mod tests {
     /// - The `rs` alias selects the same bundled Rust grammar.
     /// - Unknown languages retain their label and fall back to plain source.
     /// - Source-ending newlines remain available to wrapped code rendering.
+    /// - Empty separator paragraphs retain one terminal row between code blocks.
     #[test]
     fn markdown_maps_fenced_code_languages_and_fallbacks() {
         let source = concat!(
@@ -1325,11 +1375,11 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column([
+            column(separate_blocks(vec![
                 code_block("fn main() {}\n").language("rust"),
                 code_block("let value = true;\n").language("rs"),
                 code_block("plain\n").language("unknown-language"),
-            ]),
+            ])),
         );
     }
 
@@ -1349,13 +1399,17 @@ mod tests {
     /// - An empty fence produces an empty unlabeled code block.
     /// - Indented Unicode source produces an unlabeled plain code block.
     /// - Both mappings preserve the code-block builder defaults.
+    /// - An empty separator paragraph retains one terminal row between blocks.
     #[test]
     fn markdown_maps_empty_and_indented_code_blocks() {
         let source = "```\n```\n\n    plain 界\n";
 
         assert_eq!(
             markdown(source),
-            column([code_block(""), code_block("plain 界\n")]),
+            column(separate_blocks(vec![
+                code_block(""),
+                code_block("plain 界\n"),
+            ])),
         );
     }
 
@@ -1464,6 +1518,7 @@ mod tests {
     /// - Loose item paragraphs remain separate blocks.
     /// - Mixed ordered and unordered nesting retains its hierarchy.
     /// - Tight-list text becomes paragraphs and empty items remain present.
+    /// - Empty separator paragraphs retain block spacing inside loose items.
     #[test]
     fn markdown_preserves_nested_and_mixed_lists() {
         let source = concat!(
@@ -1478,17 +1533,17 @@ mod tests {
         assert_eq!(
             markdown(source),
             column([ordered_list([
-                list_item([
+                list_item(separate_blocks(vec![
                     paragraph("First"),
                     paragraph("Second paragraph."),
                     unordered_list([
-                        list_item([
+                        list_item(separate_blocks(vec![
                             paragraph("Nested bullet"),
                             ordered_list([list_item([paragraph("Nested number")])]).start(7),
-                        ]),
+                        ])),
                         list_item([]),
                     ]),
-                ]),
+                ])),
                 list_item([paragraph("Last")]),
             ])
             .start(3)]),
@@ -1553,6 +1608,7 @@ mod tests {
     /// - Each quote becomes a left-bordered block with readable padding.
     /// - The outer border remains visible beside wrapped content.
     /// - The nested quote stacks a second border without flattening its child.
+    /// - The blank row between quote blocks retains the outer quote border.
     #[test]
     fn markdown_renders_nested_blockquotes_with_wrapped_prefixes() -> Result<()> {
         let source = "> Alpha beta gamma\n>\n> > Inner\n";
@@ -1561,14 +1617,16 @@ mod tests {
             markdown(source),
             column([block_quote(vec![
                 paragraph("Alpha beta gamma"),
+                paragraph(""),
                 block_quote(vec![paragraph("Inner")]),
             ])]),
         );
 
-        let lines = rendered_markdown_lines(source, 12, 3)?;
+        let lines = rendered_markdown_lines(source, 12, 4)?;
         assert!(lines[0].starts_with("│ Alpha beta"));
         assert!(lines[1].starts_with("│ gamma"));
-        assert!(lines[2].starts_with("│ │ Inner"));
+        assert_eq!(lines[2].trim_end(), "│");
+        assert!(lines[3].starts_with("│ │ Inner"));
 
         Ok(())
     }
@@ -1612,6 +1670,7 @@ mod tests {
     /// - Source-only and alt-only images remain descriptive.
     /// - An image with neither value still has a readable label.
     /// - Every image maps to text rather than a path-backed image view.
+    /// - Empty separator paragraphs retain one terminal row between images.
     #[test]
     fn markdown_maps_images_to_descriptive_text() {
         let source = concat!(
@@ -1623,12 +1682,12 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column([
+            column(separate_blocks(vec![
                 paragraph("Image: diagram (https://example.com/diagram.png)"),
                 paragraph("Image: local.png"),
                 paragraph("Image: caption"),
                 paragraph("Image"),
-            ]),
+            ])),
         );
     }
 
@@ -1652,6 +1711,7 @@ mod tests {
     /// - Block HTML tags, entities, and source line endings remain literal.
     /// - Entities in ordinary Markdown text decode to their visible characters.
     /// - Following semantic content remains in source order.
+    /// - Empty separator paragraphs retain one terminal row between blocks.
     #[test]
     fn markdown_preserves_literal_html_and_entities() {
         let source = concat!(
@@ -1664,7 +1724,7 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column([
+            column(separate_blocks(vec![
                 paragraph("Before <kbd>&</kbd> after."),
                 paragraph(Text::from(vec![
                     Line::raw("<section>"),
@@ -1673,7 +1733,7 @@ mod tests {
                     Line::default(),
                 ])),
                 paragraph("Fish & Chips ©"),
-            ]),
+            ])),
         );
     }
 
@@ -1695,6 +1755,7 @@ mod tests {
     /// - Task and footnote events receive readable terminal markers.
     /// - Display-math and footnote-definition text stays in source order.
     /// - Production parsing remains limited to CommonMark plus tables.
+    /// - Empty separator paragraphs retain one terminal row between blocks.
     #[test]
     fn markdown_preserves_text_from_unsupported_parser_events() {
         let source = concat!(
@@ -1711,11 +1772,11 @@ mod tests {
 
         assert_eq!(
             column(parse_blocks(&mut parser, None, MarkdownOptions::default(),)),
-            column([
+            column(separate_blocks(vec![
                 unordered_list([list_item([paragraph("[x] done and x + y[^note]")])]),
                 paragraph("z"),
                 paragraph("Detail"),
-            ]),
+            ])),
         );
     }
 
@@ -1737,18 +1798,19 @@ mod tests {
     ///
     /// - The semantic heading remains first.
     /// - Rule, image, and raw-HTML fallbacks retain their original order.
+    /// - Empty separator paragraphs retain one terminal row between fallbacks.
     #[test]
     fn markdown_preserves_fallback_source_order() {
         let source = "# Start\n\n---\n\n![middle](middle.png)\n\n<end>\n";
 
         assert_eq!(
             markdown(source),
-            column([
+            column(separate_blocks(vec![
                 h1("Start"),
                 thematic_break(),
                 paragraph("Image: middle (middle.png)"),
                 paragraph(Text::from(vec![Line::raw("<end>"), Line::default()])),
-            ]),
+            ])),
         );
     }
 
@@ -1770,18 +1832,19 @@ mod tests {
     ///
     /// - Parsing succeeds without reordering block types.
     /// - Unicode content remains intact in headings and list items.
+    /// - Empty separator paragraphs retain one terminal row between blocks.
     #[test]
     fn markdown_preserves_source_order() {
         let source = "# 開始\n\nBefore.\n\n- 中\n\n## 終了\n";
 
         assert_eq!(
             markdown(source),
-            column([
+            column(separate_blocks(vec![
                 h1("開始"),
                 paragraph("Before."),
                 unordered_list([list_item([paragraph("中")])]),
                 h2("終了"),
-            ]),
+            ])),
         );
     }
 

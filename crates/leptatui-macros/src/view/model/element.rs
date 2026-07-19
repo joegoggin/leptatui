@@ -147,15 +147,7 @@ impl Element {
         }
 
         if self.name == "Markdown" {
-            return self.expand_required_attr_element(
-                "Markdown",
-                AttrKind::MarkdownSource,
-                "source",
-                |source| {
-                    let leptatui = crate::utils::crate_path::leptatui();
-                    quote! { #leptatui::markdown(#source) }
-                },
-            );
+            return self.expand_markdown();
         }
 
         match self.name.to_string().as_str() {
@@ -390,6 +382,71 @@ impl Element {
         )
     }
 
+    /// Expands an infallible path-backed Markdown element.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] loading the Markdown view into its tree position.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if children are present, `src` is missing,
+    /// attributes are duplicated, or Markdown options are invalid.
+    fn expand_markdown(&self) -> Result<TokenStream> {
+        if !self.children.is_empty() {
+            return Err(Error::new_spanned(
+                &self.name,
+                "Markdown does not accept children",
+            ));
+        }
+
+        let attrs = self.validate_attrs()?;
+        let src_attrs = attrs
+            .iter()
+            .filter(|validated| validated.kind == AttrKind::MarkdownSrc)
+            .collect::<Vec<_>>();
+        let src_attr = match src_attrs.as_slice() {
+            [src_attr] => *src_attr,
+            [] => {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    "Markdown requires a src attribute",
+                ));
+            }
+            [first, ..] => {
+                return Err(Error::new_spanned(
+                    &first.attr.name,
+                    "Markdown expects exactly one src attribute",
+                ));
+            }
+        };
+
+        let leptatui = crate::utils::crate_path::leptatui();
+        let source = src_attr.attr.value.to_tokens();
+        let mut options = quote! { #leptatui::MarkdownOptions::default() };
+
+        if let Some(theme) = attrs
+            .iter()
+            .find(|validated| validated.kind == AttrKind::SyntaxTheme)
+        {
+            let value = theme.attr.value.to_tokens();
+            options = quote! { (#options).syntax_theme(#value) };
+        }
+
+        if let Some(line_numbers) = attrs
+            .iter()
+            .find(|validated| validated.kind == AttrKind::LineNumbers)
+        {
+            let value = line_numbers.attr.value.to_tokens();
+            options = quote! { (#options).line_numbers(#value) };
+        }
+
+        self.expand_attrs(
+            quote! { #leptatui::markdown_file_with_options(#source, #options) },
+            &attrs,
+        )
+    }
+
     /// Expands a self-contained element with one required attribute.
     ///
     /// # Arguments
@@ -530,18 +587,12 @@ impl Element {
                 "class" => AttrKind::Class,
                 "id" => AttrKind::Id,
                 "style" => AttrKind::Style,
-                "source" if element_name == "Markdown" => AttrKind::MarkdownSource,
-                "source" => {
-                    return Err(Error::new_spanned(
-                        &attr.name,
-                        "view! source attribute is only supported on Markdown",
-                    ));
-                }
                 "src" if element_name == "Image" => AttrKind::ImageSource,
+                "src" if element_name == "Markdown" => AttrKind::MarkdownSrc,
                 "src" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "view! src attribute is only supported on Image",
+                        "view! src attribute is only supported on Image or Markdown",
                     ));
                 }
                 "alt" if element_name == "Image" => AttrKind::Alt,
@@ -628,18 +679,22 @@ impl Element {
                         "view! language attribute is only supported on CodeBlock",
                     ));
                 }
-                "line_numbers" if element_name == "CodeBlock" => AttrKind::LineNumbers,
+                "line_numbers" if matches!(element_name.as_str(), "CodeBlock" | "Markdown") => {
+                    AttrKind::LineNumbers
+                }
                 "line_numbers" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "view! line_numbers attribute is only supported on CodeBlock",
+                        "view! line_numbers attribute is only supported on CodeBlock or Markdown",
                     ));
                 }
-                "syntax_theme" if element_name == "CodeBlock" => AttrKind::SyntaxTheme,
+                "syntax_theme" if matches!(element_name.as_str(), "CodeBlock" | "Markdown") => {
+                    AttrKind::SyntaxTheme
+                }
                 "syntax_theme" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "view! syntax_theme attribute is only supported on CodeBlock",
+                        "view! syntax_theme attribute is only supported on CodeBlock or Markdown",
                     ));
                 }
                 _ => {
@@ -660,7 +715,7 @@ impl Element {
                             "unsupported view! attribute; expected class, id, style, value, or label"
                         }
                         "Markdown" => {
-                            "unsupported view! attribute; expected class, id, style, or source"
+                            "unsupported view! attribute; expected class, id, style, src, line_numbers, or syntax_theme"
                         }
                         "OrderedList" => {
                             "unsupported view! attribute; expected class, id, style, or start"
@@ -747,7 +802,7 @@ impl Element {
                 AttrKind::InputValue => expanded,
                 AttrKind::ImageSource => expanded,
                 AttrKind::ProgressValue => expanded,
-                AttrKind::MarkdownSource => expanded,
+                AttrKind::MarkdownSrc => expanded,
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
                 AttrKind::Alt => quote! { (#expanded).alt(#value) },
                 AttrKind::Label => quote! { (#expanded).label(#value) },
@@ -760,9 +815,17 @@ impl Element {
                     quote! { (#expanded).alignment(#value) }
                 }
                 AttrKind::Language => quote! { (#expanded).language(#value) },
+                AttrKind::LineNumbers if self.name == "Markdown" => {
+                    reject_literal_typed_attr(attr, "line_numbers", "bool")?;
+                    expanded
+                }
                 AttrKind::LineNumbers => {
                     reject_literal_typed_attr(attr, "line_numbers", "bool")?;
                     quote! { (#expanded).line_numbers(#value) }
+                }
+                AttrKind::SyntaxTheme if self.name == "Markdown" => {
+                    reject_literal_typed_attr(attr, "syntax_theme", "SyntaxTheme")?;
+                    expanded
                 }
                 AttrKind::SyntaxTheme => {
                     reject_literal_typed_attr(attr, "syntax_theme", "SyntaxTheme")?;
@@ -783,7 +846,7 @@ impl Element {
                     | AttrKind::InputValue
                     | AttrKind::ImageSource
                     | AttrKind::ProgressValue
-                    | AttrKind::MarkdownSource
+                    | AttrKind::MarkdownSrc
                     | AttrKind::Style
                     | AttrKind::Start
                     | AttrKind::Alignment
@@ -1156,8 +1219,8 @@ mod attr_validation {
         ImageSource,
         /// Required progress value.
         ProgressValue,
-        /// Required in-memory Markdown source.
-        MarkdownSource,
+        /// Required Markdown file path.
+        MarkdownSrc,
         /// Input placeholder text.
         Placeholder,
         /// Image fallback text.

@@ -14,6 +14,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout, Position, Rect, Size},
+    style::Style,
     text::{Line, Span, Text},
     widgets::{Block, Gauge, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
@@ -28,6 +29,7 @@ use crate::{
 };
 
 use super::{
+    code_block::SyntaxTheme,
     metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
     model::{FormAction, InputAction, View, clamped_progress_value},
 };
@@ -156,11 +158,7 @@ fn wrapped_code_text(
 /// # Returns
 ///
 /// A non-empty [`Vec`] of visual [`Line`] values.
-fn wrap_styled_line(
-    line: &Line<'static>,
-    width: u16,
-    base_style: ratatui::style::Style,
-) -> Vec<Line<'static>> {
+fn wrap_styled_line(line: &Line<'static>, width: u16, base_style: Style) -> Vec<Line<'static>> {
     let width = usize::from(width);
     if width == 0 {
         return vec![Line::default()];
@@ -182,19 +180,23 @@ fn wrap_styled_line(
             wrapped.push(Line::from(std::mem::take(&mut spans)));
             line_width = 0;
         }
-        spans.push(Span::styled(grapheme.symbol.to_owned(), grapheme.style));
+        let grapheme_style = base_style
+            .bg
+            .map_or(grapheme.style, |background| grapheme.style.bg(background));
+        spans.push(Span::styled(grapheme.symbol.to_owned(), grapheme_style));
         line_width = line_width.saturating_add(grapheme_width);
     }
     wrapped.push(Line::from(spans));
     wrapped
 }
 
-/// Renders a bordered syntax-highlighted code block.
+/// Renders a bordered syntax-highlighted code block with a uniform interior background.
 ///
 /// # Arguments
 ///
 /// * `language` — Optional caller-supplied token shown in the border title.
 /// * `line_numbers` — Whether the logical-line gutter is enabled.
+/// * `syntax_theme` — Bundled theme supplying the default block background.
 /// * `highlighted_lines` — Retained highlighted logical source lines.
 /// * `metadata` — Selector metadata used to resolve block styling.
 /// * `ctx` — Rendering context containing the target area.
@@ -205,11 +207,17 @@ fn wrap_styled_line(
 fn render_code_block_view(
     language: Option<&str>,
     line_numbers: bool,
+    syntax_theme: SyntaxTheme,
     highlighted_lines: &[Line<'static>],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     let style = resolve_style(metadata, ctx);
+    let background = style
+        .background
+        .unwrap_or_else(|| syntax_theme.background());
+    let mut content_style = style;
+    content_style.background = Some(background);
     let area = ctx.area();
     let provisional_block = style.to_block_with_default_borders(Borders::ALL);
     let provisional_inner = provisional_block.inner(area);
@@ -217,7 +225,7 @@ fn render_code_block_view(
         highlighted_lines,
         line_numbers,
         provisional_inner.width,
-        style,
+        content_style,
     );
     let required_height = line_count_height(content.lines.len())
         .max(1)
@@ -229,6 +237,12 @@ fn render_code_block_view(
         borders.remove(Borders::BOTTOM);
         visible_style.borders = Some(borders);
     }
+    visible_style.background = None;
+    let mut background_area_style = visible_style;
+    background_area_style.padding = None;
+    let background_area = background_area_style
+        .to_block_with_default_borders(Borders::ALL)
+        .inner(area);
     let block = visible_style.to_block_with_default_borders(Borders::ALL);
     let block = if let Some(language) = language {
         block.title(language.to_owned())
@@ -236,13 +250,16 @@ fn render_code_block_view(
         block
     };
     let inner = block.inner(area);
+    ctx.with_area(background_area, |ctx| {
+        ctx.render_widget(Block::new().style(Style::new().bg(background)));
+    });
     ctx.render_widget(block);
     ctx.with_area_inherited_style_and_selector_ancestor(
         inner,
         style.inherited_values(),
         metadata.clone(),
         |ctx| {
-            ctx.render_widget(Paragraph::new(content).style(style.to_ratatui_style()));
+            ctx.render_widget(Paragraph::new(content).style(content_style.to_ratatui_style()));
         },
     );
     Ok(())
@@ -438,12 +455,14 @@ impl View {
             Self::CodeBlock {
                 language,
                 line_numbers,
+                syntax_theme,
                 highlighted_lines,
                 metadata,
                 ..
             } => render_code_block_view(
                 language.as_deref(),
                 *line_numbers,
+                *syntax_theme,
                 highlighted_lines,
                 metadata,
                 ctx,

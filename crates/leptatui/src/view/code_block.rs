@@ -2,7 +2,8 @@
 //!
 //! This module loads syntect's bundled grammars and themes once, converts
 //! highlighted ranges into owned Ratatui lines, and retains those lines in the
-//! view tree so frame rendering only performs width-aware layout.
+//! view tree so frame rendering only performs width-aware layout. The selected
+//! theme also supplies the default background for the complete block interior.
 
 use std::sync::OnceLock;
 
@@ -12,11 +13,11 @@ use ratatui::{
 };
 use syntect::{
     easy::HighlightLines,
-    highlighting::{FontStyle, ThemeSet},
+    highlighting::{Color as SyntectColor, FontStyle, ThemeSet},
     parsing::SyntaxSet,
 };
 
-/// Bundled syntax theme used by code-block views.
+/// Bundled syntax and background theme used by code-block views.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SyntaxTheme {
     /// Base16 Ocean dark theme.
@@ -37,6 +38,23 @@ impl SyntaxTheme {
             Self::Dark => "base16-ocean.dark",
             Self::Light => "base16-ocean.light",
         }
+    }
+
+    /// Returns the bundled theme's terminal background color.
+    ///
+    /// Syntect's white fallback is retained if a bundled theme unexpectedly
+    /// omits its background setting.
+    ///
+    /// # Returns
+    ///
+    /// A Ratatui [`Color`] for the selected syntax theme.
+    pub(crate) fn background(self) -> Color {
+        let background = theme_set()
+            .themes
+            .get(self.key())
+            .and_then(|theme| theme.settings.background)
+            .unwrap_or(SyntectColor::WHITE);
+        ratatui_color(background)
     }
 }
 
@@ -145,17 +163,22 @@ fn ratatui_style(style: syntect::highlighting::Style) -> Style {
     }
 
     Style::new()
-        .fg(Color::Rgb(
-            style.foreground.r,
-            style.foreground.g,
-            style.foreground.b,
-        ))
-        .bg(Color::Rgb(
-            style.background.r,
-            style.background.g,
-            style.background.b,
-        ))
+        .fg(ratatui_color(style.foreground))
+        .bg(ratatui_color(style.background))
         .add_modifier(modifiers)
+}
+
+/// Converts a Syntect RGB color into its Ratatui equivalent.
+///
+/// # Arguments
+///
+/// * `color` — Syntect color whose alpha channel is ignored by terminal output.
+///
+/// # Returns
+///
+/// A Ratatui [`Color`] retaining the red, green, and blue components.
+fn ratatui_color(color: SyntectColor) -> Color {
+    Color::Rgb(color.r, color.g, color.b)
 }
 
 /// Returns plain owned Ratatui lines for source text.

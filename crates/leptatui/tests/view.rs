@@ -15,9 +15,9 @@ use leptatui::{
     __private::FocusedControl,
     AppControl, AppRoot, Borders, CellAlignment, Color, Component, EditableState, ImageSource,
     KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations,
-    StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme, TuiSize, TuiStyle, View, ViewType,
-    VimMode, block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4, h5, h6,
-    image, input, list_item, ordered_list, paragraph, progress_bar, row, table, table_body,
+    StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme, TuiSize, TuiSpacing, TuiStyle, View,
+    ViewType, VimMode, block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4,
+    h5, h6, image, input, list_item, ordered_list, paragraph, progress_bar, row, table, table_body,
     table_cell, table_head, table_row, text, text_area, unordered_list,
     view::{Line, Span, Text},
 };
@@ -1334,6 +1334,59 @@ fn code_block_renders_language_title_and_line_number_gutter() -> Result<()> {
     assert_eq!(cell_symbol(&terminal, 5, 1, 12), "o");
     assert_eq!(cell_symbol(&terminal, 1, 2, 12), "2");
     assert_eq!(cell_symbol(&terminal, 5, 2, 12), "t");
+
+    Ok(())
+}
+
+/// Verifies code-block backgrounds fill the interior and honor authored overrides.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("x").language("rust").padding(1)
+/// code_block("x").language("unknown").background(Magenta).padding(1)
+/// terminal size = 12x5
+/// ```
+///
+/// # Assertions
+///
+/// - Dark and light syntax themes fill padding, code, trailing, and blank interior cells.
+/// - Dark and light syntax-theme backgrounds remain distinct.
+/// - An authored background overrides the selected theme for unknown-language fallback code.
+/// - Border cells do not receive either syntax or authored interior backgrounds.
+#[test]
+fn code_block_background_fills_interior_and_honors_authored_override() -> Result<()> {
+    let padding = TuiSpacing::uniform(1);
+    let dark = code_block("x")
+        .language("rust")
+        .with_inline_style(TuiStyle::new().padding(padding));
+    let mut dark_terminal = Terminal::new(TestBackend::new(12, 5))?;
+    draw_view(&mut dark_terminal, &dark)?;
+    let dark_background = cell_colors(&dark_terminal, 2, 2, 12).1;
+    assert_ne!(dark_background, Color::Reset);
+    for (x, y) in [(1, 1), (9, 2), (10, 2), (1, 3)] {
+        assert_eq!(cell_colors(&dark_terminal, x, y, 12).1, dark_background);
+    }
+    assert_ne!(cell_colors(&dark_terminal, 0, 0, 12).1, dark_background);
+
+    let light = dark.clone().syntax_theme(SyntaxTheme::Light);
+    let mut light_terminal = Terminal::new(TestBackend::new(12, 5))?;
+    draw_view(&mut light_terminal, &light)?;
+    let light_background = cell_colors(&light_terminal, 2, 2, 12).1;
+    assert_ne!(light_background, dark_background);
+    assert_eq!(cell_colors(&light_terminal, 9, 2, 12).1, light_background);
+    assert_eq!(cell_colors(&light_terminal, 1, 3, 12).1, light_background);
+    assert_ne!(cell_colors(&light_terminal, 0, 0, 12).1, light_background);
+
+    let authored = code_block("x")
+        .language("unknown-language")
+        .with_inline_style(TuiStyle::new().background(Color::Magenta).padding(padding));
+    let mut authored_terminal = Terminal::new(TestBackend::new(12, 5))?;
+    draw_view(&mut authored_terminal, &authored)?;
+    for (x, y) in [(1, 1), (2, 2), (9, 2), (10, 2), (1, 3)] {
+        assert_eq!(cell_colors(&authored_terminal, x, y, 12).1, Color::Magenta);
+    }
+    assert_ne!(cell_colors(&authored_terminal, 0, 0, 12).1, Color::Magenta);
 
     Ok(())
 }

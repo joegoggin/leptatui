@@ -69,6 +69,33 @@ unordered lists, a responsive table with aligned cells, and a
 syntax-highlighted code block with line numbers. Scroll with `j`/`k`, Page Up
 and Page Down, `gg`, or `G`. Press `q` to quit.
 
+## Markdown Reader
+
+Run the full-screen reader with its bundled showcase:
+
+```sh
+cargo run --example markdown_reader
+```
+
+Pass a path to read any local UTF-8 Markdown file instead:
+
+```sh
+cargo run --example markdown_reader -- README.md
+```
+
+The bundled fixture demonstrates headings, inline formatting, nested lists,
+aligned tables, readable fallback blocks, and known- and unknown-language code
+fences:
+
+```sh
+cargo run --example markdown_reader -- crates/leptatui/examples/assets/markdown_showcase.md
+```
+
+The reader constructs its document from `<Markdown src={path} />` before
+terminal startup. Unreadable paths and invalid UTF-8 open the reader with a
+path-aware fallback paragraph. Scroll with the arrow keys or `j`/`k`, Page Up
+and Page Down, `gg`, or `G`. Press `q` to quit.
+
 ## Theme Switcher
 
 Run the context-backed light/dark theme example:

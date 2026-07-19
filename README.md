@@ -130,11 +130,19 @@ children, while tables use `TableHead` or `TableBody`, `TableRow`, and
 `TableCell`. Code blocks support `language`, `line_numbers`, and `syntax_theme`
 configuration.
 
-Use `markdown` or `<Markdown source=... />` to convert in-memory CommonMark
-into the same scrollable semantic views. `markdown_with_options` configures
-syntax themes and line numbers for parsed code blocks. For explicit UTF-8 file
-loading, use `markdown_file` or `markdown_file_with_options`; file readers
-return path-aware `MarkdownError` values.
+Use `markdown` or `markdown_with_options` to convert in-memory CommonMark into
+scrollable semantic views. For UTF-8 file loading, use `markdown_file`,
+`markdown_file_with_options`, or a path-backed tag:
+
+```rust
+view! {
+    <Markdown src="/path/to/file.md" />
+}
+```
+
+File readers are infallible: unreadable paths and invalid UTF-8 render a
+path-aware fallback paragraph. The option-bearing function and tag attributes
+configure syntax themes and line numbers for parsed code blocks.
 
 ```rust
 use leptatui::prelude::*;
@@ -699,6 +707,24 @@ Run the semantic document component showcase:
 
 ```sh
 cargo run --example document_showcase
+```
+
+Run the full-screen reader with its bundled showcase:
+
+```sh
+cargo run --example markdown_reader
+```
+
+Read any local UTF-8 Markdown file instead:
+
+```sh
+cargo run --example markdown_reader -- README.md
+```
+
+Run the reader against its bundled semantic and syntax-highlighting fixture:
+
+```sh
+cargo run --example markdown_reader -- crates/leptatui/examples/assets/markdown_showcase.md
 ```
 
 See `crates/leptatui/examples/README.md` for controls.

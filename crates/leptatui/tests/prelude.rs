@@ -108,8 +108,8 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// - A memo can derive from a prelude signal.
 /// - Context values can be provided and read from the prelude.
 /// - Standard-library builders, callback aliases, source types, Markdown
-///   options, file readers, and errors type-check from the prelude.
-/// - The Markdown view tag expands to the same in-memory document as its reader.
+///   options, and infallible file readers type-check from the prelude.
+/// - The Markdown view tag loads a path into the same document as its reader.
 /// - The view and stylesheet macros support standard-library component names
 ///   from prelude imports.
 #[test]
@@ -188,12 +188,16 @@ fn prelude_exposes_reactivity_and_context() {
             button("OK"),
         ]));
         let _ = view;
+        let markdown_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/markdown/core.md"
+        );
 
         let macro_view: View = view! {
             <Column>
                 <H1>"Guide"</H1>
                 <Paragraph>"Overview"</Paragraph>
-                <Markdown source="# Markdown" />
+                <Markdown src={markdown_path} />
                 <OrderedList start=3>
                     <ListItem>
                         <Paragraph>"First"</Paragraph>
@@ -218,12 +222,25 @@ fn prelude_exposes_reactivity_and_context() {
             </Column>
         };
         let _ = macro_view;
-        let macro_markdown: View = view! { <Markdown source="# Markdown" /> };
-        assert_eq!(macro_markdown, markdown("# Markdown"));
+        let macro_markdown: View = view! {
+            <Markdown
+                src={markdown_path}
+                syntax_theme=SyntaxTheme::Light
+                line_numbers=true
+            />
+        };
+        assert_eq!(
+            macro_markdown,
+            markdown_with_options(
+                include_str!("fixtures/markdown/core.md"),
+                MarkdownOptions::default()
+                    .syntax_theme(SyntaxTheme::Light)
+                    .line_numbers(true),
+            )
+        );
         let _default_file_reader = |path: &str| markdown_file(path);
         let _configured_file_reader =
             |path: &str, options: MarkdownOptions| markdown_file_with_options(path, options);
-        let _markdown_error_size = std::mem::size_of::<MarkdownError>();
 
         let style = TuiStyle::new()
             .foreground(Color::LightCyan)

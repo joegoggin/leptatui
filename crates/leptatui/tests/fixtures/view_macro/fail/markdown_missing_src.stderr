@@ -1,0 +1,5 @@
+error: Markdown requires a src attribute
+ --> tests/fixtures/view_macro/fail/markdown_missing_src.rs:8:10
+  |
+8 |         <Markdown />
+  |          ^^^^^^^^
