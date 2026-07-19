@@ -2,8 +2,9 @@
 //!
 //! This module converts pulldown-cmark's balanced event stream into the
 //! semantic headings, paragraphs, lists, tables, highlighted code blocks, and
-//! styled inline spans exposed by [`crate::view`]. Only the table extension is
-//! enabled beyond core CommonMark.
+//! styled inline spans exposed by [`crate::view`]. Readable styled-block or
+//! text fallbacks retain CommonMark content without dedicated semantic views.
+//! Only the table extension is enabled beyond core CommonMark.
 
 use std::iter::Peekable;
 
@@ -14,8 +15,9 @@ use ratatui::{
 };
 
 use crate::{
-    CellAlignment, View, code_block, column, h1, h2, h3, h4, h5, h6, list_item, ordered_list,
-    paragraph, table, table_body, table_cell, table_head, table_row, unordered_list,
+    Borders, CellAlignment, TuiSpacing, TuiStyle, View, block, code_block, column, h1, h2, h3, h4,
+    h5, h6, list_item, ordered_list, paragraph, table, table_body, table_cell, table_head,
+    table_row, unordered_list,
 };
 
 /// Accumulates owned rich-text lines while parsing inline Markdown events.
@@ -163,9 +165,9 @@ impl Default for InlineText {
 
 /// Converts CommonMark source into a scrollable semantic document view.
 ///
-/// The parser enables tables as the only extension. Unsupported block types
-/// are traversed when they can contain supported semantic blocks so their
-/// readable child content remains in source order.
+/// The parser enables tables as the only extension. Unsupported presentation
+/// maps to deterministic terminal text or styled blocks, and unsupported
+/// containers are traversed so readable child content remains in source order.
 ///
 /// # Arguments
 ///
@@ -217,7 +219,10 @@ fn parse_blocks<'a>(events: &mut Peekable<Parser<'a>>, end: Option<TagEnd>) -> V
             }
             Event::Start(Tag::BlockQuote(kind)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.extend(parse_blocks(events, Some(TagEnd::BlockQuote(kind))));
+                views.push(block_quote(parse_blocks(
+                    events,
+                    Some(TagEnd::BlockQuote(kind)),
+                )));
             }
             Event::Start(Tag::CodeBlock(kind)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
@@ -225,7 +230,7 @@ fn parse_blocks<'a>(events: &mut Peekable<Parser<'a>>, end: Option<TagEnd>) -> V
             }
             Event::Start(Tag::HtmlBlock) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                skip_until(events, TagEnd::HtmlBlock);
+                views.push(parse_html_block(events));
             }
             Event::Start(Tag::Emphasis) => parse_inline_events(
                 events,
@@ -242,29 +247,107 @@ fn parse_blocks<'a>(events: &mut Peekable<Parser<'a>>, end: Option<TagEnd>) -> V
             Event::Start(Tag::Link { dest_url, .. }) => {
                 parse_link(events, &dest_url, Style::new(), &mut inline);
             }
-            Event::Text(content) => inline.push_text(&content, Style::new()),
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                parse_image(events, &dest_url, Style::new(), &mut inline);
+            }
+            Event::Text(content)
+            | Event::InlineMath(content)
+            | Event::DisplayMath(content)
+            | Event::Html(content)
+            | Event::InlineHtml(content) => inline.push_text(&content, Style::new()),
             Event::Code(content) => {
                 inline.push_text(&content, Style::new().add_modifier(Modifier::REVERSED))
             }
+            Event::FootnoteReference(label) => {
+                push_footnote_reference(&mut inline, &label, Style::new());
+            }
             Event::SoftBreak | Event::HardBreak => inline.push_break(),
+            Event::Rule => {
+                flush_inline_paragraph(&mut inline, &mut views);
+                views.push(thematic_break());
+            }
+            Event::TaskListMarker(checked) => {
+                push_task_list_marker(&mut inline, checked, Style::new());
+            }
             Event::End(tag) if Some(tag) == end => {
                 flush_inline_paragraph(&mut inline, &mut views);
                 break;
             }
-            Event::End(_)
-            | Event::Start(_)
-            | Event::InlineMath(_)
-            | Event::DisplayMath(_)
-            | Event::Html(_)
-            | Event::InlineHtml(_)
-            | Event::FootnoteReference(_)
-            | Event::Rule
-            | Event::TaskListMarker(_) => {}
+            Event::End(_) | Event::Start(_) => {}
         }
     }
 
     flush_inline_paragraph(&mut inline, &mut views);
     views
+}
+
+/// Wraps parsed quote children in a visible, wrap-aware terminal prefix.
+///
+/// A left border marks every rendered quote row, including wrapped content.
+/// One cell of padding separates the marker from the content, and nested quote
+/// blocks naturally stack their prefixes.
+///
+/// # Arguments
+///
+/// * `children` — Semantic and fallback views parsed inside the blockquote.
+///
+/// # Returns
+///
+/// A left-bordered [`View::Block`] containing the quote children.
+fn block_quote(children: Vec<View>) -> View {
+    block(column(children)).with_inline_style(
+        TuiStyle::new()
+            .borders(Borders::LEFT)
+            .padding(TuiSpacing::new(1, 0, 0, 0)),
+    )
+}
+
+/// Creates a width-responsive horizontal terminal rule.
+///
+/// # Returns
+///
+/// A one-row [`View::Block`] whose top border fills the available width.
+fn thematic_break() -> View {
+    block(column(Vec::<View>::new())).with_inline_style(TuiStyle::new().borders(Borders::TOP))
+}
+
+/// Collects one raw HTML block as literal terminal text.
+///
+/// Pulldown-cmark includes source line endings in block HTML events. Feeding
+/// those payloads through [`InlineText`] retains the exact logical line shape
+/// without interpreting tags or entities inside the raw block.
+///
+/// # Arguments
+///
+/// * `events` — CommonMark event stream positioned inside an HTML block.
+///
+/// # Returns
+///
+/// A semantic paragraph containing the literal HTML block payload.
+fn parse_html_block<'a>(events: &mut Peekable<Parser<'a>>) -> View {
+    let mut content = InlineText::new();
+
+    for event in events.by_ref() {
+        match event {
+            Event::End(TagEnd::HtmlBlock) => break,
+            Event::Text(text)
+            | Event::Code(text)
+            | Event::InlineMath(text)
+            | Event::DisplayMath(text)
+            | Event::Html(text)
+            | Event::InlineHtml(text) => content.push_text(&text, Style::new()),
+            Event::FootnoteReference(label) => {
+                push_footnote_reference(&mut content, &label, Style::new());
+            }
+            Event::SoftBreak | Event::HardBreak => content.push_break(),
+            Event::TaskListMarker(checked) => {
+                push_task_list_marker(&mut content, checked, Style::new());
+            }
+            Event::Start(_) | Event::End(_) | Event::Rule => {}
+        }
+    }
+
+    paragraph(content.into_text())
 }
 
 /// Converts accumulated direct inline content into a semantic paragraph.
@@ -335,19 +418,76 @@ fn parse_inline_events<'a>(
             Event::Start(Tag::Link { dest_url, .. }) => {
                 parse_link(events, &dest_url, style, content);
             }
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                parse_image(events, &dest_url, style, content);
+            }
             Event::Start(Tag::CodeBlock(_)) => skip_until(events, TagEnd::CodeBlock),
             Event::Start(Tag::HtmlBlock) => skip_until(events, TagEnd::HtmlBlock),
-            Event::Start(_)
-            | Event::End(_)
-            | Event::InlineMath(_)
-            | Event::DisplayMath(_)
-            | Event::Html(_)
-            | Event::InlineHtml(_)
-            | Event::FootnoteReference(_)
-            | Event::Rule
-            | Event::TaskListMarker(_) => {}
+            Event::InlineMath(text)
+            | Event::DisplayMath(text)
+            | Event::Html(text)
+            | Event::InlineHtml(text) => content.push_text(&text, style),
+            Event::FootnoteReference(label) => {
+                push_footnote_reference(content, &label, style);
+            }
+            Event::TaskListMarker(checked) => {
+                push_task_list_marker(content, checked, style);
+            }
+            Event::Start(_) | Event::End(_) | Event::Rule => {}
         }
     }
+}
+
+/// Parses a Markdown image into deterministic descriptive terminal text.
+///
+/// No image view is constructed, so remote and local destinations are never
+/// opened. Parsed alt content is flattened to visible text and combined with
+/// the source using a stable `Image:` label.
+///
+/// # Arguments
+///
+/// * `events` — CommonMark event stream positioned inside an image.
+/// * `destination` — Parsed image source URL or path.
+/// * `style` — Span style inherited from the surrounding inline scope.
+/// * `content` — Destination rich-text accumulator.
+fn parse_image<'a>(
+    events: &mut Peekable<Parser<'a>>,
+    destination: &str,
+    style: Style,
+    content: &mut InlineText,
+) {
+    let mut alt = InlineText::new();
+    parse_inline_events(events, TagEnd::Image, style, &mut alt);
+    let alt = alt.plain_text();
+    let fallback = match (alt.is_empty(), destination.is_empty()) {
+        (false, false) => format!("Image: {alt} ({destination})"),
+        (false, true) => format!("Image: {alt}"),
+        (true, false) => format!("Image: {destination}"),
+        (true, true) => "Image".to_owned(),
+    };
+    content.push_text(&fallback, style);
+}
+
+/// Appends a readable footnote reference when such an event is enabled.
+///
+/// # Arguments
+///
+/// * `content` — Destination rich-text accumulator.
+/// * `label` — Parsed footnote label.
+/// * `style` — Span style inherited from the surrounding inline scope.
+fn push_footnote_reference(content: &mut InlineText, label: &str, style: Style) {
+    content.push_text(&format!("[^{label}]"), style);
+}
+
+/// Appends a readable checkbox marker when task-list events are enabled.
+///
+/// # Arguments
+///
+/// * `content` — Destination rich-text accumulator.
+/// * `checked` — Whether the parsed task marker is checked.
+/// * `style` — Span style inherited from the surrounding inline scope.
+fn push_task_list_marker(content: &mut InlineText, checked: bool, style: Style) {
+    content.push_text(if checked { "[x] " } else { "[ ] " }, style);
 }
 
 /// Parses a Markdown link and appends a terminal-readable destination.
@@ -616,7 +756,43 @@ fn skip_until<'a>(events: &mut Peekable<Parser<'a>>, end: TagEnd) {
 
 #[cfg(test)]
 mod tests {
+    use ratatui::{Terminal, backend::TestBackend};
+
     use super::*;
+    use crate::{RenderCtx, Result};
+
+    /// Renders Markdown into fixed terminal rows for fallback assertions.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` — CommonMark source to convert and render.
+    /// * `width` — Test terminal width in cells.
+    /// * `height` — Test terminal height in cells.
+    ///
+    /// # Returns
+    ///
+    /// A [`Vec`] containing rendered terminal symbols grouped by row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] if terminal or view rendering fails.
+    fn rendered_markdown_lines(source: &str, width: u16, height: u16) -> Result<Vec<String>> {
+        let view = markdown_to_view(source);
+        let mut terminal = Terminal::new(TestBackend::new(width, height))?;
+        let mut render_result = Ok(());
+
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            render_result = view.render(&mut ctx);
+        })?;
+        render_result?;
+
+        let cells = terminal.backend().buffer().content();
+        Ok(cells
+            .chunks(usize::from(width))
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect())
+            .collect())
+    }
 
     /// Verifies Markdown headings map to every semantic heading level.
     ///
@@ -939,6 +1115,220 @@ mod tests {
                 ]))]),
                 table_body([table_row(aligned_cells(["a", "b", "c", "d"]))]),
             ])]),
+        );
+    }
+
+    /// Verifies nested blockquotes retain semantic children and visible prefixes.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// > Alpha beta gamma
+    /// >
+    /// > > Inner
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Each quote becomes a left-bordered block with readable padding.
+    /// - The outer border remains visible beside wrapped content.
+    /// - The nested quote stacks a second border without flattening its child.
+    #[test]
+    fn markdown_renders_nested_blockquotes_with_wrapped_prefixes() -> Result<()> {
+        let source = "> Alpha beta gamma\n>\n> > Inner\n";
+
+        assert_eq!(
+            markdown_to_view(source),
+            column([block_quote(vec![
+                paragraph("Alpha beta gamma"),
+                block_quote(vec![paragraph("Inner")]),
+            ])]),
+        );
+
+        let lines = rendered_markdown_lines(source, 12, 3)?;
+        assert!(lines[0].starts_with("│ Alpha beta"));
+        assert!(lines[1].starts_with("│ gamma"));
+        assert!(lines[2].starts_with("│ │ Inner"));
+
+        Ok(())
+    }
+
+    /// Verifies thematic breaks render as width-responsive terminal rules.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// ---
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - A thematic break maps to a dedicated one-row fallback block.
+    /// - A one-cell terminal renders one horizontal rule glyph without panic.
+    /// - Wider terminals fill the complete row with rule glyphs.
+    #[test]
+    fn markdown_renders_thematic_breaks_at_narrow_widths() -> Result<()> {
+        assert_eq!(markdown_to_view("---\n"), column([thematic_break()]));
+        assert_eq!(rendered_markdown_lines("---\n", 1, 1)?, ["─"]);
+        assert_eq!(rendered_markdown_lines("---\n", 6, 1)?, ["──────"]);
+
+        Ok(())
+    }
+
+    /// Verifies Markdown images become descriptive text without image loading.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// ![diagram](https://example.com/diagram.png)
+    /// ![](local.png)
+    /// ![caption]()
+    /// ![]()
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Alt text and source are both shown when present.
+    /// - Source-only and alt-only images remain descriptive.
+    /// - An image with neither value still has a readable label.
+    /// - Every image maps to text rather than a path-backed image view.
+    #[test]
+    fn markdown_maps_images_to_descriptive_text() {
+        let source = concat!(
+            "![diagram](https://example.com/diagram.png)\n\n",
+            "![](local.png)\n\n",
+            "![caption]()\n\n",
+            "![]()\n",
+        );
+
+        assert_eq!(
+            markdown_to_view(source),
+            column([
+                paragraph("Image: diagram (https://example.com/diagram.png)"),
+                paragraph("Image: local.png"),
+                paragraph("Image: caption"),
+                paragraph("Image"),
+            ]),
+        );
+    }
+
+    /// Verifies raw HTML remains literal and entities follow CommonMark parsing.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// Before <kbd>&amp;</kbd> after.
+    ///
+    /// <section>
+    /// block &amp;
+    /// </section>
+    ///
+    /// Fish &amp; Chips &copy;
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Inline HTML tags are retained around decoded CommonMark text.
+    /// - Block HTML tags, entities, and source line endings remain literal.
+    /// - Entities in ordinary Markdown text decode to their visible characters.
+    /// - Following semantic content remains in source order.
+    #[test]
+    fn markdown_preserves_literal_html_and_entities() {
+        let source = concat!(
+            "Before <kbd>&amp;</kbd> after.\n\n",
+            "<section>\n",
+            "block &amp;\n",
+            "</section>\n\n",
+            "Fish &amp; Chips &copy;\n",
+        );
+
+        assert_eq!(
+            markdown_to_view(source),
+            column([
+                paragraph("Before <kbd>&</kbd> after."),
+                paragraph(Text::from(vec![
+                    Line::raw("<section>"),
+                    Line::raw("block &amp;"),
+                    Line::raw("</section>"),
+                    Line::default(),
+                ])),
+                paragraph("Fish & Chips ©"),
+            ]),
+        );
+    }
+
+    /// Verifies textual extension events remain readable when encountered.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// - [x] ~~done~~ and $x + y$[^note]
+    ///
+    /// $$z$$
+    ///
+    /// [^note]: Detail
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Unsupported inline presentation drops styling but retains its payload.
+    /// - Task and footnote events receive readable terminal markers.
+    /// - Display-math and footnote-definition text stays in source order.
+    /// - Production parsing remains limited to CommonMark plus tables.
+    #[test]
+    fn markdown_preserves_text_from_unsupported_parser_events() {
+        let source = concat!(
+            "- [x] ~~done~~ and $x + y$[^note]\n\n",
+            "$$z$$\n\n",
+            "[^note]: Detail\n",
+        );
+        let options = Options::ENABLE_TABLES
+            | Options::ENABLE_TASKLISTS
+            | Options::ENABLE_STRIKETHROUGH
+            | Options::ENABLE_MATH
+            | Options::ENABLE_FOOTNOTES;
+        let mut parser = Parser::new_ext(source, options).peekable();
+
+        assert_eq!(
+            column(parse_blocks(&mut parser, None)),
+            column([
+                unordered_list([list_item([paragraph("[x] done and x + y[^note]")])]),
+                paragraph("z"),
+                paragraph("Detail"),
+            ]),
+        );
+    }
+
+    /// Verifies semantic blocks and readable fallbacks retain source order.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// # Start
+    ///
+    /// ---
+    ///
+    /// ![middle](middle.png)
+    ///
+    /// <end>
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The semantic heading remains first.
+    /// - Rule, image, and raw-HTML fallbacks retain their original order.
+    #[test]
+    fn markdown_preserves_fallback_source_order() {
+        let source = "# Start\n\n---\n\n![middle](middle.png)\n\n<end>\n";
+
+        assert_eq!(
+            markdown_to_view(source),
+            column([
+                h1("Start"),
+                thematic_break(),
+                paragraph("Image: middle (middle.png)"),
+                paragraph(Text::from(vec![Line::raw("<end>"), Line::default()])),
+            ]),
         );
     }
 
