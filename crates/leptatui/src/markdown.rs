@@ -623,9 +623,9 @@ fn push_task_list_marker(content: &mut InlineText, checked: bool, style: Style) 
 /// Parses a Markdown link and appends a terminal-readable destination.
 ///
 /// Link labels are underlined and retain surrounding emphasis or strong
-/// modifiers. Destinations are appended only when the visible label does not
-/// already expose the exact URL or an email address without its `mailto:`
-/// scheme.
+/// modifiers. Non-empty destinations are appended only when the visible label
+/// does not already expose the exact URL or an email address without its
+/// `mailto:` scheme.
 ///
 /// # Arguments
 ///
@@ -644,7 +644,7 @@ fn parse_link<'a>(
     parse_inline_events(events, TagEnd::Link, link_style, &mut link);
 
     let label = link.plain_text();
-    if !link_destination_is_visible(&label, destination) {
+    if !destination.is_empty() && !link_destination_is_visible(&label, destination) {
         if label.is_empty() {
             link.push_text(destination, link_style);
         } else {
@@ -1403,7 +1403,7 @@ mod tests {
     /// ```text
     /// Read [the *guide*](https://example.com/guide),
     /// [https://example.com](https://example.com), <https://example.org>,
-    /// and <reader@example.com>.
+    /// and <reader@example.com>, plus [empty]().
     /// ```
     ///
     /// # Assertions
@@ -1412,12 +1412,13 @@ mod tests {
     /// - A descriptive label is followed by its parenthesized destination.
     /// - URL labels and URL autolinks do not duplicate their destinations.
     /// - Email autolinks do not expose or duplicate the `mailto:` scheme.
+    /// - Links with empty destinations do not display empty parentheses.
     #[test]
     fn markdown_styles_links_and_appends_hidden_destinations() {
         let source = concat!(
             "Read [the *guide*](https://example.com/guide), ",
             "[https://example.com](https://example.com), ",
-            "<https://example.org>, and <reader@example.com>.\n",
+            "<https://example.org>, and <reader@example.com>, plus [empty]().\n",
         );
         let underline = Style::new().add_modifier(Modifier::UNDERLINED);
 
@@ -1434,6 +1435,8 @@ mod tests {
                 Span::styled("https://example.org", underline),
                 Span::raw(", and "),
                 Span::styled("reader@example.com", underline),
+                Span::raw(", plus "),
+                Span::styled("empty", underline),
                 Span::raw("."),
             ])))]),
         );

@@ -146,6 +146,18 @@ impl Element {
             return self.expand_progress_bar();
         }
 
+        if self.name == "Markdown" {
+            return self.expand_required_attr_element(
+                "Markdown",
+                AttrKind::MarkdownSource,
+                "source",
+                |source| {
+                    let leptatui = crate::utils::crate_path::leptatui();
+                    quote! { #leptatui::markdown(#source) }
+                },
+            );
+        }
+
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 let leptatui = crate::utils::crate_path::leptatui();
@@ -195,15 +207,6 @@ impl Element {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::paragraph(#content) }
             }),
-            "Markdown" => self.expand_required_attr_element(
-                "Markdown",
-                AttrKind::MarkdownSource,
-                "source",
-                |source| {
-                    let leptatui = crate::utils::crate_path::leptatui();
-                    quote! { #leptatui::markdown(#source) }
-                },
-            ),
             "CodeBlock" => self.expand_text_like("CodeBlock", |content| {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::code_block(#content) }
