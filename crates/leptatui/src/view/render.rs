@@ -94,6 +94,88 @@ fn semantic_paragraph(content: &Text<'static>, style: TuiStyle) -> Paragraph<'st
         .wrap(Wrap { trim: false })
 }
 
+/// Returns the horizontal offset for a semantic heading's content.
+///
+/// The offset includes one `#` per heading level and one separating space.
+///
+/// # Arguments
+///
+/// * `level` — One-based semantic heading level.
+///
+/// # Returns
+///
+/// A [`u16`] offset from the heading area's left edge.
+fn heading_content_offset(level: u16) -> u16 {
+    level.saturating_add(1)
+}
+
+/// Renders a Markdown-style semantic heading with a hanging content indent.
+///
+/// The marker occupies only the first row while wrapped content remains aligned
+/// beneath the heading text.
+///
+/// # Arguments
+///
+/// * `content` — Rich heading text to render.
+/// * `metadata` — Selector metadata used to resolve the heading style.
+/// * `level` — One-based semantic heading level.
+/// * `ctx` — Rendering context containing the target area and stylesheets.
+fn render_heading(
+    content: &Text<'static>,
+    metadata: &StyleMetadata,
+    level: u16,
+    ctx: &mut RenderCtx<'_, '_>,
+) {
+    let style = resolve_style(metadata, ctx);
+    let area = ctx.area();
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let content_offset = heading_content_offset(level).min(area.width);
+    let marker = format!("{} ", "#".repeat(usize::from(level)));
+    let marker_area = Rect {
+        width: content_offset,
+        height: 1,
+        ..area
+    };
+    ctx.with_area(marker_area, |ctx| {
+        ctx.render_widget(Paragraph::new(marker).style(style.to_ratatui_style()));
+    });
+
+    if content_offset < area.width {
+        let content_area = Rect {
+            x: area.x.saturating_add(content_offset),
+            width: area.width.saturating_sub(content_offset),
+            ..area
+        };
+        ctx.with_area(content_area, |ctx| {
+            ctx.render_widget(semantic_paragraph(content, style));
+        });
+    }
+}
+
+/// Returns the minimum height required by a Markdown-style semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich heading text to measure.
+/// * `style` — Resolved style applied beneath rich-text spans.
+/// * `level` — One-based semantic heading level.
+/// * `width` — Available heading width in terminal cells.
+///
+/// # Returns
+///
+/// A [`u16`] row count that includes wrapping after the heading marker.
+fn heading_min_height(content: &Text<'static>, style: TuiStyle, level: u16, width: u16) -> u16 {
+    let content_width = width.saturating_sub(heading_content_offset(level));
+    if content_width == 0 {
+        return u16::from(width > 0);
+    }
+
+    line_count_height(semantic_paragraph(content, style).line_count(content_width)).max(1)
+}
+
 /// Wraps retained code lines for the available inner width.
 ///
 /// Syntax spans are split only at grapheme boundaries. When line numbers are
@@ -441,13 +523,31 @@ impl View {
                 ctx.render_widget(text_paragraph(content.as_str(), style));
                 Ok(())
             }
-            Self::H1 { content, metadata }
-            | Self::H2 { content, metadata }
-            | Self::H3 { content, metadata }
-            | Self::H4 { content, metadata }
-            | Self::H5 { content, metadata }
-            | Self::H6 { content, metadata }
-            | Self::Paragraph { content, metadata } => {
+            Self::H1 { content, metadata } => {
+                render_heading(content, metadata, 1, ctx);
+                Ok(())
+            }
+            Self::H2 { content, metadata } => {
+                render_heading(content, metadata, 2, ctx);
+                Ok(())
+            }
+            Self::H3 { content, metadata } => {
+                render_heading(content, metadata, 3, ctx);
+                Ok(())
+            }
+            Self::H4 { content, metadata } => {
+                render_heading(content, metadata, 4, ctx);
+                Ok(())
+            }
+            Self::H5 { content, metadata } => {
+                render_heading(content, metadata, 5, ctx);
+                Ok(())
+            }
+            Self::H6 { content, metadata } => {
+                render_heading(content, metadata, 6, ctx);
+                Ok(())
+            }
+            Self::Paragraph { content, metadata } => {
                 let style = resolve_style(metadata, ctx);
                 ctx.render_widget(semantic_paragraph(content, style));
                 Ok(())
@@ -5371,13 +5471,31 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             let style = resolve_style(metadata, ctx);
             line_count_height(text_paragraph(content.as_str(), style).line_count(ctx.area().width))
         }
-        View::H1 { content, metadata }
-        | View::H2 { content, metadata }
-        | View::H3 { content, metadata }
-        | View::H4 { content, metadata }
-        | View::H5 { content, metadata }
-        | View::H6 { content, metadata }
-        | View::Paragraph { content, metadata } => {
+        View::H1 { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            heading_min_height(content, style, 1, ctx.area().width)
+        }
+        View::H2 { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            heading_min_height(content, style, 2, ctx.area().width)
+        }
+        View::H3 { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            heading_min_height(content, style, 3, ctx.area().width)
+        }
+        View::H4 { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            heading_min_height(content, style, 4, ctx.area().width)
+        }
+        View::H5 { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            heading_min_height(content, style, 5, ctx.area().width)
+        }
+        View::H6 { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            heading_min_height(content, style, 6, ctx.area().width)
+        }
+        View::Paragraph { content, metadata } => {
             let style = resolve_style(metadata, ctx);
             line_count_height(semantic_paragraph(content, style).line_count(ctx.area().width))
         }

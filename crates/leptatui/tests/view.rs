@@ -792,7 +792,7 @@ fn semantic_text_builders_store_rich_text_and_metadata() {
     }
 }
 
-/// Verifies semantic text views render their documented default modifiers.
+/// Verifies semantic text views render their documented hierarchy and modifiers.
 ///
 /// # Example Under Test
 ///
@@ -803,31 +803,51 @@ fn semantic_text_builders_store_rich_text_and_metadata() {
 ///
 /// # Assertions
 ///
-/// - H1 is bold and underlined.
+/// - H1 is bold and retains the terminal's default background.
 /// - H2 is bold.
 /// - H3 is bold and italic.
-/// - H4 is underlined.
-/// - H5 is italic.
+/// - H4 is italic.
+/// - H5 is dim and italic.
 /// - H6 is dim.
+/// - H1 through H6 use Markdown-style `#` markers and no underline modifier.
 /// - Paragraph has no default modifier.
 #[test]
 fn semantic_text_views_render_default_modifiers() -> Result<()> {
-    let views = [
-        (h1("H1"), Modifier::BOLD | Modifier::UNDERLINED),
-        (h2("H2"), Modifier::BOLD),
-        (h3("H3"), Modifier::BOLD | Modifier::ITALIC),
-        (h4("H4"), Modifier::UNDERLINED),
-        (h5("H5"), Modifier::ITALIC),
-        (h6("H6"), Modifier::DIM),
-        (paragraph("Paragraph"), Modifier::empty()),
+    let headings = [
+        (h1("H1"), 1, Modifier::BOLD),
+        (h2("H2"), 2, Modifier::BOLD),
+        (h3("H3"), 3, Modifier::BOLD | Modifier::ITALIC),
+        (h4("H4"), 4, Modifier::ITALIC),
+        (h5("H5"), 5, Modifier::DIM | Modifier::ITALIC),
+        (h6("H6"), 6, Modifier::DIM),
     ];
 
-    for (view, expected_modifiers) in views {
-        let mut terminal = Terminal::new(TestBackend::new(12, 1))?;
+    for (view, level, expected_modifiers) in headings {
+        let mut terminal = Terminal::new(TestBackend::new(16, 1))?;
         draw_view(&mut terminal, &view)?;
 
-        assert_eq!(cell_modifiers(&terminal, 0, 0, 12), expected_modifiers);
+        let content_x = level + 1;
+        for marker_x in 0..level {
+            assert_eq!(cell_symbol(&terminal, marker_x, 0, 16), "#");
+        }
+        assert_eq!(cell_symbol(&terminal, content_x, 0, 16), "H");
+        assert_eq!(
+            cell_modifiers(&terminal, content_x, 0, 16),
+            expected_modifiers
+        );
+        assert_eq!(cell_modifiers(&terminal, 0, 0, 16), expected_modifiers);
+        assert!(!expected_modifiers.contains(Modifier::UNDERLINED));
+        if level == 1 {
+            assert_eq!(cell_colors(&terminal, content_x, 0, 16).1, Color::Reset);
+        }
     }
+
+    let mut paragraph_terminal = Terminal::new(TestBackend::new(16, 1))?;
+    draw_view(&mut paragraph_terminal, &paragraph("Paragraph"))?;
+    assert_eq!(
+        cell_modifiers(&paragraph_terminal, 0, 0, 16),
+        Modifier::empty()
+    );
 
     Ok(())
 }
@@ -846,7 +866,7 @@ fn semantic_text_views_render_default_modifiers() -> Result<()> {
 ///
 /// # Assertions
 ///
-/// - The H1 default resolves to bold and underlined without authored styles.
+/// - The H1 default resolves to bold without authored styles.
 /// - A normal type rule can remove every default modifier.
 /// - A class rule replaces the semantic default.
 /// - An inline declaration replaces a normal class rule.
@@ -861,10 +881,7 @@ fn semantic_defaults_have_low_cascade_precedence() {
         TuiStyle::new(),
         &theme,
     );
-    assert_eq!(
-        default_style.modifiers,
-        Some(Modifier::BOLD | Modifier::UNDERLINED)
-    );
+    assert_eq!(default_style.modifiers, Some(Modifier::BOLD));
 
     let type_stylesheet = Stylesheet::new().rule(
         StyleSelector::view_type(ViewType::H1),
@@ -953,34 +970,77 @@ fn semantic_rendering_preserves_rich_text_span_styles() -> Result<()> {
     Ok(())
 }
 
-/// Verifies every semantic text variant wraps and reports its wrapped height.
+/// Verifies heading decoration preserves rich-text span styles while wrapping.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h3([yellow reversed "Rich ", plain "body"])
+/// terminal width = 9
+/// ```
+///
+/// # Assertions
+///
+/// - The H3 marker contains three leading `#` cells.
+/// - Both content rows begin after the marker gutter.
+/// - The first span retains its yellow foreground and reversed modifier.
+/// - The second span wraps without inheriting the first span's reversed modifier.
+#[test]
+fn heading_rendering_preserves_rich_text_styles_and_hanging_indent() -> Result<()> {
+    let content = Text::from(Line::from(vec![
+        Span::styled(
+            "Rich ",
+            Style::new()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::REVERSED),
+        ),
+        Span::raw("body"),
+    ]));
+    let mut terminal = Terminal::new(TestBackend::new(9, 2))?;
+
+    draw_view(&mut terminal, &h3(content))?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 9), "#");
+    assert_eq!(cell_symbol(&terminal, 1, 0, 9), "#");
+    assert_eq!(cell_symbol(&terminal, 2, 0, 9), "#");
+    assert_eq!(cell_symbol(&terminal, 4, 0, 9), "R");
+    assert_eq!(cell_colors(&terminal, 4, 0, 9).0, Color::Yellow);
+    assert!(cell_modifiers(&terminal, 4, 0, 9).contains(Modifier::REVERSED));
+    assert_eq!(cell_symbol(&terminal, 4, 1, 9), "b");
+    assert!(!cell_modifiers(&terminal, 4, 1, 9).contains(Modifier::REVERSED));
+
+    Ok(())
+}
+
+/// Verifies semantic headings wrap after their Markdown-style markers.
 ///
 /// # Example Under Test
 ///
 /// ```text
 /// h1("One Two") through h6("One Two")
-/// paragraph("One Two")
-/// terminal width = 4
+/// content width = 4
 /// ```
 ///
 /// # Assertions
 ///
-/// - Every semantic view reports a two-row minimum height.
-/// - Every semantic view renders `Two` on the second row.
+/// - Every heading reports a two-row minimum height.
+/// - Each marker contains one `#` per heading level with no leading indentation.
+/// - Both heading rows begin after the complete marker gutter.
 #[test]
 fn semantic_text_variants_wrap_and_report_intrinsic_height() -> Result<()> {
-    let views = [
-        h1("One Two"),
-        h2("One Two"),
-        h3("One Two"),
-        h4("One Two"),
-        h5("One Two"),
-        h6("One Two"),
-        paragraph("One Two"),
+    let headings = [
+        (h1("One Two"), 1),
+        (h2("One Two"), 2),
+        (h3("One Two"), 3),
+        (h4("One Two"), 4),
+        (h5("One Two"), 5),
+        (h6("One Two"), 6),
     ];
 
-    for view in views {
-        let mut terminal = Terminal::new(TestBackend::new(4, 2))?;
+    for (view, level) in headings {
+        let content_x = level + 1;
+        let width = content_x + 4;
+        let mut terminal = Terminal::new(TestBackend::new(width, 2))?;
         let mut min_height = 0;
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
@@ -989,7 +1049,56 @@ fn semantic_text_variants_wrap_and_report_intrinsic_height() -> Result<()> {
         draw_view(&mut terminal, &view)?;
 
         assert_eq!(min_height, 2);
-        assert_eq!(symbol_position(&terminal, "T", 4), (0, 1));
+        for marker_x in 0..level {
+            assert_eq!(cell_symbol(&terminal, marker_x, 0, width), "#");
+        }
+        assert_eq!(symbol_position(&terminal, "O", width), (content_x, 0));
+        assert_eq!(symbol_position(&terminal, "T", width), (content_x, 1));
+    }
+
+    Ok(())
+}
+
+/// Verifies Markdown-style headings tolerate viewports narrower than their marker.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h6("Heading") at widths 0 through 8
+/// ```
+///
+/// # Assertions
+///
+/// - Measurement and rendering succeed at every width.
+/// - Any nonzero viewport renders the visible portion of the marker.
+/// - H6 renders all six hash cells when the viewport permits them.
+/// - Heading content begins at cell seven when the viewport permits it.
+#[test]
+fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
+    for width in 0..=8 {
+        let view = h6("Heading");
+        let mut terminal = Terminal::new(TestBackend::new(width, 2))?;
+        let mut min_height = 0;
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            min_height = view.__min_height(&mut ctx);
+            render_result = view.render(&mut ctx);
+        })?;
+        render_result?;
+
+        if width == 0 {
+            assert_eq!(min_height, 0);
+        } else {
+            assert!(min_height >= 1);
+            assert_eq!(cell_symbol(&terminal, 0, 0, width), "#");
+        }
+        if width >= 6 {
+            assert_eq!(cell_symbol(&terminal, 5, 0, width), "#");
+        }
+        if width >= 8 {
+            assert_eq!(cell_symbol(&terminal, 7, 0, width), "H");
+        }
     }
 
     Ok(())

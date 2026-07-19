@@ -73,11 +73,11 @@ impl ViewType {
     /// stylesheet and inline declarations.
     pub(crate) fn default_style(self) -> TuiStyle {
         match self {
-            Self::H1 => TuiStyle::new().modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            Self::H1 => TuiStyle::new().modifier(Modifier::BOLD),
             Self::H2 | Self::TableHead => TuiStyle::new().modifier(Modifier::BOLD),
             Self::H3 => TuiStyle::new().modifier(Modifier::BOLD | Modifier::ITALIC),
-            Self::H4 => TuiStyle::new().modifier(Modifier::UNDERLINED),
-            Self::H5 => TuiStyle::new().modifier(Modifier::ITALIC),
+            Self::H4 => TuiStyle::new().modifier(Modifier::ITALIC),
+            Self::H5 => TuiStyle::new().modifier(Modifier::DIM | Modifier::ITALIC),
             Self::H6 => TuiStyle::new().modifier(Modifier::DIM),
             Self::Paragraph
             | Self::CodeBlock
