@@ -1,0 +1,5 @@
+error: Markdown expects exactly one source attribute
+ --> tests/fixtures/view_macro/fail/markdown_duplicate_source.rs:8:19
+  |
+8 |         <Markdown source="# One" source="# Two" />
+  |                   ^^^^^^

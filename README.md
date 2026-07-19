@@ -99,8 +99,8 @@ view! {
 
 Leptatui's standard view set includes layout containers (`Block`, `Row`,
 `Column`), plain and semantic text, nested lists, responsive tables,
-syntax-highlighted code blocks, buttons, controlled form controls, images, and
-progress bars.
+syntax-highlighted code blocks, CommonMark documents, buttons, controlled form
+controls, images, and progress bars.
 All are available through `leptatui::prelude::*` as builders and through
 PascalCase `view!` tags.
 
@@ -129,6 +129,12 @@ unordered lists, responsive tables, and `CodeBlock`. Lists contain `ListItem`
 children, while tables use `TableHead` or `TableBody`, `TableRow`, and
 `TableCell`. Code blocks support `language`, `line_numbers`, and `syntax_theme`
 configuration.
+
+Use `markdown` or `<Markdown source=... />` to convert in-memory CommonMark
+into the same scrollable semantic views. `markdown_with_options` configures
+syntax themes and line numbers for parsed code blocks. For explicit UTF-8 file
+loading, use `markdown_file` or `markdown_file_with_options`; file readers
+return path-aware `MarkdownError` values.
 
 ```rust
 use leptatui::prelude::*;

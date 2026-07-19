@@ -59,7 +59,9 @@
 //! markers. [`table`] groups semantic table sections, rows, and aligned cells
 //! into a bordered responsive grid. These semantic views accept
 //! owned Ratatui rich text, wrap to the available width, and contribute their
-//! wrapped height to parent layouts.
+//! wrapped height to parent layouts. [`markdown`] renders in-memory CommonMark
+//! without failure, while [`markdown_file`] performs explicit UTF-8 file
+//! loading before creating the same scrollable document view.
 //!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
@@ -77,6 +79,7 @@
 //! APIs.
 
 mod executor;
+mod markdown;
 
 pub mod action;
 pub mod app;
@@ -98,6 +101,10 @@ pub use component::{
     Children, ChildrenFn, ChildrenMut, Component, KeyControl, RenderCtx, use_key_event,
 };
 pub use leptatui_macros::{component, stylesheet, view};
+pub use markdown::{
+    MarkdownError, MarkdownOptions, markdown, markdown_file, markdown_file_with_options,
+    markdown_with_options,
+};
 pub use resource::{Resource, ResourceState, create_resource};
 pub use route::{RouteState, provide_route, use_navigate, use_route};
 pub use style::{

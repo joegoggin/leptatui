@@ -1,0 +1,5 @@
+error: Markdown does not accept children
+ --> tests/fixtures/view_macro/fail/markdown_child.rs:8:10
+  |
+8 |         <Markdown source="# Guide">
+  |          ^^^^^^^^
