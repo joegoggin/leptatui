@@ -4,9 +4,15 @@
 //! semantic headings, paragraphs, lists, tables, highlighted code blocks, and
 //! styled inline spans exposed by [`crate::view`]. Readable styled-block or
 //! text fallbacks retain CommonMark content without dedicated semantic views.
-//! Only the table extension is enabled beyond core CommonMark.
+//! In-memory readers are infallible, while explicit file readers finish UTF-8
+//! filesystem loading before returning a view. Only the table extension is
+//! enabled beyond core CommonMark.
 
-use std::iter::Peekable;
+use std::{
+    fs, io,
+    iter::Peekable,
+    path::{Path, PathBuf},
+};
 
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::{
@@ -15,10 +21,157 @@ use ratatui::{
 };
 
 use crate::{
-    Borders, CellAlignment, TuiSpacing, TuiStyle, View, block, code_block, column, h1, h2, h3, h4,
-    h5, h6, list_item, ordered_list, paragraph, table, table_body, table_cell, table_head,
-    table_row, unordered_list,
+    Borders, CellAlignment, SyntaxTheme, TuiSpacing, TuiStyle, View, block, code_block, column, h1,
+    h2, h3, h4, h5, h6, list_item, ordered_list, paragraph, table, table_body, table_cell,
+    table_head, table_row, unordered_list,
 };
+
+/// Default presentation options applied while converting Markdown documents.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct MarkdownOptions {
+    /// Bundled syntax theme applied to fenced and indented code blocks.
+    syntax_theme: SyntaxTheme,
+    /// Whether parsed code blocks display one-based line numbers.
+    line_numbers: bool,
+}
+
+impl MarkdownOptions {
+    /// Sets the bundled syntax theme for parsed code blocks.
+    ///
+    /// # Arguments
+    ///
+    /// * `syntax_theme` — Dark or light bundled theme selection.
+    ///
+    /// # Returns
+    ///
+    /// A [`MarkdownOptions`] value with the requested syntax theme.
+    pub fn syntax_theme(mut self, syntax_theme: SyntaxTheme) -> Self {
+        self.syntax_theme = syntax_theme;
+        self
+    }
+
+    /// Sets default line-number visibility for parsed code blocks.
+    ///
+    /// # Arguments
+    ///
+    /// * `line_numbers` — Whether to display one-based logical line numbers.
+    ///
+    /// # Returns
+    ///
+    /// A [`MarkdownOptions`] value with the requested line-number behavior.
+    pub fn line_numbers(mut self, line_numbers: bool) -> Self {
+        self.line_numbers = line_numbers;
+        self
+    }
+}
+
+/// Errors returned while loading Markdown files.
+#[derive(Debug, thiserror::Error)]
+pub enum MarkdownError {
+    /// Reading or decoding a Markdown file failed.
+    #[error("failed to read Markdown file `{path}`: {source}", path = .path.display())]
+    Read {
+        /// Path supplied to the Markdown file reader.
+        path: PathBuf,
+        /// Underlying filesystem or UTF-8 decoding error.
+        #[source]
+        source: io::Error,
+    },
+}
+
+/// Converts CommonMark source into a scrollable semantic document view.
+///
+/// Uses [`MarkdownOptions::default`] and performs no filesystem access.
+///
+/// # Arguments
+///
+/// * `source` — CommonMark source text to parse.
+///
+/// # Returns
+///
+/// A [`View::Column`] containing semantic document blocks in source order.
+pub fn markdown(source: impl AsRef<str>) -> View {
+    markdown_with_options(source, MarkdownOptions::default())
+}
+
+/// Converts CommonMark source with explicit presentation options.
+///
+/// Parsing is infallible and performs no filesystem access.
+///
+/// # Arguments
+///
+/// * `source` — CommonMark source text to parse.
+/// * `options` — Code-block presentation defaults for the document.
+///
+/// # Returns
+///
+/// A [`View::Column`] containing semantic document blocks in source order.
+pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) -> View {
+    let mut parser = Parser::new_ext(source.as_ref(), Options::ENABLE_TABLES).peekable();
+    column(parse_blocks(&mut parser, None, options))
+}
+
+/// Loads a UTF-8 Markdown file into a scrollable semantic document view.
+///
+/// Uses [`MarkdownOptions::default`] and performs all filesystem access before
+/// returning the view.
+///
+/// # Arguments
+///
+/// * `path` — Path to the UTF-8 Markdown file to load.
+///
+/// # Returns
+///
+/// A [`Result`](std::result::Result) containing the parsed document view.
+///
+/// # Errors
+///
+/// Returns [`MarkdownError::Read`] if the path cannot be read as a UTF-8 file.
+pub fn markdown_file(path: impl AsRef<Path>) -> Result<View, MarkdownError> {
+    markdown_file_with_options(path, MarkdownOptions::default())
+}
+
+/// Loads a UTF-8 Markdown file with explicit presentation options.
+///
+/// All filesystem access completes before the returned view enters render
+/// traversal.
+///
+/// # Examples
+///
+/// ```no_run
+/// use leptatui::{MarkdownOptions, SyntaxTheme, markdown_file_with_options};
+///
+/// let view = markdown_file_with_options(
+///     "README.md",
+///     MarkdownOptions::default().syntax_theme(SyntaxTheme::Light),
+/// )?;
+/// # let _ = view;
+/// # Ok::<(), leptatui::MarkdownError>(())
+/// ```
+///
+/// # Arguments
+///
+/// * `path` — Path to the UTF-8 Markdown file to load.
+/// * `options` — Code-block presentation defaults for the document.
+///
+/// # Returns
+///
+/// A [`Result`](std::result::Result) containing the parsed document view.
+///
+/// # Errors
+///
+/// Returns [`MarkdownError::Read`] if the path cannot be read as a UTF-8 file.
+pub fn markdown_file_with_options(
+    path: impl AsRef<Path>,
+    options: MarkdownOptions,
+) -> Result<View, MarkdownError> {
+    let path = path.as_ref();
+    let source = fs::read_to_string(path).map_err(|source| MarkdownError::Read {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(markdown_with_options(source, options))
+}
 
 /// Accumulates owned rich-text lines while parsing inline Markdown events.
 ///
@@ -163,24 +316,6 @@ impl Default for InlineText {
     }
 }
 
-/// Converts CommonMark source into a scrollable semantic document view.
-///
-/// The parser enables tables as the only extension. Unsupported presentation
-/// maps to deterministic terminal text or styled blocks, and unsupported
-/// containers are traversed so readable child content remains in source order.
-///
-/// # Arguments
-///
-/// * `source` — CommonMark source text to parse.
-///
-/// # Returns
-///
-/// A [`View::Column`] containing semantic document blocks in source order.
-pub(crate) fn markdown_to_view(source: &str) -> View {
-    let mut parser = Parser::new_ext(source, Options::ENABLE_TABLES).peekable();
-    column(parse_blocks(&mut parser, None))
-}
-
 /// Parses semantic blocks until the requested closing tag or end of input.
 ///
 /// Direct inline events are collected into a paragraph because pulldown-cmark
@@ -190,11 +325,16 @@ pub(crate) fn markdown_to_view(source: &str) -> View {
 ///
 /// * `events` — Peekable CommonMark event stream positioned inside a block.
 /// * `end` — Optional closing tag that terminates the current block sequence.
+/// * `options` — Code-block presentation defaults for the document.
 ///
 /// # Returns
 ///
 /// A [`Vec`] containing converted semantic views in event order.
-fn parse_blocks<'a>(events: &mut Peekable<Parser<'a>>, end: Option<TagEnd>) -> Vec<View> {
+fn parse_blocks<'a>(
+    events: &mut Peekable<Parser<'a>>,
+    end: Option<TagEnd>,
+    options: MarkdownOptions,
+) -> Vec<View> {
     let mut views = Vec::new();
     let mut inline = InlineText::new();
 
@@ -211,7 +351,7 @@ fn parse_blocks<'a>(events: &mut Peekable<Parser<'a>>, end: Option<TagEnd>) -> V
             }
             Event::Start(Tag::List(start)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(parse_list(events, start));
+                views.push(parse_list(events, start, options));
             }
             Event::Start(Tag::Table(alignments)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
@@ -222,11 +362,12 @@ fn parse_blocks<'a>(events: &mut Peekable<Parser<'a>>, end: Option<TagEnd>) -> V
                 views.push(block_quote(parse_blocks(
                     events,
                     Some(TagEnd::BlockQuote(kind)),
+                    options,
                 )));
             }
             Event::Start(Tag::CodeBlock(kind)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(parse_code_block(events, kind));
+                views.push(parse_code_block(events, kind, options));
             }
             Event::Start(Tag::HtmlBlock) => {
                 flush_inline_paragraph(&mut inline, &mut views);
@@ -552,11 +693,16 @@ fn link_destination_is_visible(label: &str, destination: &str) -> bool {
 ///
 /// * `events` — CommonMark event stream positioned inside the code block.
 /// * `kind` — Parsed fenced info string or indented-block marker.
+/// * `options` — Presentation defaults applied to the parsed code block.
 ///
 /// # Returns
 ///
 /// A [`View::CodeBlock`] retaining the parsed source and language selection.
-fn parse_code_block<'a>(events: &mut Peekable<Parser<'a>>, kind: CodeBlockKind<'a>) -> View {
+fn parse_code_block<'a>(
+    events: &mut Peekable<Parser<'a>>,
+    kind: CodeBlockKind<'a>,
+    options: MarkdownOptions,
+) -> View {
     let mut source = String::new();
     for event in events.by_ref() {
         match event {
@@ -571,7 +717,9 @@ fn parse_code_block<'a>(events: &mut Peekable<Parser<'a>>, kind: CodeBlockKind<'
         CodeBlockKind::Indented => None,
         CodeBlockKind::Fenced(info) => info.split_whitespace().next().map(str::to_owned),
     };
-    let view = code_block(source);
+    let view = code_block(source)
+        .line_numbers(options.line_numbers)
+        .syntax_theme(options.syntax_theme);
     match language {
         Some(language) => view.language(language),
         None => view,
@@ -605,17 +753,22 @@ fn heading(level: HeadingLevel, content: Text<'static>) -> View {
 ///
 /// * `events` — CommonMark event stream positioned after the list opening tag.
 /// * `start` — First ordered marker, or [`None`] for an unordered list.
+/// * `options` — Code-block presentation defaults for nested list content.
 ///
 /// # Returns
 ///
 /// A semantic ordered or unordered list retaining item order and nesting.
-fn parse_list<'a>(events: &mut Peekable<Parser<'a>>, start: Option<u64>) -> View {
+fn parse_list<'a>(
+    events: &mut Peekable<Parser<'a>>,
+    start: Option<u64>,
+    options: MarkdownOptions,
+) -> View {
     let mut items = Vec::new();
 
     while let Some(event) = events.next() {
         match event {
             Event::Start(Tag::Item) => {
-                items.push(list_item(parse_blocks(events, Some(TagEnd::Item))));
+                items.push(list_item(parse_blocks(events, Some(TagEnd::Item), options)));
             }
             Event::End(TagEnd::List(_)) => break,
             _ => {}
@@ -756,10 +909,99 @@ fn skip_until<'a>(events: &mut Peekable<Parser<'a>>, end: TagEnd) {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        error::Error as _,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend};
 
     use super::*;
     use crate::{RenderCtx, Result};
+
+    /// Returns a unique temporary directory path for Markdown reader fixtures.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — Human-readable suffix identifying the fixture purpose.
+    ///
+    /// # Returns
+    ///
+    /// A [`PathBuf`] below the process temporary directory.
+    fn markdown_fixture_dir(name: &str) -> PathBuf {
+        static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
+
+        std::env::temp_dir().join(format!(
+            "leptatui-markdown-{}-{}-{name}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
+
+    /// Returns code-block options from a single-block Markdown document.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` — Parsed document expected to contain one code block.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing line-number visibility and the syntax theme.
+    fn parsed_code_block_options(view: &View) -> (bool, SyntaxTheme) {
+        let View::Column { children, .. } = view else {
+            panic!("expected Markdown column, got {view:?}");
+        };
+        let [
+            View::CodeBlock {
+                line_numbers,
+                syntax_theme,
+                ..
+            },
+        ] = children.as_slice()
+        else {
+            panic!("expected one Markdown code block, got {children:?}");
+        };
+
+        (*line_numbers, *syntax_theme)
+    }
+
+    /// Returns scroll offset and maximum offset from a Markdown document.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` — Parsed Markdown column whose scroll metadata is inspected.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the current and maximum vertical scroll offsets.
+    fn markdown_scroll_state(view: &View) -> (u16, u16) {
+        let View::Column { metadata, .. } = view else {
+            panic!("expected Markdown column, got {view:?}");
+        };
+
+        (metadata.scroll_offset(), metadata.max_scroll_offset())
+    }
+
+    /// Verifies a Markdown reader error retains its path and I/O source.
+    ///
+    /// # Arguments
+    ///
+    /// * `error` — Reader error returned for the failing path.
+    /// * `expected_path` — Exact path expected in the public error variant.
+    ///
+    /// # Returns
+    ///
+    /// An [`io::Error`] containing the preserved underlying failure.
+    fn assert_markdown_read_error(error: MarkdownError, expected_path: &Path) -> io::Error {
+        let diagnostic = error.to_string();
+        assert!(diagnostic.contains(&expected_path.display().to_string()));
+        assert!(error.source().is_some());
+
+        let MarkdownError::Read { path, source } = error;
+        assert_eq!(path, expected_path);
+        source
+    }
 
     /// Renders Markdown into fixed terminal rows for fallback assertions.
     ///
@@ -777,7 +1019,7 @@ mod tests {
     ///
     /// Returns [`crate::Error`] if terminal or view rendering fails.
     fn rendered_markdown_lines(source: &str, width: u16, height: u16) -> Result<Vec<String>> {
-        let view = markdown_to_view(source);
+        let view = markdown(source);
         let mut terminal = Terminal::new(TestBackend::new(width, height))?;
         let mut render_result = Ok(());
 
@@ -792,6 +1034,215 @@ mod tests {
             .chunks(usize::from(width))
             .map(|row| row.iter().map(|cell| cell.symbol()).collect())
             .collect())
+    }
+
+    /// Verifies in-memory Markdown readers apply default and custom options.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// markdown("```rust\nfn main() {}\n```")
+    /// markdown_with_options(source, light theme + line numbers)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Both in-memory readers return document views without failure.
+    /// - Default code blocks use the dark theme without line numbers.
+    /// - Custom options apply the light theme and enable line numbers.
+    /// - An owned source string is accepted by the option-bearing reader.
+    #[test]
+    fn markdown_reader_apis_apply_default_and_custom_options() {
+        let source = "```rust\nfn main() {}\n```\n";
+        let default = markdown(source);
+        assert_eq!(
+            parsed_code_block_options(&default),
+            (false, SyntaxTheme::Dark)
+        );
+
+        let options = MarkdownOptions::default()
+            .syntax_theme(SyntaxTheme::Light)
+            .line_numbers(true);
+        let owned_source = source.to_owned();
+        let configured = markdown_with_options(owned_source, options);
+        assert_eq!(
+            parsed_code_block_options(&configured),
+            (true, SyntaxTheme::Light)
+        );
+    }
+
+    /// Verifies Markdown file readers synchronously load UTF-8 source.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// markdown_file("guide.md")
+    /// markdown_file_with_options("guide.md", light theme + line numbers)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The UTF-8 fixture writes and both file readers load it successfully.
+    /// - The default file reader matches the in-memory default reader.
+    /// - The option-bearing file reader applies its code-block defaults.
+    /// - The fixture directory is removed after verification.
+    #[test]
+    fn markdown_file_reader_apis_load_utf8_source() {
+        let fixture_dir = markdown_fixture_dir("readers");
+        let fixture_path = fixture_dir.join("guide.md");
+        let source = "```rust\nfn main() {}\n```\n";
+        fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+        fs::write(&fixture_path, source).expect("Markdown fixture should be written");
+
+        let default = markdown_file(&fixture_path).expect("default file reader should succeed");
+        assert_eq!(default, markdown(source));
+
+        let options = MarkdownOptions::default()
+            .syntax_theme(SyntaxTheme::Light)
+            .line_numbers(true);
+        let configured = markdown_file_with_options(&fixture_path, options)
+            .expect("configured file reader should succeed");
+        assert_eq!(
+            parsed_code_block_options(&configured),
+            (true, SyntaxTheme::Light)
+        );
+
+        fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+    }
+
+    /// Verifies Markdown file errors retain path-aware I/O diagnostics.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// missing.md
+    /// directory.md/
+    /// invalid-utf8.md containing FF FE
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Missing paths report [`io::ErrorKind::NotFound`].
+    /// - Directory paths return their platform I/O failure instead of parsing.
+    /// - Invalid UTF-8 reports [`io::ErrorKind::InvalidData`].
+    /// - Every error retains the exact path, includes it in display output, and chains its cause.
+    /// - The fixture directory is removed after verification.
+    #[test]
+    fn markdown_file_errors_preserve_paths_and_io_causes() {
+        let fixture_dir = markdown_fixture_dir("errors");
+        let directory_path = fixture_dir.join("directory.md");
+        let invalid_utf8_path = fixture_dir.join("invalid-utf8.md");
+        let missing_path = fixture_dir.join("missing.md");
+        fs::create_dir_all(&directory_path).expect("directory fixture should be created");
+        fs::write(&invalid_utf8_path, [0xff, 0xfe])
+            .expect("invalid UTF-8 fixture should be written");
+
+        let missing = markdown_file(&missing_path).expect_err("missing path should fail");
+        assert_eq!(
+            assert_markdown_read_error(missing, &missing_path).kind(),
+            io::ErrorKind::NotFound
+        );
+
+        let directory = markdown_file(&directory_path).expect_err("directory path should fail");
+        assert_ne!(
+            assert_markdown_read_error(directory, &directory_path).kind(),
+            io::ErrorKind::NotFound
+        );
+
+        let invalid_utf8 =
+            markdown_file(&invalid_utf8_path).expect_err("invalid UTF-8 should fail");
+        assert_eq!(
+            assert_markdown_read_error(invalid_utf8, &invalid_utf8_path).kind(),
+            io::ErrorKind::InvalidData
+        );
+
+        fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+    }
+
+    /// Verifies in-memory Markdown rendering never interprets source as a path.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// markdown("/temporary/missing.md")
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The path does not exist before or after conversion and rendering.
+    /// - The path-like source becomes an ordinary Markdown paragraph.
+    /// - Rendering succeeds without filesystem access.
+    #[test]
+    fn markdown_source_rendering_performs_no_filesystem_io() -> Result<()> {
+        let missing_path = markdown_fixture_dir("no-io").join("missing.md");
+        let source = missing_path.display().to_string();
+        assert!(!missing_path.exists());
+
+        let view = markdown(&source);
+        assert_eq!(view, column([paragraph(source)]));
+        let mut terminal = Terminal::new(TestBackend::new(80, 2))?;
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            render_result = view.render(&mut ctx);
+        })?;
+        render_result?;
+
+        assert!(!missing_path.exists());
+        Ok(())
+    }
+
+    /// Verifies Markdown documents use the existing vertical scroll commands.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// ten Markdown paragraphs rendered into a 3-row terminal
+    /// Down, Up, PageDown, PageUp, G, gg
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Rendering establishes an overflowing scroll range on the document column.
+    /// - Arrow keys move one row down and up.
+    /// - Page keys move five rows down and up.
+    /// - `G` reaches the maximum offset and `gg` returns to zero.
+    #[test]
+    fn markdown_documents_use_existing_vertical_scroll_keys() -> Result<()> {
+        let source = (1..=10)
+            .map(|index| format!("Paragraph {index}."))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let mut view = markdown(source);
+        let mut terminal = Terminal::new(TestBackend::new(20, 3))?;
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            render_result = view.render(&mut ctx);
+        })?;
+        render_result?;
+
+        let (offset, max_offset) = markdown_scroll_state(&view);
+        assert_eq!(offset, 0);
+        assert!(max_offset >= 6);
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))?;
+        assert_eq!(markdown_scroll_state(&view).0, 1);
+        view.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))?;
+        assert_eq!(markdown_scroll_state(&view).0, 0);
+
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?;
+        assert_eq!(markdown_scroll_state(&view).0, 5);
+        view.handle_key_event(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE))?;
+        assert_eq!(markdown_scroll_state(&view).0, 0);
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))?;
+        assert_eq!(markdown_scroll_state(&view).0, max_offset);
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))?;
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))?;
+        assert_eq!(markdown_scroll_state(&view).0, 0);
+
+        Ok(())
     }
 
     /// Verifies Markdown headings map to every semantic heading level.
@@ -824,7 +1275,7 @@ mod tests {
         );
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([
                 h1("One"),
                 h2("Two"),
@@ -856,7 +1307,7 @@ mod tests {
         let source = "Soft\nbreak  \nhard 界 `code`\n";
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([paragraph(Text::from(vec![
                 Line::raw("Soft"),
                 Line::raw("break"),
@@ -907,7 +1358,7 @@ mod tests {
         );
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([
                 code_block("fn main() {}\n").language("rust"),
                 code_block("let value = true;\n").language("rs"),
@@ -937,7 +1388,7 @@ mod tests {
         let source = "```\n```\n\n    plain 界\n";
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([code_block(""), code_block("plain 界\n")]),
         );
     }
@@ -962,7 +1413,7 @@ mod tests {
         let source = "*outer **bold 界** tail* and **plain** with `code` plus \\*escaped\\*.\n";
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([paragraph(Text::from(Line::from(vec![
                 Span::styled("outer ", Style::new().add_modifier(Modifier::ITALIC),),
                 Span::styled(
@@ -1005,7 +1456,7 @@ mod tests {
         let underline = Style::new().add_modifier(Modifier::UNDERLINED);
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([paragraph(Text::from(Line::from(vec![
                 Span::raw("Read "),
                 Span::styled("the ", underline),
@@ -1056,7 +1507,7 @@ mod tests {
         );
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([ordered_list([
                 list_item([
                     paragraph("First"),
@@ -1108,7 +1559,7 @@ mod tests {
         };
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([table([
                 table_head([table_row(aligned_cells([
                     "Default", "Left", "Center", "Right",
@@ -1138,7 +1589,7 @@ mod tests {
         let source = "> Alpha beta gamma\n>\n> > Inner\n";
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([block_quote(vec![
                 paragraph("Alpha beta gamma"),
                 block_quote(vec![paragraph("Inner")]),
@@ -1168,7 +1619,7 @@ mod tests {
     /// - Wider terminals fill the complete row with rule glyphs.
     #[test]
     fn markdown_renders_thematic_breaks_at_narrow_widths() -> Result<()> {
-        assert_eq!(markdown_to_view("---\n"), column([thematic_break()]));
+        assert_eq!(markdown("---\n"), column([thematic_break()]));
         assert_eq!(rendered_markdown_lines("---\n", 1, 1)?, ["─"]);
         assert_eq!(rendered_markdown_lines("---\n", 6, 1)?, ["──────"]);
 
@@ -1202,7 +1653,7 @@ mod tests {
         );
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([
                 paragraph("Image: diagram (https://example.com/diagram.png)"),
                 paragraph("Image: local.png"),
@@ -1243,7 +1694,7 @@ mod tests {
         );
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([
                 paragraph("Before <kbd>&</kbd> after."),
                 paragraph(Text::from(vec![
@@ -1290,7 +1741,7 @@ mod tests {
         let mut parser = Parser::new_ext(source, options).peekable();
 
         assert_eq!(
-            column(parse_blocks(&mut parser, None)),
+            column(parse_blocks(&mut parser, None, MarkdownOptions::default(),)),
             column([
                 unordered_list([list_item([paragraph("[x] done and x + y[^note]")])]),
                 paragraph("z"),
@@ -1322,7 +1773,7 @@ mod tests {
         let source = "# Start\n\n---\n\n![middle](middle.png)\n\n<end>\n";
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([
                 h1("Start"),
                 thematic_break(),
@@ -1355,7 +1806,7 @@ mod tests {
         let source = "# 開始\n\nBefore.\n\n- 中\n\n## 終了\n";
 
         assert_eq!(
-            markdown_to_view(source),
+            markdown(source),
             column([
                 h1("開始"),
                 paragraph("Before."),
@@ -1379,6 +1830,6 @@ mod tests {
     /// - The result is an empty semantic column.
     #[test]
     fn markdown_empty_source_returns_empty_column() {
-        assert_eq!(markdown_to_view(""), column([]));
+        assert_eq!(markdown(""), column([]));
     }
 }

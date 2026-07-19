@@ -91,6 +91,8 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// block(column([
 ///     h1("Guide"),
 ///     paragraph("Overview"),
+///     markdown("# Markdown"),
+///     markdown_with_options(source, MarkdownOptions::default()),
 ///     ordered_list([list_item([paragraph("First")])]),
 ///     table([table_body([table_row([table_cell("Ready")])])]),
 ///     code_block("fn main() {}").language("rust"),
@@ -105,10 +107,11 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// - Signals can be read, set, and updated from the prelude.
 /// - A memo can derive from a prelude signal.
 /// - Context values can be provided and read from the prelude.
-/// - New standard-library builders, callback aliases, and source types
-///   type-check from the prelude.
-/// - The view and stylesheet macros support the new standard-library
-///   component names from prelude imports.
+/// - Standard-library builders, callback aliases, source types, Markdown
+///   options, file readers, and errors type-check from the prelude.
+/// - The Markdown view tag expands to the same in-memory document as its reader.
+/// - The view and stylesheet macros support standard-library component names
+///   from prelude imports.
 #[test]
 fn prelude_exposes_reactivity_and_context() {
     Owner::new().with(|| {
@@ -155,6 +158,13 @@ fn prelude_exposes_reactivity_and_context() {
             h5("Detail"),
             h6("Note"),
             paragraph("Overview"),
+            markdown("# Markdown"),
+            markdown_with_options(
+                "```rust\nfn main() {}\n```",
+                MarkdownOptions::default()
+                    .syntax_theme(SyntaxTheme::Light)
+                    .line_numbers(true),
+            ),
             ordered_list([
                 list_item([paragraph("First")]),
                 list_item([paragraph("Second")]),
@@ -183,6 +193,7 @@ fn prelude_exposes_reactivity_and_context() {
             <Column>
                 <H1>"Guide"</H1>
                 <Paragraph>"Overview"</Paragraph>
+                <Markdown source="# Markdown" />
                 <OrderedList start=3>
                     <ListItem>
                         <Paragraph>"First"</Paragraph>
@@ -207,6 +218,12 @@ fn prelude_exposes_reactivity_and_context() {
             </Column>
         };
         let _ = macro_view;
+        let macro_markdown: View = view! { <Markdown source="# Markdown" /> };
+        assert_eq!(macro_markdown, markdown("# Markdown"));
+        let _default_file_reader = |path: &str| markdown_file(path);
+        let _configured_file_reader =
+            |path: &str, options: MarkdownOptions| markdown_file_with_options(path, options);
+        let _markdown_error_size = std::mem::size_of::<MarkdownError>();
 
         let style = TuiStyle::new()
             .foreground(Color::LightCyan)

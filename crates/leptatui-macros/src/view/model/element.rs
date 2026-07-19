@@ -195,6 +195,15 @@ impl Element {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::paragraph(#content) }
             }),
+            "Markdown" => self.expand_required_attr_element(
+                "Markdown",
+                AttrKind::MarkdownSource,
+                "source",
+                |source| {
+                    let leptatui = crate::utils::crate_path::leptatui();
+                    quote! { #leptatui::markdown(#source) }
+                },
+            ),
             "CodeBlock" => self.expand_text_like("CodeBlock", |content| {
                 let leptatui = crate::utils::crate_path::leptatui();
                 quote! { #leptatui::code_block(#content) }
@@ -518,6 +527,13 @@ impl Element {
                 "class" => AttrKind::Class,
                 "id" => AttrKind::Id,
                 "style" => AttrKind::Style,
+                "source" if element_name == "Markdown" => AttrKind::MarkdownSource,
+                "source" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! source attribute is only supported on Markdown",
+                    ));
+                }
                 "src" if element_name == "Image" => AttrKind::ImageSource,
                 "src" => {
                     return Err(Error::new_spanned(
@@ -640,6 +656,9 @@ impl Element {
                         "ProgressBar" => {
                             "unsupported view! attribute; expected class, id, style, value, or label"
                         }
+                        "Markdown" => {
+                            "unsupported view! attribute; expected class, id, style, or source"
+                        }
                         "OrderedList" => {
                             "unsupported view! attribute; expected class, id, style, or start"
                         }
@@ -725,6 +744,7 @@ impl Element {
                 AttrKind::InputValue => expanded,
                 AttrKind::ImageSource => expanded,
                 AttrKind::ProgressValue => expanded,
+                AttrKind::MarkdownSource => expanded,
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
                 AttrKind::Alt => quote! { (#expanded).alt(#value) },
                 AttrKind::Label => quote! { (#expanded).label(#value) },
@@ -760,6 +780,7 @@ impl Element {
                     | AttrKind::InputValue
                     | AttrKind::ImageSource
                     | AttrKind::ProgressValue
+                    | AttrKind::MarkdownSource
                     | AttrKind::Style
                     | AttrKind::Start
                     | AttrKind::Alignment
@@ -1087,6 +1108,7 @@ fn is_builtin_element(name: &Ident) -> bool {
             | "H5"
             | "H6"
             | "Paragraph"
+            | "Markdown"
             | "CodeBlock"
             | "OrderedList"
             | "UnorderedList"
@@ -1131,6 +1153,8 @@ mod attr_validation {
         ImageSource,
         /// Required progress value.
         ProgressValue,
+        /// Required in-memory Markdown source.
+        MarkdownSource,
         /// Input placeholder text.
         Placeholder,
         /// Image fallback text.

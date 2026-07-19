@@ -6,6 +6,7 @@ use leptatui::prelude::*;
 fn main() {
     let heading_style = TuiStyle::new().foreground(Color::Cyan);
     let source = String::from("fn main() {}\n");
+    let markdown_source = String::from("# Markdown guide\n");
 
     let view: View = view! {
         <Column>
@@ -16,6 +17,7 @@ fn main() {
             <H5>"Notes"</H5>
             <H6>"Aside"</H6>
             <Paragraph>{String::from("Semantic content")}</Paragraph>
+            <Markdown source={markdown_source.clone()} />
             <OrderedList start=3>
                 <ListItem>
                     <Paragraph>"First"</Paragraph>
@@ -57,6 +59,7 @@ fn main() {
         h5("Notes"),
         h6("Aside"),
         paragraph(String::from("Semantic content")),
+        markdown(markdown_source),
         ordered_list([list_item([
             paragraph("First"),
             unordered_list([list_item([paragraph("Nested")])]),
