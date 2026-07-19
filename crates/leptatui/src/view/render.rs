@@ -109,6 +109,31 @@ fn heading_content_offset(level: u16) -> u16 {
     level.saturating_add(1)
 }
 
+/// Returns the one-based level of a semantic heading view.
+///
+/// # Arguments
+///
+/// * `view` — Semantic heading view to classify.
+///
+/// # Returns
+///
+/// A [`u16`] containing the heading level from one through six.
+///
+/// # Panics
+///
+/// Panics if `view` is not a semantic heading variant.
+fn heading_level(view: &View) -> u16 {
+    match view {
+        View::H1 { .. } => 1,
+        View::H2 { .. } => 2,
+        View::H3 { .. } => 3,
+        View::H4 { .. } => 4,
+        View::H5 { .. } => 5,
+        View::H6 { .. } => 6,
+        _ => unreachable!("heading level requested for a non-heading view"),
+    }
+}
+
 /// Renders a Markdown-style semantic heading with a hanging content indent.
 ///
 /// The marker occupies only the first row while wrapped content remains aligned
@@ -229,6 +254,36 @@ fn wrapped_code_text(
     Text::from(visual_lines)
 }
 
+/// Returns wrapped code content and its required block height.
+///
+/// # Arguments
+///
+/// * `highlighted_lines` — Retained highlighted logical source lines.
+/// * `line_numbers` — Whether the logical-line gutter is enabled.
+/// * `style` — Resolved code-block style used for wrapping and block geometry.
+/// * `area` — Available code-block render area.
+///
+/// # Returns
+///
+/// A tuple containing wrapped visual lines and the saturated required height.
+fn code_block_layout(
+    highlighted_lines: &[Line<'static>],
+    line_numbers: bool,
+    style: TuiStyle,
+    area: Rect,
+) -> (Text<'static>, u16) {
+    let inner = style
+        .to_block_with_default_borders(Borders::ALL)
+        .inner(area);
+    let content = wrapped_code_text(highlighted_lines, line_numbers, inner.width, style);
+    let required_height = line_count_height(content.lines.len())
+        .max(1)
+        .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+        .saturating_add(vertical_padding_rows(style.padding));
+
+    (content, required_height)
+}
+
 /// Wraps one styled logical line at grapheme boundaries.
 ///
 /// # Arguments
@@ -301,18 +356,8 @@ fn render_code_block_view(
     let mut content_style = style;
     content_style.background = Some(background);
     let area = ctx.area();
-    let provisional_block = style.to_block_with_default_borders(Borders::ALL);
-    let provisional_inner = provisional_block.inner(area);
-    let content = wrapped_code_text(
-        highlighted_lines,
-        line_numbers,
-        provisional_inner.width,
-        content_style,
-    );
-    let required_height = line_count_height(content.lines.len())
-        .max(1)
-        .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-        .saturating_add(vertical_padding_rows(style.padding));
+    let (content, required_height) =
+        code_block_layout(highlighted_lines, line_numbers, content_style, area);
     let mut visible_style = style;
     if area.height < required_height {
         let mut borders = style.borders.unwrap_or(Borders::ALL);
@@ -523,28 +568,13 @@ impl View {
                 ctx.render_widget(text_paragraph(content.as_str(), style));
                 Ok(())
             }
-            Self::H1 { content, metadata } => {
-                render_heading(content, metadata, 1, ctx);
-                Ok(())
-            }
-            Self::H2 { content, metadata } => {
-                render_heading(content, metadata, 2, ctx);
-                Ok(())
-            }
-            Self::H3 { content, metadata } => {
-                render_heading(content, metadata, 3, ctx);
-                Ok(())
-            }
-            Self::H4 { content, metadata } => {
-                render_heading(content, metadata, 4, ctx);
-                Ok(())
-            }
-            Self::H5 { content, metadata } => {
-                render_heading(content, metadata, 5, ctx);
-                Ok(())
-            }
-            Self::H6 { content, metadata } => {
-                render_heading(content, metadata, 6, ctx);
+            Self::H1 { content, metadata }
+            | Self::H2 { content, metadata }
+            | Self::H3 { content, metadata }
+            | Self::H4 { content, metadata }
+            | Self::H5 { content, metadata }
+            | Self::H6 { content, metadata } => {
+                render_heading(content, metadata, heading_level(self), ctx);
                 Ok(())
             }
             Self::Paragraph { content, metadata } => {
@@ -5471,29 +5501,14 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             let style = resolve_style(metadata, ctx);
             line_count_height(text_paragraph(content.as_str(), style).line_count(ctx.area().width))
         }
-        View::H1 { content, metadata } => {
+        View::H1 { content, metadata }
+        | View::H2 { content, metadata }
+        | View::H3 { content, metadata }
+        | View::H4 { content, metadata }
+        | View::H5 { content, metadata }
+        | View::H6 { content, metadata } => {
             let style = resolve_style(metadata, ctx);
-            heading_min_height(content, style, 1, ctx.area().width)
-        }
-        View::H2 { content, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            heading_min_height(content, style, 2, ctx.area().width)
-        }
-        View::H3 { content, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            heading_min_height(content, style, 3, ctx.area().width)
-        }
-        View::H4 { content, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            heading_min_height(content, style, 4, ctx.area().width)
-        }
-        View::H5 { content, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            heading_min_height(content, style, 5, ctx.area().width)
-        }
-        View::H6 { content, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            heading_min_height(content, style, 6, ctx.area().width)
+            heading_min_height(content, style, heading_level(view), ctx.area().width)
         }
         View::Paragraph { content, metadata } => {
             let style = resolve_style(metadata, ctx);
@@ -5506,19 +5521,9 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             ..
         } => {
             let style = resolve_style(metadata, ctx);
-            let inner = style
-                .to_block_with_default_borders(Borders::ALL)
-                .inner(ctx.area());
-            let content_height = line_count_height(
-                wrapped_code_text(highlighted_lines, *line_numbers, inner.width, style)
-                    .lines
-                    .len(),
-            )
-            .max(1);
-
-            content_height
-                .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-                .saturating_add(vertical_padding_rows(style.padding))
+            let (_, required_height) =
+                code_block_layout(highlighted_lines, *line_numbers, style, ctx.area());
+            required_height
         }
         View::OrderedList {
             items,

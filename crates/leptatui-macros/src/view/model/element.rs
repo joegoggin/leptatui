@@ -393,36 +393,9 @@ impl Element {
     /// Returns [`syn::Error`] if children are present, `src` is missing,
     /// attributes are duplicated, or Markdown options are invalid.
     fn expand_markdown(&self) -> Result<TokenStream> {
-        if !self.children.is_empty() {
-            return Err(Error::new_spanned(
-                &self.name,
-                "Markdown does not accept children",
-            ));
-        }
-
-        let attrs = self.validate_attrs()?;
-        let src_attrs = attrs
-            .iter()
-            .filter(|validated| validated.kind == AttrKind::MarkdownSrc)
-            .collect::<Vec<_>>();
-        let src_attr = match src_attrs.as_slice() {
-            [src_attr] => *src_attr,
-            [] => {
-                return Err(Error::new_spanned(
-                    &self.name,
-                    "Markdown requires a src attribute",
-                ));
-            }
-            [first, ..] => {
-                return Err(Error::new_spanned(
-                    &first.attr.name,
-                    "Markdown expects exactly one src attribute",
-                ));
-            }
-        };
-
+        let (attrs, source) =
+            self.validate_required_attr_element("Markdown", AttrKind::MarkdownSrc, "src")?;
         let leptatui = crate::utils::crate_path::leptatui();
-        let source = src_attr.attr.value.to_tokens();
         let mut options = quote! { #leptatui::MarkdownOptions::default() };
 
         if let Some(theme) = attrs
@@ -472,6 +445,33 @@ impl Element {
         required_attr_name: &str,
         build: impl FnOnce(TokenStream) -> TokenStream,
     ) -> Result<TokenStream> {
+        let (attrs, value) =
+            self.validate_required_attr_element(element_name, required_kind, required_attr_name)?;
+        self.expand_attrs(build(value), &attrs)
+    }
+
+    /// Validates a self-contained element and returns its required attribute.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` — Name to use in compile diagnostics.
+    /// * `required_kind` — Attribute kind that must appear exactly once.
+    /// * `required_attr_name` — Attribute name to use in diagnostics.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the validated attributes and required value tokens.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if children are present, the required attribute
+    /// is missing or duplicated, or another attribute is invalid.
+    fn validate_required_attr_element(
+        &self,
+        element_name: &str,
+        required_kind: AttrKind,
+        required_attr_name: &str,
+    ) -> Result<(Vec<ValidatedAttr<'_>>, TokenStream)> {
         if !self.children.is_empty() {
             return Err(Error::new_spanned(
                 &self.name,
@@ -501,7 +501,7 @@ impl Element {
         };
 
         let value = required_attr.attr.value.to_tokens();
-        self.expand_attrs(build(value), &attrs)
+        Ok((attrs, value))
     }
 
     /// Expands a PascalCase component tag into a component constructor call.

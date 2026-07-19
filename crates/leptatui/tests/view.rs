@@ -28,6 +28,10 @@ use ratatui::{
     symbols::{block as symbol_block, border as symbol_border, line as symbol_line},
 };
 
+mod support;
+
+use support::{draw_view, rendered_text};
+
 /// Creates a key-press event for a key code.
 ///
 /// # Arguments
@@ -576,50 +580,6 @@ fn cell_colors(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> 
 fn cell_modifiers(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) -> Modifier {
     let index = usize::from(y) * usize::from(width) + usize::from(x);
     terminal.backend().buffer().content()[index].modifier
-}
-
-/// Draws a view into a test terminal.
-///
-/// # Arguments
-///
-/// * `terminal` — Test terminal receiving the rendered view.
-/// * `view` — View tree to render.
-///
-/// # Returns
-///
-/// An empty [`Result`] on successful terminal and view rendering.
-///
-/// # Errors
-///
-/// Returns [`leptatui::Error`] if terminal drawing or view rendering fails.
-fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Result<()> {
-    let mut render_result = Ok(());
-
-    terminal.draw(|frame| {
-        let mut ctx = RenderCtx::new(frame);
-        render_result = view.render(&mut ctx);
-    })?;
-
-    render_result
-}
-
-/// Returns the rendered buffer symbols as one contiguous string.
-///
-/// # Arguments
-///
-/// * `terminal` — Test terminal containing the rendered buffer.
-///
-/// # Returns
-///
-/// A [`String`] containing every cell symbol in buffer order.
-fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
-    terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect()
 }
 
 /// Verifies a block view renders its child text.

@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use leptatui::{Component, RenderCtx, Result};
+use leptatui::{Component, RenderCtx, Result, View};
 use ratatui::{Terminal, backend::TestBackend};
 use tokio::{task::yield_now, time::timeout};
 
@@ -83,6 +83,52 @@ where
     render_result
 }
 
+/// Renders a view into an existing test terminal.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal used as the render target.
+/// * `view` — View tree to render.
+///
+/// # Returns
+///
+/// An empty [`Result`] when terminal drawing and view rendering succeed.
+///
+/// # Errors
+///
+/// Returns [`leptatui::Error::Io`] if terminal drawing or view rendering fails.
+pub(crate) fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Result<()> {
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = view.render(&mut ctx);
+    })?;
+
+    render_result
+}
+
+/// Renders a view into a fixed-size test terminal.
+///
+/// # Arguments
+///
+/// * `view` — View tree to render.
+/// * `width` — Terminal width in cells.
+/// * `height` — Terminal height in cells.
+///
+/// # Returns
+///
+/// A [`Terminal`] containing the rendered view output.
+///
+/// # Errors
+///
+/// Returns [`leptatui::Error::Io`] if terminal drawing or view rendering fails.
+pub(crate) fn render_view(view: &View, width: u16, height: u16) -> Result<Terminal<TestBackend>> {
+    let mut terminal = Terminal::new(TestBackend::new(width, height))?;
+    draw_view(&mut terminal, view)?;
+    Ok(terminal)
+}
+
 /// Returns rendered terminal text as a flat string.
 ///
 /// # Arguments
@@ -99,6 +145,30 @@ pub(crate) fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
         .content()
         .iter()
         .map(|cell| cell.symbol())
+        .collect()
+}
+
+/// Returns terminal symbols grouped by rendered row.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal whose buffer should be inspected.
+///
+/// # Returns
+///
+/// A [`Vec`] containing one symbol string for each terminal row.
+pub(crate) fn rendered_lines(terminal: &Terminal<TestBackend>) -> Vec<String> {
+    let width = usize::from(terminal.backend().buffer().area.width);
+    if width == 0 {
+        return Vec::new();
+    }
+
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .chunks(width)
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect())
         .collect()
 }
 

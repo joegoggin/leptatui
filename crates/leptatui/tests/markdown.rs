@@ -13,6 +13,10 @@ use leptatui::{
 };
 use ratatui::{Terminal, backend::TestBackend, style::Style};
 
+mod support;
+
+use support::{render_view, rendered_lines};
+
 /// Representative headings, paragraphs, inline syntax, and list fixture.
 const CORE_FIXTURE: &str = include_str!("fixtures/markdown/core.md");
 /// Representative readable fallback and table fixture.
@@ -21,58 +25,6 @@ const FALLBACKS_FIXTURE: &str = include_str!("fixtures/markdown/fallbacks.md");
 const CODE_FIXTURE: &str = include_str!("fixtures/markdown/code.md");
 /// Zero-content Markdown fixture.
 const EMPTY_FIXTURE: &str = include_str!("fixtures/markdown/empty.md");
-
-/// Renders a view into a fixed-size test terminal.
-///
-/// # Arguments
-///
-/// * `view` — View tree to render.
-/// * `width` — Terminal width in cells.
-/// * `height` — Terminal height in cells.
-///
-/// # Returns
-///
-/// A [`Terminal`] containing the rendered buffer.
-///
-/// # Errors
-///
-/// Returns [`leptatui::Error`] if terminal drawing or view rendering fails.
-fn render_view(view: &View, width: u16, height: u16) -> Result<Terminal<TestBackend>> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height))?;
-    let mut render_result = Ok(());
-
-    terminal.draw(|frame| {
-        let mut ctx = RenderCtx::new(frame);
-        render_result = view.render(&mut ctx);
-    })?;
-    render_result?;
-
-    Ok(terminal)
-}
-
-/// Returns terminal symbols grouped by rendered row.
-///
-/// # Arguments
-///
-/// * `terminal` — Test terminal whose buffer should be inspected.
-///
-/// # Returns
-///
-/// A [`Vec`] containing one symbol string for each terminal row.
-fn rendered_lines(terminal: &Terminal<TestBackend>) -> Vec<String> {
-    let width = usize::from(terminal.backend().buffer().area.width);
-    if width == 0 {
-        return Vec::new();
-    }
-
-    terminal
-        .backend()
-        .buffer()
-        .content()
-        .chunks(width)
-        .map(|row| row.iter().map(|cell| cell.symbol()).collect())
-        .collect()
-}
 
 /// Creates the expected semantic sequence for visibly separated Markdown blocks.
 ///
