@@ -1031,6 +1031,7 @@ fn semantic_text_variants_wrap_and_report_intrinsic_height() -> Result<()> {
 ///
 /// - Measurement and rendering succeed at every width.
 /// - Any nonzero viewport renders the visible portion of the marker.
+/// - Viewports narrower than the marker gutter render content on the next row.
 /// - H6 renders all six hash cells when the viewport permits them.
 /// - Heading content begins at cell seven when the viewport permits it.
 #[test]
@@ -1052,6 +1053,10 @@ fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
         } else {
             assert!(min_height >= 1);
             assert_eq!(cell_symbol(&terminal, 0, 0, width), "#");
+        }
+        if (1..=7).contains(&width) {
+            assert!(min_height > 1);
+            assert_eq!(cell_symbol(&terminal, 0, 1, width), "H");
         }
         if width >= 6 {
             assert_eq!(cell_symbol(&terminal, 5, 0, width), "#");

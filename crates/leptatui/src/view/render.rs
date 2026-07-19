@@ -177,6 +177,15 @@ fn render_heading(
         ctx.with_area(content_area, |ctx| {
             ctx.render_widget(semantic_paragraph(content, style));
         });
+    } else if area.height > 1 {
+        let content_area = Rect {
+            y: area.y.saturating_add(1),
+            height: area.height.saturating_sub(1),
+            ..area
+        };
+        ctx.with_area(content_area, |ctx| {
+            ctx.render_widget(semantic_paragraph(content, style));
+        });
     }
 }
 
@@ -195,7 +204,13 @@ fn render_heading(
 fn heading_min_height(content: &Text<'static>, style: TuiStyle, level: u16, width: u16) -> u16 {
     let content_width = width.saturating_sub(heading_content_offset(level));
     if content_width == 0 {
-        return u16::from(width > 0);
+        if width == 0 {
+            return 0;
+        }
+
+        return 1u16.saturating_add(line_count_height(
+            semantic_paragraph(content, style).line_count(width),
+        ));
     }
 
     line_count_height(semantic_paragraph(content, style).line_count(content_width)).max(1)
