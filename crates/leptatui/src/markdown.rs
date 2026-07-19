@@ -10,7 +10,6 @@
 
 use std::{
     fs, io,
-    iter::Peekable,
     path::{Path, PathBuf},
 };
 
@@ -107,7 +106,7 @@ pub fn markdown(source: impl AsRef<str>) -> View {
 ///
 /// A [`View::Column`] containing semantic document blocks in source order.
 pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) -> View {
-    let mut parser = Parser::new_ext(source.as_ref(), Options::ENABLE_TABLES).peekable();
+    let mut parser = Parser::new_ext(source.as_ref(), Options::ENABLE_TABLES);
     column(parse_blocks(&mut parser, None, options))
 }
 
@@ -323,7 +322,7 @@ impl Default for InlineText {
 ///
 /// # Arguments
 ///
-/// * `events` — Peekable CommonMark event stream positioned inside a block.
+/// * `events` — CommonMark event stream positioned inside a block.
 /// * `end` — Optional closing tag that terminates the current block sequence.
 /// * `options` — Code-block presentation defaults for the document.
 ///
@@ -331,7 +330,7 @@ impl Default for InlineText {
 ///
 /// A [`Vec`] containing converted semantic views in event order.
 fn parse_blocks<'a>(
-    events: &mut Peekable<Parser<'a>>,
+    events: &mut impl Iterator<Item = Event<'a>>,
     end: Option<TagEnd>,
     options: MarkdownOptions,
 ) -> Vec<View> {
@@ -373,48 +372,15 @@ fn parse_blocks<'a>(
                 flush_inline_paragraph(&mut inline, &mut views);
                 views.push(parse_html_block(events));
             }
-            Event::Start(Tag::Emphasis) => parse_inline_events(
-                events,
-                TagEnd::Emphasis,
-                Style::new().add_modifier(Modifier::ITALIC),
-                &mut inline,
-            ),
-            Event::Start(Tag::Strong) => parse_inline_events(
-                events,
-                TagEnd::Strong,
-                Style::new().add_modifier(Modifier::BOLD),
-                &mut inline,
-            ),
-            Event::Start(Tag::Link { dest_url, .. }) => {
-                parse_link(events, &dest_url, Style::new(), &mut inline);
-            }
-            Event::Start(Tag::Image { dest_url, .. }) => {
-                parse_image(events, &dest_url, Style::new(), &mut inline);
-            }
-            Event::Text(content)
-            | Event::InlineMath(content)
-            | Event::DisplayMath(content)
-            | Event::Html(content)
-            | Event::InlineHtml(content) => inline.push_text(&content, Style::new()),
-            Event::Code(content) => {
-                inline.push_text(&content, Style::new().add_modifier(Modifier::REVERSED))
-            }
-            Event::FootnoteReference(label) => {
-                push_footnote_reference(&mut inline, &label, Style::new());
-            }
-            Event::SoftBreak | Event::HardBreak => inline.push_break(),
             Event::Rule => {
                 flush_inline_paragraph(&mut inline, &mut views);
                 views.push(thematic_break());
-            }
-            Event::TaskListMarker(checked) => {
-                push_task_list_marker(&mut inline, checked, Style::new());
             }
             Event::End(tag) if Some(tag) == end => {
                 flush_inline_paragraph(&mut inline, &mut views);
                 break;
             }
-            Event::End(_) | Event::Start(_) => {}
+            event => parse_inline_event(events, event, Style::new(), &mut inline),
         }
     }
 
@@ -465,7 +431,7 @@ fn thematic_break() -> View {
 /// # Returns
 ///
 /// A semantic paragraph containing the literal HTML block payload.
-fn parse_html_block<'a>(events: &mut Peekable<Parser<'a>>) -> View {
+fn parse_html_block<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> View {
     let mut content = InlineText::new();
 
     for event in events.by_ref() {
@@ -513,7 +479,7 @@ fn flush_inline_paragraph(inline: &mut InlineText, views: &mut Vec<View>) {
 /// # Returns
 ///
 /// An owned [`Text`] containing styled spans and retained line breaks.
-fn parse_inline<'a>(events: &mut Peekable<Parser<'a>>, end: TagEnd) -> Text<'static> {
+fn parse_inline<'a>(events: &mut impl Iterator<Item = Event<'a>>, end: TagEnd) -> Text<'static> {
     let mut content = InlineText::new();
     parse_inline_events(events, end, Style::new(), &mut content);
     content.into_text()
@@ -531,51 +497,74 @@ fn parse_inline<'a>(events: &mut Peekable<Parser<'a>>, end: TagEnd) -> Text<'sta
 /// * `style` — Span style inherited by text in the current scope.
 /// * `content` — Destination rich-text accumulator.
 fn parse_inline_events<'a>(
-    events: &mut Peekable<Parser<'a>>,
+    events: &mut impl Iterator<Item = Event<'a>>,
     end: TagEnd,
     style: Style,
     content: &mut InlineText,
 ) {
     while let Some(event) = events.next() {
-        match event {
-            Event::Text(text) => content.push_text(&text, style),
-            Event::Code(text) => {
-                content.push_text(&text, style.add_modifier(Modifier::REVERSED));
-            }
-            Event::SoftBreak | Event::HardBreak => content.push_break(),
-            Event::End(tag) if tag == end => break,
-            Event::Start(Tag::Emphasis) => parse_inline_events(
-                events,
-                TagEnd::Emphasis,
-                style.add_modifier(Modifier::ITALIC),
-                content,
-            ),
-            Event::Start(Tag::Strong) => parse_inline_events(
-                events,
-                TagEnd::Strong,
-                style.add_modifier(Modifier::BOLD),
-                content,
-            ),
-            Event::Start(Tag::Link { dest_url, .. }) => {
-                parse_link(events, &dest_url, style, content);
-            }
-            Event::Start(Tag::Image { dest_url, .. }) => {
-                parse_image(events, &dest_url, style, content);
-            }
-            Event::Start(Tag::CodeBlock(_)) => skip_until(events, TagEnd::CodeBlock),
-            Event::Start(Tag::HtmlBlock) => skip_until(events, TagEnd::HtmlBlock),
-            Event::InlineMath(text)
-            | Event::DisplayMath(text)
-            | Event::Html(text)
-            | Event::InlineHtml(text) => content.push_text(&text, style),
-            Event::FootnoteReference(label) => {
-                push_footnote_reference(content, &label, style);
-            }
-            Event::TaskListMarker(checked) => {
-                push_task_list_marker(content, checked, style);
-            }
-            Event::Start(_) | Event::End(_) | Event::Rule => {}
+        if event == Event::End(end) {
+            break;
         }
+        parse_inline_event(events, event, style, content);
+    }
+}
+
+/// Parses one inline event into an accumulator using an inherited span style.
+///
+/// Nested inline tags recursively consume their balanced event scopes. Block
+/// tags encountered inside inline content are skipped through their closing
+/// tags, while unsupported structural events are ignored.
+///
+/// # Arguments
+///
+/// * `events` — CommonMark event stream positioned after the current event.
+/// * `event` — Inline or fallback event to convert.
+/// * `style` — Span style inherited by the event's content.
+/// * `content` — Destination rich-text accumulator.
+fn parse_inline_event<'a>(
+    events: &mut impl Iterator<Item = Event<'a>>,
+    event: Event<'a>,
+    style: Style,
+    content: &mut InlineText,
+) {
+    match event {
+        Event::Text(text)
+        | Event::InlineMath(text)
+        | Event::DisplayMath(text)
+        | Event::Html(text)
+        | Event::InlineHtml(text) => content.push_text(&text, style),
+        Event::Code(text) => {
+            content.push_text(&text, style.add_modifier(Modifier::REVERSED));
+        }
+        Event::SoftBreak | Event::HardBreak => content.push_break(),
+        Event::Start(Tag::Emphasis) => parse_inline_events(
+            events,
+            TagEnd::Emphasis,
+            style.add_modifier(Modifier::ITALIC),
+            content,
+        ),
+        Event::Start(Tag::Strong) => parse_inline_events(
+            events,
+            TagEnd::Strong,
+            style.add_modifier(Modifier::BOLD),
+            content,
+        ),
+        Event::Start(Tag::Link { dest_url, .. }) => {
+            parse_link(events, &dest_url, style, content);
+        }
+        Event::Start(Tag::Image { dest_url, .. }) => {
+            parse_image(events, &dest_url, style, content);
+        }
+        Event::Start(Tag::CodeBlock(_)) => skip_until(events, TagEnd::CodeBlock),
+        Event::Start(Tag::HtmlBlock) => skip_until(events, TagEnd::HtmlBlock),
+        Event::FootnoteReference(label) => {
+            push_footnote_reference(content, &label, style);
+        }
+        Event::TaskListMarker(checked) => {
+            push_task_list_marker(content, checked, style);
+        }
+        Event::Start(_) | Event::End(_) | Event::Rule => {}
     }
 }
 
@@ -592,7 +581,7 @@ fn parse_inline_events<'a>(
 /// * `style` — Span style inherited from the surrounding inline scope.
 /// * `content` — Destination rich-text accumulator.
 fn parse_image<'a>(
-    events: &mut Peekable<Parser<'a>>,
+    events: &mut impl Iterator<Item = Event<'a>>,
     destination: &str,
     style: Style,
     content: &mut InlineText,
@@ -645,7 +634,7 @@ fn push_task_list_marker(content: &mut InlineText, checked: bool, style: Style) 
 /// * `style` — Span style inherited from the surrounding inline scope.
 /// * `content` — Destination rich-text accumulator.
 fn parse_link<'a>(
-    events: &mut Peekable<Parser<'a>>,
+    events: &mut impl Iterator<Item = Event<'a>>,
     destination: &str,
     style: Style,
     content: &mut InlineText,
@@ -699,7 +688,7 @@ fn link_destination_is_visible(label: &str, destination: &str) -> bool {
 ///
 /// A [`View::CodeBlock`] retaining the parsed source and language selection.
 fn parse_code_block<'a>(
-    events: &mut Peekable<Parser<'a>>,
+    events: &mut impl Iterator<Item = Event<'a>>,
     kind: CodeBlockKind<'a>,
     options: MarkdownOptions,
 ) -> View {
@@ -759,7 +748,7 @@ fn heading(level: HeadingLevel, content: Text<'static>) -> View {
 ///
 /// A semantic ordered or unordered list retaining item order and nesting.
 fn parse_list<'a>(
-    events: &mut Peekable<Parser<'a>>,
+    events: &mut impl Iterator<Item = Event<'a>>,
     start: Option<u64>,
     options: MarkdownOptions,
 ) -> View {
@@ -797,17 +786,17 @@ fn parse_list<'a>(
 /// # Returns
 ///
 /// A semantic table containing one header section and one body section.
-fn parse_table<'a>(events: &mut Peekable<Parser<'a>>, alignments: &[Alignment]) -> View {
+fn parse_table<'a>(events: &mut impl Iterator<Item = Event<'a>>, alignments: &[Alignment]) -> View {
     let mut header_rows = Vec::new();
     let mut body_rows = Vec::new();
 
     while let Some(event) = events.next() {
         match event {
             Event::Start(Tag::TableHead) => {
-                header_rows.push(parse_table_head(events, alignments));
+                header_rows.push(parse_table_cells(events, alignments, TagEnd::TableHead));
             }
             Event::Start(Tag::TableRow) => {
-                body_rows.push(parse_table_row(events, alignments));
+                body_rows.push(parse_table_cells(events, alignments, TagEnd::TableRow));
             }
             Event::End(TagEnd::Table) => break,
             _ => {}
@@ -817,45 +806,22 @@ fn parse_table<'a>(events: &mut Peekable<Parser<'a>>, alignments: &[Alignment]) 
     table([table_head(header_rows), table_body(body_rows)])
 }
 
-/// Parses direct CommonMark table-header cells into one semantic row.
-///
-/// # Arguments
-///
-/// * `events` — CommonMark event stream positioned inside a table head.
-/// * `alignments` — Parsed alignment for each source column.
-///
-/// # Returns
-///
-/// A semantic table-row view containing the header cells.
-fn parse_table_head<'a>(events: &mut Peekable<Parser<'a>>, alignments: &[Alignment]) -> View {
-    let mut cells = Vec::new();
-
-    while let Some(event) = events.next() {
-        match event {
-            Event::Start(Tag::TableCell) => {
-                let alignment = alignment_at(alignments, cells.len());
-                cells
-                    .push(table_cell(parse_inline(events, TagEnd::TableCell)).alignment(alignment));
-            }
-            Event::End(TagEnd::TableHead) => break,
-            _ => {}
-        }
-    }
-
-    table_row(cells)
-}
-
-/// Parses one CommonMark body row into a semantic table row.
+/// Parses CommonMark table cells into one semantic header or body row.
 ///
 /// # Arguments
 ///
 /// * `events` — CommonMark event stream positioned inside a table row.
 /// * `alignments` — Parsed alignment for each source column.
+/// * `end` — Closing tag that terminates the header or body row.
 ///
 /// # Returns
 ///
-/// A semantic table-row view containing aligned body cells.
-fn parse_table_row<'a>(events: &mut Peekable<Parser<'a>>, alignments: &[Alignment]) -> View {
+/// A semantic table-row view containing aligned cells.
+fn parse_table_cells<'a>(
+    events: &mut impl Iterator<Item = Event<'a>>,
+    alignments: &[Alignment],
+    end: TagEnd,
+) -> View {
     let mut cells = Vec::new();
 
     while let Some(event) = events.next() {
@@ -865,7 +831,7 @@ fn parse_table_row<'a>(events: &mut Peekable<Parser<'a>>, alignments: &[Alignmen
                 cells
                     .push(table_cell(parse_inline(events, TagEnd::TableCell)).alignment(alignment));
             }
-            Event::End(TagEnd::TableRow) => break,
+            Event::End(tag) if tag == end => break,
             _ => {}
         }
     }
@@ -899,7 +865,7 @@ fn alignment_at(alignments: &[Alignment], column: usize) -> CellAlignment {
 ///
 /// * `events` — CommonMark event stream positioned inside the block.
 /// * `end` — Closing tag that terminates the discarded block.
-fn skip_until<'a>(events: &mut Peekable<Parser<'a>>, end: TagEnd) {
+fn skip_until<'a>(events: &mut impl Iterator<Item = Event<'a>>, end: TagEnd) {
     for event in events.by_ref() {
         if event == Event::End(end) {
             break;
@@ -1738,7 +1704,7 @@ mod tests {
             | Options::ENABLE_STRIKETHROUGH
             | Options::ENABLE_MATH
             | Options::ENABLE_FOOTNOTES;
-        let mut parser = Parser::new_ext(source, options).peekable();
+        let mut parser = Parser::new_ext(source, options);
 
         assert_eq!(
             column(parse_blocks(&mut parser, None, MarkdownOptions::default(),)),
