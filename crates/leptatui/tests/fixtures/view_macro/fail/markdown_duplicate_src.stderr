@@ -1,0 +1,5 @@
+error: Markdown expects exactly one src attribute
+ --> tests/fixtures/view_macro/fail/markdown_duplicate_src.rs:8:19
+  |
+8 |         <Markdown src="one.md" src="two.md" />
+  |                   ^^^

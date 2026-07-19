@@ -13,6 +13,10 @@ use leptatui::{
 };
 use ratatui::{Terminal, backend::TestBackend, style::Style};
 
+mod support;
+
+use support::{render_view, rendered_lines};
+
 /// Representative headings, paragraphs, inline syntax, and list fixture.
 const CORE_FIXTURE: &str = include_str!("fixtures/markdown/core.md");
 /// Representative readable fallback and table fixture.
@@ -22,56 +26,27 @@ const CODE_FIXTURE: &str = include_str!("fixtures/markdown/code.md");
 /// Zero-content Markdown fixture.
 const EMPTY_FIXTURE: &str = include_str!("fixtures/markdown/empty.md");
 
-/// Renders a view into a fixed-size test terminal.
+/// Creates the expected semantic sequence for visibly separated Markdown blocks.
 ///
 /// # Arguments
 ///
-/// * `view` — View tree to render.
-/// * `width` — Terminal width in cells.
-/// * `height` — Terminal height in cells.
+/// * `blocks` — Content-bearing Markdown blocks in source order.
 ///
 /// # Returns
 ///
-/// A [`Terminal`] containing the rendered buffer.
-///
-/// # Errors
-///
-/// Returns [`leptatui::Error`] if terminal drawing or view rendering fails.
-fn render_view(view: &View, width: u16, height: u16) -> Result<Terminal<TestBackend>> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height))?;
-    let mut render_result = Ok(());
+/// A [`Vec`] containing one empty paragraph between each block.
+fn separated_blocks(blocks: impl IntoIterator<Item = View>) -> Vec<View> {
+    let blocks = blocks.into_iter().collect::<Vec<_>>();
+    let mut separated = Vec::with_capacity(blocks.len().saturating_mul(2).saturating_sub(1));
 
-    terminal.draw(|frame| {
-        let mut ctx = RenderCtx::new(frame);
-        render_result = view.render(&mut ctx);
-    })?;
-    render_result?;
-
-    Ok(terminal)
-}
-
-/// Returns terminal symbols grouped by rendered row.
-///
-/// # Arguments
-///
-/// * `terminal` — Test terminal whose buffer should be inspected.
-///
-/// # Returns
-///
-/// A [`Vec`] containing one symbol string for each terminal row.
-fn rendered_lines(terminal: &Terminal<TestBackend>) -> Vec<String> {
-    let width = usize::from(terminal.backend().buffer().area.width);
-    if width == 0 {
-        return Vec::new();
+    for block in blocks {
+        if !separated.is_empty() {
+            separated.push(paragraph(""));
+        }
+        separated.push(block);
     }
 
-    terminal
-        .backend()
-        .buffer()
-        .content()
-        .chunks(width)
-        .map(|row| row.iter().map(|cell| cell.symbol()).collect())
-        .collect()
+    separated
 }
 
 /// Creates the semantic blockquote fallback used by Markdown conversion.
@@ -114,6 +89,7 @@ fn thematic_break() -> View {
 /// - Unicode paragraph content and nested inline modifiers remain intact.
 /// - Link labels are underlined and display a readable destination.
 /// - Mixed nested lists retain loose paragraphs, empty items, and non-one starts.
+/// - Empty separator paragraphs retain one terminal row between blocks.
 #[test]
 fn markdown_core_fixture_builds_semantic_views() {
     let italic = Style::new().add_modifier(Modifier::ITALIC);
@@ -121,7 +97,7 @@ fn markdown_core_fixture_builds_semantic_views() {
 
     assert_eq!(
         markdown(CORE_FIXTURE),
-        column([
+        column(separated_blocks([
             h1("One"),
             h2("Two"),
             h3("Three"),
@@ -144,21 +120,21 @@ fn markdown_core_fixture_builds_semantic_views() {
                 Span::raw("."),
             ]))),
             ordered_list([
-                list_item([
+                list_item(separated_blocks([
                     paragraph("First"),
                     paragraph("Second paragraph."),
                     unordered_list([
-                        list_item([
+                        list_item(separated_blocks([
                             paragraph("Nested bullet"),
                             ordered_list([list_item([paragraph("Nested number")])]).start(7),
-                        ]),
+                        ])),
                         list_item([]),
                     ]),
-                ]),
+                ])),
                 list_item([paragraph("Last")]),
             ])
             .start(3),
-        ]),
+        ])),
     );
 }
 
@@ -176,6 +152,7 @@ fn markdown_core_fixture_builds_semantic_views() {
 /// - Images and literal HTML become deterministic paragraph content.
 /// - Table sections and cell alignments match the Markdown delimiter row.
 /// - Malformed-looking but parseable delimiters remain literal text.
+/// - Empty separator paragraphs retain one terminal row between blocks.
 #[test]
 fn markdown_fallback_fixture_builds_semantic_views() {
     let aligned_cells = |values: [&'static str; 4]| {
@@ -189,11 +166,11 @@ fn markdown_fallback_fixture_builds_semantic_views() {
 
     assert_eq!(
         markdown(FALLBACKS_FIXTURE),
-        column([
-            block_quote([
+        column(separated_blocks([
+            block_quote(separated_blocks([
                 paragraph("Alpha beta gamma"),
                 block_quote([paragraph("Inner")]),
-            ]),
+            ])),
             thematic_break(),
             paragraph("Image: diagram (https://example.com/diagram.png)"),
             paragraph("Before <kbd>&</kbd> after."),
@@ -212,7 +189,7 @@ fn markdown_fallback_fixture_builds_semantic_views() {
                 ]))]),
             ]),
             paragraph("Unclosed **strong and [link](https://example.com"),
-        ]),
+        ])),
     );
 }
 
@@ -230,18 +207,19 @@ fn markdown_fallback_fixture_builds_semantic_views() {
 /// - The `rust` token and `rs` alias retain highlighted semantic code blocks.
 /// - Unknown languages remain labeled while falling back to plain source.
 /// - Empty, indented, long, and Unicode code sources remain intact.
+/// - Empty separator paragraphs retain one terminal row between code blocks.
 #[test]
 fn markdown_code_fixture_builds_semantic_views() {
     assert_eq!(
         markdown(CODE_FIXTURE),
-        column([
+        column(separated_blocks([
             code_block("fn main() {\n    println!(\"界\");\n}\n").language("rust"),
             code_block("let value = true;\n").language("rs"),
             code_block("plain\n").language("unknown-language"),
             code_block(""),
             code_block("indented 界\n"),
             code_block("abcdefghijklmnopqrstuvwxyz界\n").language("text"),
-        ]),
+        ])),
     );
 }
 
@@ -256,6 +234,7 @@ fn markdown_code_fixture_builds_semantic_views() {
 ///
 /// # Assertions
 ///
+/// - Markdown H1 through H6 use the same repeated `#` heading hierarchy.
 /// - Long Unicode prose wraps across multiple terminal rows.
 /// - Ordered and unordered list markers remain visible.
 /// - Links expose their destinations in terminal text.
@@ -264,6 +243,20 @@ fn markdown_code_fixture_builds_semantic_views() {
 fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
     let core = render_view(&markdown(CORE_FIXTURE), 24, 80)?;
     let core_lines = rendered_lines(&core);
+    for expected_heading in [
+        "# One",
+        "## Two",
+        "### Three",
+        "#### Four",
+        "##### Five",
+        "###### Six",
+    ] {
+        assert!(
+            core_lines
+                .iter()
+                .any(|line| line.starts_with(expected_heading))
+        );
+    }
     assert!(core_lines.iter().any(|line| line.contains("Unicode 界")));
     assert!(
         core_lines
@@ -334,8 +327,16 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
     let View::Column { children, .. } = &view else {
         panic!("expected Markdown document column, got {view:?}");
     };
+    let code_blocks = children
+        .iter()
+        .filter(|child| match *child {
+            View::CodeBlock { .. } => true,
+            View::Paragraph { content, .. } if content.to_string().is_empty() => false,
+            _ => panic!("expected code block or separator, got {child:?}"),
+        })
+        .collect::<Vec<_>>();
 
-    for child in children {
+    for child in &code_blocks {
         let View::CodeBlock {
             line_numbers,
             syntax_theme,
@@ -351,7 +352,7 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
     for index in [0, 1] {
         let View::CodeBlock {
             highlighted_lines, ..
-        } = &children[index]
+        } = code_blocks[index]
         else {
             unreachable!("fixture children were checked as code blocks");
         };
@@ -365,7 +366,7 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
 
     let View::CodeBlock {
         highlighted_lines, ..
-    } = &children[2]
+    } = code_blocks[2]
     else {
         unreachable!("fixture children were checked as code blocks");
     };
@@ -383,6 +384,36 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
     assert!(lines.iter().any(|line| line.contains("unknown-language")));
     assert!(lines.iter().any(|line| line.contains("1 │")));
     assert!(lines.iter().any(|line| line.contains('界')));
+
+    Ok(())
+}
+
+/// Verifies fenced Markdown code fills the complete code-block interior.
+///
+/// # Example Under Test
+///
+/// ````text
+/// ```rust
+/// let value = true;
+/// ```
+/// ````
+///
+/// # Assertions
+///
+/// - The syntax background extends from source text through the trailing row width.
+/// - The trailing logical blank line retains the same syntax background.
+/// - The surrounding border does not receive the syntax background.
+#[test]
+fn markdown_code_background_fills_the_block_interior() -> Result<()> {
+    let source = "```rust\nlet value = true;\n```\n";
+    let terminal = render_view(&markdown(source), 24, 4)?;
+    let cells = terminal.backend().buffer().content();
+    let background_at = |x: usize, y: usize| cells[y * 24 + x].bg;
+    let code_background = background_at(1, 1);
+
+    assert_eq!(background_at(22, 1), code_background);
+    assert_eq!(background_at(1, 2), code_background);
+    assert_ne!(background_at(0, 0), code_background);
 
     Ok(())
 }

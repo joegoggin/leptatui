@@ -14,6 +14,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout, Position, Rect, Size},
+    style::Style,
     text::{Line, Span, Text},
     widgets::{Block, Gauge, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
@@ -28,6 +29,7 @@ use crate::{
 };
 
 use super::{
+    code_block::SyntaxTheme,
     metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
     model::{FormAction, InputAction, View, clamped_progress_value},
 };
@@ -92,6 +94,128 @@ fn semantic_paragraph(content: &Text<'static>, style: TuiStyle) -> Paragraph<'st
         .wrap(Wrap { trim: false })
 }
 
+/// Returns the horizontal offset for a semantic heading's content.
+///
+/// The offset includes one `#` per heading level and one separating space.
+///
+/// # Arguments
+///
+/// * `level` — One-based semantic heading level.
+///
+/// # Returns
+///
+/// A [`u16`] offset from the heading area's left edge.
+fn heading_content_offset(level: u16) -> u16 {
+    level.saturating_add(1)
+}
+
+/// Returns the one-based level of a semantic heading view.
+///
+/// # Arguments
+///
+/// * `view` — Semantic heading view to classify.
+///
+/// # Returns
+///
+/// A [`u16`] containing the heading level from one through six.
+///
+/// # Panics
+///
+/// Panics if `view` is not a semantic heading variant.
+fn heading_level(view: &View) -> u16 {
+    match view {
+        View::H1 { .. } => 1,
+        View::H2 { .. } => 2,
+        View::H3 { .. } => 3,
+        View::H4 { .. } => 4,
+        View::H5 { .. } => 5,
+        View::H6 { .. } => 6,
+        _ => unreachable!("heading level requested for a non-heading view"),
+    }
+}
+
+/// Renders a Markdown-style semantic heading with a hanging content indent.
+///
+/// The marker occupies only the first row while wrapped content remains aligned
+/// beneath the heading text.
+///
+/// # Arguments
+///
+/// * `content` — Rich heading text to render.
+/// * `metadata` — Selector metadata used to resolve the heading style.
+/// * `level` — One-based semantic heading level.
+/// * `ctx` — Rendering context containing the target area and stylesheets.
+fn render_heading(
+    content: &Text<'static>,
+    metadata: &StyleMetadata,
+    level: u16,
+    ctx: &mut RenderCtx<'_, '_>,
+) {
+    let style = resolve_style(metadata, ctx);
+    let area = ctx.area();
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let content_offset = heading_content_offset(level).min(area.width);
+    let marker = format!("{} ", "#".repeat(usize::from(level)));
+    let marker_area = Rect {
+        width: content_offset,
+        height: 1,
+        ..area
+    };
+    ctx.with_area(marker_area, |ctx| {
+        ctx.render_widget(Paragraph::new(marker).style(style.to_ratatui_style()));
+    });
+
+    if content_offset < area.width {
+        let content_area = Rect {
+            x: area.x.saturating_add(content_offset),
+            width: area.width.saturating_sub(content_offset),
+            ..area
+        };
+        ctx.with_area(content_area, |ctx| {
+            ctx.render_widget(semantic_paragraph(content, style));
+        });
+    } else if area.height > 1 {
+        let content_area = Rect {
+            y: area.y.saturating_add(1),
+            height: area.height.saturating_sub(1),
+            ..area
+        };
+        ctx.with_area(content_area, |ctx| {
+            ctx.render_widget(semantic_paragraph(content, style));
+        });
+    }
+}
+
+/// Returns the minimum height required by a Markdown-style semantic heading.
+///
+/// # Arguments
+///
+/// * `content` — Rich heading text to measure.
+/// * `style` — Resolved style applied beneath rich-text spans.
+/// * `level` — One-based semantic heading level.
+/// * `width` — Available heading width in terminal cells.
+///
+/// # Returns
+///
+/// A [`u16`] row count that includes wrapping after the heading marker.
+fn heading_min_height(content: &Text<'static>, style: TuiStyle, level: u16, width: u16) -> u16 {
+    let content_width = width.saturating_sub(heading_content_offset(level));
+    if content_width == 0 {
+        if width == 0 {
+            return 0;
+        }
+
+        return 1u16.saturating_add(line_count_height(
+            semantic_paragraph(content, style).line_count(width),
+        ));
+    }
+
+    line_count_height(semantic_paragraph(content, style).line_count(content_width)).max(1)
+}
+
 /// Wraps retained code lines for the available inner width.
 ///
 /// Syntax spans are split only at grapheme boundaries. When line numbers are
@@ -145,6 +269,36 @@ fn wrapped_code_text(
     Text::from(visual_lines)
 }
 
+/// Returns wrapped code content and its required block height.
+///
+/// # Arguments
+///
+/// * `highlighted_lines` — Retained highlighted logical source lines.
+/// * `line_numbers` — Whether the logical-line gutter is enabled.
+/// * `style` — Resolved code-block style used for wrapping and block geometry.
+/// * `area` — Available code-block render area.
+///
+/// # Returns
+///
+/// A tuple containing wrapped visual lines and the saturated required height.
+fn code_block_layout(
+    highlighted_lines: &[Line<'static>],
+    line_numbers: bool,
+    style: TuiStyle,
+    area: Rect,
+) -> (Text<'static>, u16) {
+    let inner = style
+        .to_block_with_default_borders(Borders::ALL)
+        .inner(area);
+    let content = wrapped_code_text(highlighted_lines, line_numbers, inner.width, style);
+    let required_height = line_count_height(content.lines.len())
+        .max(1)
+        .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+        .saturating_add(vertical_padding_rows(style.padding));
+
+    (content, required_height)
+}
+
 /// Wraps one styled logical line at grapheme boundaries.
 ///
 /// # Arguments
@@ -156,11 +310,7 @@ fn wrapped_code_text(
 /// # Returns
 ///
 /// A non-empty [`Vec`] of visual [`Line`] values.
-fn wrap_styled_line(
-    line: &Line<'static>,
-    width: u16,
-    base_style: ratatui::style::Style,
-) -> Vec<Line<'static>> {
+fn wrap_styled_line(line: &Line<'static>, width: u16, base_style: Style) -> Vec<Line<'static>> {
     let width = usize::from(width);
     if width == 0 {
         return vec![Line::default()];
@@ -182,19 +332,23 @@ fn wrap_styled_line(
             wrapped.push(Line::from(std::mem::take(&mut spans)));
             line_width = 0;
         }
-        spans.push(Span::styled(grapheme.symbol.to_owned(), grapheme.style));
+        let grapheme_style = base_style
+            .bg
+            .map_or(grapheme.style, |background| grapheme.style.bg(background));
+        spans.push(Span::styled(grapheme.symbol.to_owned(), grapheme_style));
         line_width = line_width.saturating_add(grapheme_width);
     }
     wrapped.push(Line::from(spans));
     wrapped
 }
 
-/// Renders a bordered syntax-highlighted code block.
+/// Renders a bordered syntax-highlighted code block with a uniform interior background.
 ///
 /// # Arguments
 ///
 /// * `language` — Optional caller-supplied token shown in the border title.
 /// * `line_numbers` — Whether the logical-line gutter is enabled.
+/// * `syntax_theme` — Bundled theme supplying the default block background.
 /// * `highlighted_lines` — Retained highlighted logical source lines.
 /// * `metadata` — Selector metadata used to resolve block styling.
 /// * `ctx` — Rendering context containing the target area.
@@ -205,30 +359,32 @@ fn wrap_styled_line(
 fn render_code_block_view(
     language: Option<&str>,
     line_numbers: bool,
+    syntax_theme: SyntaxTheme,
     highlighted_lines: &[Line<'static>],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     let style = resolve_style(metadata, ctx);
+    let background = style
+        .background
+        .unwrap_or_else(|| syntax_theme.background());
+    let mut content_style = style;
+    content_style.background = Some(background);
     let area = ctx.area();
-    let provisional_block = style.to_block_with_default_borders(Borders::ALL);
-    let provisional_inner = provisional_block.inner(area);
-    let content = wrapped_code_text(
-        highlighted_lines,
-        line_numbers,
-        provisional_inner.width,
-        style,
-    );
-    let required_height = line_count_height(content.lines.len())
-        .max(1)
-        .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-        .saturating_add(vertical_padding_rows(style.padding));
+    let (content, required_height) =
+        code_block_layout(highlighted_lines, line_numbers, content_style, area);
     let mut visible_style = style;
     if area.height < required_height {
         let mut borders = style.borders.unwrap_or(Borders::ALL);
         borders.remove(Borders::BOTTOM);
         visible_style.borders = Some(borders);
     }
+    visible_style.background = None;
+    let mut background_area_style = visible_style;
+    background_area_style.padding = None;
+    let background_area = background_area_style
+        .to_block_with_default_borders(Borders::ALL)
+        .inner(area);
     let block = visible_style.to_block_with_default_borders(Borders::ALL);
     let block = if let Some(language) = language {
         block.title(language.to_owned())
@@ -236,13 +392,16 @@ fn render_code_block_view(
         block
     };
     let inner = block.inner(area);
+    ctx.with_area(background_area, |ctx| {
+        ctx.render_widget(Block::new().style(Style::new().bg(background)));
+    });
     ctx.render_widget(block);
     ctx.with_area_inherited_style_and_selector_ancestor(
         inner,
         style.inherited_values(),
         metadata.clone(),
         |ctx| {
-            ctx.render_widget(Paragraph::new(content).style(style.to_ratatui_style()));
+            ctx.render_widget(Paragraph::new(content).style(content_style.to_ratatui_style()));
         },
     );
     Ok(())
@@ -429,8 +588,11 @@ impl View {
             | Self::H3 { content, metadata }
             | Self::H4 { content, metadata }
             | Self::H5 { content, metadata }
-            | Self::H6 { content, metadata }
-            | Self::Paragraph { content, metadata } => {
+            | Self::H6 { content, metadata } => {
+                render_heading(content, metadata, heading_level(self), ctx);
+                Ok(())
+            }
+            Self::Paragraph { content, metadata } => {
                 let style = resolve_style(metadata, ctx);
                 ctx.render_widget(semantic_paragraph(content, style));
                 Ok(())
@@ -438,12 +600,14 @@ impl View {
             Self::CodeBlock {
                 language,
                 line_numbers,
+                syntax_theme,
                 highlighted_lines,
                 metadata,
                 ..
             } => render_code_block_view(
                 language.as_deref(),
                 *line_numbers,
+                *syntax_theme,
                 highlighted_lines,
                 metadata,
                 ctx,
@@ -5357,8 +5521,11 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         | View::H3 { content, metadata }
         | View::H4 { content, metadata }
         | View::H5 { content, metadata }
-        | View::H6 { content, metadata }
-        | View::Paragraph { content, metadata } => {
+        | View::H6 { content, metadata } => {
+            let style = resolve_style(metadata, ctx);
+            heading_min_height(content, style, heading_level(view), ctx.area().width)
+        }
+        View::Paragraph { content, metadata } => {
             let style = resolve_style(metadata, ctx);
             line_count_height(semantic_paragraph(content, style).line_count(ctx.area().width))
         }
@@ -5369,19 +5536,9 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
             ..
         } => {
             let style = resolve_style(metadata, ctx);
-            let inner = style
-                .to_block_with_default_borders(Borders::ALL)
-                .inner(ctx.area());
-            let content_height = line_count_height(
-                wrapped_code_text(highlighted_lines, *line_numbers, inner.width, style)
-                    .lines
-                    .len(),
-            )
-            .max(1);
-
-            content_height
-                .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-                .saturating_add(vertical_padding_rows(style.padding))
+            let (_, required_height) =
+                code_block_layout(highlighted_lines, *line_numbers, style, ctx.area());
+            required_height
         }
         View::OrderedList {
             items,

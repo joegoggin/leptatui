@@ -1,5 +1,0 @@
-error: view! source attribute is only supported on Markdown
- --> tests/fixtures/view_macro/fail/markdown_source_wrong_element.rs:8:20
-  |
-8 |         <Paragraph source="# Guide">"bad"</Paragraph>
-  |                    ^^^^^^

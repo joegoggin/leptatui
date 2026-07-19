@@ -1,0 +1,5 @@
+error: view! line_numbers attribute must be a bool expression
+ --> tests/fixtures/view_macro/fail/markdown_literal_line_numbers.rs:8:34
+  |
+8 |         <Markdown src="guide.md" line_numbers="true" />
+  |                                  ^^^^^^^^^^^^
