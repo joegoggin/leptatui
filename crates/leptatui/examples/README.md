@@ -69,6 +69,72 @@ unordered lists, a responsive table with aligned cells, and a
 syntax-highlighted code block with line numbers. Scroll with `j`/`k`, Page Up
 and Page Down, `gg`, or `G`. Press `q` to quit.
 
+Semantic views can be assembled with builders. Ordered-list starts, table-cell
+alignment, and code presentation are configured on the returned `View`:
+
+```rust
+use leptatui::prelude::*;
+
+let document = column([
+    h2("Nested list"),
+    ordered_list([list_item([
+        paragraph("Parent item"),
+        unordered_list([list_item([paragraph("Nested item")])]),
+    ])])
+    .start(3),
+    table([
+        table_head([table_row([
+            table_cell("Component"),
+            table_cell("Layout").alignment(CellAlignment::Center),
+        ])]),
+        table_body([table_row([
+            table_cell("Table"),
+            table_cell("Responsive").alignment(CellAlignment::Right),
+        ])]),
+    ]),
+    code_block("fn main() {}")
+        .language("rust")
+        .syntax_theme(SyntaxTheme::Dark)
+        .line_numbers(true),
+]);
+```
+
+The showcase uses the equivalent nested tags and semantic stylesheet
+selectors:
+
+```rust
+use leptatui::prelude::*;
+
+stylesheet! {
+    H2 => { fg: Color::LightBlue }
+    OrderedList => { fg: Color::LightCyan }
+    TableHead => { fg: Color::LightCyan }
+    CodeBlock => { fg: Color::LightBlue }
+}
+
+let document = view! {
+    <Column>
+        <OrderedList start=3>
+            <ListItem>
+                <Paragraph>"Parent item"</Paragraph>
+                <UnorderedList>
+                    <ListItem><Paragraph>"Nested item"</Paragraph></ListItem>
+                </UnorderedList>
+            </ListItem>
+        </OrderedList>
+        <CodeBlock
+            language="rust"
+            syntax_theme={SyntaxTheme::Dark}
+            line_numbers=true
+        >"fn main() {}"</CodeBlock>
+    </Column>
+};
+```
+
+All document content, including code, wraps to the terminal width instead of
+scrolling horizontally. Unknown code languages render as plain source text,
+and table cells contain inline text rather than nested block views in v1.
+
 ## Markdown Reader
 
 Run the full-screen reader with its bundled showcase:
@@ -95,6 +161,42 @@ The reader constructs its document from `<Markdown src={path} />` before
 terminal startup. Unreadable paths and invalid UTF-8 open the reader with a
 path-aware fallback paragraph. Scroll with the arrow keys or `j`/`k`, Page Up
 and Page Down, `gg`, or `G`. Press `q` to quit.
+
+Use `markdown` and `markdown_with_options` when the source is already in
+memory:
+
+```rust
+use leptatui::prelude::*;
+
+let source = "# Reader\n\n```rust\nfn main() {}\n```";
+let default_document = markdown(source);
+let configured_document = markdown_with_options(
+    source,
+    MarkdownOptions::default()
+        .syntax_theme(SyntaxTheme::Dark)
+        .line_numbers(true),
+);
+```
+
+Use the file functions or `Markdown` tag when the input is a local UTF-8 path:
+
+```rust
+use leptatui::prelude::*;
+
+let default_file = markdown_file("README.md");
+let configured_file = markdown_file_with_options(
+    "README.md",
+    MarkdownOptions::default().syntax_theme(SyntaxTheme::Light),
+);
+let tagged_file = view! {
+    <Markdown src="README.md" syntax_theme={SyntaxTheme::Dark} line_numbers=true />
+};
+```
+
+Markdown support targets CommonMark plus tables. Optional GFM extensions such
+as task lists, strikethrough, and footnotes are deferred. Links remain readable
+but are not interactive. Images render as descriptive text, and neither local
+nor remote image targets are fetched.
 
 ## Theme Switcher
 

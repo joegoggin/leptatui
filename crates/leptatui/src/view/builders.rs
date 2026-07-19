@@ -162,8 +162,10 @@ pub fn paragraph(content: impl Into<Text<'static>>) -> View {
 ///
 /// The source is retained as logical lines. Supplying a recognized language
 /// later through [`View::language`] highlights those lines once rather than on
-/// every render frame. The selected syntax theme fills the block interior unless
-/// an authored code-block background overrides it.
+/// every render frame. Unknown language tokens retain plain source. Logical
+/// lines wrap to the available width rather than scrolling horizontally. The
+/// selected syntax theme fills the block interior unless an authored
+/// code-block background overrides it.
 ///
 /// # Arguments
 ///
@@ -297,7 +299,10 @@ pub fn table_row(cells: impl IntoIterator<Item = View>) -> View {
     }
 }
 
-/// Creates a semantic table cell with left-aligned rich text.
+/// Creates a semantic table cell with left-aligned inline rich text.
+///
+/// Table cells contain Ratatui text rather than nested block views in the v1
+/// semantic document API.
 ///
 /// # Arguments
 ///

@@ -124,25 +124,151 @@ supported graphics protocol. Otherwise it renders deterministic fallback text,
 preferring the view's `alt` text when provided. `ProgressBar` renders a gauge
 with a clamped `0.0..=1.0` value and optional `label`.
 
-Semantic document views include `H1` through `H6`, `Paragraph`, ordered and
-unordered lists, responsive tables, and `CodeBlock`. Lists contain `ListItem`
-children, while tables use `TableHead` or `TableBody`, `TableRow`, and
-`TableCell`. Code blocks support `language`, `line_numbers`, and `syntax_theme`
-configuration.
+### Semantic Documents
 
-Use `markdown` or `markdown_with_options` to convert in-memory CommonMark into
-scrollable semantic views. For UTF-8 file loading, use `markdown_file`,
-`markdown_file_with_options`, or a path-backed tag:
+Semantic document views include `H1` through `H6`, `Paragraph`, ordered and
+unordered lists, responsive tables, and `CodeBlock`. Lists contain block-based
+`ListItem` children, while tables use `TableHead` or `TableBody`, `TableRow`,
+and inline-text `TableCell` values. Builders compose the same tree as the
+PascalCase `view!` tags:
 
 ```rust
-view! {
-    <Markdown src="/path/to/file.md" />
+use leptatui::prelude::*;
+
+let document = column([
+    h1("Leptatui guide"),
+    paragraph("Semantic content wraps with the terminal viewport."),
+    ordered_list([
+        list_item([
+            paragraph("Compose block-oriented list items."),
+            unordered_list([list_item([paragraph("Nest list types freely.")])]),
+        ]),
+        list_item([paragraph("Choose the first decimal marker.")]),
+    ])
+    .start(3),
+    table([
+        table_head([table_row([
+            table_cell("Component"),
+            table_cell("Status").alignment(CellAlignment::Center),
+        ])]),
+        table_body([table_row([
+            table_cell("CodeBlock"),
+            table_cell("Ready").alignment(CellAlignment::Right),
+        ])]),
+    ]),
+    code_block("fn main() { println!(\"hello\"); }")
+        .language("rust")
+        .syntax_theme(SyntaxTheme::Dark)
+        .line_numbers(true),
+]);
+```
+
+The same document shape can be written and styled with nested tags. Semantic
+view names are also stylesheet type selectors:
+
+```rust
+use leptatui::prelude::*;
+
+#[component]
+fn Guide() -> View {
+    stylesheet! {
+        H1 => { fg: Color::LightCyan }
+        OrderedList => { fg: Color::LightGreen }
+        TableHead => { fg: Color::LightCyan }
+        CodeBlock => { fg: Color::LightBlue }
+    }
+
+    view! {
+        <Column>
+            <H1>"Leptatui guide"</H1>
+            <OrderedList start=3>
+                <ListItem>
+                    <Paragraph>"Compose block-oriented list items."</Paragraph>
+                    <UnorderedList>
+                        <ListItem><Paragraph>"Nest list types freely."</Paragraph></ListItem>
+                    </UnorderedList>
+                </ListItem>
+            </OrderedList>
+            <Table>
+                <TableHead>
+                    <TableRow>
+                        <TableCell>"Component"</TableCell>
+                        <TableCell alignment={CellAlignment::Center}>"Status"</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    <TableRow>
+                        <TableCell>"CodeBlock"</TableCell>
+                        <TableCell alignment={CellAlignment::Right}>"Ready"</TableCell>
+                    </TableRow>
+                </TableBody>
+            </Table>
+            <CodeBlock
+                language="rust"
+                syntax_theme={SyntaxTheme::Dark}
+                line_numbers=true
+            >"fn main() {}"</CodeBlock>
+        </Column>
+    }
 }
 ```
 
-File readers are infallible: unreadable paths and invalid UTF-8 render a
-path-aware fallback paragraph. The option-bearing function and tag attributes
-configure syntax themes and line numbers for parsed code blocks.
+Headings, paragraphs, list items, table cells, and code lines wrap to the
+available width and contribute their wrapped height to parent layouts. Code
+blocks do not scroll horizontally. A recognized `language` selects a bundled
+syntax grammar; an unknown language keeps the source readable as plain text.
+`SyntaxTheme::Dark` is the default, and line numbers are disabled unless
+requested. Table cells accept inline Ratatui text rather than nested block
+views in the v1 API.
+
+### Markdown Readers
+
+Use `markdown` for default in-memory conversion or `markdown_with_options` to
+configure every parsed code block:
+
+```rust
+use leptatui::prelude::*;
+
+let source = "# Guide\n\n```rust\nfn main() {}\n```";
+let default_document = markdown(source);
+let highlighted_document = markdown_with_options(
+    source,
+    MarkdownOptions::default()
+        .syntax_theme(SyntaxTheme::Light)
+        .line_numbers(true),
+);
+```
+
+For explicit UTF-8 path loading, use `markdown_file`,
+`markdown_file_with_options`, or the path-backed `Markdown` tag. Loading
+finishes before the view is returned:
+
+```rust
+use leptatui::prelude::*;
+
+let default_file = markdown_file("README.md");
+let configured_file = markdown_file_with_options(
+    "README.md",
+    MarkdownOptions::default()
+        .syntax_theme(SyntaxTheme::Dark)
+        .line_numbers(true),
+);
+let tagged_file = view! {
+    <Markdown
+        src="README.md"
+        syntax_theme={SyntaxTheme::Dark}
+        line_numbers=true
+    />
+};
+```
+
+The compatibility promise is CommonMark plus tables. Optional GFM task lists,
+strikethrough, footnotes, and other extensions are deferred. Links are styled
+and include otherwise-hidden destinations, but they are not interactive.
+Images become deterministic descriptive text; local and remote image targets
+are never fetched. Raw HTML and unsupported blocks remain readable fallbacks.
+Unreadable paths and invalid UTF-8 also render a path-aware fallback paragraph
+instead of returning an error.
 
 ```rust
 use leptatui::prelude::*;

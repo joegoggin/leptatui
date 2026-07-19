@@ -5,8 +5,10 @@
 //! styled inline spans exposed by [`crate::view`]. Readable styled-block or
 //! text fallbacks retain CommonMark content without dedicated semantic views.
 //! In-memory and explicit file readers are infallible; file failures become
-//! path-aware semantic fallback content. Only the table extension is enabled
-//! beyond core CommonMark.
+//! path-aware semantic fallback content. The compatibility promise is core
+//! CommonMark plus tables. Optional GFM extensions are deferred, links remain
+//! readable but non-interactive, and images become descriptive text without
+//! fetching local or remote targets.
 
 use std::{fs, path::Path};
 
@@ -65,6 +67,15 @@ impl MarkdownOptions {
 ///
 /// Uses [`MarkdownOptions::default`] and performs no filesystem access.
 ///
+/// # Examples
+///
+/// ```
+/// use leptatui::markdown;
+///
+/// let document = markdown("# Guide\n\nRead **semantic** terminal documents.");
+/// # let _ = document;
+/// ```
+///
 /// # Arguments
 ///
 /// * `source` — CommonMark source text to parse.
@@ -80,6 +91,21 @@ pub fn markdown(source: impl AsRef<str>) -> View {
 /// Converts CommonMark source with explicit presentation options.
 ///
 /// Parsing is infallible and performs no filesystem access.
+///
+/// # Examples
+///
+/// ```
+/// use leptatui::{MarkdownOptions, SyntaxTheme, markdown_with_options};
+///
+/// let source = "```rust\nfn main() {}\n```";
+/// let document = markdown_with_options(
+///     source,
+///     MarkdownOptions::default()
+///         .syntax_theme(SyntaxTheme::Dark)
+///         .line_numbers(true),
+/// );
+/// # let _ = document;
+/// ```
 ///
 /// # Arguments
 ///
@@ -99,6 +125,15 @@ pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) 
 ///
 /// Uses [`MarkdownOptions::default`] and performs all filesystem access before
 /// returning the view.
+///
+/// # Examples
+///
+/// ```
+/// use leptatui::markdown_file;
+///
+/// let document = markdown_file("README.md");
+/// # let _ = document;
+/// ```
 ///
 /// # Arguments
 ///
@@ -124,7 +159,9 @@ pub fn markdown_file(path: impl AsRef<Path>) -> View {
 ///
 /// let view = markdown_file_with_options(
 ///     "README.md",
-///     MarkdownOptions::default().syntax_theme(SyntaxTheme::Light),
+///     MarkdownOptions::default()
+///         .syntax_theme(SyntaxTheme::Light)
+///         .line_numbers(true),
 /// );
 /// # let _ = view;
 /// ```

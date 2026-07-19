@@ -51,6 +51,9 @@
 //! protocols, and falls back to deterministic text when graphics support is
 //! unavailable. `ProgressBar` renders a clamped `0.0..=1.0` gauge with an
 //! optional label.
+//!
+//! # Semantic Documents and Markdown
+//!
 //! Semantic headings are available through [`h1`] through [`h6`], and
 //! [`paragraph`] creates unmodified body text. [`code_block`] creates a
 //! bordered, width-aware source view with optional bundled syntax highlighting
@@ -59,9 +62,117 @@
 //! markers. [`table`] groups semantic table sections, rows, and aligned cells
 //! into a bordered responsive grid. These semantic views accept
 //! owned Ratatui rich text, wrap to the available width, and contribute their
-//! wrapped height to parent layouts. [`markdown`] renders in-memory CommonMark,
-//! while [`markdown_file`] performs explicit UTF-8 file loading and renders a
-//! path-aware fallback paragraph when loading fails.
+//! wrapped height to parent layouts. Code wraps instead of scrolling
+//! horizontally, unknown language tokens retain plain source, and table cells
+//! contain inline text rather than nested block views in the v1 API.
+//!
+//! Builder configuration methods set ordered-list starts, table-cell
+//! alignment, and code presentation:
+//!
+//! ```
+//! use leptatui::prelude::*;
+//!
+//! let document = column([
+//!     h1("Guide"),
+//!     ordered_list([list_item([
+//!         paragraph("Parent item"),
+//!         unordered_list([list_item([paragraph("Nested item")])]),
+//!     ])])
+//!     .start(3),
+//!     table([
+//!         table_head([table_row([
+//!             table_cell("Component"),
+//!             table_cell("Status").alignment(CellAlignment::Center),
+//!         ])]),
+//!         table_body([table_row([
+//!             table_cell("CodeBlock"),
+//!             table_cell("Ready").alignment(CellAlignment::Right),
+//!         ])]),
+//!     ]),
+//!     code_block("fn main() {}")
+//!         .language("rust")
+//!         .syntax_theme(SyntaxTheme::Dark)
+//!         .line_numbers(true),
+//! ]);
+//! # let _ = document;
+//! ```
+//!
+//! The [`macro@view`] and [`macro@stylesheet`] macros expose the same semantic
+//! structure and type selectors:
+//!
+//! ```
+//! use leptatui::prelude::*;
+//!
+//! let _styles = stylesheet! {
+//!     H1 => { fg: Color::LightCyan }
+//!     OrderedList => { fg: Color::LightGreen }
+//!     TableHead => { fg: Color::LightCyan }
+//!     CodeBlock => { fg: Color::LightBlue }
+//! };
+//! let document = view! {
+//!     <Column>
+//!         <H1>"Guide"</H1>
+//!         <OrderedList start=3>
+//!             <ListItem>
+//!                 <Paragraph>"Parent item"</Paragraph>
+//!                 <UnorderedList>
+//!                     <ListItem><Paragraph>"Nested item"</Paragraph></ListItem>
+//!                 </UnorderedList>
+//!             </ListItem>
+//!         </OrderedList>
+//!         <Table>
+//!             <TableHead>
+//!                 <TableRow>
+//!                     <TableCell>"Component"</TableCell>
+//!                     <TableCell alignment={CellAlignment::Center}>"Status"</TableCell>
+//!                 </TableRow>
+//!             </TableHead>
+//!             <TableBody>
+//!                 <TableRow>
+//!                     <TableCell>"CodeBlock"</TableCell>
+//!                     <TableCell alignment={CellAlignment::Right}>"Ready"</TableCell>
+//!                 </TableRow>
+//!             </TableBody>
+//!         </Table>
+//!         <CodeBlock
+//!             language="rust"
+//!             syntax_theme={SyntaxTheme::Dark}
+//!             line_numbers=true
+//!         >"fn main() {}"</CodeBlock>
+//!     </Column>
+//! };
+//! # let _ = document;
+//! ```
+//!
+//! [`markdown`] and [`markdown_with_options`] convert in-memory CommonMark.
+//! [`markdown_file`] and [`markdown_file_with_options`] synchronously load
+//! UTF-8 paths before returning a view, and `view!` provides the equivalent
+//! path-backed `Markdown` tag:
+//!
+//! ```
+//! use leptatui::prelude::*;
+//!
+//! let source = "# Guide\n\n```rust\nfn main() {}\n```";
+//! let default_document = markdown(source);
+//! let configured_document = markdown_with_options(
+//!     source,
+//!     MarkdownOptions::default()
+//!         .syntax_theme(SyntaxTheme::Light)
+//!         .line_numbers(true),
+//! );
+//! let file_document = markdown_file("README.md");
+//! let tagged_document = view! {
+//!     <Markdown src="README.md" syntax_theme={SyntaxTheme::Dark} line_numbers=true />
+//! };
+//! # let _ = (default_document, configured_document, file_document, tagged_document);
+//! ```
+//!
+//! Markdown compatibility covers CommonMark plus tables. Optional GFM
+//! extensions are deferred. Links are readable but non-interactive; images
+//! become descriptive text without fetching local or remote targets; and raw
+//! HTML or unsupported blocks retain readable fallbacks. File readers are
+//! infallible and render a path-aware paragraph for unreadable or non-UTF-8
+//! input.
 //!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
