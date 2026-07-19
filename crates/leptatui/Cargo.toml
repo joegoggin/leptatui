@@ -11,6 +11,7 @@ leptatui-macros = { path = "../leptatui-macros" }
 leptos = { version = "0.9.0-alpha", default-features = false, features = [
     "csr",
 ] }
+pulldown-cmark = { version = "0.13.4", default-features = false }
 ratatui = { version = "0.30.0", default-features = false, features = [
     "crossterm_0_29",
     "unstable-rendered-line-info",

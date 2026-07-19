@@ -77,6 +77,8 @@
 //! APIs.
 
 mod executor;
+#[allow(dead_code)]
+mod markdown;
 
 pub mod action;
 pub mod app;
