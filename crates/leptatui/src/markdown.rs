@@ -19,9 +19,9 @@ use ratatui::{
 };
 
 use crate::{
-    Borders, CellAlignment, SyntaxTheme, TuiSpacing, TuiStyle, View, block, code_block, column, h1,
-    h2, h3, h4, h5, h6, list_item, ordered_list, paragraph, table, table_body, table_cell,
-    table_head, table_row, unordered_list,
+    AnyView, Borders, CellAlignment, IntoView, SyntaxTheme, TuiSpacing, TuiStyle, block,
+    code_block, column, h1, h2, h3, h4, h5, h6, list_item, ordered_list, paragraph, table,
+    table_body, table_cell, table_head, table_row, unordered_list,
 };
 
 /// Default presentation options applied while converting Markdown documents.
@@ -82,9 +82,9 @@ impl MarkdownOptions {
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing semantic document blocks separated by empty
-/// terminal rows in source order.
-pub fn markdown(source: impl AsRef<str>) -> View {
+/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
+/// semantic document blocks separated by empty terminal rows in source order.
+pub fn markdown(source: impl AsRef<str>) -> AnyView {
     markdown_with_options(source, MarkdownOptions::default())
 }
 
@@ -114,11 +114,11 @@ pub fn markdown(source: impl AsRef<str>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing semantic document blocks separated by empty
-/// terminal rows in source order.
-pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) -> View {
+/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
+/// semantic document blocks separated by empty terminal rows in source order.
+pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) -> AnyView {
     let mut parser = Parser::new_ext(source.as_ref(), Options::ENABLE_TABLES);
-    column(parse_blocks(&mut parser, None, options))
+    column(parse_blocks(&mut parser, None, options)).into_view()
 }
 
 /// Loads a UTF-8 Markdown file into a scrollable semantic document view.
@@ -141,9 +141,10 @@ pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) 
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing the parsed document or a path-aware fallback
-/// paragraph when the file cannot be read as UTF-8.
-pub fn markdown_file(path: impl AsRef<Path>) -> View {
+/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
+/// the parsed document or a path-aware fallback paragraph when the file cannot
+/// be read as UTF-8.
+pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
     markdown_file_with_options(path, MarkdownOptions::default())
 }
 
@@ -173,16 +174,18 @@ pub fn markdown_file(path: impl AsRef<Path>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing the parsed document or a path-aware fallback
-/// paragraph when the file cannot be read as UTF-8.
-pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptions) -> View {
+/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
+/// the parsed document or a path-aware fallback paragraph when the file cannot
+/// be read as UTF-8.
+pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptions) -> AnyView {
     let path = path.as_ref();
     match fs::read_to_string(path) {
         Ok(source) => markdown_with_options(source, options),
         Err(error) => column([paragraph(format!(
             "failed to read Markdown file `{}`: {error}",
             path.display()
-        ))]),
+        ))])
+        .into_view(),
     }
 }
 
@@ -348,7 +351,7 @@ fn parse_blocks<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     end: Option<TagEnd>,
     options: MarkdownOptions,
-) -> Vec<View> {
+) -> Vec<AnyView> {
     let mut views = Vec::new();
     let mut inline = InlineText::new();
 
@@ -356,7 +359,7 @@ fn parse_blocks<'a>(
         match event {
             Event::Start(Tag::Paragraph) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(paragraph(parse_inline(events, TagEnd::Paragraph)));
+                views.push(paragraph(parse_inline(events, TagEnd::Paragraph)).into_view());
             }
             Event::Start(Tag::Heading { level, .. }) => {
                 flush_inline_paragraph(&mut inline, &mut views);
@@ -416,12 +419,12 @@ fn parse_blocks<'a>(
 /// # Returns
 ///
 /// A [`Vec`] containing the blocks separated by empty paragraphs.
-fn separate_blocks(blocks: Vec<View>) -> Vec<View> {
+fn separate_blocks(blocks: Vec<AnyView>) -> Vec<AnyView> {
     let mut separated = Vec::with_capacity(blocks.len().saturating_mul(2).saturating_sub(1));
 
     for block in blocks {
         if !separated.is_empty() {
-            separated.push(paragraph(""));
+            separated.push(paragraph("").into_view());
         }
         separated.push(block);
     }
@@ -442,12 +445,14 @@ fn separate_blocks(blocks: Vec<View>) -> Vec<View> {
 /// # Returns
 ///
 /// A left-bordered [`View::Block`] containing the quote children.
-fn block_quote(children: Vec<View>) -> View {
-    block(column(children)).with_inline_style(
-        TuiStyle::new()
-            .borders(Borders::LEFT)
-            .padding(TuiSpacing::new(1, 0, 0, 0)),
-    )
+fn block_quote(children: Vec<AnyView>) -> AnyView {
+    block(column(children))
+        .with_inline_style(
+            TuiStyle::new()
+                .borders(Borders::LEFT)
+                .padding(TuiSpacing::new(1, 0, 0, 0)),
+        )
+        .into_view()
 }
 
 /// Creates a width-responsive horizontal terminal rule.
@@ -455,8 +460,10 @@ fn block_quote(children: Vec<View>) -> View {
 /// # Returns
 ///
 /// A one-row [`View::Block`] whose top border fills the available width.
-fn thematic_break() -> View {
-    block(column(Vec::<View>::new())).with_inline_style(TuiStyle::new().borders(Borders::TOP))
+fn thematic_break() -> AnyView {
+    block(column(Vec::<AnyView>::new()))
+        .with_inline_style(TuiStyle::new().borders(Borders::TOP))
+        .into_view()
 }
 
 /// Collects one raw HTML block as literal terminal text.
@@ -472,7 +479,7 @@ fn thematic_break() -> View {
 /// # Returns
 ///
 /// A semantic paragraph containing the literal HTML block payload.
-fn parse_html_block<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> View {
+fn parse_html_block<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> AnyView {
     let mut content = InlineText::new();
 
     for event in events.by_ref() {
@@ -495,7 +502,7 @@ fn parse_html_block<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> View {
         }
     }
 
-    paragraph(content.into_text())
+    paragraph(content.into_text()).into_view()
 }
 
 /// Converts accumulated direct inline content into a semantic paragraph.
@@ -504,9 +511,9 @@ fn parse_html_block<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> View {
 ///
 /// * `inline` — Pending styled inline text.
 /// * `views` — Destination block sequence for the resulting paragraph.
-fn flush_inline_paragraph(inline: &mut InlineText, views: &mut Vec<View>) {
+fn flush_inline_paragraph(inline: &mut InlineText, views: &mut Vec<AnyView>) {
     if inline.has_content() {
-        views.push(paragraph(std::mem::take(inline).into_text()));
+        views.push(paragraph(std::mem::take(inline).into_text()).into_view());
     }
 }
 
@@ -727,12 +734,13 @@ fn link_destination_is_visible(label: &str, destination: &str) -> bool {
 ///
 /// # Returns
 ///
-/// A [`View::CodeBlock`] retaining the parsed source and language selection.
+/// An [`AnyView`] containing a [`CodeBlockView`](crate::CodeBlockView) that
+/// retains the parsed source and language selection.
 fn parse_code_block<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     kind: CodeBlockKind<'a>,
     options: MarkdownOptions,
-) -> View {
+) -> AnyView {
     let mut source = String::new();
     for event in events.by_ref() {
         match event {
@@ -754,6 +762,7 @@ fn parse_code_block<'a>(
         Some(language) => view.language(language),
         None => view,
     }
+    .into_view()
 }
 
 /// Creates the semantic heading matching a CommonMark heading level.
@@ -766,7 +775,7 @@ fn parse_code_block<'a>(
 /// # Returns
 ///
 /// A semantic H1 through H6 [`View`].
-fn heading(level: HeadingLevel, content: Text<'static>) -> View {
+fn heading(level: HeadingLevel, content: Text<'static>) -> AnyView {
     match level {
         HeadingLevel::H1 => h1(content),
         HeadingLevel::H2 => h2(content),
@@ -775,6 +784,7 @@ fn heading(level: HeadingLevel, content: Text<'static>) -> View {
         HeadingLevel::H5 => h5(content),
         HeadingLevel::H6 => h6(content),
     }
+    .into_view()
 }
 
 /// Parses a CommonMark ordered or unordered list.
@@ -792,7 +802,7 @@ fn parse_list<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     start: Option<u64>,
     options: MarkdownOptions,
-) -> View {
+) -> AnyView {
     let mut items = Vec::new();
 
     while let Some(event) = events.next() {
@@ -812,6 +822,7 @@ fn parse_list<'a>(
         }
         None => unordered_list(items),
     }
+    .into_view()
 }
 
 /// Parses a CommonMark table into semantic header and body sections.
@@ -827,7 +838,10 @@ fn parse_list<'a>(
 /// # Returns
 ///
 /// A semantic table containing one header section and one body section.
-fn parse_table<'a>(events: &mut impl Iterator<Item = Event<'a>>, alignments: &[Alignment]) -> View {
+fn parse_table<'a>(
+    events: &mut impl Iterator<Item = Event<'a>>,
+    alignments: &[Alignment],
+) -> AnyView {
     let mut header_rows = Vec::new();
     let mut body_rows = Vec::new();
 
@@ -844,7 +858,7 @@ fn parse_table<'a>(events: &mut impl Iterator<Item = Event<'a>>, alignments: &[A
         }
     }
 
-    table([table_head(header_rows), table_body(body_rows)])
+    table([table_head(header_rows), table_body(body_rows)]).into_view()
 }
 
 /// Parses CommonMark table cells into one semantic header or body row.
@@ -862,7 +876,7 @@ fn parse_table_cells<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     alignments: &[Alignment],
     end: TagEnd,
-) -> View {
+) -> AnyView {
     let mut cells = Vec::new();
 
     while let Some(event) = events.next() {
@@ -877,7 +891,7 @@ fn parse_table_cells<'a>(
         }
     }
 
-    table_row(cells)
+    table_row(cells).into_view()
 }
 
 /// Returns the semantic alignment for one parsed table column.
@@ -926,7 +940,14 @@ mod tests {
     use ratatui::{Terminal, backend::TestBackend};
 
     use super::*;
-    use crate::{RenderCtx, Result};
+    use crate::{CodeBlockView, LayoutView, RenderCtx, Result};
+
+    /// Erases heterogeneous test views into one child vector.
+    macro_rules! views {
+        ($($view:expr),* $(,)?) => {
+            vec![$($view.into_view()),*]
+        };
+    }
 
     /// Returns a unique temporary directory path for Markdown reader fixtures.
     ///
@@ -956,22 +977,18 @@ mod tests {
     /// # Returns
     ///
     /// A tuple containing line-number visibility and the syntax theme.
-    fn parsed_code_block_options(view: &View) -> (bool, SyntaxTheme) {
-        let View::Column { children, .. } = view else {
-            panic!("expected Markdown column, got {view:?}");
+    fn parsed_code_block_options(view: &AnyView) -> (bool, SyntaxTheme) {
+        let document = view
+            .downcast_ref::<LayoutView>()
+            .expect("Markdown document should be a column layout");
+        let [child] = document.children() else {
+            panic!("expected one Markdown code block");
         };
-        let [
-            View::CodeBlock {
-                line_numbers,
-                syntax_theme,
-                ..
-            },
-        ] = children.as_slice()
-        else {
-            panic!("expected one Markdown code block, got {children:?}");
-        };
+        let code = child
+            .downcast_ref::<CodeBlockView>()
+            .expect("Markdown child should be a code block");
 
-        (*line_numbers, *syntax_theme)
+        (code.has_line_numbers(), code.selected_syntax_theme())
     }
 
     /// Returns scroll offset and maximum offset from a Markdown document.
@@ -983,10 +1000,11 @@ mod tests {
     /// # Returns
     ///
     /// A tuple containing the current and maximum vertical scroll offsets.
-    fn markdown_scroll_state(view: &View) -> (u16, u16) {
-        let View::Column { metadata, .. } = view else {
-            panic!("expected Markdown column, got {view:?}");
-        };
+    fn markdown_scroll_state(view: &AnyView) -> (u16, u16) {
+        let document = view
+            .downcast_ref::<LayoutView>()
+            .expect("Markdown document should be a column layout");
+        let metadata = document.metadata();
 
         (metadata.scroll_offset(), metadata.max_scroll_offset())
     }
@@ -1006,7 +1024,7 @@ mod tests {
     /// # Errors
     ///
     /// Returns [`crate::Error`] if terminal or view rendering fails.
-    fn rendered_view_lines(view: &View, width: u16, height: u16) -> Result<Vec<String>> {
+    fn rendered_view_lines(view: &AnyView, width: u16, height: u16) -> Result<Vec<String>> {
         let mut terminal = Terminal::new(TestBackend::new(width, height))?;
         let mut render_result = Ok(());
 
@@ -1298,7 +1316,7 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column(separate_blocks(vec![
+            column(separate_blocks(views![
                 h1("One"),
                 h2("Two"),
                 h3("Three"),
@@ -1412,7 +1430,7 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column(separate_blocks(vec![
+            column(separate_blocks(views![
                 code_block("fn main() {}\n").language("rust"),
                 code_block("let value = true;\n").language("rs"),
                 code_block("plain\n").language("unknown-language"),
@@ -1443,7 +1461,7 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column(separate_blocks(vec![
+            column(separate_blocks(views![
                 code_block(""),
                 code_block("plain 界\n"),
             ])),
@@ -1570,15 +1588,15 @@ mod tests {
         assert_eq!(
             markdown(source),
             column([ordered_list([
-                list_item(separate_blocks(vec![
+                list_item(separate_blocks(views![
                     paragraph("First"),
                     paragraph("Second paragraph."),
                     unordered_list([
-                        list_item(separate_blocks(vec![
+                        list_item(separate_blocks(views![
                             paragraph("Nested bullet"),
                             ordered_list([list_item([paragraph("Nested number")])]).start(7),
                         ])),
-                        list_item([]),
+                        list_item(()),
                     ]),
                 ])),
                 list_item([paragraph("Last")]),
@@ -1652,10 +1670,10 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column([block_quote(vec![
+            column([block_quote(views![
                 paragraph("Alpha beta gamma"),
                 paragraph(""),
-                block_quote(vec![paragraph("Inner")]),
+                block_quote(views![paragraph("Inner")]),
             ])]),
         );
 
@@ -1719,7 +1737,7 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column(separate_blocks(vec![
+            column(separate_blocks(views![
                 paragraph("Image: diagram (https://example.com/diagram.png)"),
                 paragraph("Image: local.png"),
                 paragraph("Image: caption"),
@@ -1761,7 +1779,7 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column(separate_blocks(vec![
+            column(separate_blocks(views![
                 paragraph("Before <kbd>&</kbd> after."),
                 paragraph(Text::from(vec![
                     Line::raw("<section>"),
@@ -1809,7 +1827,7 @@ mod tests {
 
         assert_eq!(
             column(parse_blocks(&mut parser, None, MarkdownOptions::default(),)),
-            column(separate_blocks(vec![
+            column(separate_blocks(views![
                 unordered_list([list_item([paragraph("[x] done and x + y[^note]")])]),
                 paragraph("z"),
                 paragraph("Detail"),
@@ -1842,7 +1860,7 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column(separate_blocks(vec![
+            column(separate_blocks(views![
                 h1("Start"),
                 thematic_break(),
                 paragraph("Image: middle (middle.png)"),
@@ -1876,7 +1894,7 @@ mod tests {
 
         assert_eq!(
             markdown(source),
-            column(separate_blocks(vec![
+            column(separate_blocks(views![
                 h1("開始"),
                 paragraph("Before."),
                 unordered_list([list_item([paragraph("中")])]),
@@ -1899,6 +1917,6 @@ mod tests {
     /// - The result is an empty semantic column.
     #[test]
     fn markdown_empty_source_returns_empty_column() {
-        assert_eq!(markdown(""), column([]));
+        assert_eq!(markdown(""), column(()));
     }
 }

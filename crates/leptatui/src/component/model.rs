@@ -6,6 +6,7 @@
 
 use std::path::Path;
 
+use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     Frame,
     buffer::Buffer,
@@ -15,7 +16,7 @@ use ratatui::{
 };
 
 use crate::{
-    StyleMetadata,
+    StyleMetadata, ThemeVariables,
     app::Result,
     context,
     style::{Stylesheet, TuiStyle, ViewportSize},
@@ -23,7 +24,7 @@ use crate::{
         TerminalImageFallback, TerminalImageRenderOutcome, TerminalImageSupport,
         render_terminal_image_fallback,
     },
-    view::View,
+    view::AnyView,
 };
 
 /// Rendering context for a single frame and target area.
@@ -85,13 +86,37 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.viewport_size
     }
 
-    /// Returns the stylesheets used by this render context.
+    /// Resolves authored and inherited styles for view metadata.
+    ///
+    /// Custom [`crate::View`] implementations can use this method before
+    /// rendering a Ratatui widget so application stylesheets, inline styles,
+    /// selector ancestry, viewport queries, and theme variables behave like
+    /// they do for built-in views.
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` — Selector and inline-style metadata for the view.
     ///
     /// # Returns
     ///
-    /// A stylesheet slice used for view style resolution.
-    pub(crate) fn stylesheets(&self) -> &[Stylesheet] {
-        &self.stylesheets
+    /// A resolved [`TuiStyle`] for the current rendering context.
+    pub fn resolve_style(&self, metadata: &StyleMetadata) -> TuiStyle {
+        let theme = context::use_context::<ThemeVariables>()
+            .or_else(|| {
+                context::use_context::<ReadSignal<ThemeVariables>>()
+                    .map(|theme| theme.get_untracked())
+            })
+            .unwrap_or_default();
+
+        Stylesheet::resolve_stylesheets(
+            &self.stylesheets,
+            metadata,
+            &self.selector_ancestors,
+            self.inherited_style,
+            metadata.inline_style(),
+            Some(self.viewport_size),
+            &theme,
+        )
     }
 
     /// Renders with an additional component-scoped stylesheet.
@@ -151,16 +176,6 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.inherited_style
     }
 
-    /// Returns selector metadata for ancestor views in render order.
-    ///
-    /// # Returns
-    ///
-    /// A [`StyleMetadata`] slice ordered from outermost ancestor to innermost
-    /// ancestor.
-    pub(crate) fn selector_ancestors(&self) -> &[StyleMetadata] {
-        &self.selector_ancestors
-    }
-
     /// Renders a Ratatui widget into the current target area.
     ///
     /// # Arguments
@@ -200,7 +215,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// Returns [`crate::app::Error::Io`] if view rendering performs terminal
     /// I/O that fails.
-    pub fn render_view(&mut self, view: &View) -> Result<()> {
+    pub fn render_view(&mut self, view: &AnyView) -> Result<()> {
         view.render(self)
     }
 
@@ -363,7 +378,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// Renders a view into an offscreen buffer and copies a clipped row slice.
     pub(crate) fn render_view_clipped(
         &mut self,
-        view: &View,
+        view: &AnyView,
         full_area: Rect,
         source_y: u16,
         target_area: Rect,
@@ -471,7 +486,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// # Returns
     ///
     /// An `R` value returned by `render`.
-    pub(crate) fn with_area_and_inherited_style<R>(
+    pub fn with_area_and_inherited_style<R>(
         &mut self,
         area: Rect,
         inherited_style: TuiStyle,
@@ -497,7 +512,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// # Returns
     ///
     /// An `R` value returned by `render`.
-    pub(crate) fn with_area_inherited_style_and_selector_ancestor<R>(
+    pub fn with_area_inherited_style_and_selector_ancestor<R>(
         &mut self,
         area: Rect,
         inherited_style: TuiStyle,

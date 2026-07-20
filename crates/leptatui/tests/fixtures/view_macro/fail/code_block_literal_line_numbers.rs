@@ -4,7 +4,7 @@ use leptatui::prelude::*;
 
 /// Triggers typed code-block attribute validation.
 fn main() {
-    let _: View = view! {
+    let _ = view! {
         <CodeBlock line_numbers="true">"let ready = true;"</CodeBlock>
     };
 }

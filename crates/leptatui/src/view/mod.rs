@@ -20,6 +20,14 @@ pub use builders::{
     table_head, table_row, text, text_area, unordered_list,
 };
 pub use code_block::SyntaxTheme;
+pub use dynamic::DynamicView;
 pub use metadata::{EditableState, StyleMetadata, ViewType, VimMode};
-pub use model::{ButtonAction, CellAlignment, FormAction, ImageSource, InputAction, View};
+pub(crate) use model::reconcile_views;
+pub use model::{
+    AnyView, BlockView, ButtonAction, ButtonView, CellAlignment, CodeBlockView, ContainerView,
+    EditableKind, EditableTextView, EditableView, FormAction, FormView, HeadingLevel, HeadingView,
+    ImageSource, ImageView, InputAction, IntoView, IntoViews, LayoutView, ListItemView, ListKind,
+    ListView, ParagraphView, ProgressBarView, StyledView, TableCellView, TableRowView,
+    TableSectionKind, TableSectionView, TableView, TextView, TextualView, View,
+};
 pub use ratatui::text::{Line, Span, Text};

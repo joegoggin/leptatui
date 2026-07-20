@@ -61,7 +61,7 @@ fn navigate_to(navigate: WriteSignal<DemoPage>, page: DemoPage) -> AppControl {
 
 /// Root component for the multi-page demo.
 #[component]
-fn MultiPageDemo() -> View {
+fn MultiPageDemo() -> impl IntoView {
     let counter = RwSignal::new(0);
     let theme_mode = RwSignal::new(ThemeMode::Light);
     let theme = RwSignal::new(ThemeMode::Light.variables());
@@ -150,7 +150,7 @@ fn MultiPageDemo() -> View {
 
 /// Top navigation shared across pages.
 #[component]
-fn Nav() -> View {
+fn Nav() -> impl IntoView {
     let navigate = use_navigate::<DemoPage>();
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {
@@ -184,7 +184,7 @@ fn Nav() -> View {
 
 /// Landing page that summarizes shared demo state.
 #[component]
-fn HomePage() -> View {
+fn HomePage() -> impl IntoView {
     let counter = expect_context::<RwSignal<i32>>();
     let theme_mode = expect_context::<RwSignal<ThemeMode>>();
 
@@ -216,7 +216,7 @@ fn HomePage() -> View {
 
 /// Counter page that remains interactive after route navigation.
 #[component]
-fn CounterPage() -> View {
+fn CounterPage() -> impl IntoView {
     let counter = expect_context::<RwSignal<i32>>();
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {
@@ -266,7 +266,7 @@ fn CounterPage() -> View {
 
 /// Settings page that updates shared theme preference state.
 #[component]
-fn SettingsPage() -> View {
+fn SettingsPage() -> impl IntoView {
     let mode = expect_context::<RwSignal<ThemeMode>>();
     let theme = expect_context::<RwSignal<ThemeVariables>>();
 

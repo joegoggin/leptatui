@@ -1,13 +1,14 @@
 //! App root adapter contract.
 //!
-//! This module defines the root-level rendering interface and adapts
-//! [`Component`] values into app roots.
+//! This module defines the root-level rendering interface and adapts [`View`]
+//! values into app roots.
 
 use crossterm::event::Event;
 use ratatui::Frame;
 
 use crate::{
-    component::{Component, FocusedControl, RenderCtx},
+    AnyView, View,
+    component::{FocusedControl, RenderCtx},
     context,
 };
 
@@ -62,10 +63,7 @@ pub trait AppRoot {
     }
 }
 
-impl<T> AppRoot for T
-where
-    T: Component,
-{
+impl AppRoot for AnyView {
     /// Renders a component root inside a fresh Leptatui context scope.
     ///
     /// # Arguments
@@ -83,7 +81,7 @@ where
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
         context::hooks::__with_context_scope(|| {
             let mut ctx = RenderCtx::new(frame);
-            Component::render(self, &mut ctx)
+            AnyView::render(self, &mut ctx)
         })
     }
 
@@ -102,18 +100,42 @@ where
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
     /// I/O that fails.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        Component::handle_event(self, event)
+        AnyView::handle_event(self, event)
     }
 
     /// Forwards pending input flushing into component roots.
     #[doc(hidden)]
     fn __flush_pending_input(&mut self) -> Option<AppControl> {
-        Component::__flush_pending_input(self)
+        AnyView::__flush_pending_input(self)
     }
 
     /// Forwards focused-control metadata from component roots.
     #[doc(hidden)]
     fn __focused_control(&self) -> Option<FocusedControl> {
-        Component::__focused_control(self)
+        AnyView::__focused_control(self)
+    }
+}
+
+impl<V> AppRoot for V
+where
+    V: View,
+{
+    fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
+        context::hooks::__with_context_scope(|| {
+            let mut ctx = RenderCtx::new(frame);
+            View::render(self, &mut ctx)
+        })
+    }
+
+    fn handle_event(&mut self, event: Event) -> Result<AppControl> {
+        View::handle_event(self, event)
+    }
+
+    fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        View::__flush_pending_input(self)
+    }
+
+    fn __focused_control(&self) -> Option<FocusedControl> {
+        View::__focused_control(self)
     }
 }

@@ -214,7 +214,7 @@ struct ResourceStatus {
     resource: Resource<String, &'static str>,
 }
 
-impl Component for ResourceStatus {
+impl View for ResourceStatus {
     /// Renders the current resource state into the terminal frame.
     ///
     /// # Arguments
@@ -228,14 +228,22 @@ impl Component for ResourceStatus {
     /// # Errors
     ///
     /// Returns [`Error::Io`] if rendering the text view fails.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let label = match self.resource.get() {
             ResourceState::Pending => String::from("Loading"),
             ResourceState::Ready(value) => value,
             ResourceState::Error(error) => format!("Error: {error}"),
         };
 
-        ctx.render_view(&text(label))
+        View::render(&text(label), ctx)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

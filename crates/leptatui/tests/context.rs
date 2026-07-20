@@ -3,8 +3,8 @@
 //! These tests cover public context APIs at runtime boundaries.
 
 use leptatui::{
-    AppControl, AppRoot, Color, Component, RenderCtx, Result, StyleDeclarations, StyleSelector,
-    Stylesheet, ThemeVariables, column, component,
+    AnyView, AppControl, AppRoot, Color, IntoView, RenderCtx, Result, StyleDeclarations,
+    StyleSelector, Stylesheet, ThemeVariables, View, column, component,
     context::{expect_context, provide_context, use_context},
     text, theme_color,
 };
@@ -22,14 +22,22 @@ type ObservedLabels = Rc<RefCell<Vec<Option<ScopeLabel>>>>;
 /// Component that provides a label to its child subtree.
 struct LabelProvider {
     value: ScopeLabel,
-    child: leptatui::View,
+    child: AnyView,
 }
 
-impl Component for LabelProvider {
+impl View for LabelProvider {
     /// Provides a label, then renders the child subtree.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.value.clone());
         ctx.render_view(&self.child)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -45,23 +53,31 @@ impl LabelConsumer {
     }
 }
 
-impl Component for LabelConsumer {
+impl View for LabelConsumer {
     /// Records the visible label during render.
-    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         self.observed.borrow_mut().push(use_context::<ScopeLabel>());
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
 /// Component that provides a label during render and forwards events to a child.
 struct EventLabelProvider {
     value: ScopeLabel,
-    child: leptatui::View,
+    child: AnyView,
 }
 
-impl Component for EventLabelProvider {
+impl View for EventLabelProvider {
     /// Provides a label while rendering the provider subtree.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.value.clone());
         ctx.render_view(&self.child)
     }
@@ -70,6 +86,14 @@ impl Component for EventLabelProvider {
     fn handle_event(&mut self, event: crossterm::event::Event) -> Result<AppControl> {
         self.child.handle_event(event)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Component that records context visible during event handling.
@@ -77,9 +101,9 @@ struct EventLabelConsumer {
     observed: Rc<RefCell<Option<ScopeLabel>>>,
 }
 
-impl Component for EventLabelConsumer {
+impl View for EventLabelConsumer {
     /// Renders nothing; this component only observes event-time context.
-    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         Ok(())
     }
 
@@ -88,16 +112,24 @@ impl Component for EventLabelConsumer {
         *self.observed.borrow_mut() = use_context::<ScopeLabel>();
         Ok(AppControl::Continue)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Component that provides active theme variables before rendering a child.
 struct ThemeRenderRoot {
     dark: ReadSignal<bool>,
-    child: leptatui::View,
+    child: AnyView,
     stylesheet: Stylesheet,
 }
 
-impl Component for ThemeRenderRoot {
+impl View for ThemeRenderRoot {
     /// Provides variables from the active boolean theme flag and renders the child.
     ///
     /// # Arguments
@@ -107,7 +139,7 @@ impl Component for ThemeRenderRoot {
     /// # Returns
     ///
     /// An empty [`Result`] on successful child rendering.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let theme = if self.dark.get_untracked() {
             ThemeVariables::new()
                 .color("text", Color::White)
@@ -121,16 +153,24 @@ impl Component for ThemeRenderRoot {
         provide_context(theme);
         ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_view(&self.child))
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Component that provides active theme variables through a signal context.
 struct ThemeSignalRoot {
     theme: ReadSignal<ThemeVariables>,
-    child: leptatui::View,
+    child: AnyView,
     stylesheet: Stylesheet,
 }
 
-impl Component for ThemeSignalRoot {
+impl View for ThemeSignalRoot {
     /// Provides the theme signal and renders the child with stylesheet rules.
     ///
     /// # Arguments
@@ -140,21 +180,29 @@ impl Component for ThemeSignalRoot {
     /// # Returns
     ///
     /// An empty [`Result`] on successful child rendering.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(self.theme);
         ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_view(&self.child))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
 /// Component that records context values observed during rendering.
 struct ContextRoot {
     /// String context observed through Leptatui render-scope storage.
-    observed_text: Option<String>,
+    observed_text: RefCell<Option<String>>,
     /// Signal value observed through Leptos owner fallback storage.
-    observed_count: Option<i32>,
+    observed_count: RefCell<Option<i32>>,
 }
 
-impl Component for ContextRoot {
+impl View for ContextRoot {
     /// Provides and reads context values during a render pass.
     ///
     /// # Arguments
@@ -164,20 +212,28 @@ impl Component for ContextRoot {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         provide_context(String::from("from component"));
-        self.observed_text = use_context::<String>();
+        *self.observed_text.borrow_mut() = use_context::<String>();
 
         Owner::new().with(|| {
             let (count, set_count) = signal(1);
             leptos::context::provide_context(count);
             set_count.set(2);
 
-            self.observed_count =
+            *self.observed_count.borrow_mut() =
                 use_context::<ReadSignal<i32>>().map(|count| count.get_untracked());
         });
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -206,8 +262,8 @@ fn component_render_scope_can_provide_and_read_context() -> Result<()> {
     let backend = TestBackend::new(16, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut root = ContextRoot {
-        observed_text: None,
-        observed_count: None,
+        observed_text: RefCell::new(None),
+        observed_count: RefCell::new(None),
     };
     let mut render_result = Ok(());
 
@@ -216,8 +272,11 @@ fn component_render_scope_can_provide_and_read_context() -> Result<()> {
     })?;
     render_result?;
 
-    assert_eq!(root.observed_text.as_deref(), Some("from component"));
-    assert_eq!(root.observed_count, Some(2));
+    assert_eq!(
+        root.observed_text.borrow().as_deref(),
+        Some("from component")
+    );
+    assert_eq!(*root.observed_count.borrow(), Some(2));
 
     Ok(())
 }
@@ -246,7 +305,7 @@ fn context_theme_variables_update_rendered_styles() -> Result<()> {
     );
     let mut root = ThemeRenderRoot {
         dark,
-        child: text("Theme").with_classes("themed"),
+        child: text("Theme").with_classes("themed").into_view(),
         stylesheet,
     };
     let backend = TestBackend::new(12, 1);
@@ -317,7 +376,7 @@ fn context_theme_signal_updates_rendered_styles() -> Result<()> {
     );
     let mut root = ThemeSignalRoot {
         theme,
-        child: text("Theme").with_classes("themed"),
+        child: text("Theme").with_classes("themed").into_view(),
         stylesheet,
     };
     let backend = TestBackend::new(12, 1);
@@ -418,7 +477,8 @@ fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
                 child: component(LabelConsumer::new(Rc::clone(&observed))),
             }),
             component(LabelConsumer::new(Rc::clone(&observed))),
-        ]),
+        ])
+        .into_view(),
     });
     let mut render_result = Ok(());
 

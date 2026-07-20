@@ -10,12 +10,14 @@ use crossterm::event::{Event, KeyEvent};
 
 use crate::{
     app::{AppControl, Result},
-    component::{Component, FocusedControl, KeyControl, RenderCtx},
+    component::{FocusedControl, KeyControl, RenderCtx},
     context::ContextScope,
 };
 
+use super::model::{AnyView, IntoView, View};
+
 /// Shared mutable component instance stored by a component view boundary.
-type SharedComponent = Rc<RefCell<dyn Component>>;
+type SharedComponent = Rc<RefCell<AnyView>>;
 /// Lazy factory that creates a shared component instance on first use.
 type ComponentFactory = Box<dyn FnOnce() -> SharedComponent>;
 
@@ -51,13 +53,13 @@ impl ComponentView {
     /// A [`ComponentView`] containing the provided component.
     pub(crate) fn new<C>(component: C) -> Self
     where
-        C: Component + 'static,
+        C: View + 'static,
     {
         Self {
             inner: Rc::new(ComponentViewInner {
                 component_type: TypeId::of::<C>(),
                 preserve_on_reconcile: false,
-                component: RefCell::new(Some(Rc::new(RefCell::new(component)))),
+                component: RefCell::new(Some(Rc::new(RefCell::new(component.into_view())))),
                 factory: RefCell::new(None),
                 context: ContextScope::new(),
             }),
@@ -70,14 +72,16 @@ impl ComponentView {
         factory: impl FnOnce() -> C + 'static,
     ) -> Self
     where
-        C: Component + 'static,
+        C: View + 'static,
     {
         Self {
             inner: Rc::new(ComponentViewInner {
                 component_type: TypeId::of::<C>(),
                 preserve_on_reconcile,
                 component: RefCell::new(None),
-                factory: RefCell::new(Some(Box::new(move || Rc::new(RefCell::new(factory()))))),
+                factory: RefCell::new(Some(Box::new(move || {
+                    Rc::new(RefCell::new(factory().into_view()))
+                }))),
                 context: ContextScope::new(),
             }),
         }
@@ -98,12 +102,12 @@ impl ComponentView {
     /// Returns [`crate::app::Error::Io`] if the component render path performs
     /// terminal I/O that fails.
     pub(crate) fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        self.with_reset_component_mut(|component| component.render(ctx))
+        self.with_reset_component(|component| component.render(ctx))
     }
 
     /// Returns the minimum useful render height inside this component boundary.
     pub(crate) fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        self.with_reset_component(|component| component.__min_height(ctx))
+        self.with_reset_component(|component| component.as_view().__min_height(ctx))
     }
 
     /// Handles an event inside this component's existing context scope.
@@ -120,7 +124,7 @@ impl ComponentView {
     ///
     /// Returns [`crate::app::Error::Io`] if the component event path performs
     /// terminal I/O that fails.
-    pub(crate) fn handle_event(&self, event: Event) -> Result<AppControl> {
+    pub(crate) fn dispatch_event(&self, event: Event) -> Result<AppControl> {
         self.with_component_mut(|component| component.handle_event(event))
     }
 
@@ -231,20 +235,6 @@ impl ComponentView {
         self.with_component(|component| component.__has_overflowing_scroll_target())
     }
 
-    /// Compares two component boundaries by shared storage identity.
-    ///
-    /// # Arguments
-    ///
-    /// * `other` — Component boundary to compare with `self`.
-    ///
-    /// # Returns
-    ///
-    /// A [`bool`] indicating whether both boundaries point to the same
-    /// component storage.
-    pub(super) fn ptr_eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.inner, &other.inner)
-    }
-
     /// Returns whether reconciliation may preserve these component boundaries.
     pub(crate) fn can_reconcile_from(&self, other: &Self) -> bool {
         self.inner.preserve_on_reconcile
@@ -253,42 +243,32 @@ impl ComponentView {
     }
 
     /// Reads the materialized component inside its persistent context scope.
-    fn with_component<R>(&self, read: impl FnOnce(&dyn Component) -> R) -> R {
+    fn with_component<R>(&self, read: impl FnOnce(&AnyView) -> R) -> R {
         let component = self.component();
 
         self.inner.context.with(|| {
             let component = component.borrow();
-            read(&*component)
+            read(&component)
         })
     }
 
     /// Mutates the materialized component inside its persistent context scope.
-    fn with_component_mut<R>(&self, write: impl FnOnce(&mut dyn Component) -> R) -> R {
+    fn with_component_mut<R>(&self, write: impl FnOnce(&mut AnyView) -> R) -> R {
         let component = self.component();
 
         self.inner.context.with(|| {
             let mut component = component.borrow_mut();
-            write(&mut *component)
+            write(&mut component)
         })
     }
 
     /// Reads the materialized component inside a reset context scope.
-    fn with_reset_component<R>(&self, read: impl FnOnce(&dyn Component) -> R) -> R {
+    fn with_reset_component<R>(&self, read: impl FnOnce(&AnyView) -> R) -> R {
         let component = self.component();
 
         self.inner.context.with_reset(|| {
             let component = component.borrow();
-            read(&*component)
-        })
-    }
-
-    /// Mutates the materialized component inside a reset context scope.
-    fn with_reset_component_mut<R>(&self, write: impl FnOnce(&mut dyn Component) -> R) -> R {
-        let component = self.component();
-
-        self.inner.context.with_reset(|| {
-            let mut component = component.borrow_mut();
-            write(&mut *component)
+            read(&component)
         })
     }
 
@@ -323,5 +303,112 @@ impl fmt::Debug for ComponentView {
     /// A [`fmt::Result`] indicating whether formatting succeeded.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ComponentView").finish()
+    }
+}
+
+impl PartialEq for ComponentView {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl View for ComponentView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        ComponentView::render(self, ctx)
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        ComponentView::min_height(self, ctx)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn reconcile(&mut self, previous: &dyn View) {
+        if let Some(previous) = previous.as_any().downcast_ref::<Self>()
+            && self.can_reconcile_from(previous)
+        {
+            self.inner = previous.inner.clone();
+        }
+    }
+
+    fn can_reconcile_from(&self, previous: &dyn View) -> bool {
+        previous
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|previous| ComponentView::can_reconcile_from(self, previous))
+    }
+
+    fn __dispatch_event(&mut self, event: &Event) -> Result<AppControl> {
+        self.dispatch_event(event.clone())
+    }
+
+    fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        self.dispatch_key_event(key)
+    }
+
+    fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        self.flush_pending_input()
+    }
+
+    fn __focusable_count(&self) -> usize {
+        self.focusable_count()
+    }
+
+    fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        self.focused_index_inner(index)
+    }
+
+    fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        self.set_focus_by_index_inner(target, index);
+    }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        self.focused_control_span(ctx)
+    }
+
+    fn __activate_focused_button(&self) -> Option<AppControl> {
+        self.activate_focused_button()
+    }
+
+    fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        self.handle_focused_input_key(key)
+    }
+
+    fn __focused_control(&self) -> Option<FocusedControl> {
+        self.focused_control()
+    }
+
+    fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        self.handle_form_key(key)
+    }
+
+    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+        self.scroll_first_overflowing(delta)
+    }
+
+    fn __scroll_first_overflowing_to_top(&mut self) -> bool {
+        self.scroll_first_overflowing_to_top()
+    }
+
+    fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
+        self.scroll_first_overflowing_to_bottom()
+    }
+
+    fn __has_overflowing_scroll_target(&self) -> bool {
+        self.has_overflowing_scroll_target()
+    }
+
+    fn __set_scroll_to_top_key_pending(&self, pending: bool) -> bool {
+        self.with_component(|component| component.__set_scroll_to_top_key_pending(pending))
+    }
+
+    fn __take_scroll_to_top_key_pending(&self) -> bool {
+        self.with_component(AnyView::__take_scroll_to_top_key_pending)
     }
 }

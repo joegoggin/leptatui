@@ -7,19 +7,19 @@ use leptatui::prelude::*;
 
 /// Builds a text view from a prop.
 #[component]
-fn Label(#[prop(into)] text: String) -> View {
+fn Label(#[prop(into)] text: String) -> impl IntoView {
     view! { <Text>{text}</Text> }
 }
 
 /// Builds a button from an unbraced callback prop.
 #[component]
-fn ActionLabel(on_press: fn() -> AppControl) -> View {
+fn ActionLabel(on_press: fn() -> AppControl) -> impl IntoView {
     view! { <Button on_press={on_press}>"Run"</Button> }
 }
 
 /// Builds a panel around nested children.
 #[component]
-fn Panel(#[prop(into)] title: String, children: Children) -> View {
+fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
         <Column>
             <Text>{title}</Text>
@@ -30,10 +30,10 @@ fn Panel(#[prop(into)] title: String, children: Children) -> View {
 
 /// Exercises component tags at root and child positions.
 fn main() {
-    let root: View = view! { <Label text="Count" /> };
-    assert!(matches!(root, View::Component(_)));
+    let root = view! { <Label text="Count" /> };
+    assert!(root.style_metadata().is_none());
 
-    let view: View = view! {
+    let view = view! {
         <Panel title="Theme variables">
             <Label text="Active theme" />
             <ActionLabel on_press=|| AppControl::Continue />
@@ -41,5 +41,5 @@ fn main() {
         </Panel>
     };
 
-    assert!(matches!(view, View::Component(_)));
+    assert!(view.style_metadata().is_none());
 }

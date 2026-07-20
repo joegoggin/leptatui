@@ -4,7 +4,7 @@ use leptatui::prelude::*;
 
 /// Triggers document attribute ownership validation.
 fn main() {
-    let _: View = view! {
+    let _ = view! {
         <Paragraph language="rust">"Not code"</Paragraph>
     };
 }

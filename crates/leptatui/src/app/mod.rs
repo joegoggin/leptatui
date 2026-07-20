@@ -2,8 +2,7 @@
 //!
 //! This module owns terminal setup, event polling, root rendering, and cleanup
 //! for Leptatui applications. It adapts either an [`AppRoot`] implementation or
-//! a [`Component`](crate::Component) to a managed Ratatui/Crossterm terminal
-//! session.
+//! a [`View`](crate::View) to a managed Ratatui/Crossterm terminal session.
 //!
 //! # Implementation modules
 //!
@@ -24,6 +23,8 @@ mod terminal;
 mod wakeup;
 
 use std::time::Duration;
+
+use crate::{AnyView, IntoView};
 
 pub use control::AppControl;
 pub use error::{Error, Result};
@@ -48,17 +49,35 @@ pub struct App<R> {
     redraw_interval: Duration,
 }
 
-impl<R> App<R> {
+impl App<AnyView> {
     /// Creates an app runner for a root component.
     ///
     /// # Arguments
     ///
-    /// * `root` — Root component or [`AppRoot`] adapter to render.
+    /// * `root` — View-compatible root value to render.
     ///
     /// # Returns
     ///
     /// An [`App`] configured with the default redraw interval.
-    pub fn new(root: R) -> Self {
+    pub fn new(root: impl IntoView) -> Self {
+        Self {
+            root: root.into_view(),
+            redraw_interval: DEFAULT_REDRAW_INTERVAL,
+        }
+    }
+}
+
+impl<R> App<R> {
+    /// Creates an app from a low-level root adapter.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` — Root adapter that owns frame and event integration.
+    ///
+    /// # Returns
+    ///
+    /// An [`App`] configured with the default redraw interval.
+    pub fn from_root(root: R) -> Self {
         Self {
             root,
             redraw_interval: DEFAULT_REDRAW_INTERVAL,

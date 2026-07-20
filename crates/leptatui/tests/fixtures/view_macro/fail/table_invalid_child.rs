@@ -4,7 +4,7 @@ use leptatui::prelude::*;
 
 /// Triggers table-section child validation.
 fn main() {
-    let _: View = view! {
+    let _ = view! {
         <Table>
             <TableRow><TableCell>"Invalid"</TableCell></TableRow>
         </Table>

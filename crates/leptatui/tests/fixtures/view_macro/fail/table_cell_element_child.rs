@@ -4,7 +4,7 @@ use leptatui::prelude::*;
 
 /// Triggers table-cell text-content validation.
 fn main() {
-    let _: View = view! {
+    let _ = view! {
         <Table>
             <TableBody>
                 <TableRow><TableCell><Paragraph>"Nested"</Paragraph></TableCell></TableRow>

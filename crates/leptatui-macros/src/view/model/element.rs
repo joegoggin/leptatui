@@ -157,15 +157,15 @@ impl Element {
             }),
             "Row" => self.expand_child_list("Row", |children| {
                 let leptatui = crate::utils::crate_path::leptatui();
-                quote! { #leptatui::row(::std::vec![#(#children),*]) }
+                quote! { #leptatui::row(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
             }),
             "Column" => self.expand_child_list("Column", |children| {
                 let leptatui = crate::utils::crate_path::leptatui();
-                quote! { #leptatui::column(::std::vec![#(#children),*]) }
+                quote! { #leptatui::column(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
             }),
             "Form" => self.expand_child_list("Form", |children| {
                 let leptatui = crate::utils::crate_path::leptatui();
-                quote! { #leptatui::form(::std::vec![#(#children),*]) }
+                quote! { #leptatui::form(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
             }),
             "Text" => self.expand_text_like("Text", |content| {
                 let leptatui = crate::utils::crate_path::leptatui();
@@ -208,7 +208,7 @@ impl Element {
                 &["ListItem"],
                 |children| {
                     let leptatui = crate::utils::crate_path::leptatui();
-                    quote! { #leptatui::ordered_list(::std::vec![#(#children),*]) }
+                    quote! { #leptatui::ordered_list(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
                 },
             ),
             "UnorderedList" => self.expand_element_child_list(
@@ -216,19 +216,19 @@ impl Element {
                 &["ListItem"],
                 |children| {
                     let leptatui = crate::utils::crate_path::leptatui();
-                    quote! { #leptatui::unordered_list(::std::vec![#(#children),*]) }
+                    quote! { #leptatui::unordered_list(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
                 },
             ),
             "ListItem" => self.expand_child_list("ListItem", |children| {
                 let leptatui = crate::utils::crate_path::leptatui();
-                quote! { #leptatui::list_item(::std::vec![#(#children),*]) }
+                quote! { #leptatui::list_item(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
             }),
             "Table" => self.expand_element_child_list(
                 "Table",
                 &["TableHead", "TableBody"],
                 |children| {
                     let leptatui = crate::utils::crate_path::leptatui();
-                    quote! { #leptatui::table(::std::vec![#(#children),*]) }
+                    quote! { #leptatui::table(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
                 },
             ),
             "TableHead" => self.expand_element_child_list(
@@ -236,7 +236,7 @@ impl Element {
                 &["TableRow"],
                 |children| {
                     let leptatui = crate::utils::crate_path::leptatui();
-                    quote! { #leptatui::table_head(::std::vec![#(#children),*]) }
+                    quote! { #leptatui::table_head(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
                 },
             ),
             "TableBody" => self.expand_element_child_list(
@@ -244,7 +244,7 @@ impl Element {
                 &["TableRow"],
                 |children| {
                     let leptatui = crate::utils::crate_path::leptatui();
-                    quote! { #leptatui::table_body(::std::vec![#(#children),*]) }
+                    quote! { #leptatui::table_body(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
                 },
             ),
             "TableRow" => self.expand_element_child_list(
@@ -252,7 +252,7 @@ impl Element {
                 &["TableCell"],
                 |children| {
                     let leptatui = crate::utils::crate_path::leptatui();
-                    quote! { #leptatui::table_row(::std::vec![#(#children),*]) }
+                    quote! { #leptatui::table_row(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
                 },
             ),
             "TableCell" => self.expand_text_like("TableCell", |content| {
@@ -549,7 +549,7 @@ impl Element {
                 let children = self.expand_component_children()?;
                 quote! {
                     .children(::std::boxed::Box::new(move || {
-                        ::std::vec![#(#children),*]
+                        ::std::vec![#(#leptatui::IntoView::into_view(#children)),*]
                     }))
                 }
             };
@@ -1044,7 +1044,7 @@ impl Element {
         };
         let leptatui = crate::utils::crate_path::leptatui();
 
-        Ok(quote! { ::core::convert::Into::<#leptatui::View>::into(#value) })
+        Ok(quote! { #leptatui::IntoView::into_view(#value) })
     }
 
     /// Expands a child element or braced expression into a view expression.
@@ -1061,9 +1061,9 @@ impl Element {
             {
                 Ok(Some(quote! { #leptatui::dynamic(#expr) }))
             }
-            Child::Text(TextContent::Expr(expr)) => Ok(Some(
-                quote! { ::core::convert::Into::<#leptatui::View>::into(#expr) },
-            )),
+            Child::Text(TextContent::Expr(expr)) => {
+                Ok(Some(quote! { #leptatui::IntoView::into_view(#expr) }))
+            }
             Child::Text(TextContent::Literal(_)) => Ok(None),
         }
     }

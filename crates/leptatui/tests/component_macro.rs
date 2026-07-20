@@ -14,9 +14,9 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use leptatui::context::provide_context;
 use leptatui::{
-    AppControl, Children, Color, Component, KeyControl, LayoutDirection, RenderCtx, Result,
-    ThemeVariables, button, column, component, dynamic, row, stylesheet, text, theme_color,
-    use_key_event, view,
+    AppControl, Children, Color, KeyControl, LayoutDirection, RenderCtx, Result, ThemeVariables,
+    View, button, column, component, dynamic, row, stylesheet, text, theme_color, use_key_event,
+    view,
 };
 use leptos::prelude::{GetUntracked, ReadSignal, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
@@ -84,9 +84,9 @@ enum MacroRoutePage {
     Settings,
 }
 
-/// Component with a local stylesheet applied to its own text view.
+/// View with a local stylesheet applied to its own text view.
 #[component]
-fn MacroStyledText() -> leptatui::View {
+fn MacroStyledText() -> impl leptatui::IntoView {
     stylesheet! {
         .scoped => { fg: Color::Yellow, bg: Color::Blue }
     }
@@ -94,9 +94,9 @@ fn MacroStyledText() -> leptatui::View {
     text("Scoped").with_classes("scoped")
 }
 
-/// Component whose stylesheet targets a shared class name.
+/// View whose stylesheet targets a shared class name.
 #[component]
-fn MacroStyledSibling() -> leptatui::View {
+fn MacroStyledSibling() -> impl leptatui::IntoView {
     stylesheet! {
         .shared => { fg: Color::Yellow }
     }
@@ -104,15 +104,15 @@ fn MacroStyledSibling() -> leptatui::View {
     text("Styled").with_classes("shared")
 }
 
-/// Component with a class that should not receive sibling styles.
+/// View with a class that should not receive sibling styles.
 #[component]
-fn MacroPlainSibling() -> leptatui::View {
+fn MacroPlainSibling() -> impl leptatui::IntoView {
     text("Plain").with_classes("shared")
 }
 
 /// Parent component whose stylesheet should apply to child component internals.
 #[component]
-fn MacroParentStylesChild() -> leptatui::View {
+fn MacroParentStylesChild() -> impl leptatui::IntoView {
     stylesheet! {
         Text => { fg: Color::Green }
     }
@@ -122,7 +122,7 @@ fn MacroParentStylesChild() -> leptatui::View {
 
 /// Parent and child components with equal-specificity text rules.
 #[component]
-fn MacroParentWithChildOverride() -> leptatui::View {
+fn MacroParentWithChildOverride() -> impl leptatui::IntoView {
     stylesheet! {
         Text => { fg: Color::Green }
     }
@@ -132,7 +132,7 @@ fn MacroParentWithChildOverride() -> leptatui::View {
 
 /// Child component whose equal-specificity stylesheet should be later in source order.
 #[component]
-fn MacroChildStyleOverride() -> leptatui::View {
+fn MacroChildStyleOverride() -> impl leptatui::IntoView {
     stylesheet! {
         Text => { fg: Color::Yellow }
     }
@@ -142,7 +142,7 @@ fn MacroChildStyleOverride() -> leptatui::View {
 
 /// Parent component with a class rule that should beat a child type rule.
 #[component]
-fn MacroParentSpecificityBeatsChild() -> leptatui::View {
+fn MacroParentSpecificityBeatsChild() -> impl leptatui::IntoView {
     stylesheet! {
         .specific => { fg: Color::Green }
     }
@@ -152,7 +152,7 @@ fn MacroParentSpecificityBeatsChild() -> leptatui::View {
 
 /// Child component with a lower-specificity type rule.
 #[component]
-fn MacroChildLowerSpecificity() -> leptatui::View {
+fn MacroChildLowerSpecificity() -> impl leptatui::IntoView {
     stylesheet! {
         Text => { fg: Color::Yellow }
     }
@@ -160,9 +160,9 @@ fn MacroChildLowerSpecificity() -> leptatui::View {
     text("Specific").with_classes("specific")
 }
 
-/// Component whose stylesheet resolves against theme context it provides.
+/// View whose stylesheet resolves against theme context it provides.
 #[component]
-fn MacroThemedStylesheet() -> leptatui::View {
+fn MacroThemedStylesheet() -> impl leptatui::IntoView {
     provide_context(ThemeVariables::new().color("text", Color::LightCyan));
 
     stylesheet! {
@@ -172,21 +172,21 @@ fn MacroThemedStylesheet() -> leptatui::View {
     text("Theme").with_classes("themed")
 }
 
-/// Component that renders a required prop.
+/// View that renders a required prop.
 #[component]
-fn MacroPropLabel(#[prop(into)] label: String) -> leptatui::View {
+fn MacroPropLabel(#[prop(into)] label: String) -> impl leptatui::IntoView {
     text(label)
 }
 
-/// Component that renders a prop and nested children.
+/// View that renders a prop and nested children.
 #[component]
-fn MacroPropPanel(#[prop(into)] title: String, children: Children) -> leptatui::View {
-    column([text(title), column(children())])
+fn MacroPropPanel(#[prop(into)] title: String, children: Children) -> impl leptatui::IntoView {
+    column((text(title), column(children())))
 }
 
-/// Component whose internal layout changes height under a media rule.
+/// View whose internal layout changes height under a media rule.
 #[component]
-fn MacroResponsiveCaseRow() -> leptatui::View {
+fn MacroResponsiveCaseRow() -> impl leptatui::IntoView {
     view! {
         <Row class="case-row">
             <Text>"type < class"</Text>
@@ -197,7 +197,7 @@ fn MacroResponsiveCaseRow() -> leptatui::View {
 
 /// Parent component that must reserve the responsive child component height.
 #[component]
-fn MacroResponsiveCaseRoot() -> leptatui::View {
+fn MacroResponsiveCaseRoot() -> impl leptatui::IntoView {
     stylesheet! {
         @media (max-width: 60) {
             .case-row => { direction: LayoutDirection::Column }
@@ -212,9 +212,9 @@ fn MacroResponsiveCaseRoot() -> leptatui::View {
     }
 }
 
-/// Component with an overflowing internal layout.
+/// View with an overflowing internal layout.
 #[component]
-fn MacroScrollableList() -> leptatui::View {
+fn MacroScrollableList() -> impl leptatui::IntoView {
     column([
         text("One"),
         text("Two"),
@@ -227,22 +227,22 @@ fn MacroScrollableList() -> leptatui::View {
 
 /// Parent component whose default scroll keys must reach a child component.
 #[component]
-fn MacroScrollableBoundaryRoot() -> leptatui::View {
+fn MacroScrollableBoundaryRoot() -> impl leptatui::IntoView {
     row([component(MacroScrollableList::new())])
 }
 
 /// Parent component with styled and plain sibling component subtrees.
 #[component]
-fn MacroSiblingStyleRoot() -> leptatui::View {
+fn MacroSiblingStyleRoot() -> impl leptatui::IntoView {
     row([
         component(MacroStyledSibling::new()),
         component(MacroPlainSibling::new()),
     ])
 }
 
-/// Component with an interactive button used by macro runtime tests.
+/// View with an interactive button used by macro runtime tests.
 #[component]
-fn MacroButtonRoot() -> leptatui::View {
+fn MacroButtonRoot() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('s') {
             MACRO_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -258,24 +258,27 @@ fn MacroButtonRoot() -> leptatui::View {
     })
 }
 
-/// Component with no matching hook for default button key tests.
+/// View with no matching hook for default button key tests.
 #[component]
-fn MacroDefaultButtonRoot() -> leptatui::View {
+fn MacroDefaultButtonRoot() -> impl leptatui::IntoView {
     button("Default").on_press(|| {
         MACRO_DEFAULT_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
         AppControl::Continue
     })
 }
 
-/// Component that wraps one built-in button.
+/// View that wraps one built-in button.
 #[component]
-fn MacroWrappedButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> leptatui::View {
+fn MacroWrappedButton(
+    #[prop(into)] label: String,
+    on_press: fn() -> AppControl,
+) -> impl leptatui::IntoView {
     button(label).on_press(on_press)
 }
 
 /// Root with sibling custom button components.
 #[component]
-fn MacroWrappedButtonSiblings() -> leptatui::View {
+fn MacroWrappedButtonSiblings() -> impl leptatui::IntoView {
     view! {
         <Row>
             <MacroWrappedButton label="First" on_press=macro_first_wrapped_button_press />
@@ -286,7 +289,7 @@ fn MacroWrappedButtonSiblings() -> leptatui::View {
 
 /// Root with a built-in button and a custom button component.
 #[component]
-fn MacroMixedButtonSiblings() -> leptatui::View {
+fn MacroMixedButtonSiblings() -> impl leptatui::IntoView {
     view! {
         <Row>
             <Button on_press={macro_mixed_builtin_button_press}>"Built in"</Button>
@@ -295,9 +298,9 @@ fn MacroMixedButtonSiblings() -> leptatui::View {
     }
 }
 
-/// Component whose key map handles Tab before focus can move.
+/// View whose key map handles Tab before focus can move.
 #[component]
-fn MacroTabOverrideButtonRoot() -> leptatui::View {
+fn MacroTabOverrideButtonRoot() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Tab {
             return KeyControl::Handled;
@@ -312,9 +315,9 @@ fn MacroTabOverrideButtonRoot() -> leptatui::View {
     })
 }
 
-/// Component whose key map handles Enter before a focused button activates.
+/// View whose key map handles Enter before a focused button activates.
 #[component]
-fn MacroEnterOverrideButtonRoot() -> leptatui::View {
+fn MacroEnterOverrideButtonRoot() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Enter {
             return KeyControl::Handled;
@@ -329,9 +332,9 @@ fn MacroEnterOverrideButtonRoot() -> leptatui::View {
     })
 }
 
-/// Component with local signal state created during generated setup.
+/// View with local signal state created during generated setup.
 #[component]
-fn MacroSignalRoot() -> leptatui::View {
+fn MacroSignalRoot() -> impl leptatui::IntoView {
     MACRO_SIGNAL_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
     let (count, set_count) = signal(0);
     let increment = set_count;
@@ -345,18 +348,18 @@ fn MacroSignalRoot() -> leptatui::View {
         KeyControl::Pass
     });
 
-    column([
+    column((
         dynamic(move || text(format!("Count: {}", count.get_untracked()))),
         button("Increment").on_press(move || {
             set_count.update(|count| *count += 1);
             AppControl::Continue
         }),
-    ])
+    ))
 }
 
 /// Root component that renders page branches from route state.
 #[component]
-fn MacroRouteSwitchRoot() -> leptatui::View {
+fn MacroRouteSwitchRoot() -> impl leptatui::IntoView {
     MACRO_ROUTE_ROOT_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
 
     let (shared_count, set_shared_count) = signal(0);
@@ -387,7 +390,7 @@ fn MacroRouteSwitchRoot() -> leptatui::View {
 
 /// Descendant component that navigates by updating route context.
 #[component]
-fn MacroRouteKeyNav() -> leptatui::View {
+fn MacroRouteKeyNav() -> impl leptatui::IntoView {
     let navigate = leptatui::use_navigate::<MacroRoutePage>();
 
     use_key_event(KeyEventKind::Press, move |key| {
@@ -406,7 +409,7 @@ fn MacroRouteKeyNav() -> leptatui::View {
 
 /// Home page branch for route switching tests.
 #[component]
-fn MacroRouteHomePage() -> leptatui::View {
+fn MacroRouteHomePage() -> impl leptatui::IntoView {
     MACRO_ROUTE_HOME_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
     let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
 
@@ -419,7 +422,7 @@ fn MacroRouteHomePage() -> leptatui::View {
 
 /// Counter page branch for route switching tests.
 #[component]
-fn MacroRouteCounterPage() -> leptatui::View {
+fn MacroRouteCounterPage() -> impl leptatui::IntoView {
     MACRO_ROUTE_COUNTER_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
     let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
 
@@ -432,7 +435,7 @@ fn MacroRouteCounterPage() -> leptatui::View {
 
 /// Settings page branch for route switching tests.
 #[component]
-fn MacroRouteSettingsPage() -> leptatui::View {
+fn MacroRouteSettingsPage() -> impl leptatui::IntoView {
     MACRO_ROUTE_SETTINGS_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
     let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
 
@@ -445,7 +448,7 @@ fn MacroRouteSettingsPage() -> leptatui::View {
 
 /// Root component that switches between branches using the same component type.
 #[component]
-fn MacroRoutePropSwitchRoot() -> leptatui::View {
+fn MacroRoutePropSwitchRoot() -> impl leptatui::IntoView {
     let route_state = leptatui::provide_route(MacroRoutePage::Home);
     let route = route_state.route();
     let navigate = route_state.navigate();
@@ -474,34 +477,42 @@ fn MacroRoutePropSwitchRoot() -> leptatui::View {
 
 /// Route page whose prop must update when branches share this component type.
 #[component]
-fn MacroRouteNamedPage(#[prop(into)] label: String) -> leptatui::View {
+fn MacroRouteNamedPage(#[prop(into)] label: String) -> impl leptatui::IntoView {
     view! { <Text>{label}</Text> }
 }
 
-/// Component that records the label visible from its render context.
+/// View that records the label visible from its render context.
 struct MacroContextConsumer;
 
-impl Component for MacroContextConsumer {
+impl View for MacroContextConsumer {
     /// Records the context label visible during render.
-    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         *MACRO_CONTEXT_OBSERVED
             .lock()
             .expect("context observation lock should be available") =
             leptatui::context::use_context::<MacroLabel>();
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
-/// Component that provides context to a descendant component boundary.
+/// View that provides context to a descendant component boundary.
 #[component]
-fn MacroContextProvider() -> leptatui::View {
+fn MacroContextProvider() -> impl leptatui::IntoView {
     leptatui::context::provide_context(MacroLabel("macro"));
     component(MacroContextConsumer)
 }
 
-/// Component that exits when `q` is pressed.
+/// View that exits when `q` is pressed.
 #[component]
-fn MacroKeyExitRoot() -> leptatui::View {
+fn MacroKeyExitRoot() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;
@@ -515,7 +526,7 @@ fn MacroKeyExitRoot() -> leptatui::View {
 
 /// Parent key map used to prove child handlers get priority.
 #[component]
-fn MacroParentKeyRoot() -> leptatui::View {
+fn MacroParentKeyRoot() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('x') {
             MACRO_PARENT_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -530,7 +541,7 @@ fn MacroParentKeyRoot() -> leptatui::View {
 
 /// Child key map that handles the same key as its parent.
 #[component]
-fn MacroChildKeyHandler() -> leptatui::View {
+fn MacroChildKeyHandler() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('x') {
             MACRO_CHILD_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -545,7 +556,7 @@ fn MacroChildKeyHandler() -> leptatui::View {
 
 /// Parent key map used to prove child pass-through reaches ancestors.
 #[component]
-fn MacroParentAfterPassRoot() -> leptatui::View {
+fn MacroParentAfterPassRoot() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('p') {
             MACRO_PASS_PARENT_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -560,7 +571,7 @@ fn MacroParentAfterPassRoot() -> leptatui::View {
 
 /// Child key map that observes a key but passes it to its parent.
 #[component]
-fn MacroPassingChildKeyHandler() -> leptatui::View {
+fn MacroPassingChildKeyHandler() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('p') {
             MACRO_PASS_CHILD_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -572,9 +583,9 @@ fn MacroPassingChildKeyHandler() -> leptatui::View {
     text("Child")
 }
 
-/// Component with several handlers used to prove source-order short-circuiting.
+/// View with several handlers used to prove source-order short-circuiting.
 #[component]
-fn MacroMultipleKeyHandlers() -> leptatui::View {
+fn MacroMultipleKeyHandlers() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('m') {
             MACRO_FIRST_KEY_HANDLER.fetch_add(1, Ordering::SeqCst);
@@ -602,9 +613,9 @@ fn MacroMultipleKeyHandlers() -> leptatui::View {
     text("Handlers")
 }
 
-/// Component with explicit repeat and release key handlers.
+/// View with explicit repeat and release key handlers.
 #[component]
-fn MacroKindSpecificKeyHandlers() -> leptatui::View {
+fn MacroKindSpecificKeyHandlers() -> impl leptatui::IntoView {
     use_key_event(KeyEventKind::Repeat, |key| {
         if key.code == KeyCode::Char('k') {
             MACRO_REPEAT_KEY_PRESSES.fetch_add(1, Ordering::SeqCst);
@@ -683,7 +694,7 @@ fn rendered_cell_colors(terminal: &Terminal<TestBackend>, symbol: &str) -> (Colo
 ///
 /// # Why
 ///
-/// Component macro validation should reject unsupported signatures while
+/// View macro validation should reject unsupported signatures while
 /// preserving accepted component conversions.
 #[test]
 fn component_macro_compile_cases() {
@@ -708,7 +719,7 @@ fn generated_component_props_render() -> Result<()> {
                     MacroPropLabel::with_props(
                         MacroPropLabelProps::builder().label("Child").build(),
                     )
-                    .into(),
+                    .into_view(),
                 ]
             }))
             .build(),
@@ -760,7 +771,7 @@ fn generated_component_scroll_keys_cross_component_boundaries() -> Result<()> {
     assert!(!text.contains("Six"), "rendered text: {text:?}");
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::PageDown))?,
+        View::handle_event(&mut component, key(KeyCode::PageDown))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 12, 3)?;
@@ -768,11 +779,11 @@ fn generated_component_scroll_keys_cross_component_boundaries() -> Result<()> {
     assert!(text.contains("Six"), "rendered text: {text:?}");
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('g')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('g')))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('g')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('g')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 12, 3)?;
@@ -781,7 +792,7 @@ fn generated_component_scroll_keys_cross_component_boundaries() -> Result<()> {
     assert!(!text.contains("Six"), "rendered text: {text:?}");
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('G')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('G')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 12, 3)?;
@@ -893,7 +904,7 @@ fn generated_component_stylesheet_resolves_theme_context() -> Result<()> {
 ///
 /// ```text
 /// #[component]
-/// fn MacroButtonRoot() -> View { use_key_event(Press, ...); button("Save").on_press(...) }
+/// fn MacroButtonRoot() -> impl IntoView { use_key_event(Press, ...); button("Save").on_press(...) }
 /// render, Repeat(s), Press(s)
 /// ```
 ///
@@ -907,7 +918,7 @@ fn generated_component_stylesheet_resolves_theme_context() -> Result<()> {
 /// # Why
 ///
 /// Generated components should support custom key maps without requiring a
-/// manual [`Component`] implementation.
+/// manual [`View`] implementation.
 #[test]
 fn generated_components_dispatch_registered_key_handlers() -> Result<()> {
     MACRO_BUTTON_PRESSES.store(0, Ordering::SeqCst);
@@ -919,18 +930,18 @@ fn generated_components_dispatch_registered_key_handlers() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = Component::render(&mut component, &mut ctx);
+        render_result = View::render(&component, &mut ctx);
     })?;
     render_result?;
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('x')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('x')))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_BUTTON_PRESSES.load(Ordering::SeqCst), 0);
 
     assert_eq!(
-        Component::handle_event(
+        View::handle_event(
             &mut component,
             key_with_kind(KeyCode::Char('s'), KeyEventKind::Repeat),
         )?,
@@ -939,7 +950,7 @@ fn generated_components_dispatch_registered_key_handlers() -> Result<()> {
     assert_eq!(MACRO_BUTTON_PRESSES.load(Ordering::SeqCst), 0);
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('s')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('s')))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
@@ -969,7 +980,7 @@ fn generated_key_event_handlers_filter_by_event_kind() -> Result<()> {
     let mut component = MacroKindSpecificKeyHandlers::new();
 
     assert_eq!(
-        Component::handle_event(
+        View::handle_event(
             &mut component,
             key_with_kind(KeyCode::Char('k'), KeyEventKind::Press),
         )?,
@@ -979,7 +990,7 @@ fn generated_key_event_handlers_filter_by_event_kind() -> Result<()> {
     assert_eq!(MACRO_RELEASE_KEY_PRESSES.load(Ordering::SeqCst), 0);
 
     assert_eq!(
-        Component::handle_event(
+        View::handle_event(
             &mut component,
             key_with_kind(KeyCode::Char('k'), KeyEventKind::Repeat),
         )?,
@@ -989,7 +1000,7 @@ fn generated_key_event_handlers_filter_by_event_kind() -> Result<()> {
     assert_eq!(MACRO_RELEASE_KEY_PRESSES.load(Ordering::SeqCst), 0);
 
     assert_eq!(
-        Component::handle_event(
+        View::handle_event(
             &mut component,
             key_with_kind(KeyCode::Char('k'), KeyEventKind::Release),
         )?,
@@ -1007,7 +1018,7 @@ fn generated_key_event_handlers_filter_by_event_kind() -> Result<()> {
 ///
 /// ```text
 /// #[component]
-/// fn MacroDefaultButtonRoot() -> View { button("Default").on_press(...) }
+/// fn MacroDefaultButtonRoot() -> impl IntoView { button("Default").on_press(...) }
 /// Tab, Enter
 /// ```
 ///
@@ -1022,11 +1033,11 @@ fn generated_components_run_default_button_keys_after_hook_pass() -> Result<()> 
     let mut component = MacroDefaultButtonRoot::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_DEFAULT_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
@@ -1056,11 +1067,11 @@ fn generated_component_focus_crosses_sibling_component_boundaries() -> Result<()
     let mut component = MacroWrappedButtonSiblings::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_FIRST_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
@@ -1070,11 +1081,11 @@ fn generated_component_focus_crosses_sibling_component_boundaries() -> Result<()
     );
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_FIRST_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
@@ -1084,11 +1095,11 @@ fn generated_component_focus_crosses_sibling_component_boundaries() -> Result<()
     );
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::BackTab))?,
+        View::handle_event(&mut component, key(KeyCode::BackTab))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_FIRST_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 2);
@@ -1109,22 +1120,22 @@ fn generated_component_focus_mixes_static_and_component_buttons() -> Result<()> 
     let mut component = MacroMixedButtonSiblings::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_MIXED_BUILTIN_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
     assert_eq!(MACRO_MIXED_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 0);
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_MIXED_BUILTIN_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
@@ -1154,11 +1165,11 @@ fn generated_component_hook_can_override_default_tab_focus() -> Result<()> {
     let mut component = MacroTabOverrideButtonRoot::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_DEFAULT_BUTTON_PRESSES.load(Ordering::SeqCst), 0);
@@ -1187,11 +1198,11 @@ fn generated_component_hook_can_override_default_enter_activation() -> Result<()
     let mut component = MacroEnterOverrideButtonRoot::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Tab))?,
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Enter))?,
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_DEFAULT_BUTTON_PRESSES.load(Ordering::SeqCst), 0);
@@ -1205,7 +1216,7 @@ fn generated_component_hook_can_override_default_enter_activation() -> Result<()
 ///
 /// ```text
 /// #[component]
-/// fn MacroSignalRoot() -> View {
+/// fn MacroSignalRoot() -> impl IntoView {
 ///     let (count, set_count) = signal(0);
 ///     column([dynamic(... count ...), button(... set_count ...)])
 /// }
@@ -1213,7 +1224,7 @@ fn generated_component_hook_can_override_default_enter_activation() -> Result<()
 ///
 /// # Assertions
 ///
-/// - Component setup runs exactly once.
+/// - View setup runs exactly once.
 /// - The first render shows the initial signal value.
 /// - A key event updates the signal.
 /// - A redraw shows the updated signal without rerunning setup.
@@ -1230,20 +1241,20 @@ fn generated_component_setup_runs_once_and_signals_persist() -> Result<()> {
     let mut render_result = Ok(());
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = Component::render(&mut component, &mut ctx);
+        render_result = View::render(&component, &mut ctx);
     })?;
     render_result?;
     assert!(rendered_text(&terminal).contains("Count: 0"));
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('i')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('i')))?,
         AppControl::Continue
     );
 
     render_result = Ok(());
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = Component::render(&mut component, &mut ctx);
+        render_result = View::render(&component, &mut ctx);
     })?;
     render_result?;
 
@@ -1293,7 +1304,7 @@ fn generated_view_route_switches_pages_and_preserves_shared_state() -> Result<()
     assert_eq!(MACRO_ROUTE_HOME_SETUP_RUNS.load(Ordering::SeqCst), 1);
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('i')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('i')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 32, 4)?;
@@ -1303,7 +1314,7 @@ fn generated_view_route_switches_pages_and_preserves_shared_state() -> Result<()
     assert_eq!(MACRO_ROUTE_HOME_SETUP_RUNS.load(Ordering::SeqCst), 1);
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('c')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('c')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 32, 4)?;
@@ -1312,7 +1323,7 @@ fn generated_view_route_switches_pages_and_preserves_shared_state() -> Result<()
     assert_eq!(MACRO_ROUTE_COUNTER_SETUP_RUNS.load(Ordering::SeqCst), 1);
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('s')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('s')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 32, 4)?;
@@ -1347,7 +1358,7 @@ fn generated_view_route_switch_rebuilds_same_type_component_with_new_props() -> 
     assert!(text.contains("Home"), "rendered text: {text:?}");
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('c')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('c')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 32, 4)?;
@@ -1375,11 +1386,11 @@ fn generated_component_key_handler_can_exit() -> Result<()> {
     let mut component = MacroKeyExitRoot::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('x')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('x')))?,
         AppControl::Continue
     );
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('q')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('q')))?,
         AppControl::Exit
     );
 
@@ -1407,7 +1418,7 @@ fn child_key_handler_overrides_parent_handler() -> Result<()> {
     let mut component = MacroParentKeyRoot::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('x')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('x')))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_CHILD_KEY_PRESSES.load(Ordering::SeqCst), 1);
@@ -1437,7 +1448,7 @@ fn child_key_pass_reaches_parent_handler() -> Result<()> {
     let mut component = MacroParentAfterPassRoot::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('p')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('p')))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_PASS_CHILD_KEY_PRESSES.load(Ordering::SeqCst), 1);
@@ -1470,7 +1481,7 @@ fn component_key_handlers_short_circuit_in_registration_order() -> Result<()> {
     let mut component = MacroMultipleKeyHandlers::new();
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('m')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('m')))?,
         AppControl::Continue
     );
     assert_eq!(MACRO_FIRST_KEY_HANDLER.load(Ordering::SeqCst), 1);
@@ -1486,7 +1497,7 @@ fn component_key_handlers_short_circuit_in_registration_order() -> Result<()> {
 ///
 /// ```text
 /// #[component]
-/// fn MacroContextProvider() -> View {
+/// fn MacroContextProvider() -> impl IntoView {
 ///     provide_context(MacroLabel("macro"));
 ///     component(MacroContextConsumer)
 /// }
@@ -1505,7 +1516,7 @@ fn component_key_handlers_short_circuit_in_registration_order() -> Result<()> {
 fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
     let backend = TestBackend::new(16, 3);
     let mut terminal = Terminal::new(backend)?;
-    let mut component = MacroContextProvider::new();
+    let component = MacroContextProvider::new();
 
     for _ in 0..2 {
         *MACRO_CONTEXT_OBSERVED
@@ -1515,7 +1526,7 @@ fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
         let mut render_result = Ok(());
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            render_result = Component::render(&mut component, &mut ctx);
+            render_result = View::render(&component, &mut ctx);
         })?;
         render_result?;
 
@@ -1538,7 +1549,7 @@ fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
 /// ui = { package = "leptatui", path = "..." }
 /// use ui::prelude::*;
 /// #[component]
-/// fn Greeting() -> View { view! { <Text>"hi"</Text> } }
+/// fn Greeting() -> impl IntoView { view! { <Text>"hi"</Text> } }
 /// ```
 ///
 /// # Assertions
@@ -1606,13 +1617,12 @@ ui = {{ package = "leptatui", path = "{}" }}
         r#"use ui::prelude::*;
 
 #[component]
-fn Greeting() -> View {
+fn Greeting() -> impl IntoView {
     view! { <Text>"hi"</Text> }
 }
 
 fn main() {
-    let view: View = Greeting::new().into();
-    assert!(matches!(view, View::Component(_)));
+    let _view: AnyView = Greeting::new().into_view();
 }
 "#,
     )

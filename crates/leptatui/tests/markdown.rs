@@ -5,10 +5,10 @@
 //! terminal-buffer output.
 
 use leptatui::{
-    Borders, CellAlignment, MarkdownOptions, Modifier, RenderCtx, Result, SyntaxTheme, TuiSpacing,
-    TuiStyle, View, block, code_block, column, h1, h2, h3, h4, h5, h6, list_item, markdown,
-    markdown_with_options, ordered_list, paragraph, table, table_body, table_cell, table_head,
-    table_row, unordered_list,
+    AnyView, Borders, CellAlignment, CodeBlockView, IntoView, IntoViews, LayoutView,
+    MarkdownOptions, Modifier, RenderCtx, Result, SyntaxTheme, TuiSpacing, TuiStyle, View, block,
+    code_block, column, h1, h2, h3, h4, h5, h6, list_item, markdown, markdown_with_options,
+    ordered_list, paragraph, table, table_body, table_cell, table_head, table_row, unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{Terminal, backend::TestBackend, style::Style};
@@ -35,13 +35,13 @@ const EMPTY_FIXTURE: &str = include_str!("fixtures/markdown/empty.md");
 /// # Returns
 ///
 /// A [`Vec`] containing one empty paragraph between each block.
-fn separated_blocks(blocks: impl IntoIterator<Item = View>) -> Vec<View> {
-    let blocks = blocks.into_iter().collect::<Vec<_>>();
+fn separated_blocks(blocks: impl IntoViews) -> Vec<AnyView> {
+    let blocks = blocks.into_views();
     let mut separated = Vec::with_capacity(blocks.len().saturating_mul(2).saturating_sub(1));
 
     for block in blocks {
         if !separated.is_empty() {
-            separated.push(paragraph(""));
+            separated.push(paragraph("").into_view());
         }
         separated.push(block);
     }
@@ -58,7 +58,7 @@ fn separated_blocks(blocks: impl IntoIterator<Item = View>) -> Vec<View> {
 /// # Returns
 ///
 /// A left-bordered [`View`] matching the public Markdown presentation.
-fn block_quote(children: impl IntoIterator<Item = View>) -> View {
+fn block_quote(children: impl IntoViews) -> impl View {
     block(column(children)).with_inline_style(
         TuiStyle::new()
             .borders(Borders::LEFT)
@@ -71,8 +71,16 @@ fn block_quote(children: impl IntoIterator<Item = View>) -> View {
 /// # Returns
 ///
 /// A top-bordered [`View`] matching the public Markdown presentation.
-fn thematic_break() -> View {
-    block(column(Vec::<View>::new())).with_inline_style(TuiStyle::new().borders(Borders::TOP))
+fn thematic_break() -> impl View {
+    block(column(())).with_inline_style(TuiStyle::new().borders(Borders::TOP))
+}
+
+/// Asserts two view trees produce the same terminal output.
+fn assert_views_render_equally(actual: &AnyView, expected: &dyn View) {
+    let actual = render_view(actual.as_view(), 80, 200).expect("actual view should render");
+    let expected = render_view(expected, 80, 200).expect("expected view should render");
+
+    assert_eq!(rendered_lines(&actual), rendered_lines(&expected));
 }
 
 /// Verifies the core fixture maps CommonMark structure into semantic views.
@@ -95,47 +103,46 @@ fn markdown_core_fixture_builds_semantic_views() {
     let italic = Style::new().add_modifier(Modifier::ITALIC);
     let underline = Style::new().add_modifier(Modifier::UNDERLINED);
 
-    assert_eq!(
-        markdown(CORE_FIXTURE),
-        column(separated_blocks([
-            h1("One"),
-            h2("Two"),
-            h3("Three"),
-            h4("Four"),
-            h5("Five"),
-            h6("Six"),
-            paragraph(
-                "This paragraph is deliberately long enough to wrap in a narrow terminal while preserving Unicode 界 characters.",
-            ),
-            paragraph(Text::from(Line::from(vec![
-                Span::styled("outer ", italic),
-                Span::styled("bold 界", italic.add_modifier(Modifier::BOLD)),
-                Span::styled(" tail", italic),
-                Span::raw(" and "),
-                Span::styled("plain", Style::new().add_modifier(Modifier::BOLD)),
-                Span::raw(" with "),
-                Span::styled("code", Style::new().add_modifier(Modifier::REVERSED)),
-                Span::raw(" plus "),
-                Span::styled("the guide (https://example.com/guide)", underline),
-                Span::raw("."),
-            ]))),
-            ordered_list([
-                list_item(separated_blocks([
-                    paragraph("First"),
-                    paragraph("Second paragraph."),
-                    unordered_list([
-                        list_item(separated_blocks([
-                            paragraph("Nested bullet"),
-                            ordered_list([list_item([paragraph("Nested number")])]).start(7),
-                        ])),
-                        list_item([]),
-                    ]),
-                ])),
-                list_item([paragraph("Last")]),
-            ])
-            .start(3),
-        ])),
-    );
+    let actual = markdown(CORE_FIXTURE);
+    let expected = column(separated_blocks((
+        h1("One"),
+        h2("Two"),
+        h3("Three"),
+        h4("Four"),
+        h5("Five"),
+        h6("Six"),
+        paragraph(
+            "This paragraph is deliberately long enough to wrap in a narrow terminal while preserving Unicode 界 characters.",
+        ),
+        paragraph(Text::from(Line::from(vec![
+            Span::styled("outer ", italic),
+            Span::styled("bold 界", italic.add_modifier(Modifier::BOLD)),
+            Span::styled(" tail", italic),
+            Span::raw(" and "),
+            Span::styled("plain", Style::new().add_modifier(Modifier::BOLD)),
+            Span::raw(" with "),
+            Span::styled("code", Style::new().add_modifier(Modifier::REVERSED)),
+            Span::raw(" plus "),
+            Span::styled("the guide (https://example.com/guide)", underline),
+            Span::raw("."),
+        ]))),
+        ordered_list([
+            list_item(separated_blocks((
+                paragraph("First"),
+                paragraph("Second paragraph."),
+                unordered_list([
+                    list_item(separated_blocks((
+                        paragraph("Nested bullet"),
+                        ordered_list([list_item([paragraph("Nested number")])]).start(7),
+                    ))),
+                    list_item(()),
+                ]),
+            ))),
+            list_item([paragraph("Last")]),
+        ])
+        .start(3),
+    )));
+    assert_views_render_equally(&actual, &expected);
 }
 
 /// Verifies fallback fixture blocks remain readable and semantically ordered.
@@ -164,33 +171,32 @@ fn markdown_fallback_fixture_builds_semantic_views() {
         ]
     };
 
-    assert_eq!(
-        markdown(FALLBACKS_FIXTURE),
-        column(separated_blocks([
-            block_quote(separated_blocks([
-                paragraph("Alpha beta gamma"),
-                block_quote([paragraph("Inner")]),
-            ])),
-            thematic_break(),
-            paragraph("Image: diagram (https://example.com/diagram.png)"),
-            paragraph("Before <kbd>&</kbd> after."),
-            paragraph(Text::from(vec![
-                Line::raw("<section>"),
-                Line::raw("literal &amp;"),
-                Line::raw("</section>"),
-                Line::default(),
-            ])),
-            table([
-                table_head([table_row(aligned_cells([
-                    "Default", "Left", "Center", "Right",
-                ]))]),
-                table_body([table_row(aligned_cells([
-                    "alpha", "beta", "gamma", "delta",
-                ]))]),
-            ]),
-            paragraph("Unclosed **strong and [link](https://example.com"),
+    let actual = markdown(FALLBACKS_FIXTURE);
+    let expected = column(separated_blocks((
+        block_quote(separated_blocks((
+            paragraph("Alpha beta gamma"),
+            block_quote([paragraph("Inner")]),
+        ))),
+        thematic_break(),
+        paragraph("Image: diagram (https://example.com/diagram.png)"),
+        paragraph("Before <kbd>&</kbd> after."),
+        paragraph(Text::from(vec![
+            Line::raw("<section>"),
+            Line::raw("literal &amp;"),
+            Line::raw("</section>"),
+            Line::default(),
         ])),
-    );
+        table([
+            table_head([table_row(aligned_cells([
+                "Default", "Left", "Center", "Right",
+            ]))]),
+            table_body([table_row(aligned_cells([
+                "alpha", "beta", "gamma", "delta",
+            ]))]),
+        ]),
+        paragraph("Unclosed **strong and [link](https://example.com"),
+    )));
+    assert_views_render_equally(&actual, &expected);
 }
 
 /// Verifies code fixtures preserve fence selection and fallback behavior.
@@ -210,17 +216,16 @@ fn markdown_fallback_fixture_builds_semantic_views() {
 /// - Empty separator paragraphs retain one terminal row between code blocks.
 #[test]
 fn markdown_code_fixture_builds_semantic_views() {
-    assert_eq!(
-        markdown(CODE_FIXTURE),
-        column(separated_blocks([
-            code_block("fn main() {\n    println!(\"界\");\n}\n").language("rust"),
-            code_block("let value = true;\n").language("rs"),
-            code_block("plain\n").language("unknown-language"),
-            code_block(""),
-            code_block("indented 界\n"),
-            code_block("abcdefghijklmnopqrstuvwxyz界\n").language("text"),
-        ])),
-    );
+    let actual = markdown(CODE_FIXTURE);
+    let expected = column(separated_blocks([
+        code_block("fn main() {\n    println!(\"界\");\n}\n").language("rust"),
+        code_block("let value = true;\n").language("rs"),
+        code_block("plain\n").language("unknown-language"),
+        code_block(""),
+        code_block("indented 界\n"),
+        code_block("abcdefghijklmnopqrstuvwxyz界\n").language("text"),
+    ]));
+    assert_views_render_equally(&actual, &expected);
 }
 
 /// Verifies fixture documents render stable terminal fragments without snapshots.
@@ -241,7 +246,8 @@ fn markdown_code_fixture_builds_semantic_views() {
 /// - Quote prefixes, rules, image fallbacks, literal HTML, and tables render visibly.
 #[test]
 fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
-    let core = render_view(&markdown(CORE_FIXTURE), 24, 80)?;
+    let core_document = markdown(CORE_FIXTURE);
+    let core = render_view(core_document.as_view(), 24, 80)?;
     let core_lines = rendered_lines(&core);
     for expected_heading in [
         "# One",
@@ -279,7 +285,8 @@ fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
             .any(|line| line.trim_start().starts_with("7."))
     );
 
-    let fallbacks = render_view(&markdown(FALLBACKS_FIXTURE), 48, 80)?;
+    let fallback_document = markdown(FALLBACKS_FIXTURE);
+    let fallbacks = render_view(fallback_document.as_view(), 48, 80)?;
     let fallback_lines = rendered_lines(&fallbacks);
     assert!(
         fallback_lines
@@ -324,60 +331,40 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
         .syntax_theme(SyntaxTheme::Light)
         .line_numbers(true);
     let view = markdown_with_options(CODE_FIXTURE, options);
-    let View::Column { children, .. } = &view else {
-        panic!("expected Markdown document column, got {view:?}");
-    };
-    let code_blocks = children
+    let document = view
+        .downcast_ref::<LayoutView>()
+        .expect("Markdown document should be a column layout");
+    let code_blocks = document
+        .children()
         .iter()
-        .filter(|child| match *child {
-            View::CodeBlock { .. } => true,
-            View::Paragraph { content, .. } if content.to_string().is_empty() => false,
-            _ => panic!("expected code block or separator, got {child:?}"),
-        })
+        .filter_map(AnyView::downcast_ref::<CodeBlockView>)
         .collect::<Vec<_>>();
+    assert_eq!(code_blocks.len(), 6);
 
     for child in &code_blocks {
-        let View::CodeBlock {
-            line_numbers,
-            syntax_theme,
-            ..
-        } = child
-        else {
-            panic!("expected code block, got {child:?}");
-        };
-        assert!(*line_numbers);
-        assert_eq!(*syntax_theme, SyntaxTheme::Light);
+        assert!(child.has_line_numbers());
+        assert_eq!(child.selected_syntax_theme(), SyntaxTheme::Light);
     }
 
     for index in [0, 1] {
-        let View::CodeBlock {
-            highlighted_lines, ..
-        } = code_blocks[index]
-        else {
-            unreachable!("fixture children were checked as code blocks");
-        };
         assert!(
-            highlighted_lines
+            code_blocks[index]
+                .highlighted_lines()
                 .iter()
                 .flat_map(|line| &line.spans)
                 .any(|span| span.style.fg.is_some()),
         );
     }
 
-    let View::CodeBlock {
-        highlighted_lines, ..
-    } = code_blocks[2]
-    else {
-        unreachable!("fixture children were checked as code blocks");
-    };
     assert!(
-        highlighted_lines
+        code_blocks[2]
+            .highlighted_lines()
             .iter()
             .flat_map(|line| &line.spans)
             .all(|span| span.style.fg.is_none()),
     );
 
-    let rendered = render_view(&view, 24, 80)?;
+    let rendered = render_view(view.as_view(), 24, 80)?;
     let lines = rendered_lines(&rendered);
     assert!(lines.iter().any(|line| line.contains("rust")));
     assert!(lines.iter().any(|line| line.contains("rs")));
@@ -406,7 +393,8 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
 #[test]
 fn markdown_code_background_fills_the_block_interior() -> Result<()> {
     let source = "```rust\nlet value = true;\n```\n";
-    let terminal = render_view(&markdown(source), 24, 4)?;
+    let document = markdown(source);
+    let terminal = render_view(document.as_view(), 24, 4)?;
     let cells = terminal.backend().buffer().content();
     let background_at = |x: usize, y: usize| cells[y * 24 + x].bg;
     let code_background = background_at(1, 1);
@@ -435,8 +423,12 @@ fn markdown_code_background_fills_the_block_interior() -> Result<()> {
 #[test]
 fn markdown_fixtures_handle_empty_and_zero_sized_viewports() -> Result<()> {
     let empty = markdown(EMPTY_FIXTURE);
-    assert_eq!(empty, column([]));
-    let empty_terminal = render_view(&empty, 0, 0)?;
+    assert!(
+        empty
+            .downcast_ref::<LayoutView>()
+            .is_some_and(|layout| layout.children().is_empty())
+    );
+    let empty_terminal = render_view(empty.as_view(), 0, 0)?;
     assert!(rendered_lines(&empty_terminal).is_empty());
 
     let code = markdown(CODE_FIXTURE);

@@ -177,7 +177,7 @@ impl TuiStyle {
     /// # Returns
     ///
     /// A [`TuiStyle`] containing inheritable values from this style.
-    pub(crate) const fn inherited_values(self) -> Self {
+    pub const fn inherited_values(self) -> Self {
         Self {
             foreground: self.foreground,
             background: None,

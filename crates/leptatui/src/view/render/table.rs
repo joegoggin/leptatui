@@ -15,7 +15,7 @@ use crate::{
     style::{Color, TuiStyle},
     view::{
         metadata::StyleMetadata,
-        model::{CellAlignment, View},
+        model::{AnyView, CellAlignment, TableCellView, TableRowView, TableSectionView},
     },
 };
 
@@ -60,16 +60,15 @@ struct ResolvedTableLayout {
 /// # Returns
 ///
 /// A [`Vec`] containing render-ready rows from valid table sections.
-fn collect_table_rows(sections: &[View], ctx: &mut RenderCtx<'_, '_>) -> Vec<RenderedTableRow> {
+fn collect_table_rows(sections: &[AnyView], ctx: &mut RenderCtx<'_, '_>) -> Vec<RenderedTableRow> {
     let mut rendered_rows = Vec::new();
 
     for section in sections {
-        let (rows, metadata) = match section {
-            View::TableHead { rows, metadata } | View::TableBody { rows, metadata } => {
-                (rows, metadata)
-            }
-            _ => continue,
+        let Some(section) = section.downcast_ref::<TableSectionView>() else {
+            continue;
         };
+        let rows = &section.children;
+        let metadata = &section.metadata;
         let section_style = resolve_style(metadata, ctx);
         let section_background = section_style.background;
         let area = ctx.area();
@@ -101,13 +100,13 @@ fn collect_table_rows(sections: &[View], ctx: &mut RenderCtx<'_, '_>) -> Vec<Ren
 ///
 /// An [`Option`] containing a render-ready row when `row` is a table row.
 fn collect_table_row(
-    row: &View,
+    row: &AnyView,
     section_background: Option<Color>,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Option<RenderedTableRow> {
-    let View::TableRow { cells, metadata } = row else {
-        return None;
-    };
+    let row = row.downcast_ref::<TableRowView>()?;
+    let cells = &row.children;
+    let metadata = &row.metadata;
     let row_style = resolve_style(metadata, ctx);
     let background = row_style.background.or(section_background);
     let area = ctx.area();
@@ -136,17 +135,12 @@ fn collect_table_row(
 /// # Returns
 ///
 /// A [`RenderedTableCell`] preserving the source column position.
-fn collect_table_cell(cell: &View, ctx: &mut RenderCtx<'_, '_>) -> RenderedTableCell {
-    if let View::TableCell {
-        content,
-        alignment,
-        metadata,
-    } = cell
-    {
+fn collect_table_cell(cell: &AnyView, ctx: &mut RenderCtx<'_, '_>) -> RenderedTableCell {
+    if let Some(cell) = cell.downcast_ref::<TableCellView>() {
         return RenderedTableCell {
-            content: content.clone(),
-            alignment: *alignment,
-            style: resolve_style(metadata, ctx),
+            content: cell.content.clone(),
+            alignment: cell.alignment,
+            style: resolve_style(&cell.metadata, ctx),
         };
     }
 
@@ -169,7 +163,7 @@ fn collect_table_cell(cell: &View, ctx: &mut RenderCtx<'_, '_>) -> RenderedTable
 ///
 /// A [`ResolvedTableLayout`] shared by rendering and intrinsic measurement.
 fn resolve_table_layout(
-    sections: &[View],
+    sections: &[AnyView],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> ResolvedTableLayout {
@@ -404,7 +398,7 @@ fn ratatui_cell_alignment(alignment: CellAlignment) -> Alignment {
 ///
 /// An empty [`Result`] on success.
 pub(super) fn render_table_view(
-    sections: &[View],
+    sections: &[AnyView],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
@@ -558,7 +552,7 @@ pub(super) fn render_table_view(
 ///
 /// A [`u16`] height including horizontal row boundaries.
 pub(super) fn min_height_for_table_view(
-    sections: &[View],
+    sections: &[AnyView],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> u16 {

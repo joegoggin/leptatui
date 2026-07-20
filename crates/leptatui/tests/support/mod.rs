@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use leptatui::{Component, RenderCtx, Result, View};
+use leptatui::{RenderCtx, Result, View};
 use ratatui::{Terminal, backend::TestBackend};
 use tokio::{task::yield_now, time::timeout};
 
@@ -42,7 +42,7 @@ pub(crate) fn render_component<C>(
     height: u16,
 ) -> Result<Terminal<TestBackend>>
 where
-    C: Component,
+    C: View,
 {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend)?;
@@ -71,13 +71,13 @@ pub(crate) fn draw_component<C>(
     component: &mut C,
 ) -> Result<()>
 where
-    C: Component,
+    C: View,
 {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = Component::render(component, &mut ctx);
+        render_result = View::render(component, &mut ctx);
     })?;
 
     render_result
@@ -97,7 +97,7 @@ where
 /// # Errors
 ///
 /// Returns [`leptatui::Error::Io`] if terminal drawing or view rendering fails.
-pub(crate) fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Result<()> {
+pub(crate) fn draw_view(terminal: &mut Terminal<TestBackend>, view: &dyn View) -> Result<()> {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -123,7 +123,11 @@ pub(crate) fn draw_view(terminal: &mut Terminal<TestBackend>, view: &View) -> Re
 /// # Errors
 ///
 /// Returns [`leptatui::Error::Io`] if terminal drawing or view rendering fails.
-pub(crate) fn render_view(view: &View, width: u16, height: u16) -> Result<Terminal<TestBackend>> {
+pub(crate) fn render_view(
+    view: &dyn View,
+    width: u16,
+    height: u16,
+) -> Result<Terminal<TestBackend>> {
     let mut terminal = Terminal::new(TestBackend::new(width, height))?;
     draw_view(&mut terminal, view)?;
     Ok(terminal)

@@ -199,7 +199,7 @@ impl Selector {
         })
     }
 
-    /// Expands a supported view type selector identifier.
+    /// Expands an open semantic view type selector identifier.
     ///
     /// # Arguments
     ///
@@ -207,47 +207,10 @@ impl Selector {
     ///
     /// # Returns
     ///
-    /// A [`TokenStream`] containing a public `ViewType` variant.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`syn::Error`] if `view_type` is not a supported terminal view
-    /// type.
+    /// A [`TokenStream`] containing an open `ViewType` name.
     fn expand_view_type(view_type: &Ident) -> Result<TokenStream> {
         let leptatui = crate::utils::crate_path::leptatui();
-
-        match view_type.to_string().as_str() {
-            "Block" => Ok(quote! { #leptatui::ViewType::Block }),
-            "Text" => Ok(quote! { #leptatui::ViewType::Text }),
-            "H1" => Ok(quote! { #leptatui::ViewType::H1 }),
-            "H2" => Ok(quote! { #leptatui::ViewType::H2 }),
-            "H3" => Ok(quote! { #leptatui::ViewType::H3 }),
-            "H4" => Ok(quote! { #leptatui::ViewType::H4 }),
-            "H5" => Ok(quote! { #leptatui::ViewType::H5 }),
-            "H6" => Ok(quote! { #leptatui::ViewType::H6 }),
-            "Paragraph" => Ok(quote! { #leptatui::ViewType::Paragraph }),
-            "CodeBlock" => Ok(quote! { #leptatui::ViewType::CodeBlock }),
-            "OrderedList" => Ok(quote! { #leptatui::ViewType::OrderedList }),
-            "UnorderedList" => Ok(quote! { #leptatui::ViewType::UnorderedList }),
-            "ListItem" => Ok(quote! { #leptatui::ViewType::ListItem }),
-            "Table" => Ok(quote! { #leptatui::ViewType::Table }),
-            "TableHead" => Ok(quote! { #leptatui::ViewType::TableHead }),
-            "TableBody" => Ok(quote! { #leptatui::ViewType::TableBody }),
-            "TableRow" => Ok(quote! { #leptatui::ViewType::TableRow }),
-            "TableCell" => Ok(quote! { #leptatui::ViewType::TableCell }),
-            "Row" => Ok(quote! { #leptatui::ViewType::Row }),
-            "Column" => Ok(quote! { #leptatui::ViewType::Column }),
-            "Form" => Ok(quote! { #leptatui::ViewType::Form }),
-            "Button" => Ok(quote! { #leptatui::ViewType::Button }),
-            "Input" => Ok(quote! { #leptatui::ViewType::Input }),
-            "TextArea" => Ok(quote! { #leptatui::ViewType::TextArea }),
-            "Image" => Ok(quote! { #leptatui::ViewType::Image }),
-            "ProgressBar" => Ok(quote! { #leptatui::ViewType::ProgressBar }),
-            _ => Err(Error::new_spanned(
-                view_type,
-                "unsupported stylesheet type selector; expected a built-in Leptatui view type",
-            )),
-        }
+        Ok(quote! { #leptatui::ViewType::new(::core::stringify!(#view_type)) })
     }
 
     /// Expands a supported pseudo-selector identifier.

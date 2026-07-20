@@ -4,7 +4,7 @@ use leptatui::prelude::*;
 
 /// Triggers table-section row validation.
 fn main() {
-    let _: View = view! {
+    let _ = view! {
         <Table>
             <TableBody><TableCell>"Invalid"</TableCell></TableBody>
         </Table>

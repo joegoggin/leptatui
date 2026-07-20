@@ -1,7 +1,7 @@
 //! Rendering and event traversal for Leptatui views.
 //!
-//! This module maps [`View`] variants to Ratatui widgets, layout splits, and
-//! component event propagation.
+//! This module renders built-in [`View`] implementations and supplies shared
+//! event behavior for every view tree.
 
 mod table;
 
@@ -11,7 +11,6 @@ use std::{
 };
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout, Position, Rect, Size},
     style::Style,
@@ -21,17 +20,20 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    ThemeVariables,
     app::{AppControl, Result},
-    component::{Component, FocusedControl, KeyControl, RenderCtx},
-    context,
+    component::{FocusedControl, KeyControl, RenderCtx},
     style::{Borders, LayoutDirection, Modifier, TuiSize, TuiStyle},
 };
 
 use super::{
     code_block::SyntaxTheme,
     metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
-    model::{FormAction, InputAction, View, clamped_progress_value},
+    model::{
+        AnyView, BlockView, ButtonView, CodeBlockView, EditableKind, EditableTextView, FormAction,
+        FormView, HeadingView, ImageSource, ImageView, InputAction, LayoutView, ListItemView,
+        ListKind, ListView, ParagraphView, ProgressBarView, TableCellView, TableRowView,
+        TableSectionView, TableView, TextView, View, clamped_progress_value,
+    },
 };
 
 use self::table::{min_height_for_table_view, render_table_view};
@@ -54,28 +56,7 @@ const LIST_NEST_INDENT: u16 = 2;
 ///
 /// A [`TuiStyle`] containing the resolved view style.
 fn resolve_style(metadata: &StyleMetadata, ctx: &RenderCtx<'_, '_>) -> TuiStyle {
-    let theme = context::use_context::<ThemeVariables>()
-        .or_else(|| {
-            context::use_context::<ReadSignal<ThemeVariables>>().map(|theme| theme.get_untracked())
-        })
-        .unwrap_or_default();
-
-    crate::Stylesheet::resolve_stylesheets(
-        ctx.stylesheets(),
-        metadata,
-        ctx.selector_ancestors(),
-        ctx.inherited_style(),
-        metadata.inline_style(),
-        Some(ctx.viewport_size()),
-        &theme,
-    )
-}
-
-/// Returns a paragraph configured for Leptatui text rendering.
-fn text_paragraph<'a>(content: &'a str, style: TuiStyle) -> Paragraph<'a> {
-    Paragraph::new(content)
-        .style(style.to_ratatui_style())
-        .wrap(Wrap { trim: false })
+    ctx.resolve_style(metadata)
 }
 
 /// Returns a paragraph configured for wrapped semantic rich-text rendering.
@@ -122,18 +103,6 @@ fn heading_content_offset(level: u16) -> u16 {
 /// # Panics
 ///
 /// Panics if `view` is not a semantic heading variant.
-fn heading_level(view: &View) -> u16 {
-    match view {
-        View::H1 { .. } => 1,
-        View::H2 { .. } => 2,
-        View::H3 { .. } => 3,
-        View::H4 { .. } => 4,
-        View::H5 { .. } => 5,
-        View::H6 { .. } => 6,
-        _ => unreachable!("heading level requested for a non-heading view"),
-    }
-}
-
 /// Renders a Markdown-style semantic heading with a hanging content indent.
 ///
 /// The marker occupies only the first row while wrapped content remains aligned
@@ -549,311 +518,46 @@ fn image_render_area(area: Rect, image_size: Option<TuiSize>) -> Rect {
     }
 }
 
-impl View {
-    /// Renders this view into a context.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` — Rendering context for the view's target area.
-    ///
-    /// # Returns
-    ///
-    /// An empty [`Result`] on success.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if rendering performs terminal I/O
-    /// that fails.
+impl AnyView {
+    /// Renders the stored concrete node.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        match self {
-            Self::Block { child, metadata } => {
-                let style = resolve_style(metadata, ctx);
-                let block = style.to_block_with_default_borders(Borders::ALL);
-                let inner = block.inner(ctx.area());
-                ctx.render_widget(block);
-                ctx.with_area_inherited_style_and_selector_ancestor(
-                    inner,
-                    style.inherited_values(),
-                    metadata.clone(),
-                    |ctx| child.render(ctx),
-                )
-            }
-            Self::Text { content, metadata } => {
-                let style = resolve_style(metadata, ctx);
-                ctx.render_widget(text_paragraph(content.as_str(), style));
-                Ok(())
-            }
-            Self::H1 { content, metadata }
-            | Self::H2 { content, metadata }
-            | Self::H3 { content, metadata }
-            | Self::H4 { content, metadata }
-            | Self::H5 { content, metadata }
-            | Self::H6 { content, metadata } => {
-                render_heading(content, metadata, heading_level(self), ctx);
-                Ok(())
-            }
-            Self::Paragraph { content, metadata } => {
-                let style = resolve_style(metadata, ctx);
-                ctx.render_widget(semantic_paragraph(content, style));
-                Ok(())
-            }
-            Self::CodeBlock {
-                language,
-                line_numbers,
-                syntax_theme,
-                highlighted_lines,
-                metadata,
-                ..
-            } => render_code_block_view(
-                language.as_deref(),
-                *line_numbers,
-                *syntax_theme,
-                highlighted_lines,
-                metadata,
-                ctx,
-            ),
-            Self::OrderedList {
-                items,
-                start,
-                metadata,
-            } => render_list_view(items, Some(*start), metadata, ctx),
-            Self::UnorderedList { items, metadata } => render_list_view(items, None, metadata, ctx),
-            Self::ListItem { children, metadata } => {
-                render_layout_view(children, metadata, LayoutDirection::Column, ctx)
-            }
-            Self::Table { sections, metadata } => render_table_view(sections, metadata, ctx),
-            Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. } => Ok(()),
-            Self::Image {
-                source,
-                alt,
-                metadata,
-            } => {
-                let style = resolve_style(metadata, ctx);
-                let path = match source {
-                    super::model::ImageSource::Path(path) => path.as_path(),
-                };
-                let image_area = image_render_area(ctx.area(), style.image_size);
-                ctx.with_area(image_area, |ctx| {
-                    ctx.render_terminal_image_path(path, alt.as_deref(), style.to_ratatui_style());
-                });
-                Ok(())
-            }
-            Self::ProgressBar {
-                value,
-                label,
-                metadata,
-            } => {
-                let style = resolve_style(metadata, ctx);
-                let ratatui_style = style.to_ratatui_style();
-                let mut gauge = Gauge::default()
-                    .ratio(clamped_progress_value(*value))
-                    .style(ratatui_style)
-                    .gauge_style(ratatui_style);
-                if let Some(label) = label.as_deref() {
-                    gauge = gauge.label(Span::styled(label, ratatui_style));
-                }
-
-                ctx.render_widget(gauge);
-                Ok(())
-            }
-            Self::Row { children, metadata } => {
-                render_layout_view(children, metadata, LayoutDirection::Row, ctx)
-            }
-            Self::Column { children, metadata } => {
-                render_layout_view(children, metadata, LayoutDirection::Column, ctx)
-            }
-            Self::Form {
-                children, metadata, ..
-            } => render_layout_view(children, metadata, LayoutDirection::Column, ctx),
-            Self::Button {
-                label, metadata, ..
-            } => {
-                let style = resolve_style(metadata, ctx);
-                ctx.render_widget(
-                    Paragraph::new(label.as_str())
-                        .centered()
-                        .style(style.to_ratatui_style())
-                        .block(style.to_block_with_default_borders(Borders::ALL)),
-                );
-                metadata.clear_scroll_into_view_request();
-                Ok(())
-            }
-            Self::Input {
-                value,
-                placeholder,
-                metadata,
-                editable_state,
-                ..
-            } => {
-                let style = resolve_style(metadata, ctx);
-                let block = style.to_block_with_default_borders(Borders::ALL);
-                let inner = block.inner(ctx.area());
-                let pending = pending_insert_render(value.as_str(), editable_state);
-                let display_value = if let Some(pending) = pending.as_ref() {
-                    pending.value.as_str()
-                } else if value.is_empty() {
-                    placeholder.as_deref().unwrap_or("")
-                } else {
-                    value.as_str()
-                };
-                let horizontal_scroll = if let Some(pending) = pending.as_ref() {
-                    input_horizontal_scroll(
-                        pending.value.as_str(),
-                        pending.scroll_cursor,
-                        editable_state.horizontal_scroll(),
-                        inner.width,
-                    )
-                } else if value.is_empty() {
-                    0
-                } else {
-                    input_horizontal_scroll(
-                        value.as_str(),
-                        editable_state.cursor(),
-                        editable_state.horizontal_scroll(),
-                        inner.width,
-                    )
-                };
-                ctx.render_widget(block);
-                ctx.with_area(inner, |ctx| {
-                    ctx.render_widget(input_paragraph(
-                        display_value,
-                        style,
-                        horizontal_scroll,
-                        pending
-                            .as_ref()
-                            .and_then(|pending| pending.selection.clone())
-                            .or_else(|| {
-                                visual_selection_range(
-                                    value.as_str(),
-                                    editable_state,
-                                    EditableControlKind::Input,
-                                )
-                            }),
-                    ));
-                    if metadata.is_focused() {
-                        if let Some(pending) = pending.as_ref() {
-                            set_input_cursor(
-                                pending.value.as_str(),
-                                pending.cursor,
-                                horizontal_scroll,
-                                ctx,
-                            );
-                        } else {
-                            set_input_cursor(
-                                value.as_str(),
-                                editable_state.cursor(),
-                                horizontal_scroll,
-                                ctx,
-                            );
-                        }
-                    }
-                });
-                metadata.clear_scroll_into_view_request();
-                Ok(())
-            }
-            Self::TextArea {
-                value,
-                placeholder,
-                metadata,
-                editable_state,
-                ..
-            } => {
-                let style = resolve_style(metadata, ctx);
-                let block = style.to_block_with_default_borders(Borders::ALL);
-                let inner = block.inner(ctx.area());
-                let pending = pending_insert_render(value.as_str(), editable_state);
-                let display_value = if let Some(pending) = pending.as_ref() {
-                    pending.value.as_str()
-                } else if value.is_empty() {
-                    placeholder.as_deref().unwrap_or("")
-                } else {
-                    value.as_str()
-                };
-                let vertical_scroll = if let Some(pending) = pending.as_ref() {
-                    text_area_vertical_scroll(
-                        pending.value.as_str(),
-                        pending.scroll_cursor,
-                        editable_state.vertical_scroll(),
-                        inner.height,
-                        inner.width,
-                    )
-                } else if value.is_empty() {
-                    0
-                } else {
-                    text_area_vertical_scroll(
-                        value.as_str(),
-                        editable_state.cursor(),
-                        editable_state.vertical_scroll(),
-                        inner.height,
-                        inner.width,
-                    )
-                };
-                ctx.render_widget(block);
-                ctx.with_area(inner, |ctx| {
-                    ctx.render_widget(text_area_paragraph(
-                        display_value,
-                        style,
-                        vertical_scroll,
-                        editable_state.horizontal_scroll(),
-                        pending
-                            .as_ref()
-                            .and_then(|pending| pending.selection.clone())
-                            .or_else(|| {
-                                visual_selection_range(
-                                    value.as_str(),
-                                    editable_state,
-                                    EditableControlKind::TextArea,
-                                )
-                            }),
-                    ));
-                    if metadata.is_focused() {
-                        if let Some(pending) = pending.as_ref() {
-                            set_text_area_pending_insert_cursor(
-                                pending.value.as_str(),
-                                pending.cursor,
-                                vertical_scroll,
-                                editable_state.horizontal_scroll(),
-                                ctx,
-                            );
-                        } else {
-                            set_text_area_cursor(
-                                value.as_str(),
-                                editable_state.cursor(),
-                                vertical_scroll,
-                                editable_state.horizontal_scroll(),
-                                ctx,
-                            );
-                        }
-                    }
-                });
-                metadata.clear_scroll_into_view_request();
-                Ok(())
-            }
-            Self::Dynamic(child) => child.with_view(|child| child.render(ctx)),
-            Self::Component(component) => component.render(ctx),
-        }
+        self.as_view().render(ctx)
     }
 
-    /// Renders a clipped terminal image segment when this view is an image.
+    /// Returns the minimum useful height of the stored subtree.
+    #[doc(hidden)]
+    pub fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        self.as_view().min_height(ctx)
+    }
+
+    /// Dispatches an event through the stored subtree.
+    pub fn handle_event(&mut self, event: Event) -> Result<AppControl> {
+        self.as_view_mut().handle_event(event)
+    }
+
+    /// Dispatches custom and built-in behavior for a key event.
+    pub fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        self.as_view_mut().handle_key_event(key)
+    }
+
+    /// Handles built-in scrolling, focus, editing, and activation keys.
+    #[doc(hidden)]
+    pub fn __handle_default_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        handle_default_view_key_event(self.as_view_mut(), key)
+    }
+
+    /// Renders a clipped segment when the stored node is an image.
     pub(crate) fn render_terminal_image_clipped(
         &self,
         source_y: u16,
         target_area: Rect,
         ctx: &mut RenderCtx<'_, '_>,
     ) -> Result<bool> {
-        let Self::Image {
-            source,
-            alt,
-            metadata,
-        } = self
-        else {
+        let Some(image) = self.downcast_ref::<ImageView>() else {
             return Ok(false);
         };
 
-        let style = resolve_style(metadata, ctx);
+        let style = resolve_style(&image.metadata, ctx);
         let full_image_area = image_render_area(ctx.area(), style.image_size);
         if source_y >= full_image_area.height {
             return Ok(true);
@@ -868,9 +572,7 @@ impl View {
             return Ok(true);
         }
 
-        let path = match source {
-            super::model::ImageSource::Path(path) => path.as_path(),
-        };
+        let ImageSource::Path(path) = &image.source;
         let render_area = Rect {
             x: target_area
                 .x
@@ -880,1255 +582,1058 @@ impl View {
             height,
         };
         let full_size = Size::new(full_image_area.width, full_image_area.height);
-
         ctx.with_area(render_area, |ctx| {
             ctx.render_terminal_image_path_clipped(
                 path,
-                alt.as_deref(),
+                image.alt.as_deref(),
                 style.to_ratatui_style(),
                 full_size,
                 source_y,
             );
         });
-
         Ok(true)
-    }
-
-    /// Dispatches an event through this view tree.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` — Crossterm event emitted by the terminal.
-    ///
-    /// # Returns
-    ///
-    /// An [`AppControl`] value indicating whether traversal should continue.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
-    pub fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        if let Event::Key(key) = event {
-            return Ok(self.handle_key_event(key)?.into());
-        }
-
-        self.dispatch_event_ref(&event)
-    }
-
-    /// Dispatches a key event through this view tree.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Crossterm key event emitted by the terminal.
-    ///
-    /// # Returns
-    ///
-    /// A [`KeyControl`] value indicating whether the key was handled.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        let control = self.__dispatch_key_event(key)?;
-        if control == KeyControl::Pass {
-            return self.__handle_default_key_event(key);
-        }
-
-        Ok(control)
-    }
-
-    /// Emits any expired pending insert-mode key in this view tree.
-    #[doc(hidden)]
-    pub fn __flush_pending_input(&mut self) -> Option<AppControl> {
-        self.flush_pending_input_at(Instant::now())
-    }
-
-    /// Dispatches a key event through descendant component boundaries only.
-    #[doc(hidden)]
-    pub fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        self.dispatch_key_event_ref(&key)
-    }
-
-    /// Handles built-in key behavior for this view tree.
-    #[doc(hidden)]
-    pub fn __handle_default_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        Ok(self.handle_default_key_event_ref(&key))
-    }
-
-    /// Emits an expired pending insert-mode key at the provided time.
-    fn flush_pending_input_at(&mut self, now: Instant) -> Option<AppControl> {
-        match self {
-            Self::Block { child, .. } => child.flush_pending_input_at(now),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => flush_child_pending_input(children, now),
-            Self::Dynamic(child) => child.with_view_mut(|child| child.flush_pending_input_at(now)),
-            Self::Component(component) => component.flush_pending_input(),
-            Self::Input {
-                value,
-                on_input,
-                editable_state,
-                ..
-            }
-            | Self::TextArea {
-                value,
-                on_input,
-                editable_state,
-                ..
-            } => flush_expired_insert_key(value, on_input, editable_state, now),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. } => None,
-            Self::Image { .. }
-            | Self::ProgressBar { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. } => None,
-        }
-    }
-
-    /// Returns the number of focusable controls in this view tree.
-    #[doc(hidden)]
-    pub fn __focusable_count(&self) -> usize {
-        self.focusable_count()
-    }
-
-    /// Returns the minimum useful render height for this view tree.
-    #[doc(hidden)]
-    pub fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        min_height_for_view(self, ctx)
-    }
-
-    /// Returns the focused control index while tracking traversal position.
-    #[doc(hidden)]
-    pub fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
-        self.focused_index_inner(index)
-    }
-
-    /// Sets focus by flattened control index while tracking traversal position.
-    #[doc(hidden)]
-    pub fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
-        self.set_focus_by_index_inner(target, index);
-    }
-
-    /// Returns the focused control's vertical span inside this view area.
-    #[doc(hidden)]
-    pub fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
-        focused_control_span_for_view(self, ctx).map(VerticalSpan::into_tuple)
-    }
-
-    /// Activates the focused button if this view tree contains one.
-    #[doc(hidden)]
-    pub fn __activate_focused_button(&self) -> Option<AppControl> {
-        self.activate_focused_button()
-    }
-
-    /// Handles a key on the focused input, if this tree contains one.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Key event to apply to the focused input.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing the key control result when an input handles
-    /// the key.
-    #[doc(hidden)]
-    pub fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
-        self.handle_focused_input_key_ref(&key)
-    }
-
-    /// Returns the focused built-in control in this view tree.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing focused control metadata when a supported
-    /// built-in control is focused.
-    #[doc(hidden)]
-    pub fn __focused_control(&self) -> Option<FocusedControl> {
-        self.focused_control()
-    }
-
-    /// Handles form-owned submit or cancel keys in this view tree.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Key event to evaluate for form behavior.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing key traversal control when a form handles the
-    /// key.
-    #[doc(hidden)]
-    pub fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
-        self.handle_form_key_ref(&key)
-    }
-
-    /// Scrolls the first overflowing vertical layout in this view tree.
-    #[doc(hidden)]
-    pub fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
-        self.scroll_first_overflowing(delta)
-    }
-
-    /// Scrolls the first overflowing vertical layout in this view tree to the top.
-    #[doc(hidden)]
-    pub fn __scroll_first_overflowing_to_top(&mut self) -> bool {
-        self.scroll_first_overflowing_to(ScrollBoundary::Top)
-    }
-
-    /// Scrolls the first overflowing vertical layout in this view tree to the bottom.
-    #[doc(hidden)]
-    pub fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
-        self.scroll_first_overflowing_to(ScrollBoundary::Bottom)
-    }
-
-    /// Returns whether this view tree contains an overflowing scroll target.
-    #[doc(hidden)]
-    pub fn __has_overflowing_scroll_target(&self) -> bool {
-        self.has_overflowing_scroll_target()
-    }
-
-    /// Dispatches a key event by reference through this view tree.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Crossterm key event to dispatch without cloning at every
-    ///   branch.
-    ///
-    /// # Returns
-    ///
-    /// A [`KeyControl`] value indicating whether the key was handled.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
-    fn dispatch_key_event_ref(&mut self, key: &KeyEvent) -> Result<KeyControl> {
-        match self {
-            Self::Block { child, .. } => child.dispatch_key_event_ref(key),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => handle_child_key_events(children, key),
-            Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_key_event_ref(key)),
-            Self::Component(component) => component.dispatch_key_event(*key),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => Ok(KeyControl::Pass),
-        }
-    }
-
-    /// Handles built-in key behavior for scrolling, focus movement, and button activation.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Key event to match against built-in view behavior.
-    ///
-    /// # Returns
-    ///
-    /// A [`KeyControl`] value indicating whether the key was handled.
-    fn handle_default_key_event_ref(&mut self, key: &KeyEvent) -> KeyControl {
-        if key.kind != KeyEventKind::Press {
-            return KeyControl::Pass;
-        }
-
-        if let Some(control) = self.handle_form_key_ref(key) {
-            self.clear_scroll_to_top_key_pending();
-            return control;
-        }
-
-        if let Some(control) = self.handle_focused_input_key_ref(key) {
-            self.clear_scroll_to_top_key_pending();
-            return control;
-        }
-
-        match key.code {
-            KeyCode::Down | KeyCode::Char('j') => {
-                self.handle_scroll_key(|view| view.scroll_first_overflowing(1))
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                self.handle_scroll_key(|view| view.scroll_first_overflowing(-1))
-            }
-            KeyCode::PageDown => self.handle_scroll_key(|view| view.scroll_first_overflowing(5)),
-            KeyCode::PageUp => self.handle_scroll_key(|view| view.scroll_first_overflowing(-5)),
-            KeyCode::Char('g') => self.handle_scroll_to_top_key(),
-            KeyCode::Char('G') => self
-                .handle_scroll_key(|view| view.scroll_first_overflowing_to(ScrollBoundary::Bottom)),
-            KeyCode::Tab | KeyCode::BackTab => {
-                self.clear_scroll_to_top_key_pending();
-                let count = self.focusable_count();
-                if count == 0 {
-                    return KeyControl::Pass;
-                }
-
-                let direction = match key.code {
-                    KeyCode::Tab => FocusDirection::Forward,
-                    KeyCode::BackTab => FocusDirection::Backward,
-                    _ => unreachable!("only tab keys are matched"),
-                };
-                self.move_focus(direction, count);
-                KeyControl::Handled
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                self.clear_scroll_to_top_key_pending();
-                self.activate_focused_button()
-                    .map_or(KeyControl::Pass, KeyControl::from)
-            }
-            _ => {
-                self.clear_scroll_to_top_key_pending();
-                KeyControl::Pass
-            }
-        }
-    }
-
-    /// Handles a single-key scroll command and clears pending multi-key scroll state.
-    fn handle_scroll_key(&mut self, scroll: impl FnOnce(&mut Self) -> bool) -> KeyControl {
-        self.clear_scroll_to_top_key_pending();
-        key_control_from_bool(scroll(self))
-    }
-
-    /// Handles the two-key `gg` scroll-to-top sequence.
-    fn handle_scroll_to_top_key(&mut self) -> KeyControl {
-        if self.take_scroll_to_top_key_pending() {
-            key_control_from_bool(self.scroll_first_overflowing_to(ScrollBoundary::Top))
-        } else if self.has_overflowing_scroll_target() {
-            self.set_scroll_to_top_key_pending(true);
-            KeyControl::Handled
-        } else {
-            KeyControl::Pass
-        }
-    }
-
-    /// Scrolls the first overflowing vertical layout found in render order.
-    ///
-    /// # Arguments
-    ///
-    /// * `delta` — Signed number of terminal rows to move through the overflow.
-    ///
-    /// # Returns
-    ///
-    /// A [`bool`] indicating whether any scroll offset changed.
-    fn scroll_first_overflowing(&mut self, delta: i16) -> bool {
-        match self {
-            Self::Block { child, .. } => child.scroll_first_overflowing(delta),
-            Self::Row { children, metadata }
-            | Self::Column { children, metadata }
-            | Self::Form {
-                children, metadata, ..
-            } => {
-                if metadata.max_scroll_offset() > 0 && metadata.scroll_by(delta) {
-                    return true;
-                }
-
-                children
-                    .iter_mut()
-                    .any(|child| child.scroll_first_overflowing(delta))
-            }
-            Self::OrderedList { items, .. } | Self::UnorderedList { items, .. } => items
-                .iter_mut()
-                .any(|item| item.scroll_first_overflowing(delta)),
-            Self::ListItem { children, .. } => children
-                .iter_mut()
-                .any(|child| child.scroll_first_overflowing(delta)),
-            Self::Dynamic(child) => {
-                child.with_view_mut(|child| child.scroll_first_overflowing(delta))
-            }
-            Self::Component(component) => component.scroll_first_overflowing(delta),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => false,
-        }
-    }
-
-    /// Scrolls the first overflowing vertical layout to an absolute boundary.
-    fn scroll_first_overflowing_to(&mut self, boundary: ScrollBoundary) -> bool {
-        match self {
-            Self::Block { child, .. } => child.scroll_first_overflowing_to(boundary),
-            Self::Row { children, metadata }
-            | Self::Column { children, metadata }
-            | Self::Form {
-                children, metadata, ..
-            } => {
-                if metadata.max_scroll_offset() > 0 {
-                    let target = match boundary {
-                        ScrollBoundary::Top => 0,
-                        ScrollBoundary::Bottom => metadata.max_scroll_offset(),
-                    };
-
-                    if metadata.scroll_offset() != target {
-                        metadata.set_scroll_offset(target);
-                        return true;
-                    }
-                }
-
-                children
-                    .iter_mut()
-                    .any(|child| child.scroll_first_overflowing_to(boundary))
-            }
-            Self::OrderedList { items, .. } | Self::UnorderedList { items, .. } => items
-                .iter_mut()
-                .any(|item| item.scroll_first_overflowing_to(boundary)),
-            Self::ListItem { children, .. } => children
-                .iter_mut()
-                .any(|child| child.scroll_first_overflowing_to(boundary)),
-            Self::Component(component) => match boundary {
-                ScrollBoundary::Top => component.scroll_first_overflowing_to_top(),
-                ScrollBoundary::Bottom => component.scroll_first_overflowing_to_bottom(),
-            },
-            Self::Dynamic(child) => {
-                child.with_view_mut(|child| child.scroll_first_overflowing_to(boundary))
-            }
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => false,
-        }
-    }
-
-    /// Returns whether this tree contains a layout with scrollable overflow.
-    fn has_overflowing_scroll_target(&self) -> bool {
-        match self {
-            Self::Block { child, .. } => child.has_overflowing_scroll_target(),
-            Self::Row { children, metadata }
-            | Self::Column { children, metadata }
-            | Self::Form {
-                children, metadata, ..
-            } => {
-                metadata.max_scroll_offset() > 0
-                    || children.iter().any(Self::has_overflowing_scroll_target)
-            }
-            Self::OrderedList { items, .. } | Self::UnorderedList { items, .. } => {
-                items.iter().any(Self::has_overflowing_scroll_target)
-            }
-            Self::ListItem { children, .. } => {
-                children.iter().any(Self::has_overflowing_scroll_target)
-            }
-            Self::Dynamic(child) => child.with_view(Self::has_overflowing_scroll_target),
-            Self::Component(component) => component.has_overflowing_scroll_target(),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => false,
-        }
-    }
-
-    /// Returns metadata used to store default key-sequence state.
-    fn key_sequence_metadata(&self) -> Option<&StyleMetadata> {
-        match self {
-            Self::Block { metadata, .. }
-            | Self::Text { metadata, .. }
-            | Self::H1 { metadata, .. }
-            | Self::H2 { metadata, .. }
-            | Self::H3 { metadata, .. }
-            | Self::H4 { metadata, .. }
-            | Self::H5 { metadata, .. }
-            | Self::H6 { metadata, .. }
-            | Self::Paragraph { metadata, .. }
-            | Self::CodeBlock { metadata, .. }
-            | Self::OrderedList { metadata, .. }
-            | Self::UnorderedList { metadata, .. }
-            | Self::ListItem { metadata, .. }
-            | Self::Row { metadata, .. }
-            | Self::Column { metadata, .. }
-            | Self::Form { metadata, .. }
-            | Self::Button { metadata, .. }
-            | Self::Input { metadata, .. }
-            | Self::TextArea { metadata, .. }
-            | Self::Image { metadata, .. }
-            | Self::Table { metadata, .. }
-            | Self::TableHead { metadata, .. }
-            | Self::TableBody { metadata, .. }
-            | Self::TableRow { metadata, .. }
-            | Self::TableCell { metadata, .. }
-            | Self::ProgressBar { metadata, .. } => Some(metadata),
-            Self::Dynamic(_) | Self::Component(_) => None,
-        }
-    }
-
-    /// Stores whether the first `g` in `gg` has been pressed.
-    fn set_scroll_to_top_key_pending(&self, pending: bool) {
-        if let Some(metadata) = self.key_sequence_metadata() {
-            metadata.set_scroll_to_top_key_pending(pending);
-        }
-    }
-
-    /// Clears and returns whether the first `g` in `gg` was pressed.
-    fn take_scroll_to_top_key_pending(&self) -> bool {
-        self.key_sequence_metadata()
-            .is_some_and(StyleMetadata::take_scroll_to_top_key_pending)
-    }
-
-    /// Clears any pending first `g` key.
-    fn clear_scroll_to_top_key_pending(&self) {
-        self.set_scroll_to_top_key_pending(false);
-    }
-
-    /// Handles an editing key for the currently focused input.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Key event to apply to the focused input.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing the key control result when an input handles
-    /// the key.
-    fn handle_focused_input_key_ref(&mut self, key: &KeyEvent) -> Option<KeyControl> {
-        match self {
-            Self::Input {
-                value,
-                metadata,
-                on_input,
-                editable_state,
-                ..
-            } if metadata.is_focused() => {
-                handle_input_key(value.as_str(), on_input, editable_state, key)
-            }
-            Self::TextArea {
-                value,
-                metadata,
-                on_input,
-                editable_state,
-                ..
-            } if metadata.is_focused() => {
-                let control = handle_text_area_key(value.as_str(), on_input, editable_state, key);
-                if matches!(control, Some(KeyControl::Handled | KeyControl::Exit)) {
-                    metadata.request_scroll_into_view();
-                }
-
-                control
-            }
-            Self::Block { child, .. } => child.handle_focused_input_key_ref(key),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => children
-                .iter_mut()
-                .find_map(|child| child.handle_focused_input_key_ref(key)),
-            Self::Dynamic(child) => {
-                child.with_view_mut(|child| child.handle_focused_input_key_ref(key))
-            }
-            Self::Component(component) => component.handle_focused_input_key(*key),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => None,
-        }
-    }
-
-    /// Returns the focused built-in control in this view tree.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing focused control metadata when a supported
-    /// built-in control is focused.
-    fn focused_control(&self) -> Option<FocusedControl> {
-        match self {
-            Self::Button { metadata, .. } if metadata.is_focused() => Some(FocusedControl::Button),
-            Self::Input {
-                metadata,
-                editable_state,
-                ..
-            } if metadata.is_focused() => Some(FocusedControl::Input {
-                insert_mode: editable_state.mode() == VimMode::Insert
-                    && !has_active_insert_key_pending(editable_state, Instant::now()),
-                visual_mode: matches!(editable_state.mode(), VimMode::Visual | VimMode::VisualLine),
-            }),
-            Self::TextArea {
-                metadata,
-                editable_state,
-                ..
-            } if metadata.is_focused() => Some(FocusedControl::TextArea {
-                insert_mode: editable_state.mode() == VimMode::Insert
-                    && !has_active_insert_key_pending(editable_state, Instant::now()),
-                visual_mode: matches!(editable_state.mode(), VimMode::Visual | VimMode::VisualLine),
-            }),
-            Self::Block { child, .. } => child.focused_control(),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => children.iter().find_map(Self::focused_control),
-            Self::Dynamic(child) => child.with_view(Self::focused_control),
-            Self::Component(component) => component.focused_control(),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => None,
-        }
-    }
-
-    /// Handles form-owned submit and cancel keys.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Key event to evaluate for form behavior.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing key traversal control when a form handles the
-    /// key.
-    fn handle_form_key_ref(&mut self, key: &KeyEvent) -> Option<KeyControl> {
-        match self {
-            Self::Form {
-                children,
-                on_submit,
-                on_cancel,
-                ..
-            } => {
-                if let Some(control) = children
-                    .iter_mut()
-                    .find_map(|child| child.handle_form_key_ref(key))
-                {
-                    return Some(control);
-                }
-
-                let focused = children.iter().find_map(Self::focused_control)?;
-                handle_form_focused_key(focused, key, on_submit, on_cancel)
-            }
-            Self::Block { child, .. } => child.handle_form_key_ref(key),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => children
-                .iter_mut()
-                .find_map(|child| child.handle_form_key_ref(key)),
-            Self::Dynamic(child) => child.with_view_mut(|child| child.handle_form_key_ref(key)),
-            Self::Component(component) => component.handle_form_key(*key),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => None,
-        }
-    }
-
-    /// Returns the number of focusable controls in this view tree.
-    ///
-    /// # Returns
-    ///
-    /// A [`usize`] count of focusable control views.
-    fn focusable_count(&self) -> usize {
-        match self {
-            Self::Button { .. } | Self::Input { .. } | Self::TextArea { .. } => 1,
-            Self::Block { child, .. } => child.focusable_count(),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => children.iter().map(Self::focusable_count).sum(),
-            Self::Dynamic(child) => child.with_view(Self::focusable_count),
-            Self::Component(component) => component.focusable_count(),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => 0,
-        }
-    }
-
-    /// Moves focus to the next or previous focusable control.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` — Direction to move through focusable controls.
-    /// * `count` — Number of focusable controls in the view tree.
-    fn move_focus(&mut self, direction: FocusDirection, count: usize) {
-        if count == 0 {
-            return;
-        }
-
-        let target = match (self.focused_index(), direction) {
-            (Some(index), FocusDirection::Forward) => (index + 1) % count,
-            (Some(0), FocusDirection::Backward) => count - 1,
-            (Some(index), FocusDirection::Backward) => index - 1,
-            (None, FocusDirection::Forward) => 0,
-            (None, FocusDirection::Backward) => count - 1,
-        };
-
-        self.set_focus_by_index(target);
-    }
-
-    /// Returns the flattened index of the currently focused control.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option<usize>`] containing the focused control index.
-    fn focused_index(&self) -> Option<usize> {
-        let mut index = 0;
-        self.focused_index_inner(&mut index)
-    }
-
-    /// Returns the focused control index while tracking traversal position.
-    ///
-    /// # Arguments
-    ///
-    /// * `index` — Current flattened control index during traversal.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option<usize>`] containing the focused control index.
-    fn focused_index_inner(&self, index: &mut usize) -> Option<usize> {
-        match self {
-            Self::Button { metadata, .. }
-            | Self::Input { metadata, .. }
-            | Self::TextArea { metadata, .. } => {
-                let current = *index;
-                *index += 1;
-                metadata.is_focused().then_some(current)
-            }
-            Self::Block { child, .. } => child.focused_index_inner(index),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => children
-                .iter()
-                .find_map(|child| child.focused_index_inner(index)),
-            Self::Dynamic(child) => child.with_view(|child| child.focused_index_inner(index)),
-            Self::Component(component) => component.focused_index_inner(index),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => None,
-        }
-    }
-
-    /// Sets focus by flattened control index.
-    ///
-    /// # Arguments
-    ///
-    /// * `target` — Flattened control index that should receive focus.
-    fn set_focus_by_index(&mut self, target: usize) {
-        let mut index = 0;
-        self.set_focus_by_index_inner(target, &mut index);
-    }
-
-    /// Sets focus by flattened control index while tracking traversal position.
-    ///
-    /// # Arguments
-    ///
-    /// * `target` — Flattened control index that should receive focus.
-    /// * `index` — Current flattened control index during traversal.
-    fn set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
-        match self {
-            Self::Button { metadata, .. } => {
-                let focused = *index == target;
-                metadata.set_focused(focused);
-                if focused {
-                    metadata.request_scroll_into_view();
-                } else {
-                    metadata.clear_scroll_into_view_request();
-                }
-                *index += 1;
-            }
-            Self::Input {
-                metadata,
-                editable_state,
-                ..
-            }
-            | Self::TextArea {
-                metadata,
-                editable_state,
-                ..
-            } => {
-                let focused = *index == target;
-                metadata.set_focused(focused);
-                if focused {
-                    editable_state.set_mode(VimMode::Normal);
-                    metadata.request_scroll_into_view();
-                } else {
-                    metadata.clear_scroll_into_view_request();
-                }
-                *index += 1;
-            }
-            Self::Block { child, .. } => child.set_focus_by_index_inner(target, index),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => {
-                for child in children {
-                    child.set_focus_by_index_inner(target, index);
-                }
-            }
-            Self::Dynamic(child) => {
-                child.with_view_mut(|child| child.set_focus_by_index_inner(target, index));
-            }
-            Self::Component(component) => component.set_focus_by_index_inner(target, index),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => {}
-        }
-    }
-
-    /// Activates the focused button if this view tree contains one.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option<AppControl>`] containing the focused button action result.
-    fn activate_focused_button(&self) -> Option<AppControl> {
-        match self {
-            Self::Button {
-                metadata, on_press, ..
-            } if metadata.is_focused() => Some(
-                on_press
-                    .as_ref()
-                    .map_or(AppControl::Continue, |action| action()),
-            ),
-            Self::Block { child, .. } => child.activate_focused_button(),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => {
-                children.iter().find_map(Self::activate_focused_button)
-            }
-            Self::Dynamic(child) => child.with_view(Self::activate_focused_button),
-            Self::Component(component) => component.activate_focused_button(),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => None,
-        }
-    }
-
-    /// Dispatches an event to child views and component boundaries.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` — Crossterm event to dispatch without cloning at every branch.
-    ///
-    /// # Returns
-    ///
-    /// An [`AppControl`] value indicating whether traversal should continue.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
-    fn dispatch_event_ref(&mut self, event: &Event) -> Result<AppControl> {
-        match self {
-            Self::Block { child, .. } => child.dispatch_event_ref(event),
-            Self::Row { children, .. }
-            | Self::Column { children, .. }
-            | Self::Form { children, .. }
-            | Self::OrderedList {
-                items: children, ..
-            }
-            | Self::UnorderedList {
-                items: children, ..
-            }
-            | Self::ListItem { children, .. } => handle_child_events(children, event),
-            Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_event_ref(event)),
-            Self::Component(component) => component.handle_event(event.clone()),
-            Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
-            | Self::CodeBlock { .. }
-            | Self::Button { .. }
-            | Self::Input { .. }
-            | Self::TextArea { .. }
-            | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => Ok(AppControl::Continue),
-        }
     }
 }
 
-impl Component for View {
-    /// Renders the view when it is used as a component.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` — Rendering context for the view's target area.
-    ///
-    /// # Returns
-    ///
-    /// An empty [`Result`] on success.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if rendering performs terminal I/O
-    /// that fails.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        View::render(self, ctx)
+/// Dispatches one event through a view tree.
+pub(crate) fn handle_view_event<V>(view: &mut V, event: Event) -> Result<AppControl>
+where
+    V: View + ?Sized,
+{
+    if let Event::Key(key) = event {
+        return Ok(handle_view_key_event(view, key)?.into());
     }
 
-    /// Returns the minimum useful render height for the view tree.
-    #[doc(hidden)]
-    fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        View::__min_height(self, ctx)
+    view.__dispatch_event(&event)
+}
+
+/// Dispatches custom and built-in key behavior through a view tree.
+pub(crate) fn handle_view_key_event<V>(view: &mut V, key: KeyEvent) -> Result<KeyControl>
+where
+    V: View + ?Sized,
+{
+    let control = view.__dispatch_key_event(key)?;
+    if control == KeyControl::Pass {
+        return handle_default_view_key_event(view, key);
     }
 
-    /// Dispatches an event when the view is used as a component.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` — Crossterm event emitted by the terminal.
-    ///
-    /// # Returns
-    ///
-    /// An [`AppControl`] value indicating whether traversal should continue.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
-    fn handle_event(&mut self, event: Event) -> Result<AppControl> {
-        View::handle_event(self, event)
+    Ok(control)
+}
+
+/// Handles built-in scrolling, focus, editing, and activation keys.
+fn handle_default_view_key_event<V>(view: &mut V, key: KeyEvent) -> Result<KeyControl>
+where
+    V: View + ?Sized,
+{
+    if key.kind != KeyEventKind::Press {
+        return Ok(KeyControl::Pass);
     }
 
-    /// Dispatches a key event when the view is used as a component.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Crossterm key event emitted by the terminal.
-    ///
-    /// # Returns
-    ///
-    /// A [`KeyControl`] value indicating whether the key was handled.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
-    fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        View::handle_key_event(self, key)
+    if let Some(control) = view.__handle_form_key(key) {
+        clear_scroll_to_top_key_pending(view);
+        return Ok(control);
     }
 
-    /// Dispatches custom key behavior through the view tree.
-    #[doc(hidden)]
-    fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        View::__dispatch_key_event(self, key)
+    if let Some(control) = view.__handle_focused_input_key(key) {
+        clear_scroll_to_top_key_pending(view);
+        return Ok(control);
     }
 
-    /// Returns the number of focusable controls in the view tree.
-    #[doc(hidden)]
-    fn __focusable_count(&self) -> usize {
-        View::__focusable_count(self)
+    let control = match key.code {
+        KeyCode::Down | KeyCode::Char('j') => handle_scroll_key(view, 1),
+        KeyCode::Up | KeyCode::Char('k') => handle_scroll_key(view, -1),
+        KeyCode::PageDown => handle_scroll_key(view, 5),
+        KeyCode::PageUp => handle_scroll_key(view, -5),
+        KeyCode::Char('g') => handle_scroll_to_top_key(view),
+        KeyCode::Char('G') => {
+            clear_scroll_to_top_key_pending(view);
+            key_control_from_bool(view.__scroll_first_overflowing_to_bottom())
+        }
+        KeyCode::Tab | KeyCode::BackTab => {
+            clear_scroll_to_top_key_pending(view);
+            let count = view.__focusable_count();
+            if count == 0 {
+                KeyControl::Pass
+            } else {
+                let direction = if key.code == KeyCode::Tab {
+                    FocusDirection::Forward
+                } else {
+                    FocusDirection::Backward
+                };
+                move_focus(view, direction, count);
+                KeyControl::Handled
+            }
+        }
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            clear_scroll_to_top_key_pending(view);
+            view.__activate_focused_button()
+                .map_or(KeyControl::Pass, KeyControl::from)
+        }
+        _ => {
+            clear_scroll_to_top_key_pending(view);
+            KeyControl::Pass
+        }
+    };
+
+    Ok(control)
+}
+
+/// Moves focus by one position in the requested direction.
+fn move_focus<V>(view: &mut V, direction: FocusDirection, count: usize)
+where
+    V: View + ?Sized,
+{
+    let mut index = 0;
+    let focused = view.__focused_index_inner(&mut index);
+    let target = match (focused, direction) {
+        (Some(index), FocusDirection::Forward) => (index + 1) % count,
+        (Some(0), FocusDirection::Backward) => count - 1,
+        (Some(index), FocusDirection::Backward) => index - 1,
+        (None, FocusDirection::Forward) => 0,
+        (None, FocusDirection::Backward) => count - 1,
+    };
+    let mut index = 0;
+    view.__set_focus_by_index_inner(target, &mut index);
+}
+
+/// Handles a relative scroll key.
+fn handle_scroll_key<V>(view: &mut V, delta: i16) -> KeyControl
+where
+    V: View + ?Sized,
+{
+    clear_scroll_to_top_key_pending(view);
+    key_control_from_bool(view.__scroll_first_overflowing(delta))
+}
+
+/// Handles the two-key `gg` scroll-to-top sequence.
+fn handle_scroll_to_top_key<V>(view: &mut V) -> KeyControl
+where
+    V: View + ?Sized,
+{
+    if take_scroll_to_top_key_pending(view) {
+        key_control_from_bool(view.__scroll_first_overflowing_to_top())
+    } else if view.__has_overflowing_scroll_target() {
+        set_scroll_to_top_key_pending(view, true);
+        KeyControl::Handled
+    } else {
+        KeyControl::Pass
+    }
+}
+
+/// Stores whether the first `g` in `gg` has been pressed.
+fn set_scroll_to_top_key_pending<V>(view: &V, pending: bool)
+where
+    V: View + ?Sized,
+{
+    view.__set_scroll_to_top_key_pending(pending);
+}
+
+/// Clears and returns whether the first `g` in `gg` was pressed.
+fn take_scroll_to_top_key_pending<V>(view: &V) -> bool
+where
+    V: View + ?Sized,
+{
+    view.__take_scroll_to_top_key_pending()
+}
+
+/// Clears any pending first `g` key.
+fn clear_scroll_to_top_key_pending<V>(view: &V)
+where
+    V: View + ?Sized,
+{
+    set_scroll_to_top_key_pending(view, false);
+}
+
+impl View for BlockView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let style = resolve_style(&self.metadata, ctx);
+        let block = style.to_block_with_default_borders(Borders::ALL);
+        let inner = block.inner(ctx.area());
+        ctx.render_widget(block);
+        let Some(child) = self.children.first() else {
+            return Ok(());
+        };
+        ctx.with_area_inherited_style_and_selector_ancestor(
+            inner,
+            style.inherited_values(),
+            self.metadata.clone(),
+            |ctx| child.render(ctx),
+        )
     }
 
-    /// Returns the focused control index while tracking traversal position.
-    #[doc(hidden)]
-    fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
-        View::__focused_index_inner(self, index)
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        let style = resolve_style(&self.metadata, ctx);
+        let child_height = self.children.first().map_or(0, |child| {
+            ctx.with_area_inherited_style_and_selector_ancestor(
+                ctx.area(),
+                style.inherited_values(),
+                self.metadata.clone(),
+                |ctx| child.__min_height(ctx),
+            )
+        });
+        child_height
+            .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+            .saturating_add(vertical_padding_rows(style.padding))
     }
 
-    /// Sets focus by flattened control index while tracking traversal position.
-    #[doc(hidden)]
-    fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
-        View::__set_focus_by_index_inner(self, target, index);
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn children(&self) -> &[AnyView] {
+        &self.children
+    }
+    fn children_mut(&mut self) -> &mut [AnyView] {
+        &mut self.children
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 
-    /// Returns the focused control's vertical span inside this component area.
-    #[doc(hidden)]
-    fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
-        View::__focused_button_span(self, ctx)
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        focused_control_span_for_block(self, ctx).map(VerticalSpan::into_tuple)
+    }
+}
+
+impl View for TextView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let style = resolve_style(&self.metadata, ctx);
+        ctx.render_widget(semantic_paragraph(&self.content, style));
+        Ok(())
     }
 
-    /// Activates the focused button in the view tree, if any.
-    #[doc(hidden)]
-    fn __activate_focused_button(&self) -> Option<AppControl> {
-        View::__activate_focused_button(self)
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        let style = resolve_style(&self.metadata, ctx);
+        line_count_height(semantic_paragraph(&self.content, style).line_count(ctx.area().width))
     }
 
-    /// Handles a key on the focused input in the view tree, if any.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Key event to apply to the focused input.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing the key control result when an input handles
-    /// the key.
-    #[doc(hidden)]
-    fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
-        View::__handle_focused_input_key(self, key)
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl View for HeadingView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        render_heading(&self.content, &self.metadata, self.level.number(), ctx);
+        Ok(())
     }
 
-    /// Emits any expired pending insert-mode key in the view tree.
-    #[doc(hidden)]
-    fn __flush_pending_input(&mut self) -> Option<AppControl> {
-        View::__flush_pending_input(self)
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        let style = resolve_style(&self.metadata, ctx);
+        heading_min_height(&self.content, style, self.level.number(), ctx.area().width)
     }
 
-    /// Returns the focused built-in control in the view tree, if any.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing focused control metadata when a supported
-    /// built-in control is focused.
-    #[doc(hidden)]
-    fn __focused_control(&self) -> Option<FocusedControl> {
-        View::__focused_control(self)
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl View for ParagraphView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let style = resolve_style(&self.metadata, ctx);
+        ctx.render_widget(semantic_paragraph(&self.content, style));
+        Ok(())
     }
 
-    /// Handles form-owned submit or cancel keys in the view tree, if any.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — Key event to evaluate for form behavior.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing key traversal control when a form handles the
-    /// key.
-    #[doc(hidden)]
-    fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
-        View::__handle_form_key(self, key)
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        let style = resolve_style(&self.metadata, ctx);
+        line_count_height(semantic_paragraph(&self.content, style).line_count(ctx.area().width))
     }
 
-    /// Scrolls the first overflowing vertical layout in the view tree.
-    #[doc(hidden)]
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl View for CodeBlockView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        render_code_block_view(
+            self.language.as_deref(),
+            self.line_numbers,
+            self.syntax_theme,
+            &self.highlighted_lines,
+            &self.metadata,
+            ctx,
+        )
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        let style = resolve_style(&self.metadata, ctx);
+        code_block_layout(
+            &self.highlighted_lines,
+            self.line_numbers,
+            style,
+            ctx.area(),
+        )
+        .1
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl View for ListView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let start = (self.kind == ListKind::Ordered).then_some(self.start);
+        render_list_view(&self.children, start, &self.metadata, ctx)
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        let start = (self.kind == ListKind::Ordered).then_some(self.start);
+        min_height_for_list_view(&self.children, start, &self.metadata, ctx)
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn children(&self) -> &[AnyView] {
+        &self.children
+    }
+    fn children_mut(&mut self) -> &mut [AnyView] {
+        &mut self.children
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        let start = (self.kind == ListKind::Ordered).then_some(self.start);
+        focused_control_span_for_list_view(&self.children, start, &self.metadata, ctx)
+            .map(VerticalSpan::into_tuple)
+    }
+}
+
+impl View for ListItemView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        render_layout_view(&self.children, &self.metadata, LayoutDirection::Column, ctx)
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        min_height_for_layout_view(&self.children, &self.metadata, LayoutDirection::Column, ctx)
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn children(&self) -> &[AnyView] {
+        &self.children
+    }
+    fn children_mut(&mut self) -> &mut [AnyView] {
+        &mut self.children
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        focused_control_span_for_layout_view(
+            &self.children,
+            &self.metadata,
+            LayoutDirection::Column,
+            ctx,
+        )
+        .map(VerticalSpan::into_tuple)
+    }
+}
+
+impl View for TableView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        render_table_view(&self.children, &self.metadata, ctx)
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        min_height_for_table_view(&self.children, &self.metadata, ctx)
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn children(&self) -> &[AnyView] {
+        &self.children
+    }
+    fn children_mut(&mut self) -> &mut [AnyView] {
+        &mut self.children
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+macro_rules! impl_structural_table_view {
+    ($type:ty) => {
+        impl View for $type {
+            fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+                Ok(())
+            }
+            fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
+                0
+            }
+            fn style_metadata(&self) -> Option<&StyleMetadata> {
+                Some(&self.metadata)
+            }
+            fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+                Some(&mut self.metadata)
+            }
+            fn children(&self) -> &[AnyView] {
+                &self.children
+            }
+            fn children_mut(&mut self) -> &mut [AnyView] {
+                &mut self.children
+            }
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
+        }
+    };
+}
+
+impl_structural_table_view!(TableSectionView);
+impl_structural_table_view!(TableRowView);
+
+impl View for TableCellView {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        Ok(())
+    }
+    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        0
+    }
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl View for LayoutView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        render_layout_view(&self.children, &self.metadata, self.default_direction, ctx)
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        min_height_for_layout_view(&self.children, &self.metadata, self.default_direction, ctx)
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn children(&self) -> &[AnyView] {
+        &self.children
+    }
+    fn children_mut(&mut self) -> &mut [AnyView] {
+        &mut self.children
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
-        View::__scroll_first_overflowing(self, delta)
+        if self.metadata.max_scroll_offset() > 0 && self.metadata.scroll_by(delta) {
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(|child| child.__scroll_first_overflowing(delta))
     }
 
-    /// Scrolls the first overflowing vertical layout in the view tree to the top.
-    #[doc(hidden)]
     fn __scroll_first_overflowing_to_top(&mut self) -> bool {
-        View::__scroll_first_overflowing_to_top(self)
+        if self.metadata.max_scroll_offset() > 0 && self.metadata.scroll_offset() > 0 {
+            self.metadata.set_scroll_offset(0);
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(AnyView::__scroll_first_overflowing_to_top)
     }
 
-    /// Scrolls the first overflowing vertical layout in the view tree to the bottom.
-    #[doc(hidden)]
     fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
-        View::__scroll_first_overflowing_to_bottom(self)
+        let max = self.metadata.max_scroll_offset();
+        if max > 0 && self.metadata.scroll_offset() < max {
+            self.metadata.set_scroll_offset(max);
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(AnyView::__scroll_first_overflowing_to_bottom)
     }
 
-    /// Returns whether the view tree contains an overflowing scroll target.
-    #[doc(hidden)]
     fn __has_overflowing_scroll_target(&self) -> bool {
-        View::__has_overflowing_scroll_target(self)
+        self.metadata.max_scroll_offset() > 0
+            || self
+                .children
+                .iter()
+                .any(AnyView::__has_overflowing_scroll_target)
     }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        focused_control_span_for_layout_view(
+            &self.children,
+            &self.metadata,
+            self.default_direction,
+            ctx,
+        )
+        .map(VerticalSpan::into_tuple)
+    }
+}
+
+impl View for FormView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        render_layout_view(&self.children, &self.metadata, LayoutDirection::Column, ctx)
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        min_height_for_layout_view(&self.children, &self.metadata, LayoutDirection::Column, ctx)
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn children(&self) -> &[AnyView] {
+        &self.children
+    }
+    fn children_mut(&mut self) -> &mut [AnyView] {
+        &mut self.children
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        if let Some(control) = self
+            .children
+            .iter_mut()
+            .find_map(|child| child.__handle_form_key(key))
+        {
+            return Some(control);
+        }
+        let focused = self.children.iter().find_map(AnyView::__focused_control)?;
+        handle_form_focused_key(focused, &key, &self.on_submit, &self.on_cancel)
+    }
+
+    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+        if self.metadata.max_scroll_offset() > 0 && self.metadata.scroll_by(delta) {
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(|child| child.__scroll_first_overflowing(delta))
+    }
+
+    fn __scroll_first_overflowing_to_top(&mut self) -> bool {
+        if self.metadata.max_scroll_offset() > 0 && self.metadata.scroll_offset() > 0 {
+            self.metadata.set_scroll_offset(0);
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(AnyView::__scroll_first_overflowing_to_top)
+    }
+
+    fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
+        let max = self.metadata.max_scroll_offset();
+        if max > 0 && self.metadata.scroll_offset() < max {
+            self.metadata.set_scroll_offset(max);
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(AnyView::__scroll_first_overflowing_to_bottom)
+    }
+
+    fn __has_overflowing_scroll_target(&self) -> bool {
+        self.metadata.max_scroll_offset() > 0
+            || self
+                .children
+                .iter()
+                .any(AnyView::__has_overflowing_scroll_target)
+    }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        focused_control_span_for_layout_view(
+            &self.children,
+            &self.metadata,
+            LayoutDirection::Column,
+            ctx,
+        )
+        .map(VerticalSpan::into_tuple)
+    }
+}
+
+impl View for ButtonView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let style = resolve_style(&self.metadata, ctx);
+        ctx.render_widget(
+            Paragraph::new(self.label.as_str())
+                .centered()
+                .style(style.to_ratatui_style())
+                .block(style.to_block_with_default_borders(Borders::ALL)),
+        );
+        self.metadata.clear_scroll_into_view_request();
+        Ok(())
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        let style = resolve_style(&self.metadata, ctx);
+        1u16.saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+            .saturating_add(vertical_padding_rows(style.padding))
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+    fn __focusable_count(&self) -> usize {
+        1
+    }
+
+    fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        let current = *index;
+        *index = index.saturating_add(1);
+        self.metadata.is_focused().then_some(current)
+    }
+
+    fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        let focused = *index == target;
+        self.metadata.set_focused(focused);
+        if focused {
+            self.metadata.request_scroll_into_view();
+        } else {
+            self.metadata.clear_scroll_into_view_request();
+        }
+        *index = index.saturating_add(1);
+    }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        (self.metadata.is_focused() && self.metadata.scroll_into_view_requested())
+            .then_some((0, u32::from(ctx.area().height)))
+    }
+
+    fn __activate_focused_button(&self) -> Option<AppControl> {
+        self.metadata.is_focused().then(|| {
+            self.on_press
+                .as_ref()
+                .map_or(AppControl::Continue, |action| action())
+        })
+    }
+
+    fn __focused_control(&self) -> Option<FocusedControl> {
+        self.metadata.is_focused().then_some(FocusedControl::Button)
+    }
+}
+
+impl View for EditableTextView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        render_editable_text_view(self, ctx)
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        min_height_for_editable_text_view(self, ctx)
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn reconcile(&mut self, previous: &dyn View) {
+        if let Some(previous) = previous.as_any().downcast_ref::<Self>()
+            && self.kind == previous.kind
+        {
+            self.editable_state = previous.editable_state.clone();
+        }
+    }
+
+    fn can_reconcile_from(&self, previous: &dyn View) -> bool {
+        previous
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|previous| self.kind == previous.kind)
+    }
+
+    fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        flush_expired_insert_key(
+            &self.value,
+            &self.on_input,
+            &mut self.editable_state,
+            Instant::now(),
+        )
+    }
+
+    fn __focusable_count(&self) -> usize {
+        1
+    }
+
+    fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        let current = *index;
+        *index = index.saturating_add(1);
+        self.metadata.is_focused().then_some(current)
+    }
+
+    fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        let focused = *index == target;
+        self.metadata.set_focused(focused);
+        if focused {
+            self.editable_state.set_mode(VimMode::Normal);
+            self.metadata.request_scroll_into_view();
+        } else {
+            self.metadata.clear_scroll_into_view_request();
+        }
+        *index = index.saturating_add(1);
+    }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        focused_control_span_for_editor(self, ctx).map(VerticalSpan::into_tuple)
+    }
+
+    fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        if !self.metadata.is_focused() {
+            return None;
+        }
+        let control = match self.kind {
+            EditableKind::Input => {
+                handle_input_key(&self.value, &self.on_input, &mut self.editable_state, &key)
+            }
+            EditableKind::TextArea => {
+                handle_text_area_key(&self.value, &self.on_input, &mut self.editable_state, &key)
+            }
+        };
+        if self.kind == EditableKind::TextArea
+            && matches!(control, Some(KeyControl::Handled | KeyControl::Exit))
+        {
+            self.metadata.request_scroll_into_view();
+        }
+        control
+    }
+
+    fn __focused_control(&self) -> Option<FocusedControl> {
+        if !self.metadata.is_focused() {
+            return None;
+        }
+        let insert_mode = self.editable_state.mode() == VimMode::Insert
+            && !has_active_insert_key_pending(&self.editable_state, Instant::now());
+        let visual_mode = matches!(
+            self.editable_state.mode(),
+            VimMode::Visual | VimMode::VisualLine
+        );
+        Some(match self.kind {
+            EditableKind::Input => FocusedControl::Input {
+                insert_mode,
+                visual_mode,
+            },
+            EditableKind::TextArea => FocusedControl::TextArea {
+                insert_mode,
+                visual_mode,
+            },
+        })
+    }
+}
+
+impl View for ImageView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let style = resolve_style(&self.metadata, ctx);
+        let ImageSource::Path(path) = &self.source;
+        let area = image_render_area(ctx.area(), style.image_size);
+        ctx.with_area(area, |ctx| {
+            ctx.render_terminal_image_path(path, self.alt.as_deref(), style.to_ratatui_style());
+        });
+        Ok(())
+    }
+
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        resolve_style(&self.metadata, ctx)
+            .image_size
+            .map_or(1, |size| size.height)
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl View for ProgressBarView {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        let style = resolve_style(&self.metadata, ctx);
+        let ratatui_style = style.to_ratatui_style();
+        let mut gauge = Gauge::default()
+            .ratio(clamped_progress_value(self.value))
+            .style(ratatui_style)
+            .gauge_style(ratatui_style);
+        if let Some(label) = self.label.as_deref() {
+            gauge = gauge.label(Span::styled(label, ratatui_style));
+        }
+        ctx.render_widget(gauge);
+        Ok(())
+    }
+
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// Renders a controlled input or text area.
+fn render_editable_text_view(view: &EditableTextView, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    let style = resolve_style(&view.metadata, ctx);
+    let block = style.to_block_with_default_borders(Borders::ALL);
+    let inner = block.inner(ctx.area());
+    let pending = pending_insert_render(&view.value, &view.editable_state);
+    let display_value = if let Some(pending) = pending.as_ref() {
+        pending.value.as_str()
+    } else if view.value.is_empty() {
+        view.placeholder.as_deref().unwrap_or("")
+    } else {
+        view.value.as_str()
+    };
+    ctx.render_widget(block);
+
+    match view.kind {
+        EditableKind::Input => {
+            let horizontal_scroll = if let Some(pending) = pending.as_ref() {
+                input_horizontal_scroll(
+                    &pending.value,
+                    pending.scroll_cursor,
+                    view.editable_state.horizontal_scroll(),
+                    inner.width,
+                )
+            } else if view.value.is_empty() {
+                0
+            } else {
+                input_horizontal_scroll(
+                    &view.value,
+                    view.editable_state.cursor(),
+                    view.editable_state.horizontal_scroll(),
+                    inner.width,
+                )
+            };
+            ctx.with_area(inner, |ctx| {
+                ctx.render_widget(input_paragraph(
+                    display_value,
+                    style,
+                    horizontal_scroll,
+                    pending
+                        .as_ref()
+                        .and_then(|pending| pending.selection.clone())
+                        .or_else(|| {
+                            visual_selection_range(
+                                &view.value,
+                                &view.editable_state,
+                                EditableControlKind::Input,
+                            )
+                        }),
+                ));
+                if view.metadata.is_focused() {
+                    let (value, cursor) = pending.as_ref().map_or(
+                        (view.value.as_str(), view.editable_state.cursor()),
+                        |pending| (pending.value.as_str(), pending.cursor),
+                    );
+                    set_input_cursor(value, cursor, horizontal_scroll, ctx);
+                }
+            });
+        }
+        EditableKind::TextArea => {
+            let vertical_scroll = if let Some(pending) = pending.as_ref() {
+                text_area_vertical_scroll(
+                    &pending.value,
+                    pending.scroll_cursor,
+                    view.editable_state.vertical_scroll(),
+                    inner.height,
+                    inner.width,
+                )
+            } else if view.value.is_empty() {
+                0
+            } else {
+                text_area_vertical_scroll(
+                    &view.value,
+                    view.editable_state.cursor(),
+                    view.editable_state.vertical_scroll(),
+                    inner.height,
+                    inner.width,
+                )
+            };
+            ctx.with_area(inner, |ctx| {
+                ctx.render_widget(text_area_paragraph(
+                    display_value,
+                    style,
+                    vertical_scroll,
+                    view.editable_state.horizontal_scroll(),
+                    pending
+                        .as_ref()
+                        .and_then(|pending| pending.selection.clone())
+                        .or_else(|| {
+                            visual_selection_range(
+                                &view.value,
+                                &view.editable_state,
+                                EditableControlKind::TextArea,
+                            )
+                        }),
+                ));
+                if view.metadata.is_focused() {
+                    if let Some(pending) = pending.as_ref() {
+                        set_text_area_pending_insert_cursor(
+                            &pending.value,
+                            pending.cursor,
+                            vertical_scroll,
+                            view.editable_state.horizontal_scroll(),
+                            ctx,
+                        );
+                    } else {
+                        set_text_area_cursor(
+                            &view.value,
+                            view.editable_state.cursor(),
+                            vertical_scroll,
+                            view.editable_state.horizontal_scroll(),
+                            ctx,
+                        );
+                    }
+                }
+            });
+        }
+    }
+    view.metadata.clear_scroll_into_view_request();
+    Ok(())
+}
+
+/// Returns the intrinsic height of a controlled input or text area.
+fn min_height_for_editable_text_view(view: &EditableTextView, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    let style = resolve_style(&view.metadata, ctx);
+    let border_height = vertical_border_rows(style.borders.unwrap_or(Borders::ALL));
+    let padding_height = vertical_padding_rows(style.padding);
+    if view.kind == EditableKind::Input {
+        return 1u16
+            .saturating_add(border_height)
+            .saturating_add(padding_height);
+    }
+
+    let display_value = if view.value.is_empty() {
+        view.placeholder.as_deref().unwrap_or("")
+    } else {
+        &view.value
+    };
+    let inner = style
+        .to_block_with_default_borders(Borders::ALL)
+        .inner(ctx.area());
+    line_count_height(
+        text_area_paragraph(display_value, style, 0, 0, None)
+            .line_count(inner.width)
+            .saturating_add(trailing_text_area_empty_line_rows(display_value)),
+    )
+    .max(1)
+    .saturating_add(border_height)
+    .saturating_add(padding_height)
 }
 
 /// Direction used to move focus through focusable controls.
@@ -2138,15 +1643,6 @@ enum FocusDirection {
     Forward,
     /// Move focus to the previous focusable control.
     Backward,
-}
-
-/// Absolute scroll boundary for overflowing layouts.
-#[derive(Clone, Copy)]
-enum ScrollBoundary {
-    /// First row of scrollable content.
-    Top,
-    /// Last valid scroll offset for the content.
-    Bottom,
 }
 
 /// Transient render state for an uncommitted pending insert-mode key.
@@ -4557,97 +4053,64 @@ fn scroll_span_into_view(
 }
 
 /// Returns the focused control's vertical span within a view's render area.
-fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<VerticalSpan> {
-    match view {
-        View::Button { metadata, .. } | View::Input { metadata, .. }
-            if metadata.is_focused() && metadata.scroll_into_view_requested() =>
-        {
-            Some(VerticalSpan::from_height(ctx.area().height))
-        }
-        View::TextArea {
-            value,
-            metadata,
-            editable_state,
-            ..
-        } if metadata.is_focused() && metadata.scroll_into_view_requested() => {
-            let style = resolve_style(metadata, ctx);
-            let area = ctx.area();
-            let inner = style
-                .to_block_with_default_borders(Borders::ALL)
-                .inner(area);
-            let top_offset = u32::from(inner.y.saturating_sub(area.y));
-            let cursor_row = u32::try_from(text_area_cursor_row(
-                value.as_str(),
-                editable_state.cursor(),
-                inner.width,
-            ))
-            .unwrap_or(u32::MAX);
-            let top = top_offset.saturating_add(cursor_row);
+fn focused_control_span_for_view(
+    view: &AnyView,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    view.__focused_button_span(ctx)
+        .map(|(top, bottom)| VerticalSpan { top, bottom })
+}
 
-            Some(VerticalSpan {
-                top,
-                bottom: top.saturating_add(1),
-            })
-        }
-        View::Block { child, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            let area = ctx.area();
-            let block = style.to_block_with_default_borders(Borders::ALL);
-            let inner = block.inner(area);
-            let top_offset = u32::from(inner.y.saturating_sub(area.y));
+/// Returns the focused descendant span inside a bordered block.
+fn focused_control_span_for_block(
+    view: &BlockView,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    let child = view.children.first()?;
+    let style = resolve_style(&view.metadata, ctx);
+    let area = ctx.area();
+    let inner = style
+        .to_block_with_default_borders(Borders::ALL)
+        .inner(area);
+    let top_offset = u32::from(inner.y.saturating_sub(area.y));
+    ctx.with_area_inherited_style_and_selector_ancestor(
+        inner,
+        style.inherited_values(),
+        view.metadata.clone(),
+        |ctx| focused_control_span_for_view(child, ctx),
+    )
+    .map(|span| span.offset_by(top_offset))
+}
 
-            ctx.with_area_inherited_style_and_selector_ancestor(
-                inner,
-                style.inherited_values(),
-                metadata.clone(),
-                |ctx| focused_control_span_for_view(child, ctx),
-            )
-            .map(|span| span.offset_by(top_offset))
-        }
-        View::Row { children, metadata } => {
-            focused_control_span_for_layout_view(children, metadata, LayoutDirection::Row, ctx)
-        }
-        View::Column { children, metadata } => {
-            focused_control_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
-        }
-        View::Form {
-            children, metadata, ..
-        } => focused_control_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
-        View::OrderedList {
-            items,
-            start,
-            metadata,
-        } => focused_control_span_for_list_view(items, Some(*start), metadata, ctx),
-        View::UnorderedList { items, metadata } => {
-            focused_control_span_for_list_view(items, None, metadata, ctx)
-        }
-        View::ListItem { children, metadata } => {
-            focused_control_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
-        }
-        View::Dynamic(child) => child.with_view(|child| focused_control_span_for_view(child, ctx)),
-        View::Component(component) => component
-            .focused_control_span(ctx)
-            .map(|(top, bottom)| VerticalSpan { top, bottom }),
-        View::Text { .. }
-        | View::H1 { .. }
-        | View::H2 { .. }
-        | View::H3 { .. }
-        | View::H4 { .. }
-        | View::H5 { .. }
-        | View::H6 { .. }
-        | View::Paragraph { .. }
-        | View::CodeBlock { .. }
-        | View::Button { .. }
-        | View::Input { .. }
-        | View::TextArea { .. }
-        | View::Image { .. }
-        | View::Table { .. }
-        | View::TableHead { .. }
-        | View::TableBody { .. }
-        | View::TableRow { .. }
-        | View::TableCell { .. }
-        | View::ProgressBar { .. } => None,
+/// Returns the focus visibility span for an editable text control.
+fn focused_control_span_for_editor(
+    view: &EditableTextView,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    if !view.metadata.is_focused() || !view.metadata.scroll_into_view_requested() {
+        return None;
     }
+    if view.kind == EditableKind::Input {
+        return Some(VerticalSpan::from_height(ctx.area().height));
+    }
+
+    let style = resolve_style(&view.metadata, ctx);
+    let area = ctx.area();
+    let inner = style
+        .to_block_with_default_borders(Borders::ALL)
+        .inner(area);
+    let top_offset = u32::from(inner.y.saturating_sub(area.y));
+    let cursor_row = u32::try_from(text_area_cursor_row(
+        &view.value,
+        view.editable_state.cursor(),
+        inner.width,
+    ))
+    .unwrap_or(u32::MAX);
+    let top = top_offset.saturating_add(cursor_row);
+    Some(VerticalSpan {
+        top,
+        bottom: top.saturating_add(1),
+    })
 }
 
 /// Returns the focused descendant span inside a semantic list.
@@ -4663,7 +4126,7 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
 ///
 /// An [`Option`] containing the focused descendant's vertical span.
 fn focused_control_span_for_list_view(
-    items: &[View],
+    items: &[AnyView],
     ordered_start: Option<usize>,
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
@@ -4711,18 +4174,18 @@ fn focused_control_span_for_list_view(
 ///
 /// An [`Option`] containing the focused descendant's vertical span.
 fn focused_control_span_for_list_item(
-    item: &View,
+    item: &AnyView,
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Option<VerticalSpan> {
-    if let View::ListItem { children, metadata } = item {
-        let style = resolve_style(metadata, ctx);
+    if let Some(item) = item.downcast_ref::<ListItemView>() {
+        let style = resolve_style(&item.metadata, ctx);
         let area = ctx.area();
         return ctx.with_area_inherited_style_and_selector_ancestor(
             area,
             style.inherited_values(),
-            metadata.clone(),
-            |ctx| focused_control_span_for_list_item_children(children, marker_width, ctx),
+            item.metadata.clone(),
+            |ctx| focused_control_span_for_list_item_children(&item.children, marker_width, ctx),
         );
     }
 
@@ -4741,7 +4204,7 @@ fn focused_control_span_for_list_item(
 ///
 /// An [`Option`] containing the focused descendant's vertical span.
 fn focused_control_span_for_list_item_children(
-    children: &[View],
+    children: &[AnyView],
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Option<VerticalSpan> {
@@ -4751,7 +4214,7 @@ fn focused_control_span_for_list_item_children(
     for child in children {
         let indent = list_item_child_indent(child, marker_width);
         let child_base = horizontal_inset(area, indent);
-        let child_height = ctx.with_area(child_base, |ctx| min_height_for_view(child, ctx));
+        let child_height = ctx.with_area(child_base, |ctx| child.__min_height(ctx));
         let child_area = Rect {
             height: child_height,
             ..child_base
@@ -4770,7 +4233,7 @@ fn focused_control_span_for_list_item_children(
 
 /// Returns the focused control's vertical span inside a layout view.
 fn focused_control_span_for_layout_view(
-    children: &[View],
+    children: &[AnyView],
     metadata: &StyleMetadata,
     default_direction: LayoutDirection,
     ctx: &mut RenderCtx<'_, '_>,
@@ -4801,7 +4264,7 @@ fn focused_control_span_for_layout_view(
 
 /// Returns the focused control's vertical span inside row children.
 fn focused_control_span_in_row_children(
-    children: &[View],
+    children: &[AnyView],
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
@@ -4824,7 +4287,7 @@ fn focused_control_span_in_row_children(
 
 /// Returns the focused control's vertical span inside column children.
 fn focused_control_span_in_column_children(
-    children: &[View],
+    children: &[AnyView],
     min_heights: &[u16],
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
@@ -4877,7 +4340,7 @@ fn focused_control_span_in_column_children(
 /// Returns [`crate::app::Error::Io`] if child rendering performs terminal I/O
 /// that fails.
 fn render_list_view(
-    items: &[View],
+    items: &[AnyView],
     ordered_start: Option<usize>,
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
@@ -4961,22 +4424,22 @@ fn list_markers(item_count: usize, ordered_start: Option<usize>) -> (Vec<String>
 /// Returns [`crate::app::Error::Io`] if child rendering performs terminal I/O
 /// that fails.
 fn render_marked_list_item(
-    item: &View,
+    item: &AnyView,
     marker: &str,
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
-    if let View::ListItem { children, metadata } = item {
-        let style = resolve_style(metadata, ctx);
+    if let Some(item) = item.downcast_ref::<ListItemView>() {
+        let style = resolve_style(&item.metadata, ctx);
         ctx.render_widget(Block::new().style(style.to_ratatui_style()));
         let area = ctx.area();
         return ctx.with_area_inherited_style_and_selector_ancestor(
             area,
             style.inherited_values(),
-            metadata.clone(),
+            item.metadata.clone(),
             |ctx| {
                 render_list_item_marker(marker, marker_width, style, ctx);
-                render_list_item_children(children, marker_width, ctx)
+                render_list_item_children(&item.children, marker_width, ctx)
             },
         );
     }
@@ -5035,7 +4498,7 @@ fn render_list_item_marker(
 /// Returns [`crate::app::Error::Io`] if child rendering performs terminal I/O
 /// that fails.
 fn render_list_item_children(
-    children: &[View],
+    children: &[AnyView],
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
@@ -5052,7 +4515,7 @@ fn render_list_item_children(
         let indent = list_item_child_indent(child, marker_width);
         let child_base = horizontal_inset(Rect { y, ..area }, indent);
         let height = ctx
-            .with_area(child_base, |ctx| min_height_for_view(child, ctx))
+            .with_area(child_base, |ctx| child.__min_height(ctx))
             .min(remaining);
         if height == 0 {
             continue;
@@ -5080,15 +4543,15 @@ fn render_list_item_children(
 /// # Returns
 ///
 /// A [`u16`] height including a marker-only row for empty items.
-fn min_height_for_list_item(item: &View, marker_width: u16, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-    if let View::ListItem { children, metadata } = item {
-        let style = resolve_style(metadata, ctx);
+fn min_height_for_list_item(item: &AnyView, marker_width: u16, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    if let Some(item) = item.downcast_ref::<ListItemView>() {
+        let style = resolve_style(&item.metadata, ctx);
         let area = ctx.area();
         return ctx.with_area_inherited_style_and_selector_ancestor(
             area,
             style.inherited_values(),
-            metadata.clone(),
-            |ctx| min_height_for_list_item_children(children, marker_width, ctx),
+            item.metadata.clone(),
+            |ctx| min_height_for_list_item_children(&item.children, marker_width, ctx),
         );
     }
 
@@ -5108,7 +4571,7 @@ fn min_height_for_list_item(item: &View, marker_width: u16, ctx: &mut RenderCtx<
 ///
 /// A [`u16`] sum of all item heights.
 fn min_height_for_list_view(
-    items: &[View],
+    items: &[AnyView],
     ordered_start: Option<usize>,
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
@@ -5142,7 +4605,7 @@ fn min_height_for_list_view(
 ///
 /// A [`u16`] height of at least one row for the item marker.
 fn min_height_for_list_item_children(
-    children: &[View],
+    children: &[AnyView],
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> u16 {
@@ -5152,7 +4615,7 @@ fn min_height_for_list_item_children(
         .map(|child| {
             let indent = list_item_child_indent(child, marker_width);
             let child_area = horizontal_inset(area, indent);
-            ctx.with_area(child_area, |ctx| min_height_for_view(child, ctx))
+            ctx.with_area(child_area, |ctx| child.__min_height(ctx))
         })
         .fold(0, u16::saturating_add)
         .max(1)
@@ -5168,8 +4631,8 @@ fn min_height_for_list_item_children(
 /// # Returns
 ///
 /// A [`u16`] indentation in terminal cells.
-fn list_item_child_indent(child: &View, marker_width: u16) -> u16 {
-    if matches!(child, View::OrderedList { .. } | View::UnorderedList { .. }) {
+fn list_item_child_indent(child: &AnyView, marker_width: u16) -> u16 {
+    if child.is::<ListView>() {
         LIST_NEST_INDENT
     } else {
         marker_width.saturating_add(1)
@@ -5213,7 +4676,7 @@ fn horizontal_inset(area: Rect, indent: u16) -> Rect {
 /// Returns [`crate::app::Error::Io`] if child rendering performs terminal I/O
 /// that fails.
 fn render_layout_view(
-    children: &[View],
+    children: &[AnyView],
     metadata: &StyleMetadata,
     default_direction: LayoutDirection,
     ctx: &mut RenderCtx<'_, '_>,
@@ -5249,7 +4712,7 @@ fn render_layout_view(
 /// Returns [`crate::app::Error::Io`] if child rendering performs terminal I/O
 /// that fails.
 fn render_children(
-    children: &[View],
+    children: &[AnyView],
     direction: LayoutDirection,
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
@@ -5288,7 +4751,7 @@ fn render_children(
 
 /// Renders a vertically overflowing column when the children exceed the viewport.
 fn try_render_overflowing_column_children(
-    children: &[View],
+    children: &[AnyView],
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
@@ -5374,7 +4837,7 @@ fn render_column_scrollbar(
 
 /// Renders a vertically overflowing column from a child scroll offset.
 fn render_scrolled_column_children(
-    children: &[View],
+    children: &[AnyView],
     min_heights: &[u16],
     row_offset: u16,
     inherited_style: TuiStyle,
@@ -5442,7 +4905,7 @@ fn render_scrolled_column_children(
 
 /// Returns constraints for child layout.
 fn child_constraints(
-    children: &[View],
+    children: &[AnyView],
     direction: LayoutDirection,
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
@@ -5465,7 +4928,7 @@ fn trailing_text_area_empty_line_rows(value: &str) -> usize {
 
 /// Returns minimum render heights for child views in a parent selector scope.
 fn child_min_heights(
-    children: &[View],
+    children: &[AnyView],
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
@@ -5478,7 +4941,7 @@ fn child_min_heights(
         |ctx| {
             children
                 .iter()
-                .map(|child| min_height_for_view(child, ctx))
+                .map(|child| child.__min_height(ctx))
                 .collect()
         },
     )
@@ -5486,7 +4949,7 @@ fn child_min_heights(
 
 /// Returns child minimum heights after applying row split widths.
 fn row_child_min_heights(
-    children: &[View],
+    children: &[AnyView],
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
@@ -5503,130 +4966,15 @@ fn row_child_min_heights(
             children
                 .iter()
                 .zip(areas.iter())
-                .map(|(child, area)| ctx.with_area(*area, |ctx| min_height_for_view(child, ctx)))
+                .map(|(child, area)| ctx.with_area(*area, |ctx| child.__min_height(ctx)))
                 .collect()
         },
     )
 }
 
-/// Returns the minimum useful render height for a view.
-fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-    match view {
-        View::Text { content, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            line_count_height(text_paragraph(content.as_str(), style).line_count(ctx.area().width))
-        }
-        View::H1 { content, metadata }
-        | View::H2 { content, metadata }
-        | View::H3 { content, metadata }
-        | View::H4 { content, metadata }
-        | View::H5 { content, metadata }
-        | View::H6 { content, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            heading_min_height(content, style, heading_level(view), ctx.area().width)
-        }
-        View::Paragraph { content, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            line_count_height(semantic_paragraph(content, style).line_count(ctx.area().width))
-        }
-        View::CodeBlock {
-            line_numbers,
-            highlighted_lines,
-            metadata,
-            ..
-        } => {
-            let style = resolve_style(metadata, ctx);
-            let (_, required_height) =
-                code_block_layout(highlighted_lines, *line_numbers, style, ctx.area());
-            required_height
-        }
-        View::OrderedList {
-            items,
-            start,
-            metadata,
-        } => min_height_for_list_view(items, Some(*start), metadata, ctx),
-        View::UnorderedList { items, metadata } => {
-            min_height_for_list_view(items, None, metadata, ctx)
-        }
-        View::ListItem { children, metadata } => {
-            min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
-        }
-        View::Table { sections, metadata } => min_height_for_table_view(sections, metadata, ctx),
-        View::TableHead { .. }
-        | View::TableBody { .. }
-        | View::TableRow { .. }
-        | View::TableCell { .. } => 0,
-        View::Dynamic(child) => child.with_view(|child| min_height_for_view(child, ctx)),
-        View::Button { metadata, .. } => {
-            let style = resolve_style(metadata, ctx);
-            1 + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
-                + vertical_padding_rows(style.padding)
-        }
-        View::Input { metadata, .. } => {
-            let style = resolve_style(metadata, ctx);
-            1 + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
-                + vertical_padding_rows(style.padding)
-        }
-        View::TextArea {
-            value,
-            placeholder,
-            metadata,
-            ..
-        } => {
-            let style = resolve_style(metadata, ctx);
-            let display_value = if value.is_empty() {
-                placeholder.as_deref().unwrap_or("")
-            } else {
-                value.as_str()
-            };
-            let block = style.to_block_with_default_borders(Borders::ALL);
-            let inner = block.inner(ctx.area());
-            let content_height = line_count_height(
-                text_area_paragraph(display_value, style, 0, 0, None)
-                    .line_count(inner.width)
-                    .saturating_add(trailing_text_area_empty_line_rows(display_value)),
-            )
-            .max(1);
-
-            content_height
-                + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
-                + vertical_padding_rows(style.padding)
-        }
-        View::Block { child, metadata } => {
-            let style = resolve_style(metadata, ctx);
-            let area = ctx.area();
-            let child_height = ctx.with_area_inherited_style_and_selector_ancestor(
-                area,
-                style.inherited_values(),
-                metadata.clone(),
-                |ctx| min_height_for_view(child, ctx),
-            );
-
-            child_height
-                + vertical_border_rows(style.borders.unwrap_or(Borders::ALL))
-                + vertical_padding_rows(style.padding)
-        }
-        View::Row { children, metadata } => {
-            min_height_for_layout_view(children, metadata, LayoutDirection::Row, ctx)
-        }
-        View::Column { children, metadata } => {
-            min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
-        }
-        View::Form {
-            children, metadata, ..
-        } => min_height_for_layout_view(children, metadata, LayoutDirection::Column, ctx),
-        View::Image { metadata, .. } => {
-            let style = resolve_style(metadata, ctx);
-            style.image_size.map_or(1, |size| size.height)
-        }
-        View::ProgressBar { .. } => 1,
-        View::Component(component) => component.min_height(ctx),
-    }
-}
-
 /// Returns minimum height for a layout view after resolving its direction.
 fn min_height_for_layout_view(
-    children: &[View],
+    children: &[AnyView],
     metadata: &StyleMetadata,
     default_direction: LayoutDirection,
     ctx: &mut RenderCtx<'_, '_>,
@@ -5660,68 +5008,4 @@ fn vertical_border_rows(borders: Borders) -> u16 {
 /// Returns how many vertical rows the configured padding consumes.
 fn vertical_padding_rows(padding: Option<crate::TuiSpacing>) -> u16 {
     padding.map_or(0, |padding| padding.top.saturating_add(padding.bottom))
-}
-
-/// Dispatches an event through child views until one requests exit.
-///
-/// # Arguments
-///
-/// * `children` — Child views to visit in order.
-/// * `event` — Event to dispatch to each child.
-///
-/// # Returns
-///
-/// An [`AppControl`] value requesting exit when any child exits, otherwise
-/// continue.
-///
-/// # Errors
-///
-/// Returns [`crate::app::Error::Io`] if child event handling performs terminal
-/// I/O that fails.
-fn handle_child_events(children: &mut [View], event: &Event) -> Result<AppControl> {
-    for child in children {
-        if child.dispatch_event_ref(event)? == AppControl::Exit {
-            return Ok(AppControl::Exit);
-        }
-    }
-
-    Ok(AppControl::Continue)
-}
-
-/// Dispatches a key event through child views until one handles it.
-///
-/// # Arguments
-///
-/// * `children` — Child views to visit in order.
-/// * `key` — Key event to dispatch to each child.
-///
-/// # Returns
-///
-/// A [`KeyControl`] value from the first child that handles the key, otherwise
-/// [`KeyControl::Pass`].
-///
-/// # Errors
-///
-/// Returns [`crate::app::Error::Io`] if child event handling performs terminal
-/// I/O that fails.
-fn handle_child_key_events(children: &mut [View], key: &KeyEvent) -> Result<KeyControl> {
-    for child in children {
-        let control = child.dispatch_key_event_ref(key)?;
-        if control != KeyControl::Pass {
-            return Ok(control);
-        }
-    }
-
-    Ok(KeyControl::Pass)
-}
-
-/// Emits the first expired pending insert-mode key in child views.
-fn flush_child_pending_input(children: &mut [View], now: Instant) -> Option<AppControl> {
-    for child in children {
-        if let Some(control) = child.flush_pending_input_at(now) {
-            return Some(control);
-        }
-    }
-
-    None
 }

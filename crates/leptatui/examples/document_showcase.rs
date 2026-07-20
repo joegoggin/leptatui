@@ -11,9 +11,9 @@ use leptatui::prelude::*;
 ///
 /// A [`View`] containing every semantic document component.
 #[component]
-fn DocumentShowcase() -> View {
+fn DocumentShowcase() -> impl IntoView {
     let source = String::from(
-        "#[component]\nfn Greeting() -> View {\n    view! { <Paragraph>\"Hello, terminal!\"</Paragraph> }\n}",
+        "#[component]\nfn Greeting() -> impl IntoView {\n    view! { <Paragraph>\"Hello, terminal!\"</Paragraph> }\n}",
     );
 
     use_key_event(KeyEventKind::Press, |key| {

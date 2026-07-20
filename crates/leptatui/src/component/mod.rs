@@ -1,4 +1,4 @@
-//! Component rendering contract.
+//! Component construction support and rendering context.
 //!
 //! Components render into a [`RenderCtx`], which wraps a Ratatui frame and the
 //! rectangular area currently assigned to the component.
@@ -10,7 +10,6 @@ mod model;
 mod stylesheet;
 
 pub use children::{Children, ChildrenFn, ChildrenMut};
-pub use contract::Component;
 #[doc(hidden)]
 pub use contract::FocusedControl;
 #[doc(hidden)]

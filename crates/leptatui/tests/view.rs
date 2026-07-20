@@ -13,12 +13,13 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     __private::FocusedControl,
-    AppControl, AppRoot, Borders, CellAlignment, Color, Component, EditableState, ImageSource,
-    KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations,
-    StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme, TuiSize, TuiSpacing, TuiStyle, View,
-    ViewType, VimMode, block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4,
-    h5, h6, image, input, list_item, ordered_list, paragraph, progress_bar, row, table, table_body,
-    table_cell, table_head, table_row, text, text_area, unordered_list,
+    AnyView, AppControl, Borders, ButtonView, CellAlignment, Color, EditableKind, EditableState,
+    EditableTextView, FormView, ImageSource, IntoView, KeyControl, LayoutDirection, ListItemView,
+    MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations, StyleMetadata, StyleSelector,
+    Stylesheet, SyntaxTheme, TableCellView, TableRowView, TableSectionView, TuiSize, TuiSpacing,
+    TuiStyle, View, ViewType, VimMode, block, button, code_block, column, component, dynamic, form,
+    h1, h2, h3, h4, h5, h6, image, input, list_item, ordered_list, paragraph, progress_bar, row,
+    table, table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{
@@ -54,41 +55,15 @@ fn key(code: KeyCode) -> Event {
 /// # Returns
 ///
 /// A [`Vec<bool>`] containing focus state for each button.
-fn button_focuses(view: &View) -> Vec<bool> {
-    match view {
-        View::Button { metadata, .. } => vec![metadata.is_focused()],
-        View::Block { child, .. } => button_focuses(child),
-        View::Row { children, .. }
-        | View::Column { children, .. }
-        | View::Form { children, .. }
-        | View::OrderedList {
-            items: children, ..
-        }
-        | View::UnorderedList {
-            items: children, ..
-        }
-        | View::ListItem { children, .. } => children.iter().flat_map(button_focuses).collect(),
-        View::Text { .. }
-        | View::H1 { .. }
-        | View::H2 { .. }
-        | View::H3 { .. }
-        | View::H4 { .. }
-        | View::H5 { .. }
-        | View::H6 { .. }
-        | View::Paragraph { .. }
-        | View::CodeBlock { .. }
-        | View::Table { .. }
-        | View::TableHead { .. }
-        | View::TableBody { .. }
-        | View::TableRow { .. }
-        | View::TableCell { .. }
-        | View::Input { .. }
-        | View::TextArea { .. }
-        | View::Image { .. }
-        | View::ProgressBar { .. }
-        | View::Dynamic(_)
-        | View::Component(_) => Vec::new(),
+fn button_focuses(view: &dyn View) -> Vec<bool> {
+    if let Some(button) = view.as_any().downcast_ref::<ButtonView>() {
+        return vec![button.metadata().is_focused()];
     }
+
+    view.children()
+        .iter()
+        .flat_map(|child| button_focuses(child.as_view()))
+        .collect()
 }
 
 /// Returns flattened focus states for all focusable controls in a view tree.
@@ -100,41 +75,18 @@ fn button_focuses(view: &View) -> Vec<bool> {
 /// # Returns
 ///
 /// A [`Vec<bool>`] containing focus state for each focusable control.
-fn control_focuses(view: &View) -> Vec<bool> {
-    match view {
-        View::Button { metadata, .. }
-        | View::Input { metadata, .. }
-        | View::TextArea { metadata, .. } => vec![metadata.is_focused()],
-        View::Block { child, .. } => control_focuses(child),
-        View::Row { children, .. }
-        | View::Column { children, .. }
-        | View::Form { children, .. }
-        | View::OrderedList {
-            items: children, ..
-        }
-        | View::UnorderedList {
-            items: children, ..
-        }
-        | View::ListItem { children, .. } => children.iter().flat_map(control_focuses).collect(),
-        View::Text { .. }
-        | View::H1 { .. }
-        | View::H2 { .. }
-        | View::H3 { .. }
-        | View::H4 { .. }
-        | View::H5 { .. }
-        | View::H6 { .. }
-        | View::Paragraph { .. }
-        | View::CodeBlock { .. }
-        | View::Table { .. }
-        | View::TableHead { .. }
-        | View::TableBody { .. }
-        | View::TableRow { .. }
-        | View::TableCell { .. }
-        | View::Image { .. }
-        | View::ProgressBar { .. }
-        | View::Dynamic(_)
-        | View::Component(_) => Vec::new(),
+fn control_focuses(view: &dyn View) -> Vec<bool> {
+    if let Some(button) = view.as_any().downcast_ref::<ButtonView>() {
+        return vec![button.metadata().is_focused()];
     }
+    if let Some(editor) = view.as_any().downcast_ref::<EditableTextView>() {
+        return vec![editor.metadata().is_focused()];
+    }
+
+    view.children()
+        .iter()
+        .flat_map(|child| control_focuses(child.as_view()))
+        .collect()
 }
 
 /// Creates an editable input test view.
@@ -146,7 +98,7 @@ fn control_focuses(view: &View) -> Vec<bool> {
 /// # Returns
 ///
 /// A [`View`] containing an input with fresh editable state.
-fn editable_input(value: impl Into<String>) -> View {
+fn editable_input(value: impl Into<String>) -> EditableTextView {
     input(value)
 }
 
@@ -159,7 +111,7 @@ fn editable_input(value: impl Into<String>) -> View {
 /// # Returns
 ///
 /// A [`View`] containing a text area with fresh editable state.
-fn editable_text_area(value: impl Into<String>) -> View {
+fn editable_text_area(value: impl Into<String>) -> EditableTextView {
     text_area(value)
 }
 
@@ -193,13 +145,11 @@ fn editable_state_fixture() -> EditableState {
 /// # Returns
 ///
 /// An [`EditableState`] reference retained by the view.
-fn editable_state(view: &View) -> &EditableState {
-    match view {
-        View::Input { editable_state, .. } | View::TextArea { editable_state, .. } => {
-            editable_state
-        }
-        other => panic!("expected editable view, got {other:?}"),
-    }
+fn editable_state(view: &dyn View) -> &EditableState {
+    view.as_any()
+        .downcast_ref::<EditableTextView>()
+        .expect("expected editable view")
+        .editable_state()
 }
 
 /// Returns mutable editable state stored by an editable test view.
@@ -213,13 +163,11 @@ fn editable_state(view: &View) -> &EditableState {
 /// # Returns
 ///
 /// An [`EditableState`] reference retained by the view.
-fn editable_state_mut(view: &mut View) -> &mut EditableState {
-    match view {
-        View::Input { editable_state, .. } | View::TextArea { editable_state, .. } => {
-            editable_state
-        }
-        other => panic!("expected editable view, got {other:?}"),
-    }
+fn editable_state_mut(view: &mut dyn View) -> &mut EditableState {
+    view.as_any_mut()
+        .downcast_mut::<EditableTextView>()
+        .expect("expected editable view")
+        .editable_state_mut()
 }
 
 /// Returns an unmodified key event for a test key code.
@@ -267,7 +215,10 @@ fn ctrl_enter_key_event() -> KeyEvent {
 /// # Returns
 ///
 /// A focused insert-mode [`View`] configured as an input.
-fn emitting_input(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) -> View {
+fn emitting_input(
+    value: impl Into<String>,
+    emitted: &Rc<RefCell<Vec<String>>>,
+) -> EditableTextView {
     let emitted_for_input = Rc::clone(emitted);
     let mut view = input(value).with_focus(true).on_input(move |next| {
         emitted_for_input.borrow_mut().push(next);
@@ -287,7 +238,10 @@ fn emitting_input(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) 
 /// # Returns
 ///
 /// A focused insert-mode [`View`] configured as a text area.
-fn emitting_text_area(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) -> View {
+fn emitting_text_area(
+    value: impl Into<String>,
+    emitted: &Rc<RefCell<Vec<String>>>,
+) -> EditableTextView {
     let emitted_for_text_area = Rc::clone(emitted);
     let mut view = text_area(value).with_focus(true).on_input(move |next| {
         emitted_for_text_area.borrow_mut().push(next);
@@ -309,10 +263,10 @@ fn emitting_text_area(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>
 ///
 /// A [`View`] containing the reconciled input.
 fn reconcile_input_value(
-    previous: &View,
+    previous: &EditableTextView,
     value: impl Into<String>,
     emitted: &Rc<RefCell<Vec<String>>>,
-) -> View {
+) -> EditableTextView {
     let mut next = emitting_input(value, emitted);
     leptatui::__private::__reconcile_view(&mut next, previous);
     next
@@ -331,10 +285,10 @@ fn reconcile_input_value(
 ///
 /// A [`View`] containing the reconciled text area.
 fn reconcile_text_area_value(
-    previous: &View,
+    previous: &EditableTextView,
     value: impl Into<String>,
     emitted: &Rc<RefCell<Vec<String>>>,
-) -> View {
+) -> EditableTextView {
     let mut next = emitting_text_area(value, emitted);
     leptatui::__private::__reconcile_view(&mut next, previous);
     next
@@ -357,7 +311,7 @@ fn controlled_form_view(
     notes: &Rc<RefCell<String>>,
     submits: &Rc<Cell<usize>>,
     cancels: &Rc<Cell<usize>>,
-) -> View {
+) -> FormView {
     let name_value = name.borrow().clone();
     let notes_value = notes.borrow().clone();
     let name_for_input = Rc::clone(name);
@@ -365,7 +319,7 @@ fn controlled_form_view(
     let submits_for_form = Rc::clone(submits);
     let cancels_for_form = Rc::clone(cancels);
 
-    form([
+    form((
         input(name_value).placeholder("Name").on_input(move |next| {
             *name_for_input.borrow_mut() = next;
             AppControl::Continue
@@ -377,7 +331,7 @@ fn controlled_form_view(
                 AppControl::Continue
             }),
         button("Submit"),
-    ])
+    ))
     .on_submit(move || {
         submits_for_form.set(submits_for_form.get() + 1);
         AppControl::Continue
@@ -402,12 +356,12 @@ fn controlled_form_view(
 ///
 /// A [`View`] containing the next controlled form with retained editable state.
 fn reconcile_controlled_form(
-    previous: &View,
+    previous: &FormView,
     name: &Rc<RefCell<String>>,
     notes: &Rc<RefCell<String>>,
     submits: &Rc<Cell<usize>>,
     cancels: &Rc<Cell<usize>>,
-) -> View {
+) -> FormView {
     let mut next = controlled_form_view(name, notes, submits, cancels);
     leptatui::__private::__reconcile_view(&mut next, previous);
     next
@@ -423,11 +377,8 @@ fn reconcile_controlled_form(
 /// # Returns
 ///
 /// A [`View`] reference for the requested form child.
-fn form_child(view: &View, index: usize) -> &View {
-    match view {
-        View::Form { children, .. } => &children[index],
-        other => panic!("expected form view, got {other:?}"),
-    }
+fn form_child(view: &FormView, index: usize) -> &dyn View {
+    view.children()[index].as_view()
 }
 
 /// Returns the controlled value from an input view.
@@ -439,11 +390,13 @@ fn form_child(view: &View, index: usize) -> &View {
 /// # Returns
 ///
 /// A string slice containing the input's controlled value.
-fn input_value(view: &View) -> &str {
-    match view {
-        View::Input { value, .. } => value,
-        other => panic!("expected input view, got {other:?}"),
-    }
+fn input_value(view: &dyn View) -> &str {
+    let editor = view
+        .as_any()
+        .downcast_ref::<EditableTextView>()
+        .expect("expected input view");
+    assert_eq!(editor.kind(), EditableKind::Input);
+    editor.value()
 }
 
 /// Returns the controlled value from a text-area view.
@@ -455,11 +408,13 @@ fn input_value(view: &View) -> &str {
 /// # Returns
 ///
 /// A string slice containing the text area's controlled value.
-fn text_area_value(view: &View) -> &str {
-    match view {
-        View::TextArea { value, .. } => value,
-        other => panic!("expected text-area view, got {other:?}"),
-    }
+fn text_area_value(view: &dyn View) -> &str {
+    let editor = view
+        .as_any()
+        .downcast_ref::<EditableTextView>()
+        .expect("expected text-area view");
+    assert_eq!(editor.kind(), EditableKind::TextArea);
+    editor.value()
 }
 
 /// Returns the scroll offset from a layout view.
@@ -471,13 +426,10 @@ fn text_area_value(view: &View) -> &str {
 /// # Returns
 ///
 /// A [`u16`] containing the current vertical scroll offset.
-fn scroll_offset(view: &View) -> u16 {
-    match view {
-        View::Row { metadata, .. }
-        | View::Column { metadata, .. }
-        | View::Form { metadata, .. } => metadata.scroll_offset(),
-        other => panic!("expected layout view, got {other:?}"),
-    }
+fn scroll_offset(view: &dyn View) -> u16 {
+    view.style_metadata()
+        .expect("expected styleable layout view")
+        .scroll_offset()
 }
 
 /// Returns the position of a rendered terminal cell symbol.
@@ -724,32 +676,24 @@ fn semantic_text_builders_store_rich_text_and_metadata() {
         Span::raw("Guide"),
         Span::styled("!", Style::new().fg(Color::Yellow)),
     ]));
-    let views = [
+    let headings = [
         (h1(content.clone()), ViewType::H1),
         (h2(content.clone()), ViewType::H2),
         (h3(content.clone()), ViewType::H3),
         (h4(content.clone()), ViewType::H4),
         (h5(content.clone()), ViewType::H5),
         (h6(content.clone()), ViewType::H6),
-        (paragraph(content.clone()), ViewType::Paragraph),
     ];
 
-    for (view, expected_type) in views {
-        let (actual_type, actual_content, metadata) = match &view {
-            View::H1 { content, metadata } => (ViewType::H1, content, metadata),
-            View::H2 { content, metadata } => (ViewType::H2, content, metadata),
-            View::H3 { content, metadata } => (ViewType::H3, content, metadata),
-            View::H4 { content, metadata } => (ViewType::H4, content, metadata),
-            View::H5 { content, metadata } => (ViewType::H5, content, metadata),
-            View::H6 { content, metadata } => (ViewType::H6, content, metadata),
-            View::Paragraph { content, metadata } => (ViewType::Paragraph, content, metadata),
-            other => panic!("expected semantic text view, got {other:?}"),
-        };
-
-        assert_eq!(actual_type, expected_type);
-        assert_eq!(actual_content, &content);
-        assert_eq!(metadata.view_type(), expected_type);
+    for (view, expected_type) in headings {
+        assert_eq!(view.level().view_type(), expected_type);
+        assert_eq!(view.content(), &content);
+        assert_eq!(view.metadata().view_type(), expected_type);
     }
+
+    let paragraph = paragraph(content.clone());
+    assert_eq!(paragraph.content(), &content);
+    assert_eq!(paragraph.metadata().view_type(), ViewType::Paragraph);
 }
 
 /// Verifies semantic text views render their documented hierarchy and modifiers.
@@ -1085,7 +1029,7 @@ fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
 /// - The following text view renders after both paragraph rows.
 #[test]
 fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()> {
-    let view = column([paragraph("界界界"), text("End")]);
+    let view = column((paragraph("界界界"), text("End")));
     let mut terminal = Terminal::new(TestBackend::new(4, 3))?;
 
     draw_view(&mut terminal, &view)?;
@@ -1148,30 +1092,19 @@ fn semantic_text_clips_overflow_and_handles_zero_width_splits() -> Result<()> {
 /// - List items retain block children and list-item type.
 #[test]
 fn semantic_list_builders_store_items_starts_and_metadata() {
-    let ordered = ordered_list([list_item([])]).start(3);
-    let View::OrderedList {
-        items,
-        start,
-        metadata,
-    } = &ordered
-    else {
-        panic!("expected ordered-list view, got {ordered:?}");
-    };
-    assert_eq!(*start, 3);
-    assert_eq!(metadata.view_type(), ViewType::OrderedList);
-    assert_eq!(items.len(), 1);
-    let View::ListItem { children, metadata } = &items[0] else {
-        panic!("expected list-item view, got {:?}", items[0]);
-    };
-    assert!(children.is_empty());
-    assert_eq!(metadata.view_type(), ViewType::ListItem);
+    let ordered = ordered_list([list_item(())]).start(3);
+    assert_eq!(ordered.start_value(), 3);
+    assert_eq!(ordered.metadata().view_type(), ViewType::OrderedList);
+    assert_eq!(ordered.children().len(), 1);
+    let item = ordered.children()[0]
+        .downcast_ref::<ListItemView>()
+        .expect("expected list-item view");
+    assert!(item.children().is_empty());
+    assert_eq!(item.metadata().view_type(), ViewType::ListItem);
 
     let unordered = unordered_list([list_item([paragraph("Body")])]);
-    let View::UnorderedList { items, metadata } = &unordered else {
-        panic!("expected unordered-list view, got {unordered:?}");
-    };
-    assert_eq!(metadata.view_type(), ViewType::UnorderedList);
-    assert_eq!(items.len(), 1);
+    assert_eq!(unordered.metadata().view_type(), ViewType::UnorderedList);
+    assert_eq!(unordered.children().len(), 1);
 }
 
 /// Verifies semantic table builders store structure, rich text, and alignment.
@@ -1195,41 +1128,27 @@ fn semantic_table_builders_store_structure_content_and_alignment() {
         Span::styled("me", Style::new().fg(Color::Yellow)),
     ]));
     let view = table([table_head([table_row([table_cell(rich.clone())])])]);
-    let View::Table { sections, metadata } = &view else {
-        panic!("expected table view, got {view:?}");
-    };
-    assert_eq!(metadata.view_type(), ViewType::Table);
-    let View::TableHead { rows, metadata } = &sections[0] else {
-        panic!("expected table-head view, got {:?}", sections[0]);
-    };
-    assert_eq!(metadata.view_type(), ViewType::TableHead);
-    let View::TableRow { cells, metadata } = &rows[0] else {
-        panic!("expected table-row view, got {:?}", rows[0]);
-    };
-    assert_eq!(metadata.view_type(), ViewType::TableRow);
-    let View::TableCell {
-        content,
-        alignment,
-        metadata,
-    } = &cells[0]
-    else {
-        panic!("expected table-cell view, got {:?}", cells[0]);
-    };
-    assert_eq!(content, &rich);
-    assert_eq!(*alignment, CellAlignment::Left);
-    assert_eq!(metadata.view_type(), ViewType::TableCell);
+    assert_eq!(view.metadata().view_type(), ViewType::Table);
+    let head = view.children()[0]
+        .downcast_ref::<TableSectionView>()
+        .expect("expected table-head view");
+    assert_eq!(head.metadata().view_type(), ViewType::TableHead);
+    let row = head.children()[0]
+        .downcast_ref::<TableRowView>()
+        .expect("expected table-row view");
+    assert_eq!(row.metadata().view_type(), ViewType::TableRow);
+    let cell = row.children()[0]
+        .downcast_ref::<TableCellView>()
+        .expect("expected table-cell view");
+    assert_eq!(cell.content(), &rich);
+    assert_eq!(cell.cell_alignment(), CellAlignment::Left);
+    assert_eq!(cell.metadata().view_type(), ViewType::TableCell);
 
     let aligned = table_cell("Ready").alignment(CellAlignment::Right);
-    let View::TableCell { alignment, .. } = aligned else {
-        panic!("expected aligned table cell");
-    };
-    assert_eq!(alignment, CellAlignment::Right);
+    assert_eq!(aligned.cell_alignment(), CellAlignment::Right);
 
-    let body = table_body([]);
-    let View::TableBody { metadata, .. } = body else {
-        panic!("expected table-body view");
-    };
-    assert_eq!(metadata.view_type(), ViewType::TableBody);
+    let body = table_body(());
+    assert_eq!(body.metadata().view_type(), ViewType::TableBody);
 }
 
 /// Verifies code-block builders retain source, highlighting, and display options.
@@ -1252,43 +1171,24 @@ fn semantic_table_builders_store_structure_content_and_alignment() {
 #[test]
 fn code_block_builder_retains_highlighted_lines_and_options() {
     let default = code_block("fn main() {}");
-    let View::CodeBlock {
-        line_numbers,
-        syntax_theme,
-        ..
-    } = default
-    else {
-        panic!("expected code-block view");
-    };
-    assert!(!line_numbers);
-    assert_eq!(syntax_theme, SyntaxTheme::Dark);
+    assert!(!default.has_line_numbers());
+    assert_eq!(default.selected_syntax_theme(), SyntaxTheme::Dark);
 
     let configured = code_block("fn main() {}")
         .language("rs")
         .line_numbers(true)
         .syntax_theme(SyntaxTheme::Light);
-    let View::CodeBlock {
-        source,
-        language,
-        line_numbers,
-        syntax_theme,
-        highlighted_lines,
-        metadata,
-    } = configured
-    else {
-        panic!("expected configured code-block view");
-    };
-    assert_eq!(source, "fn main() {}");
-    assert_eq!(language.as_deref(), Some("rs"));
-    assert!(line_numbers);
-    assert_eq!(syntax_theme, SyntaxTheme::Light);
+    assert_eq!(configured.source(), "fn main() {}");
+    assert_eq!(configured.language_token(), Some("rs"));
+    assert!(configured.has_line_numbers());
+    assert_eq!(configured.selected_syntax_theme(), SyntaxTheme::Light);
     assert!(
-        highlighted_lines[0]
+        configured.highlighted_lines()[0]
             .spans
             .iter()
             .any(|span| span.style.fg.is_some())
     );
-    assert_eq!(metadata.view_type(), ViewType::CodeBlock);
+    assert_eq!(configured.metadata().view_type(), ViewType::CodeBlock);
 }
 
 /// Verifies aliases share highlighting and unknown languages fall back to plain source.
@@ -1311,27 +1211,9 @@ fn code_block_recognizes_aliases_and_falls_back_for_unknown_languages() {
     let alias = code_block("let value = 1;").language("rs");
     let unknown = code_block("let value = 1;").language("not-a-language");
 
-    let View::CodeBlock {
-        highlighted_lines: rust_lines,
-        ..
-    } = rust
-    else {
-        panic!("expected Rust code block");
-    };
-    let View::CodeBlock {
-        highlighted_lines: alias_lines,
-        ..
-    } = alias
-    else {
-        panic!("expected alias code block");
-    };
-    let View::CodeBlock {
-        highlighted_lines: unknown_lines,
-        ..
-    } = unknown
-    else {
-        panic!("expected fallback code block");
-    };
+    let rust_lines = rust.highlighted_lines();
+    let alias_lines = alias.highlighted_lines();
+    let unknown_lines = unknown.highlighted_lines();
 
     assert_eq!(rust_lines, alias_lines);
     assert_eq!(unknown_lines.len(), 1);
@@ -1357,20 +1239,8 @@ fn code_block_recognizes_aliases_and_falls_back_for_unknown_languages() {
 fn code_block_dark_and_light_themes_produce_distinct_colors() {
     let dark = code_block("fn main() {}\nlet value = true;").language("rust");
     let light = dark.clone().syntax_theme(SyntaxTheme::Light);
-    let View::CodeBlock {
-        highlighted_lines: dark_lines,
-        ..
-    } = dark
-    else {
-        panic!("expected dark code block");
-    };
-    let View::CodeBlock {
-        highlighted_lines: light_lines,
-        ..
-    } = light
-    else {
-        panic!("expected light code block");
-    };
+    let dark_lines = dark.highlighted_lines();
+    let light_lines = light.highlighted_lines();
 
     assert!(dark_lines.iter().any(|line| !line.spans.is_empty()));
     assert!(light_lines.iter().any(|line| !line.spans.is_empty()));
@@ -1490,7 +1360,7 @@ fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_height() -> Result<
     })?;
     assert_eq!(code_height, 5);
 
-    let document = column([code, text("End")]);
+    let document = column((code, text("End")));
     let mut terminal = Terminal::new(TestBackend::new(10, 6))?;
     draw_view(&mut terminal, &document)?;
 
@@ -1910,10 +1780,10 @@ fn semantic_table_clips_columns_and_handles_zero_width() -> Result<()> {
 /// - Vertical clipping does not render a partial bottom boundary or panic.
 #[test]
 fn semantic_table_reserves_document_height_and_clips_vertically() -> Result<()> {
-    let document = column([
+    let document = column((
         table([table_body([table_row([table_cell("A")])])]),
         text("End"),
-    ]);
+    ));
     let mut document_terminal = Terminal::new(TestBackend::new(3, 4))?;
     draw_view(&mut document_terminal, &document)?;
     assert_eq!(symbol_position(&document_terminal, "E", 3), (0, 3));
@@ -1986,7 +1856,7 @@ fn ordered_list_starts_and_aligns_multi_digit_markers() -> Result<()> {
 fn unordered_list_wraps_mixed_blocks_and_renders_empty_items() -> Result<()> {
     let view = unordered_list([
         list_item([paragraph("Alpha Beta"), paragraph("Tail")]),
-        list_item([]),
+        list_item(()),
     ]);
     let mut terminal = Terminal::new(TestBackend::new(8, 4))?;
 
@@ -2023,13 +1893,13 @@ fn unordered_list_wraps_mixed_blocks_and_renders_empty_items() -> Result<()> {
 /// - Nested content renders after each local marker gutter.
 #[test]
 fn nested_lists_indent_two_cells_per_level() -> Result<()> {
-    let view = ordered_list([list_item([
+    let view = ordered_list([list_item((
         paragraph("Parent"),
-        unordered_list([list_item([
+        unordered_list([list_item((
             paragraph("Child"),
             ordered_list([list_item([paragraph("Grandchild")])]),
-        ])]),
-    ])]);
+        ))]),
+    ))]);
     let mut terminal = Terminal::new(TestBackend::new(18, 3))?;
 
     draw_view(&mut terminal, &view)?;
@@ -2279,7 +2149,7 @@ fn focused_input_sets_terminal_cursor_position() -> Result<()> {
 fn app_root_reports_focused_editable_control_mode() -> Result<()> {
     let normal_input = input("Ada").with_focus(true);
     assert_eq!(
-        AppRoot::__focused_control(&normal_input),
+        leptatui::AppRoot::__focused_control(&normal_input),
         Some(FocusedControl::Input {
             insert_mode: false,
             visual_mode: false,
@@ -2289,7 +2159,7 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
     let mut insert_input = input("Ada").with_focus(true);
     editable_state_mut(&mut insert_input).set_mode(VimMode::Insert);
     assert_eq!(
-        AppRoot::__focused_control(&insert_input),
+        leptatui::AppRoot::__focused_control(&insert_input),
         Some(FocusedControl::Input {
             insert_mode: true,
             visual_mode: false,
@@ -2298,7 +2168,7 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
 
     insert_input.handle_key_event(key_event(KeyCode::Char('j')))?;
     assert_eq!(
-        AppRoot::__focused_control(&insert_input),
+        leptatui::AppRoot::__focused_control(&insert_input),
         Some(FocusedControl::Input {
             insert_mode: false,
             visual_mode: false,
@@ -2309,7 +2179,7 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
     editable_state_mut(&mut visual_input).set_mode(VimMode::Visual);
     editable_state_mut(&mut visual_input).set_selection_anchor(Some(0));
     assert_eq!(
-        AppRoot::__focused_control(&visual_input),
+        leptatui::AppRoot::__focused_control(&visual_input),
         Some(FocusedControl::Input {
             insert_mode: false,
             visual_mode: true,
@@ -2318,7 +2188,7 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
 
     let normal_text_area = text_area("Ada").with_focus(true);
     assert_eq!(
-        AppRoot::__focused_control(&normal_text_area),
+        leptatui::AppRoot::__focused_control(&normal_text_area),
         Some(FocusedControl::TextArea {
             insert_mode: false,
             visual_mode: false,
@@ -2328,7 +2198,7 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
     let mut insert_text_area = text_area("Ada").with_focus(true);
     editable_state_mut(&mut insert_text_area).set_mode(VimMode::Insert);
     assert_eq!(
-        AppRoot::__focused_control(&insert_text_area),
+        leptatui::AppRoot::__focused_control(&insert_text_area),
         Some(FocusedControl::TextArea {
             insert_mode: true,
             visual_mode: false,
@@ -2337,7 +2207,7 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
 
     insert_text_area.handle_key_event(key_event(KeyCode::Char('j')))?;
     assert_eq!(
-        AppRoot::__focused_control(&insert_text_area),
+        leptatui::AppRoot::__focused_control(&insert_text_area),
         Some(FocusedControl::TextArea {
             insert_mode: false,
             visual_mode: false,
@@ -2348,7 +2218,7 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
     editable_state_mut(&mut visual_text_area).set_mode(VimMode::VisualLine);
     editable_state_mut(&mut visual_text_area).set_selection_anchor(Some(0));
     assert_eq!(
-        AppRoot::__focused_control(&visual_text_area),
+        leptatui::AppRoot::__focused_control(&visual_text_area),
         Some(FocusedControl::TextArea {
             insert_mode: false,
             visual_mode: true,
@@ -2356,10 +2226,10 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
     );
 
     assert_eq!(
-        AppRoot::__focused_control(&button("Save").with_focus(true)),
+        leptatui::AppRoot::__focused_control(&button("Save").with_focus(true)),
         Some(FocusedControl::Button)
     );
-    assert_eq!(AppRoot::__focused_control(&input("Ada")), None);
+    assert_eq!(leptatui::AppRoot::__focused_control(&input("Ada")), None);
 
     Ok(())
 }
@@ -2457,7 +2327,7 @@ fn input_pending_insert_j_preview_expires_to_insert_cursor() -> Result<()> {
     assert!(!cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
     terminal.backend_mut().assert_cursor_position((5, 1));
     assert_eq!(
-        AppRoot::__focused_control(&view),
+        leptatui::AppRoot::__focused_control(&view),
         Some(FocusedControl::Input {
             insert_mode: true,
             visual_mode: false,
@@ -2711,7 +2581,7 @@ fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
 fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
     let backend = TestBackend::new(6, 7);
     let mut terminal = Terminal::new(backend)?;
-    let view = column(vec![text_area("Hello World"), text("End")]);
+    let view = column((text_area("Hello World"), text("End")));
 
     draw_view(&mut terminal, &view)?;
 
@@ -2773,7 +2643,7 @@ fn column_reserves_height_for_wrapped_text() -> Result<()> {
 fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
     let backend = TestBackend::new(12, 7);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = form([text("Title"), input("Ada"), button("Save")]);
+    let mut view = form((text("Title"), input("Ada"), button("Save")));
 
     draw_view(&mut terminal, &view)?;
 
@@ -2818,7 +2688,7 @@ fn focusing_editable_control_enters_normal_mode_without_resetting_state() -> Res
     editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
     editable_state_mut(&mut input_view).set_cursor(1);
     editable_state_mut(&mut input_view).set_yank_buffer("copy");
-    let mut view = form([input_view, button("Save")]);
+    let mut view = form((input_view, button("Save")));
 
     assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Insert);
 
@@ -3512,8 +3382,7 @@ fn vim_scroll_to_top_prefix_resets_on_unrelated_key() -> Result<()> {
 fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down() -> Result<()> {
     let backend = TestBackend::new(12, 2);
     let mut terminal = Terminal::new(backend)?;
-    let mut view =
-        column(vec![text("Top"), button("Launch"), text("Tail")]).with_classes("surface");
+    let mut view = column((text("Top"), button("Launch"), text("Tail"))).with_classes("surface");
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::class("surface"),
         TuiStyle::new().background(Color::Blue),
@@ -3563,8 +3432,7 @@ fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down
 fn overflowing_column_keeps_parent_background_on_top_row_after_scrolling_up() -> Result<()> {
     let backend = TestBackend::new(12, 2);
     let mut terminal = Terminal::new(backend)?;
-    let mut view =
-        column(vec![text("Top"), button("Launch"), text("Tail")]).with_classes("surface");
+    let mut view = column((text("Top"), button("Launch"), text("Tail"))).with_classes("surface");
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::class("surface"),
         TuiStyle::new().background(Color::Blue),
@@ -3841,11 +3709,11 @@ fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()>
 fn column_reserves_height_for_nested_stacked_bordered_buttons() -> Result<()> {
     let backend = TestBackend::new(12, 14);
     let mut terminal = Terminal::new(backend)?;
-    let view = column(vec![
+    let view = column((
         text("Top"),
         row(vec![button("A"), button("B"), button("C"), button("D")]).with_classes("stack"),
         text("End"),
-    ]);
+    ));
     let stylesheet = Stylesheet::new().media_rule(
         MediaQuery::max_width(12),
         StyleSelector::class("stack"),
@@ -3882,13 +3750,13 @@ fn column_reserves_height_for_nested_stacked_bordered_buttons() -> Result<()> {
 fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
     let backend = TestBackend::new(12, 6);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column(vec![
+    let mut view = column((
         text("One"),
         text("Two"),
         text("Three"),
         text("Four"),
         row(vec![button("Launch"), button("Quit")]).with_classes("focus-actions"),
-    ]);
+    ));
     let stylesheet = Stylesheet::new().media_rule(
         MediaQuery::max_width(12),
         StyleSelector::class("focus-actions"),
@@ -3944,11 +3812,11 @@ fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
 fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()> {
     let backend = TestBackend::new(12, 6);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column(vec![
+    let mut view = column((
         block(text("Top")),
         row(vec![button("A"), button("B"), button("C"), button("D")]).with_classes("stack"),
         text("End"),
-    ]);
+    ));
     let stylesheet = Stylesheet::new().media_rule(
         MediaQuery::max_width(12),
         StyleSelector::class("stack"),
@@ -4125,24 +3993,15 @@ fn image_builder_stores_source_alt_and_selector_metadata() {
         .with_classes("media primary")
         .with_inline_style(style);
 
-    match view {
-        View::Image {
-            source,
-            alt,
-            metadata,
-        } => {
-            assert_eq!(source, ImageSource::Path("assets/logo.png".into()));
-            assert_eq!(alt.as_deref(), Some("Project logo"));
-            assert_eq!(metadata.view_type(), ViewType::Image);
-            assert_eq!(metadata.id(), Some("logo"));
-            assert_eq!(
-                metadata.classes(),
-                &[String::from("media"), String::from("primary")]
-            );
-            assert_eq!(metadata.inline_style(), Some(style));
-        }
-        other => panic!("expected image view, got {other:?}"),
-    }
+    assert_eq!(view.source(), &ImageSource::Path("assets/logo.png".into()));
+    assert_eq!(view.alt_text(), Some("Project logo"));
+    assert_eq!(view.metadata().view_type(), ViewType::Image);
+    assert_eq!(view.metadata().id(), Some("logo"));
+    assert_eq!(
+        view.metadata().classes(),
+        &[String::from("media"), String::from("primary")]
+    );
+    assert_eq!(view.metadata().inline_style(), Some(style));
 }
 
 /// Verifies image fallback rendering prefers caller-provided alt text.
@@ -4380,34 +4239,18 @@ fn progress_bar_builder_stores_value_label_and_selector_metadata() {
         .with_classes("meter primary")
         .with_inline_style(style);
 
-    match view {
-        View::ProgressBar {
-            value,
-            label,
-            metadata,
-        } => {
-            assert_eq!(value, 0.5);
-            assert_eq!(label.as_deref(), Some("Loading"));
-            assert_eq!(metadata.view_type(), ViewType::ProgressBar);
-            assert_eq!(metadata.id(), Some("upload"));
-            assert_eq!(
-                metadata.classes(),
-                &[String::from("meter"), String::from("primary")]
-            );
-            assert_eq!(metadata.inline_style(), Some(style));
-        }
-        other => panic!("expected progress bar view, got {other:?}"),
-    }
+    assert_eq!(view.value(), 0.5);
+    assert_eq!(view.label_text(), Some("Loading"));
+    assert_eq!(view.metadata().view_type(), ViewType::ProgressBar);
+    assert_eq!(view.metadata().id(), Some("upload"));
+    assert_eq!(
+        view.metadata().classes(),
+        &[String::from("meter"), String::from("primary")]
+    );
+    assert_eq!(view.metadata().inline_style(), Some(style));
 
-    match progress_bar(1.5) {
-        View::ProgressBar { value, .. } => assert_eq!(value, 1.0),
-        other => panic!("expected progress bar view, got {other:?}"),
-    }
-
-    match progress_bar(f64::NAN) {
-        View::ProgressBar { value, .. } => assert_eq!(value, 0.0),
-        other => panic!("expected progress bar view, got {other:?}"),
-    }
+    assert_eq!(progress_bar(1.5).value(), 1.0);
+    assert_eq!(progress_bar(f64::NAN).value(), 0.0);
 }
 
 /// Verifies empty, partial, and full progress values render as gauges.
@@ -4561,7 +4404,7 @@ fn progress_bar_type_styles_apply_to_gauge() -> Result<()> {
 /// - Tab focuses the button and skips the progress bar.
 #[test]
 fn progress_bar_is_not_focusable() -> Result<()> {
-    let mut view = column([progress_bar(0.5), button("Save")]);
+    let mut view = column((progress_bar(0.5), button("Save")));
 
     assert_eq!(view.__focusable_count(), 1);
     assert_eq!(control_focuses(&view), vec![false]);
@@ -4594,7 +4437,7 @@ fn progress_bar_is_not_focusable() -> Result<()> {
 /// Non-focusable text views should be skipped during keyboard focus movement.
 #[test]
 fn tab_focus_moves_between_static_buttons() -> Result<()> {
-    let mut view = column([button("One"), text("Gap"), button("Two")]);
+    let mut view = column((button("One"), text("Gap"), button("Two")));
 
     view.handle_event(key(KeyCode::Tab))?;
     assert_eq!(button_focuses(&view), vec![true, false]);
@@ -4625,13 +4468,13 @@ fn tab_focus_moves_between_static_buttons() -> Result<()> {
 /// - Non-editable text is skipped.
 #[test]
 fn tab_focus_moves_across_buttons_and_editable_controls() -> Result<()> {
-    let mut view = column([
+    let mut view = column((
         button("Save"),
         text("Gap"),
         editable_input("Ada"),
         editable_text_area("Notes"),
         button("Submit"),
-    ]);
+    ));
 
     assert_eq!(view.__focusable_count(), 4);
 
@@ -4820,7 +4663,7 @@ fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> Result<()> {
         editable_state_mut(&mut notes_view).set_mode(VimMode::Insert);
         editable_state_mut(&mut notes_view).set_cursor(cursor);
 
-        column([text("Top"), notes_view, text("Bottom")])
+        column((text("Top"), notes_view, text("Bottom")))
     };
     let mut view = build_view(&notes);
 
@@ -4868,13 +4711,13 @@ fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
     let mut input_view = input("Ada").with_focus(true);
     editable_state_mut(&mut input_view).set_mode(VimMode::Normal);
-    let mut view = form([
+    let mut view = form((
         text("Top"),
         input_view,
         text("After 1"),
         text("After 2"),
         text("After 3"),
-    ]);
+    ));
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(scroll_offset(&view), 0);
@@ -4922,12 +4765,12 @@ fn normal_mode_text_area_boundary_keys_scroll_overflowing_form() -> Result<()> {
     let mut text_area_view = text_area("one\ntwo").with_focus(true);
     editable_state_mut(&mut text_area_view).set_mode(VimMode::Normal);
     editable_state_mut(&mut text_area_view).set_cursor(0);
-    let mut view = form([
+    let mut view = form((
         text("Top"),
         text_area_view,
         text("After 1"),
         text("After 2"),
-    ]);
+    ));
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(scroll_offset(&view), 0);
@@ -4987,11 +4830,13 @@ fn tab_focus_scrolls_to_focused_button_inside_component_boundary() -> Result<()>
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column([
+    let mut view = column((
         button("A1"),
-        component(FocusPanel { view: button("B2") }),
+        component(FocusPanel {
+            view: button("B2").into_view(),
+        }),
         button("C3"),
-    ]);
+    ));
 
     view.handle_event(key(KeyCode::Tab))?;
     view.handle_event(key(KeyCode::Tab))?;
@@ -5368,10 +5213,7 @@ fn focused_input_without_callback_does_not_mutate_displayed_value() -> Result<()
         KeyControl::Handled
     );
 
-    match &view {
-        View::Input { value, .. } => assert_eq!(value, "Ada"),
-        other => panic!("expected input view, got {other:?}"),
-    }
+    assert_eq!(view.value(), "Ada");
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 1, 1, 8), "A");
@@ -6590,7 +6432,9 @@ fn form_inside_component_boundary_handles_submit_key() -> Result<()> {
         submits_for_form.set(submits_for_form.get() + 1);
         AppControl::Continue
     });
-    let mut view = component(FocusPanel { view });
+    let mut view = component(FocusPanel {
+        view: view.into_view(),
+    });
 
     assert_eq!(
         view.handle_key_event(key_event(KeyCode::Enter))?,
@@ -6627,10 +6471,7 @@ fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> Resul
         KeyControl::Handled
     );
 
-    match &view {
-        View::TextArea { value, .. } => assert_eq!(value, "Ada\nLovelace"),
-        other => panic!("expected text-area view, got {other:?}"),
-    }
+    assert_eq!(view.value(), "Ada\nLovelace");
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 1, 1, 12), "A");
@@ -6662,7 +6503,9 @@ fn focused_input_inside_component_boundary_handles_editing_keys() -> Result<()> 
         emitted_for_input.borrow_mut().push(next);
         AppControl::Continue
     });
-    let mut view = component(FocusPanel { view: input_view });
+    let mut view = component(FocusPanel {
+        view: input_view.into_view(),
+    });
 
     view.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
     assert_eq!(
@@ -6702,7 +6545,7 @@ fn focused_text_area_inside_component_boundary_handles_editing_keys() -> Result<
         AppControl::Continue
     });
     let mut view = component(FocusPanel {
-        view: text_area_view,
+        view: text_area_view.into_view(),
     });
 
     view.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
@@ -6740,13 +6583,13 @@ fn focused_text_area_inside_component_boundary_handles_editing_keys() -> Result<
 fn enter_and_space_do_not_activate_focused_editable_controls() -> Result<()> {
     let count = Rc::new(Cell::new(0));
     let submit_count = Rc::clone(&count);
-    let mut view = column([
+    let mut view = column((
         editable_input("Ada"),
         button("Submit").on_press(move || {
             submit_count.set(submit_count.get() + 1);
             AppControl::Continue
         }),
-    ]);
+    ));
 
     view.handle_event(key(KeyCode::Tab))?;
     assert_eq!(control_focuses(&view), vec![true, false]);
@@ -6853,10 +6696,10 @@ fn renders_focused_button_with_focus_stylesheet_rule() -> Result<()> {
 /// Component that forwards rendering and built-in focus traversal to a child view.
 struct FocusPanel {
     /// Child view owned by this component boundary.
-    view: View,
+    view: AnyView,
 }
 
-impl Component for FocusPanel {
+impl View for FocusPanel {
     /// Renders the child view.
     ///
     /// # Arguments
@@ -6866,13 +6709,12 @@ impl Component for FocusPanel {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         ctx.render_view(&self.view)
     }
 
     /// Returns the minimum useful render height of the child view.
-    #[doc(hidden)]
-    fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         self.view.__min_height(ctx)
     }
 
@@ -6896,7 +6738,7 @@ impl Component for FocusPanel {
 
     /// Returns the focused control's vertical span inside the child view.
     #[doc(hidden)]
-    fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         self.view.__focused_button_span(ctx)
     }
 
@@ -6946,12 +6788,20 @@ impl Component for FocusPanel {
     fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
         self.view.__handle_form_key(key)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Component that renders text and exits on any event.
 struct EventExit;
 
-impl Component for EventExit {
+impl View for EventExit {
     /// Renders the component's child text.
     ///
     /// # Arguments
@@ -6961,8 +6811,8 @@ impl Component for EventExit {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        ctx.render_view(&text("Child"))
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        View::render(&text("Child"), ctx)
     }
 
     /// Handles an event by requesting app exit.
@@ -6974,8 +6824,16 @@ impl Component for EventExit {
     /// # Returns
     ///
     /// An [`AppControl`] value requesting exit.
-    fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
+    fn __dispatch_event(&mut self, _event: &Event) -> Result<AppControl> {
         Ok(AppControl::Exit)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -6985,7 +6843,7 @@ struct EventCounter {
     count: Rc<Cell<usize>>,
 }
 
-impl Component for EventCounter {
+impl View for EventCounter {
     /// Renders nothing for event-only tests.
     ///
     /// # Arguments
@@ -6995,7 +6853,7 @@ impl Component for EventCounter {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         Ok(())
     }
 
@@ -7008,9 +6866,17 @@ impl Component for EventCounter {
     /// # Returns
     ///
     /// An [`AppControl`] value requesting continued traversal.
-    fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
+    fn __dispatch_event(&mut self, _event: &Event) -> Result<AppControl> {
         self.count.set(self.count.get() + 1);
         Ok(AppControl::Continue)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -7020,7 +6886,7 @@ struct MetadataRecorder {
     seen: Rc<RefCell<Option<StyleMetadata>>>,
 }
 
-impl Component for MetadataRecorder {
+impl View for MetadataRecorder {
     /// Renders a child view and records its selector metadata.
     ///
     /// # Arguments
@@ -7030,12 +6896,20 @@ impl Component for MetadataRecorder {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let view = text("Child")
             .with_id("inside")
             .with_classes("component-child");
         *self.seen.borrow_mut() = view.style_metadata().cloned();
-        ctx.render_view(&view)
+        View::render(&view, ctx)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -7094,12 +6968,12 @@ fn selector_metadata_remains_available_inside_component_boundaries() -> Result<(
 /// # Assertions
 ///
 /// - The dynamic closure is evaluated during rendering.
-/// - The component boundary renders through its `Component::render` method.
+/// - The component boundary renders through its `View::render` method.
 #[test]
 fn renders_dynamic_and_component_child_views() -> Result<()> {
     let backend = TestBackend::new(24, 5);
     let mut terminal = Terminal::new(backend)?;
-    let view = column([dynamic(|| text("Dynamic")), component(EventExit)]);
+    let view = column((dynamic(|| text("Dynamic")), component(EventExit)));
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -7138,7 +7012,7 @@ fn renders_dynamic_and_component_child_views() -> Result<()> {
 /// - `AppControl::Exit` short-circuits child traversal.
 #[test]
 fn dispatches_events_through_component_child_views() -> Result<()> {
-    let mut view = column([text("Static"), component(EventExit)]);
+    let mut view = column((text("Static"), component(EventExit)));
 
     assert_eq!(view.handle_event(Event::Resize(24, 5))?, AppControl::Exit);
 
@@ -7219,9 +7093,7 @@ fn compares_dynamic_views_by_identity() {
 fn reconciliation_retains_editable_state_for_matching_controls() {
     let retained_input_state = editable_state_fixture();
     let mut previous_input = editable_input("old").with_focus(true);
-    if let View::Input { editable_state, .. } = &mut previous_input {
-        *editable_state = retained_input_state.clone();
-    }
+    *previous_input.editable_state_mut() = retained_input_state.clone();
     let mut next_input = editable_input("new");
 
     leptatui::__private::__reconcile_view(&mut next_input, &previous_input);
@@ -7231,9 +7103,7 @@ fn reconciliation_retains_editable_state_for_matching_controls() {
 
     let retained_text_area_state = editable_state_fixture();
     let mut previous_text_area = editable_text_area("old notes").with_focus(true);
-    if let View::TextArea { editable_state, .. } = &mut previous_text_area {
-        *editable_state = retained_text_area_state.clone();
-    }
+    *previous_text_area.editable_state_mut() = retained_text_area_state.clone();
     let mut next_text_area = editable_text_area("new notes");
 
     leptatui::__private::__reconcile_view(&mut next_text_area, &previous_text_area);
@@ -7261,9 +7131,7 @@ fn reconciliation_retains_editable_state_for_matching_controls() {
 fn reconciliation_does_not_leak_editable_state_to_unrelated_views() {
     let retained_state = editable_state_fixture();
     let mut previous_input = editable_input("old").with_focus(true);
-    if let View::Input { editable_state, .. } = &mut previous_input {
-        *editable_state = retained_state.clone();
-    }
+    *previous_input.editable_state_mut() = retained_state.clone();
 
     let mut next_text_area = editable_text_area("new notes");
     let fresh_text_area = editable_text_area("new notes");
@@ -7277,9 +7145,7 @@ fn reconciliation_does_not_leak_editable_state_to_unrelated_views() {
     assert_ne!(editable_state(&next_text_area), &retained_state);
 
     let mut previous_text_area = editable_text_area("old notes").with_focus(true);
-    if let View::TextArea { editable_state, .. } = &mut previous_text_area {
-        *editable_state = retained_state.clone();
-    }
+    *previous_text_area.editable_state_mut() = retained_state.clone();
 
     let mut next_input = editable_input("new");
     let fresh_input = editable_input("new");

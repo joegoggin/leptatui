@@ -13,7 +13,7 @@
 //! use leptatui::prelude::*;
 //!
 //! #[component]
-//! fn Root() -> View {
+//! fn Root() -> impl IntoView {
 //!     view! { <Text>"Hello"</Text> }
 //! }
 //!
@@ -29,12 +29,17 @@
 //! render metadata and generated-code hooks stay outside the default import.
 
 pub use crate::{
-    Action, ActionState, App, AppControl, AppRoot, BorderType, Borders, CellAlignment, Children,
-    ChildrenFn, ChildrenMut, Color, Component, Error, FormAction, ImageSource, InputAction,
-    KeyControl, LayoutDirection, MarkdownOptions, MediaQuery, Modifier, RenderCtx, Resource,
-    ResourceState, Result, RouteState, StyleDeclarations, StyleModule, StyleRule, StyleSelector,
-    StyleValue, Stylesheet, SyntaxTheme, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle,
-    View, ViewType, ViewportSize, block, button, code_block, column,
+    Action, ActionState, AnyView, App, AppControl, AppRoot, BlockView, BorderType, Borders,
+    ButtonView, CellAlignment, Children, ChildrenFn, ChildrenMut, CodeBlockView, Color,
+    ContainerView, DynamicView, EditableKind, EditableState, EditableTextView, EditableView, Error,
+    FormAction, FormView, HeadingLevel, HeadingView, ImageSource, ImageView, InputAction, IntoView,
+    IntoViews, KeyControl, LayoutDirection, LayoutView, ListItemView, ListKind, ListView,
+    MarkdownOptions, MediaQuery, Modifier, ParagraphView, ProgressBarView, RenderCtx, Resource,
+    ResourceState, Result, RouteState, StyleDeclarations, StyleMetadata, StyleModule, StyleRule,
+    StyleSelector, StyleValue, StyledView, Stylesheet, SyntaxTheme, TableCellView, TableRowView,
+    TableSectionKind, TableSectionView, TableView, TextView, TextualView, ThemeValue,
+    ThemeVariables, TuiSize, TuiSpacing, TuiStyle, View, ViewType, ViewportSize, VimMode, block,
+    button, code_block, column,
     context::{expect_context, provide_context, use_context},
     create_action, create_resource, form, h1, h2, h3, h4, h5, h6, image, input, list_item,
     markdown, markdown_file, markdown_file_with_options, markdown_with_options, ordered_list,

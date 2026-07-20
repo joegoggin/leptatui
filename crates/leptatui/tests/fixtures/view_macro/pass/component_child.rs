@@ -7,7 +7,7 @@ use leptatui::prelude::*;
 
 /// Builds a component used as a braced child expression.
 #[component]
-fn Label() -> View {
+fn Label() -> impl IntoView {
     view! {
         <Text>"Count"</Text>
     }
@@ -15,17 +15,15 @@ fn Label() -> View {
 
 /// Exercises component child expansion within a column.
 fn main() {
-    let view: View = view! {
+    let view = view! {
         <Column>
             {Label::new()}
             <Text>"Help"</Text>
         </Column>
     };
 
-    assert!(matches!(
-        view,
-        View::Column { children, .. }
-            if matches!(children.first(), Some(View::Component(_)))
-                && children.get(1) == Some(&text("Help"))
-    ));
+    assert_eq!(view.metadata().view_type(), ViewType::Column);
+    assert_eq!(view.children().len(), 2);
+    assert!(view.children()[0].style_metadata().is_none());
+    assert_eq!(view.children()[1], text("Help"));
 }

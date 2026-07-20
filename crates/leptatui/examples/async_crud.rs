@@ -261,7 +261,7 @@ struct CrudContext {
 ///
 /// A [`View`] containing the ticket list, mutation status, controls, and help text.
 #[component]
-fn AsyncCrudDemo() -> View {
+fn AsyncCrudDemo() -> impl IntoView {
     let api = MockApi::new();
     let (refresh, set_refresh) = signal(0_u64);
 
@@ -365,13 +365,17 @@ fn AsyncCrudDemo() -> View {
 ///
 /// A [`View`] showing pending, ready, or error content for the ticket list.
 #[component]
-fn TicketList() -> View {
+fn TicketList() -> impl IntoView {
     let context = expect_context::<CrudContext>();
 
     dynamic(move || match context.tickets.get_untracked() {
-        ResourceState::Pending => text("Loading tickets from mock API...").with_classes("pending"),
+        ResourceState::Pending => text("Loading tickets from mock API...")
+            .with_classes("pending")
+            .into_view(),
         ResourceState::Ready(tickets) => render_ticket_list(tickets),
-        ResourceState::Error(error) => text(format!("Load error: {error}")).with_classes("error"),
+        ResourceState::Error(error) => text(format!("Load error: {error}"))
+            .with_classes("error")
+            .into_view(),
     })
 }
 
@@ -381,7 +385,7 @@ fn TicketList() -> View {
 ///
 /// A [`View`] showing idle, pending, success, or error mutation status.
 #[component]
-fn MutationStatus() -> View {
+fn MutationStatus() -> impl IntoView {
     let context = expect_context::<CrudContext>();
 
     dynamic(move || render_mutation_status(context.mutation.get_untracked()))
@@ -393,7 +397,7 @@ fn MutationStatus() -> View {
 ///
 /// A [`View`] containing the CRUD control row.
 #[component]
-fn CrudControls() -> View {
+fn CrudControls() -> impl IntoView {
     let context = expect_context::<CrudContext>();
 
     let create = context.clone();
@@ -511,17 +515,25 @@ fn fail_next_list(context: &CrudContext) {
 /// # Returns
 ///
 /// A [`View`] containing a section header and ticket rows.
-fn render_ticket_list(tickets: Vec<Ticket>) -> View {
+fn render_ticket_list(tickets: Vec<Ticket>) -> AnyView {
     let mut rows = Vec::with_capacity(tickets.len() + 1);
-    rows.push(text(format!("Tickets ({})", tickets.len())).with_classes("section-title ready"));
+    rows.push(
+        text(format!("Tickets ({})", tickets.len()))
+            .with_classes("section-title ready")
+            .into_view(),
+    );
 
     if tickets.is_empty() {
-        rows.push(text("No tickets returned").with_classes("muted"));
+        rows.push(
+            text("No tickets returned")
+                .with_classes("muted")
+                .into_view(),
+        );
     } else {
         rows.extend(tickets.into_iter().map(render_ticket));
     }
 
-    column(rows).with_classes("ticket-list")
+    column(rows).with_classes("ticket-list").into_view()
 }
 
 /// Renders one ticket row.
@@ -533,7 +545,7 @@ fn render_ticket_list(tickets: Vec<Ticket>) -> View {
 /// # Returns
 ///
 /// A [`View`] containing the ticket id, status, and title.
-fn render_ticket(ticket: Ticket) -> View {
+fn render_ticket(ticket: Ticket) -> AnyView {
     let class = match ticket.status {
         TicketStatus::Open => "ticket-open",
         TicketStatus::Done => "ticket-done",
@@ -546,6 +558,7 @@ fn render_ticket(ticket: Ticket) -> View {
         ticket.title
     ))
     .with_classes(class)
+    .into_view()
 }
 
 /// Renders mutation action status.
@@ -557,22 +570,26 @@ fn render_ticket(ticket: Ticket) -> View {
 /// # Returns
 ///
 /// A [`View`] describing the current mutation state.
-fn render_mutation_status(state: ActionState<TicketMutation, MutationResult, String>) -> View {
+fn render_mutation_status(state: ActionState<TicketMutation, MutationResult, String>) -> AnyView {
     if state.is_pending() {
         let label = state
             .input()
             .map(TicketMutation::label)
             .unwrap_or("mutation");
 
-        return text(format!("Mutation pending: {label}")).with_classes("pending");
+        return text(format!("Mutation pending: {label}"))
+            .with_classes("pending")
+            .into_view();
     }
 
     match state.result() {
-        Some(Ok(result)) => {
-            text(format!("Last mutation: {}", result.label())).with_classes("success")
-        }
-        Some(Err(error)) => text(format!("Mutation error: {error}")).with_classes("error"),
-        None => text("Mutation idle").with_classes("muted"),
+        Some(Ok(result)) => text(format!("Last mutation: {}", result.label()))
+            .with_classes("success")
+            .into_view(),
+        Some(Err(error)) => text(format!("Mutation error: {error}"))
+            .with_classes("error")
+            .into_view(),
+        None => text("Mutation idle").with_classes("muted").into_view(),
     }
 }
 

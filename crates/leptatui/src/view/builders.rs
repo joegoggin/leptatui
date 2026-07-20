@@ -1,20 +1,27 @@
-//! Convenience constructors for render-tree views.
+//! Convenience constructors for concrete render-tree views.
 //!
-//! This module provides the public helper functions re-exported by
-//! [`mod@crate::view`] and [`crate::prelude`].
+//! Builders retain concrete return types so type-specific configuration stays
+//! available until a value is converted through [`super::IntoView`].
 
 use ratatui::text::Text;
 
-use crate::component::Component;
+use crate::style::LayoutDirection;
 
 use super::{
     code_block::{SyntaxTheme, highlighted_source_lines},
     component_view::ComponentView,
+    dynamic::DynamicView,
     metadata::{EditableState, StyleMetadata, ViewType},
-    model::{CellAlignment, ImageSource, View, clamped_progress_value},
+    model::{
+        AnyView, BlockView, ButtonView, CellAlignment, CodeBlockView, EditableKind,
+        EditableTextView, FormView, HeadingLevel, HeadingView, ImageSource, ImageView, IntoView,
+        IntoViews, LayoutView, ListItemView, ListKind, ListView, ParagraphView, ProgressBarView,
+        TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView, TextView, View,
+        clamped_progress_value,
+    },
 };
 
-/// Creates a bordered block around a child view.
+/// Creates a bordered block around one child view.
 ///
 /// # Arguments
 ///
@@ -22,27 +29,45 @@ use super::{
 ///
 /// # Returns
 ///
-/// A [`View::Block`] containing the provided child.
-pub fn block(child: impl Into<View>) -> View {
-    View::Block {
-        child: Box::new(child.into()),
+/// A [`BlockView`] containing `child`.
+pub fn block(child: impl IntoView) -> BlockView {
+    BlockView {
+        children: vec![child.into_view()],
         metadata: StyleMetadata::new(ViewType::Block),
     }
 }
 
-/// Creates a text view.
+/// Creates a plain text view.
 ///
 /// # Arguments
 ///
-/// * `content` — Text content to render.
+/// * `content` — Rich text content to render.
 ///
 /// # Returns
 ///
-/// A [`View::Text`] containing the provided content.
-pub fn text(content: impl Into<String>) -> View {
-    View::Text {
-        content: content.into(),
+/// A [`TextView`] containing `content`.
+pub fn text(content: impl Into<String>) -> TextView {
+    TextView {
+        content: Text::from(content.into()),
         metadata: StyleMetadata::new(ViewType::Text),
+    }
+}
+
+/// Creates a semantic heading with the requested level.
+///
+/// # Arguments
+///
+/// * `content` — Rich text content to render.
+/// * `level` — Semantic heading level and selector identity.
+///
+/// # Returns
+///
+/// A [`HeadingView`] containing `content` at `level`.
+fn heading(content: impl Into<Text<'static>>, level: HeadingLevel) -> HeadingView {
+    HeadingView {
+        content: content.into(),
+        level,
+        metadata: StyleMetadata::new(level.view_type()),
     }
 }
 
@@ -54,12 +79,9 @@ pub fn text(content: impl Into<String>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::H1`] containing the provided content.
-pub fn h1(content: impl Into<Text<'static>>) -> View {
-    View::H1 {
-        content: content.into(),
-        metadata: StyleMetadata::new(ViewType::H1),
-    }
+/// A first-level [`HeadingView`].
+pub fn h1(content: impl Into<Text<'static>>) -> HeadingView {
+    heading(content, HeadingLevel::H1)
 }
 
 /// Creates a second-level semantic heading.
@@ -70,12 +92,9 @@ pub fn h1(content: impl Into<Text<'static>>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::H2`] containing the provided content.
-pub fn h2(content: impl Into<Text<'static>>) -> View {
-    View::H2 {
-        content: content.into(),
-        metadata: StyleMetadata::new(ViewType::H2),
-    }
+/// A second-level [`HeadingView`].
+pub fn h2(content: impl Into<Text<'static>>) -> HeadingView {
+    heading(content, HeadingLevel::H2)
 }
 
 /// Creates a third-level semantic heading.
@@ -86,12 +105,9 @@ pub fn h2(content: impl Into<Text<'static>>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::H3`] containing the provided content.
-pub fn h3(content: impl Into<Text<'static>>) -> View {
-    View::H3 {
-        content: content.into(),
-        metadata: StyleMetadata::new(ViewType::H3),
-    }
+/// A third-level [`HeadingView`].
+pub fn h3(content: impl Into<Text<'static>>) -> HeadingView {
+    heading(content, HeadingLevel::H3)
 }
 
 /// Creates a fourth-level semantic heading.
@@ -102,12 +118,9 @@ pub fn h3(content: impl Into<Text<'static>>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::H4`] containing the provided content.
-pub fn h4(content: impl Into<Text<'static>>) -> View {
-    View::H4 {
-        content: content.into(),
-        metadata: StyleMetadata::new(ViewType::H4),
-    }
+/// A fourth-level [`HeadingView`].
+pub fn h4(content: impl Into<Text<'static>>) -> HeadingView {
+    heading(content, HeadingLevel::H4)
 }
 
 /// Creates a fifth-level semantic heading.
@@ -118,12 +131,9 @@ pub fn h4(content: impl Into<Text<'static>>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::H5`] containing the provided content.
-pub fn h5(content: impl Into<Text<'static>>) -> View {
-    View::H5 {
-        content: content.into(),
-        metadata: StyleMetadata::new(ViewType::H5),
-    }
+/// A fifth-level [`HeadingView`].
+pub fn h5(content: impl Into<Text<'static>>) -> HeadingView {
+    heading(content, HeadingLevel::H5)
 }
 
 /// Creates a sixth-level semantic heading.
@@ -134,12 +144,9 @@ pub fn h5(content: impl Into<Text<'static>>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::H6`] containing the provided content.
-pub fn h6(content: impl Into<Text<'static>>) -> View {
-    View::H6 {
-        content: content.into(),
-        metadata: StyleMetadata::new(ViewType::H6),
-    }
+/// A sixth-level [`HeadingView`].
+pub fn h6(content: impl Into<Text<'static>>) -> HeadingView {
+    heading(content, HeadingLevel::H6)
 }
 
 /// Creates a semantic paragraph.
@@ -150,9 +157,9 @@ pub fn h6(content: impl Into<Text<'static>>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::Paragraph`] containing the provided content.
-pub fn paragraph(content: impl Into<Text<'static>>) -> View {
-    View::Paragraph {
+/// A [`ParagraphView`] containing `content`.
+pub fn paragraph(content: impl Into<Text<'static>>) -> ParagraphView {
+    ParagraphView {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::Paragraph),
     }
@@ -160,23 +167,16 @@ pub fn paragraph(content: impl Into<Text<'static>>) -> View {
 
 /// Creates a bordered syntax-highlighted code block.
 ///
-/// The source is retained as logical lines. Supplying a recognized language
-/// later through [`View::language`] highlights those lines once rather than on
-/// every render frame. Unknown language tokens retain plain source. Logical
-/// lines wrap to the available width rather than scrolling horizontally. The
-/// selected syntax theme fills the block interior unless an authored
-/// code-block background overrides it.
-///
 /// # Arguments
 ///
-/// * `source` — Source code displayed inside the block.
+/// * `source` — Source text retained for highlighting and rendering.
 ///
 /// # Returns
 ///
-/// A [`View::CodeBlock`] using the dark theme with line numbers disabled.
-pub fn code_block(source: impl Into<String>) -> View {
+/// A [`CodeBlockView`] using the dark theme with line numbers disabled.
+pub fn code_block(source: impl Into<String>) -> CodeBlockView {
     let source = source.into();
-    View::CodeBlock {
+    CodeBlockView {
         highlighted_lines: highlighted_source_lines(&source, None, SyntaxTheme::Dark),
         source,
         language: None,
@@ -190,14 +190,15 @@ pub fn code_block(source: impl Into<String>) -> View {
 ///
 /// # Arguments
 ///
-/// * `items` — List-item views to number from one.
+/// * `items` — Homogeneous collection or heterogeneous tuple of list items.
 ///
 /// # Returns
 ///
-/// A [`View::OrderedList`] containing the provided items.
-pub fn ordered_list(items: impl IntoIterator<Item = View>) -> View {
-    View::OrderedList {
-        items: items.into_iter().collect(),
+/// A [`ListView`] numbered from one.
+pub fn ordered_list(items: impl IntoViews) -> ListView {
+    ListView {
+        children: items.into_views(),
+        kind: ListKind::Ordered,
         start: 1,
         metadata: StyleMetadata::new(ViewType::OrderedList),
     }
@@ -207,46 +208,48 @@ pub fn ordered_list(items: impl IntoIterator<Item = View>) -> View {
 ///
 /// # Arguments
 ///
-/// * `items` — List-item views to mark with hyphens.
+/// * `items` — Homogeneous collection or heterogeneous tuple of list items.
 ///
 /// # Returns
 ///
-/// A [`View::UnorderedList`] containing the provided items.
-pub fn unordered_list(items: impl IntoIterator<Item = View>) -> View {
-    View::UnorderedList {
-        items: items.into_iter().collect(),
+/// A hyphen-marked [`ListView`].
+pub fn unordered_list(items: impl IntoViews) -> ListView {
+    ListView {
+        children: items.into_views(),
+        kind: ListKind::Unordered,
+        start: 1,
         metadata: StyleMetadata::new(ViewType::UnorderedList),
     }
 }
 
-/// Creates a semantic list item containing vertically stacked document blocks.
+/// Creates a semantic list item containing vertically stacked blocks.
 ///
 /// # Arguments
 ///
-/// * `children` — Document blocks contained by the list item.
+/// * `children` — Homogeneous collection or heterogeneous tuple of blocks.
 ///
 /// # Returns
 ///
-/// A [`View::ListItem`] containing the provided children.
-pub fn list_item(children: impl IntoIterator<Item = View>) -> View {
-    View::ListItem {
-        children: children.into_iter().collect(),
+/// A [`ListItemView`] containing the converted children.
+pub fn list_item(children: impl IntoViews) -> ListItemView {
+    ListItemView {
+        children: children.into_views(),
         metadata: StyleMetadata::new(ViewType::ListItem),
     }
 }
 
-/// Creates a semantic table from header and body sections.
+/// Creates a semantic table from head and body sections.
 ///
 /// # Arguments
 ///
-/// * `sections` — Table-head and table-body views rendered in source order.
+/// * `sections` — Table-head and table-body sections in source order.
 ///
 /// # Returns
 ///
-/// A [`View::Table`] containing the provided sections.
-pub fn table(sections: impl IntoIterator<Item = View>) -> View {
-    View::Table {
-        sections: sections.into_iter().collect(),
+/// A [`TableView`] containing the converted sections.
+pub fn table(sections: impl IntoViews) -> TableView {
+    TableView {
+        children: sections.into_views(),
         metadata: StyleMetadata::new(ViewType::Table),
     }
 }
@@ -255,14 +258,15 @@ pub fn table(sections: impl IntoIterator<Item = View>) -> View {
 ///
 /// # Arguments
 ///
-/// * `rows` — Table-row views rendered with the header's bold default style.
+/// * `rows` — Table rows rendered with header semantics.
 ///
 /// # Returns
 ///
-/// A [`View::TableHead`] containing the provided rows.
-pub fn table_head(rows: impl IntoIterator<Item = View>) -> View {
-    View::TableHead {
-        rows: rows.into_iter().collect(),
+/// A header [`TableSectionView`].
+pub fn table_head(rows: impl IntoViews) -> TableSectionView {
+    TableSectionView {
+        children: rows.into_views(),
+        kind: TableSectionKind::Head,
         metadata: StyleMetadata::new(ViewType::TableHead),
     }
 }
@@ -271,14 +275,15 @@ pub fn table_head(rows: impl IntoIterator<Item = View>) -> View {
 ///
 /// # Arguments
 ///
-/// * `rows` — Table-row views rendered in source order.
+/// * `rows` — Table rows rendered as body content.
 ///
 /// # Returns
 ///
-/// A [`View::TableBody`] containing the provided rows.
-pub fn table_body(rows: impl IntoIterator<Item = View>) -> View {
-    View::TableBody {
-        rows: rows.into_iter().collect(),
+/// A body [`TableSectionView`].
+pub fn table_body(rows: impl IntoViews) -> TableSectionView {
+    TableSectionView {
+        children: rows.into_views(),
+        kind: TableSectionKind::Body,
         metadata: StyleMetadata::new(ViewType::TableBody),
     }
 }
@@ -287,67 +292,65 @@ pub fn table_body(rows: impl IntoIterator<Item = View>) -> View {
 ///
 /// # Arguments
 ///
-/// * `cells` — Table-cell views rendered in column order.
+/// * `cells` — Table cells in column order.
 ///
 /// # Returns
 ///
-/// A [`View::TableRow`] containing the provided cells.
-pub fn table_row(cells: impl IntoIterator<Item = View>) -> View {
-    View::TableRow {
-        cells: cells.into_iter().collect(),
+/// A [`TableRowView`] containing the converted cells.
+pub fn table_row(cells: impl IntoViews) -> TableRowView {
+    TableRowView {
+        children: cells.into_views(),
         metadata: StyleMetadata::new(ViewType::TableRow),
     }
 }
 
-/// Creates a semantic table cell with left-aligned inline rich text.
-///
-/// Table cells contain Ratatui text rather than nested block views in the v1
-/// semantic document API.
+/// Creates a left-aligned semantic table cell.
 ///
 /// # Arguments
 ///
-/// * `content` — Rich text content rendered inside the cell.
+/// * `content` — Rich text content to render in the cell.
 ///
 /// # Returns
 ///
-/// A [`View::TableCell`] containing the provided content and default
-/// [`CellAlignment::Left`] alignment.
-pub fn table_cell(content: impl Into<Text<'static>>) -> View {
-    View::TableCell {
+/// A left-aligned [`TableCellView`].
+pub fn table_cell(content: impl Into<Text<'static>>) -> TableCellView {
+    TableCellView {
         content: content.into(),
         alignment: CellAlignment::Left,
         metadata: StyleMetadata::new(ViewType::TableCell),
     }
 }
 
-/// Creates a horizontal row.
+/// Creates a horizontal layout.
 ///
 /// # Arguments
 ///
-/// * `children` — Child views to divide across the row.
+/// * `children` — Homogeneous collection or heterogeneous tuple of child views.
 ///
 /// # Returns
 ///
-/// A [`View::Row`] containing the provided children.
-pub fn row(children: impl IntoIterator<Item = View>) -> View {
-    View::Row {
-        children: children.into_iter().collect(),
+/// A row-oriented [`LayoutView`].
+pub fn row(children: impl IntoViews) -> LayoutView {
+    LayoutView {
+        children: children.into_views(),
+        default_direction: LayoutDirection::Row,
         metadata: StyleMetadata::new(ViewType::Row),
     }
 }
 
-/// Creates a vertical column.
+/// Creates a vertical layout.
 ///
 /// # Arguments
 ///
-/// * `children` — Child views to divide down the column.
+/// * `children` — Homogeneous collection or heterogeneous tuple of child views.
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing the provided children.
-pub fn column(children: impl IntoIterator<Item = View>) -> View {
-    View::Column {
-        children: children.into_iter().collect(),
+/// A column-oriented [`LayoutView`].
+pub fn column(children: impl IntoViews) -> LayoutView {
+    LayoutView {
+        children: children.into_views(),
+        default_direction: LayoutDirection::Column,
         metadata: StyleMetadata::new(ViewType::Column),
     }
 }
@@ -356,31 +359,31 @@ pub fn column(children: impl IntoIterator<Item = View>) -> View {
 ///
 /// # Arguments
 ///
-/// * `children` — Child views grouped by the form.
+/// * `children` — Form controls and supporting child views.
 ///
 /// # Returns
 ///
-/// A [`View::Form`] containing the provided children.
-pub fn form(children: impl IntoIterator<Item = View>) -> View {
-    View::Form {
-        children: children.into_iter().collect(),
+/// A [`FormView`] with no submit or cancel callbacks.
+pub fn form(children: impl IntoViews) -> FormView {
+    FormView {
+        children: children.into_views(),
         metadata: StyleMetadata::new(ViewType::Form),
         on_submit: None,
         on_cancel: None,
     }
 }
 
-/// Creates a basic button.
+/// Creates a focusable button.
 ///
 /// # Arguments
 ///
-/// * `label` — Button text to center inside a bordered area.
+/// * `label` — Text displayed inside the button.
 ///
 /// # Returns
 ///
-/// A [`View::Button`] containing the provided label.
-pub fn button(label: impl Into<String>) -> View {
-    View::Button {
+/// A [`ButtonView`] with no activation callback.
+pub fn button(label: impl Into<String>) -> ButtonView {
+    ButtonView {
         label: label.into(),
         metadata: StyleMetadata::new(ViewType::Button),
         on_press: None,
@@ -391,43 +394,53 @@ pub fn button(label: impl Into<String>) -> View {
 ///
 /// # Arguments
 ///
-/// * `value` — Caller-owned value displayed by the input.
+/// * `value` — Caller-owned value displayed by the control.
 ///
 /// # Returns
 ///
-/// A [`View::Input`] containing the provided value.
-pub fn input(value: impl Into<String>) -> View {
-    let value = value.into();
-    let mut editable_state = EditableState::new();
-    editable_state.set_cursor(value.len());
-
-    View::Input {
-        value,
-        placeholder: None,
-        metadata: StyleMetadata::new(ViewType::Input),
-        on_input: None,
-        editable_state,
-    }
+/// An input-configured [`EditableTextView`].
+pub fn input(value: impl Into<String>) -> EditableTextView {
+    editable_text(value, EditableKind::Input, ViewType::Input)
 }
 
 /// Creates a controlled multiline text area.
 ///
 /// # Arguments
 ///
-/// * `value` — Caller-owned value displayed by the text area.
+/// * `value` — Caller-owned value displayed by the control.
 ///
 /// # Returns
 ///
-/// A [`View::TextArea`] containing the provided value.
-pub fn text_area(value: impl Into<String>) -> View {
+/// A text-area-configured [`EditableTextView`].
+pub fn text_area(value: impl Into<String>) -> EditableTextView {
+    editable_text(value, EditableKind::TextArea, ViewType::TextArea)
+}
+
+/// Creates a controlled text editor with the requested geometry.
+///
+/// # Arguments
+///
+/// * `value` — Caller-owned value displayed by the control.
+/// * `kind` — Single-line or multiline editing geometry.
+/// * `view_type` — Stylesheet selector identity for the control.
+///
+/// # Returns
+///
+/// An [`EditableTextView`] with fresh editing state.
+fn editable_text(
+    value: impl Into<String>,
+    kind: EditableKind,
+    view_type: ViewType,
+) -> EditableTextView {
     let value = value.into();
     let mut editable_state = EditableState::new();
     editable_state.set_cursor(value.len());
 
-    View::TextArea {
+    EditableTextView {
         value,
         placeholder: None,
-        metadata: StyleMetadata::new(ViewType::TextArea),
+        kind,
+        metadata: StyleMetadata::new(view_type),
         on_input: None,
         editable_state,
     }
@@ -437,69 +450,82 @@ pub fn text_area(value: impl Into<String>) -> View {
 ///
 /// # Arguments
 ///
-/// * `source` — Image source to render.
+/// * `source` — Filesystem-backed image source.
 ///
 /// # Returns
 ///
-/// A [`View::Image`] containing the provided source.
-pub fn image(source: impl Into<ImageSource>) -> View {
-    View::Image {
+/// An [`ImageView`] with no fallback text.
+pub fn image(source: impl Into<ImageSource>) -> ImageView {
+    ImageView {
         source: source.into(),
         alt: None,
         metadata: StyleMetadata::new(ViewType::Image),
     }
 }
 
-/// Creates a progress bar.
+/// Creates a gauge-style progress indicator.
 ///
 /// # Arguments
 ///
-/// * `value` — Completion ratio rendered by the progress bar.
+/// * `value` — Completion ratio, clamped to `0.0..=1.0`.
 ///
 /// # Returns
 ///
-/// A [`View::ProgressBar`] containing the provided value.
-pub fn progress_bar(value: f64) -> View {
-    View::ProgressBar {
+/// A [`ProgressBarView`] with no label.
+pub fn progress_bar(value: f64) -> ProgressBarView {
+    ProgressBarView {
         value: clamped_progress_value(value),
         label: None,
         metadata: StyleMetadata::new(ViewType::ProgressBar),
     }
 }
 
-/// Creates a dynamic child view.
+/// Creates a dynamic child boundary.
 ///
 /// # Arguments
 ///
-/// * `child` — Closure that produces a view during render-tree traversal.
+/// * `child` — Closure that rebuilds the current child during traversal.
 ///
 /// # Returns
 ///
-/// A [`View::Dynamic`] containing the provided child closure.
-pub fn dynamic(child: impl Fn() -> View + 'static) -> View {
-    View::Dynamic(super::dynamic::DynamicView::new(child))
+/// A [`DynamicView`] retaining compatible child state between refreshes.
+pub fn dynamic<V>(child: impl Fn() -> V + 'static) -> DynamicView
+where
+    V: IntoView,
+{
+    DynamicView::new(move || child().into_view())
 }
 
-/// Creates a component-boundary view.
+/// Creates a stateful component boundary.
 ///
 /// # Arguments
 ///
-/// * `component` — Component value to preserve as a render-tree boundary.
+/// * `component` — View implementation that owns component state and context.
 ///
 /// # Returns
 ///
-/// A [`View::Component`] containing the provided component.
-pub fn component(component: impl Component + 'static) -> View {
-    View::Component(ComponentView::new(component))
+/// An [`AnyView`] containing the component boundary.
+pub fn component(component: impl View + 'static) -> AnyView {
+    ComponentView::new(component).into_view()
 }
 
-/// Creates a lazy component-boundary view from a component constructor.
+/// Creates a lazy component boundary from a generated component constructor.
+///
+/// # Arguments
+///
+/// * `preserve_on_reconcile` — Whether matching generated component types may
+///   retain the previous boundary.
+/// * `factory` — Deferred component constructor.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing the lazy component boundary.
 pub(crate) fn component_factory<C>(
     preserve_on_reconcile: bool,
     factory: impl FnOnce() -> C + 'static,
-) -> View
+) -> AnyView
 where
-    C: Component + 'static,
+    C: View + 'static,
 {
-    View::Component(ComponentView::new_factory(preserve_on_reconcile, factory))
+    ComponentView::new_factory(preserve_on_reconcile, factory).into_view()
 }

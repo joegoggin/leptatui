@@ -7,7 +7,7 @@ use leptatui::prelude::*;
 
 /// Exercises nested row and column expansion.
 fn main() {
-    let view: View = view! {
+    let view = view! {
         <Column>
             <Text>{"Counter"}</Text>
             <Row>
@@ -19,6 +19,9 @@ fn main() {
 
     assert_eq!(
         view,
-        column([text("Counter"), row([button("Increment"), button("Reset")]),])
+        column((
+            text("Counter"),
+            row([button("Increment"), button("Reset")]),
+        ))
     );
 }

@@ -58,7 +58,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         #(#attrs)*
         #vis struct #ident {
             __leptatui_owner: #leptatui::prelude::Owner,
-            __leptatui_view: #leptatui::View,
+            __leptatui_view: #leptatui::AnyView,
             __leptatui_key_handlers: #leptatui::__private::KeyHandlerRegistry,
             __leptatui_stylesheet: #leptatui::Stylesheet,
         }
@@ -67,7 +67,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             #constructors
 
             #[doc(hidden)]
-            fn __create(__leptatui_setup: impl FnOnce() -> #leptatui::View) -> Self {
+            fn __create(__leptatui_setup: impl FnOnce() -> #leptatui::AnyView) -> Self {
                 let __leptatui_owner = #leptatui::prelude::Owner::new();
                 let __leptatui_key_handlers =
                     #leptatui::__private::KeyHandlerRegistry::new();
@@ -97,24 +97,17 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             #setup_fn
 
             #[doc = "Converts this component into a Leptatui view."]
-            #vis fn into_view(self) -> #leptatui::View {
+            #vis fn into_view(self) -> #leptatui::AnyView {
                 #leptatui::component(self)
             }
         }
 
         #default_impl
 
-        impl ::core::convert::From<#ident> for #leptatui::View {
-            #[doc = "Converts the component into a Leptatui view."]
-            fn from(component: #ident) -> Self {
-                component.into_view()
-            }
-        }
-
-        impl #leptatui::Component for #ident {
+        impl #leptatui::View for #ident {
             #[doc = "Renders the component into the provided Leptatui context."]
             fn render(
-                &mut self,
+                &self,
                 ctx: &mut #leptatui::RenderCtx<'_, '_>,
             ) -> #leptatui::Result<()> {
                 let __leptatui_owner = &self.__leptatui_owner;
@@ -130,40 +123,16 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 })
             }
 
-            #[doc = "Dispatches events through the component's rendered view tree."]
-            fn handle_event(
+            #[doc(hidden)]
+            fn __dispatch_event(
                 &mut self,
-                event: #leptatui::__private::Event,
+                event: &#leptatui::__private::Event,
             ) -> #leptatui::Result<#leptatui::AppControl> {
-                if let #leptatui::__private::Event::Key(__leptatui_key) = event {
-                    return self
-                        .handle_key_event(__leptatui_key)
-                        .map(::core::convert::Into::into);
-                }
-
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &mut self.__leptatui_view;
 
                 __leptatui_owner.with(|| {
-                    __leptatui_view.handle_event(event)
-                })
-            }
-
-            #[doc = "Dispatches key events through descendant and local key maps."]
-            fn handle_key_event(
-                &mut self,
-                key: #leptatui::__private::KeyEvent,
-            ) -> #leptatui::Result<#leptatui::KeyControl> {
-                let __leptatui_control = self.__dispatch_key_event(key.clone())?;
-                if __leptatui_control != #leptatui::KeyControl::Pass {
-                    return Ok(__leptatui_control);
-                }
-
-                let __leptatui_owner = &self.__leptatui_owner;
-                let __leptatui_view = &mut self.__leptatui_view;
-
-                __leptatui_owner.with(|| {
-                    __leptatui_view.__handle_default_key_event(key)
+                    __leptatui_view.__dispatch_event(event)
                 })
             }
 
@@ -200,7 +169,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
-            fn __min_height(&self, ctx: &mut #leptatui::RenderCtx<'_, '_>) -> u16 {
+            fn min_height(&self, ctx: &mut #leptatui::RenderCtx<'_, '_>) -> u16 {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;
                 let __leptatui_stylesheet = &self.__leptatui_stylesheet;
@@ -235,7 +204,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
-            fn __focused_button_span(
+            fn __focused_control_span(
                 &self,
                 ctx: &mut #leptatui::RenderCtx<'_, '_>,
             ) -> ::core::option::Option<(u32, u32)> {
@@ -272,6 +241,18 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                 __leptatui_owner.with(|| {
                     __leptatui_view.__handle_focused_input_key(key)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __flush_pending_input(
+                &mut self,
+            ) -> ::core::option::Option<#leptatui::AppControl> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__flush_pending_input()
                 })
             }
 
@@ -338,6 +319,34 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 __leptatui_owner.with(|| {
                     __leptatui_view.__has_overflowing_scroll_target()
                 })
+            }
+
+            #[doc(hidden)]
+            fn __set_scroll_to_top_key_pending(&self, pending: bool) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__set_scroll_to_top_key_pending(pending)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __take_scroll_to_top_key_pending(&self) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__take_scroll_to_top_key_pending()
+                })
+            }
+
+            fn as_any(&self) -> &dyn ::core::any::Any {
+                self
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn ::core::any::Any {
+                self
             }
         }
     })
@@ -551,7 +560,7 @@ fn expand_setup_fn(
 ) -> TokenStream {
     let setup_body = quote! {
         {
-            let view: #leptatui::View = (|| #body)().into();
+            let view: #leptatui::AnyView = #leptatui::IntoView::into_view((|| #body)());
             view
         }
     };
@@ -559,7 +568,7 @@ fn expand_setup_fn(
     if props.is_empty() {
         return quote! {
             #[doc(hidden)]
-            fn __setup_tree() -> #leptatui::View {
+            fn __setup_tree() -> #leptatui::AnyView {
                 #setup_body
             }
         };
@@ -570,7 +579,7 @@ fn expand_setup_fn(
 
     quote! {
         #[doc(hidden)]
-        fn __setup_tree(__leptatui_props: #props_ident) -> #leptatui::View {
+        fn __setup_tree(__leptatui_props: #props_ident) -> #leptatui::AnyView {
             let #props_ident {
                 #(#field_names,)*
             } = __leptatui_props;

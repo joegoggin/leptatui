@@ -7,64 +7,115 @@ use std::{cell::Cell, time::Instant};
 
 use crate::style::{Modifier, TuiStyle};
 
-/// Static terminal element type used by style selectors.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ViewType {
-    /// Bordered container view.
-    Block,
-    /// Plain text view.
-    Text,
-    /// First-level semantic heading view.
-    H1,
-    /// Second-level semantic heading view.
-    H2,
-    /// Third-level semantic heading view.
-    H3,
-    /// Fourth-level semantic heading view.
-    H4,
-    /// Fifth-level semantic heading view.
-    H5,
-    /// Sixth-level semantic heading view.
-    H6,
-    /// Semantic paragraph view.
-    Paragraph,
-    /// Syntax-highlighted code-block view.
-    CodeBlock,
-    /// Semantic ordered-list view.
-    OrderedList,
-    /// Semantic unordered-list view.
-    UnorderedList,
-    /// Semantic list-item view.
-    ListItem,
-    /// Semantic table view.
-    Table,
-    /// Semantic table-head view.
-    TableHead,
-    /// Semantic table-body view.
-    TableBody,
-    /// Semantic table-row view.
-    TableRow,
-    /// Semantic table-cell view.
-    TableCell,
-    /// Horizontal layout view.
-    Row,
-    /// Vertical layout view.
-    Column,
-    /// Grouping container for form controls.
-    Form,
-    /// Basic button view.
-    Button,
-    /// Single-line editable text control.
-    Input,
-    /// Multiline editable text control.
-    TextArea,
-    /// Path-backed terminal image with text fallback.
-    Image,
-    /// Progress indicator rendered as a gauge.
-    ProgressBar,
-}
+/// Open terminal element identity used by stylesheet type selectors.
+///
+/// Built-in identities are available as associated constants. External views
+/// can create their own identity with [`new`](Self::new).
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ViewType(&'static str);
 
 impl ViewType {
+    /// Bordered container view.
+    #[allow(non_upper_case_globals)]
+    pub const Block: Self = Self::new("Block");
+    /// Plain text view.
+    #[allow(non_upper_case_globals)]
+    pub const Text: Self = Self::new("Text");
+    /// First-level semantic heading view.
+    #[allow(non_upper_case_globals)]
+    pub const H1: Self = Self::new("H1");
+    /// Second-level semantic heading view.
+    #[allow(non_upper_case_globals)]
+    pub const H2: Self = Self::new("H2");
+    /// Third-level semantic heading view.
+    #[allow(non_upper_case_globals)]
+    pub const H3: Self = Self::new("H3");
+    /// Fourth-level semantic heading view.
+    #[allow(non_upper_case_globals)]
+    pub const H4: Self = Self::new("H4");
+    /// Fifth-level semantic heading view.
+    #[allow(non_upper_case_globals)]
+    pub const H5: Self = Self::new("H5");
+    /// Sixth-level semantic heading view.
+    #[allow(non_upper_case_globals)]
+    pub const H6: Self = Self::new("H6");
+    /// Semantic paragraph view.
+    #[allow(non_upper_case_globals)]
+    pub const Paragraph: Self = Self::new("Paragraph");
+    /// Syntax-highlighted code-block view.
+    #[allow(non_upper_case_globals)]
+    pub const CodeBlock: Self = Self::new("CodeBlock");
+    /// Semantic ordered-list view.
+    #[allow(non_upper_case_globals)]
+    pub const OrderedList: Self = Self::new("OrderedList");
+    /// Semantic unordered-list view.
+    #[allow(non_upper_case_globals)]
+    pub const UnorderedList: Self = Self::new("UnorderedList");
+    /// Semantic list-item view.
+    #[allow(non_upper_case_globals)]
+    pub const ListItem: Self = Self::new("ListItem");
+    /// Semantic table view.
+    #[allow(non_upper_case_globals)]
+    pub const Table: Self = Self::new("Table");
+    /// Semantic table-head view.
+    #[allow(non_upper_case_globals)]
+    pub const TableHead: Self = Self::new("TableHead");
+    /// Semantic table-body view.
+    #[allow(non_upper_case_globals)]
+    pub const TableBody: Self = Self::new("TableBody");
+    /// Semantic table-row view.
+    #[allow(non_upper_case_globals)]
+    pub const TableRow: Self = Self::new("TableRow");
+    /// Semantic table-cell view.
+    #[allow(non_upper_case_globals)]
+    pub const TableCell: Self = Self::new("TableCell");
+    /// Horizontal layout view.
+    #[allow(non_upper_case_globals)]
+    pub const Row: Self = Self::new("Row");
+    /// Vertical layout view.
+    #[allow(non_upper_case_globals)]
+    pub const Column: Self = Self::new("Column");
+    /// Grouping container for form controls.
+    #[allow(non_upper_case_globals)]
+    pub const Form: Self = Self::new("Form");
+    /// Basic button view.
+    #[allow(non_upper_case_globals)]
+    pub const Button: Self = Self::new("Button");
+    /// Single-line editable text control.
+    #[allow(non_upper_case_globals)]
+    pub const Input: Self = Self::new("Input");
+    /// Multiline editable text control.
+    #[allow(non_upper_case_globals)]
+    pub const TextArea: Self = Self::new("TextArea");
+    /// Path-backed terminal image with text fallback.
+    #[allow(non_upper_case_globals)]
+    pub const Image: Self = Self::new("Image");
+    /// Progress indicator rendered as a gauge.
+    #[allow(non_upper_case_globals)]
+    pub const ProgressBar: Self = Self::new("ProgressBar");
+
+    /// Creates a semantic view identity.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — Static PascalCase name used by stylesheet selectors.
+    ///
+    /// # Returns
+    ///
+    /// A [`ViewType`] containing `name`.
+    pub const fn new(name: &'static str) -> Self {
+        Self(name)
+    }
+
+    /// Returns the semantic selector name.
+    ///
+    /// # Returns
+    ///
+    /// A static string slice containing the selector name.
+    pub const fn name(self) -> &'static str {
+        self.0
+    }
+
     /// Returns the low-precedence style defaults for this view type.
     ///
     /// # Returns
@@ -98,6 +149,7 @@ impl ViewType {
             | Self::TextArea
             | Self::Image
             | Self::ProgressBar => TuiStyle::new(),
+            _ => TuiStyle::new(),
         }
     }
 }
@@ -563,6 +615,24 @@ impl StyleMetadata {
     /// * `focused` — Whether this view should match `:focus`.
     pub fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    /// Copies transient interaction state from compatible previous metadata.
+    ///
+    /// Authored selector values and inline styles remain owned by the newly
+    /// built view while focus and scrolling state survive reactive rebuilds.
+    ///
+    /// # Arguments
+    ///
+    /// * `previous` — Metadata from the previous compatible view node.
+    pub(crate) fn reconcile_runtime_state(&mut self, previous: &Self) {
+        self.focused = previous.focused;
+        self.scroll_into_view_requested
+            .set(previous.scroll_into_view_requested.get());
+        self.scroll_to_top_key_pending
+            .set(previous.scroll_to_top_key_pending.get());
+        self.scroll_offset.set(previous.scroll_offset.get());
+        self.max_scroll_offset.set(previous.max_scroll_offset.get());
     }
 
     /// Requests that this view be scrolled into visible overflow bounds.
