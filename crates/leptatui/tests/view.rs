@@ -13,10 +13,10 @@ use std::{
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     __private::FocusedControl,
-    AnyView, AppControl, Borders, ButtonView, CellAlignment, Color, EditableKind, EditableState,
-    EditableTextView, FormView, ImageSource, IntoView, KeyControl, LayoutDirection, ListItemView,
-    MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations, StyleMetadata, StyleSelector,
-    Stylesheet, SyntaxTheme, TableCellView, TableRowView, TableSectionView, TuiSize, TuiSpacing,
+    AnyView, AppControl, Borders, ButtonView, CellAlignment, Color, EditableState, FormView,
+    ImageSource, InputView, IntoView, KeyControl, LayoutDirection, ListItemView, MediaQuery,
+    Modifier, RenderCtx, Result, StyleDeclarations, StyleMetadata, StyleSelector, Stylesheet,
+    SyntaxTheme, TableCellView, TableRowView, TableSectionView, TextAreaView, TuiSize, TuiSpacing,
     TuiStyle, View, ViewType, VimMode, block, button, code_block, column, component, dynamic, form,
     h1, h2, h3, h4, h5, h6, image, input, list_item, ordered_list, paragraph, progress_bar, row,
     table, table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
@@ -79,7 +79,10 @@ fn control_focuses(view: &dyn View) -> Vec<bool> {
     if let Some(button) = view.as_any().downcast_ref::<ButtonView>() {
         return vec![button.metadata().is_focused()];
     }
-    if let Some(editor) = view.as_any().downcast_ref::<EditableTextView>() {
+    if let Some(editor) = view.as_any().downcast_ref::<InputView>() {
+        return vec![editor.metadata().is_focused()];
+    }
+    if let Some(editor) = view.as_any().downcast_ref::<TextAreaView>() {
         return vec![editor.metadata().is_focused()];
     }
 
@@ -98,7 +101,7 @@ fn control_focuses(view: &dyn View) -> Vec<bool> {
 /// # Returns
 ///
 /// A [`View`] containing an input with fresh editable state.
-fn editable_input(value: impl Into<String>) -> EditableTextView {
+fn editable_input(value: impl Into<String>) -> InputView {
     input(value)
 }
 
@@ -111,7 +114,7 @@ fn editable_input(value: impl Into<String>) -> EditableTextView {
 /// # Returns
 ///
 /// A [`View`] containing a text area with fresh editable state.
-fn editable_text_area(value: impl Into<String>) -> EditableTextView {
+fn editable_text_area(value: impl Into<String>) -> TextAreaView {
     text_area(value)
 }
 
@@ -146,8 +149,11 @@ fn editable_state_fixture() -> EditableState {
 ///
 /// An [`EditableState`] reference retained by the view.
 fn editable_state(view: &dyn View) -> &EditableState {
+    if let Some(view) = view.as_any().downcast_ref::<InputView>() {
+        return view.editable_state();
+    }
     view.as_any()
-        .downcast_ref::<EditableTextView>()
+        .downcast_ref::<TextAreaView>()
         .expect("expected editable view")
         .editable_state()
 }
@@ -164,9 +170,16 @@ fn editable_state(view: &dyn View) -> &EditableState {
 ///
 /// An [`EditableState`] reference retained by the view.
 fn editable_state_mut(view: &mut dyn View) -> &mut EditableState {
+    if view.as_any().is::<InputView>() {
+        return view
+            .as_any_mut()
+            .downcast_mut::<InputView>()
+            .expect("expected input view")
+            .editable_state_mut();
+    }
     view.as_any_mut()
-        .downcast_mut::<EditableTextView>()
-        .expect("expected editable view")
+        .downcast_mut::<TextAreaView>()
+        .expect("expected text-area view")
         .editable_state_mut()
 }
 
@@ -215,10 +228,7 @@ fn ctrl_enter_key_event() -> KeyEvent {
 /// # Returns
 ///
 /// A focused insert-mode [`View`] configured as an input.
-fn emitting_input(
-    value: impl Into<String>,
-    emitted: &Rc<RefCell<Vec<String>>>,
-) -> EditableTextView {
+fn emitting_input(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) -> InputView {
     let emitted_for_input = Rc::clone(emitted);
     let mut view = input(value).with_focus(true).on_input(move |next| {
         emitted_for_input.borrow_mut().push(next);
@@ -241,7 +251,7 @@ fn emitting_input(
 fn emitting_text_area(
     value: impl Into<String>,
     emitted: &Rc<RefCell<Vec<String>>>,
-) -> EditableTextView {
+) -> TextAreaView {
     let emitted_for_text_area = Rc::clone(emitted);
     let mut view = text_area(value).with_focus(true).on_input(move |next| {
         emitted_for_text_area.borrow_mut().push(next);
@@ -263,10 +273,10 @@ fn emitting_text_area(
 ///
 /// A [`View`] containing the reconciled input.
 fn reconcile_input_value(
-    previous: &EditableTextView,
+    previous: &InputView,
     value: impl Into<String>,
     emitted: &Rc<RefCell<Vec<String>>>,
-) -> EditableTextView {
+) -> InputView {
     let mut next = emitting_input(value, emitted);
     leptatui::__private::__reconcile_view(&mut next, previous);
     next
@@ -285,10 +295,10 @@ fn reconcile_input_value(
 ///
 /// A [`View`] containing the reconciled text area.
 fn reconcile_text_area_value(
-    previous: &EditableTextView,
+    previous: &TextAreaView,
     value: impl Into<String>,
     emitted: &Rc<RefCell<Vec<String>>>,
-) -> EditableTextView {
+) -> TextAreaView {
     let mut next = emitting_text_area(value, emitted);
     leptatui::__private::__reconcile_view(&mut next, previous);
     next
@@ -393,9 +403,8 @@ fn form_child(view: &FormView, index: usize) -> &dyn View {
 fn input_value(view: &dyn View) -> &str {
     let editor = view
         .as_any()
-        .downcast_ref::<EditableTextView>()
+        .downcast_ref::<InputView>()
         .expect("expected input view");
-    assert_eq!(editor.kind(), EditableKind::Input);
     editor.value()
 }
 
@@ -411,9 +420,8 @@ fn input_value(view: &dyn View) -> &str {
 fn text_area_value(view: &dyn View) -> &str {
     let editor = view
         .as_any()
-        .downcast_ref::<EditableTextView>()
+        .downcast_ref::<TextAreaView>()
         .expect("expected text-area view");
-    assert_eq!(editor.kind(), EditableKind::TextArea);
     editor.value()
 }
 
@@ -3897,6 +3905,32 @@ fn row_layout_stays_horizontal_without_direction_override() -> Result<()> {
     assert_eq!(symbol_position(&terminal, "B", 4), (2, 0));
 
     Ok(())
+}
+
+/// Verifies editable builders return distinct concrete view types.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada")
+/// text_area("Notes")
+/// ```
+///
+/// # Assertions
+///
+/// - `input` returns an [`InputView`].
+/// - `text_area` returns a [`TextAreaView`].
+/// - Type-erased inputs compare equal to identical inputs.
+/// - Type-erased text areas compare equal to identical text areas.
+/// - Inputs and text areas do not compare equal after type erasure.
+#[test]
+fn editable_builders_return_distinct_concrete_types() {
+    let input_view: InputView = input("Ada");
+    let text_area_view: TextAreaView = text_area("Notes");
+
+    assert_eq!(input_view.into_view(), input("Ada").into_view());
+    assert_eq!(text_area_view.into_view(), text_area("Notes").into_view());
+    assert_ne!(input("same").into_view(), text_area("same").into_view());
 }
 
 /// Verifies view builders store default selector metadata.

@@ -13,13 +13,11 @@ use crate::{
     app::Result,
     component::RenderCtx,
     style::{Color, TuiStyle},
-    view::{
-        metadata::StyleMetadata,
-        model::{AnyView, CellAlignment, TableCellView, TableRowView, TableSectionView},
-    },
+    view::{AnyView, CellAlignment, StyleMetadata, TableCellView, TableRowView, TableSectionView},
 };
 
-use super::{line_count_height, resolve_style, wrap_styled_line};
+use crate::view::content::code_block::wrap_styled_line;
+use crate::view::core::render::{line_count_height, resolve_style};
 
 /// Render-ready table cell with its resolved text style.
 #[derive(Clone)]

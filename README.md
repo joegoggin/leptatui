@@ -105,7 +105,7 @@ All are available through `leptatui::prelude::*` as builders and through
 PascalCase `view!` tags.
 
 `View` is an open, object-safe trait. Built-in builders retain concrete return
-types such as `TextView`, `LayoutView`, and `EditableTextView`, so their
+types such as `TextView`, `LayoutView`, `InputView`, and `TextAreaView`, so their
 type-specific configuration remains available without pattern matching.
 Containers accept homogeneous collections or heterogeneous tuples through
 `IntoViews`; type erasure occurs only when children enter the tree as

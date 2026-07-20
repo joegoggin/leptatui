@@ -9,7 +9,7 @@ use crate::{
     component::{FocusedControl, KeyControl, RenderCtx},
 };
 
-use super::model::{AnyView, View};
+use crate::view::{AnyView, IntoView, View};
 
 /// Shared dynamic child that preserves compatible child state between refreshes.
 #[derive(Clone)]
@@ -174,4 +174,20 @@ impl fmt::Debug for DynamicView {
             .debug_struct("DynamicView")
             .finish_non_exhaustive()
     }
+}
+
+/// Creates a dynamic child boundary.
+///
+/// # Arguments
+///
+/// * `child` — Closure that rebuilds the current child during traversal.
+///
+/// # Returns
+///
+/// A [`DynamicView`] retaining compatible child state between refreshes.
+pub fn dynamic<V>(child: impl Fn() -> V + 'static) -> DynamicView
+where
+    V: IntoView,
+{
+    DynamicView::new(move || child().into_view())
 }

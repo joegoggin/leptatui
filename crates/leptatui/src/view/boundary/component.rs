@@ -14,7 +14,7 @@ use crate::{
     context::ContextScope,
 };
 
-use super::model::{AnyView, IntoView, View};
+use crate::view::{AnyView, IntoView, View};
 
 /// Shared mutable component instance stored by a component view boundary.
 type SharedComponent = Rc<RefCell<AnyView>>;
@@ -411,4 +411,34 @@ impl View for ComponentView {
     fn __take_scroll_to_top_key_pending(&self) -> bool {
         self.with_component(AnyView::__take_scroll_to_top_key_pending)
     }
+}
+
+/// * `component` — View implementation that owns component state and context.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing the component boundary.
+pub fn component(component: impl View + 'static) -> AnyView {
+    ComponentView::new(component).into_view()
+}
+
+/// Creates a lazy component boundary from a generated component constructor.
+///
+/// # Arguments
+///
+/// * `preserve_on_reconcile` — Whether matching generated component types may
+///   retain the previous boundary.
+/// * `factory` — Deferred component constructor.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing the lazy component boundary.
+pub(crate) fn component_factory<C>(
+    preserve_on_reconcile: bool,
+    factory: impl FnOnce() -> C + 'static,
+) -> AnyView
+where
+    C: View + 'static,
+{
+    ComponentView::new_factory(preserve_on_reconcile, factory).into_view()
 }

@@ -1,9 +1,4 @@
-//! Syntax-highlighted code-block data and highlighting support.
-//!
-//! This module loads syntect's bundled grammars and themes once, converts
-//! highlighted ranges into owned Ratatui lines, and retains those lines in the
-//! view tree so frame rendering only performs width-aware layout. The selected
-//! theme also supplies the default background for the complete block interior.
+//! Syntax-highlighting support for code-block views.
 
 use std::sync::OnceLock;
 
@@ -17,15 +12,7 @@ use syntect::{
     parsing::SyntaxSet,
 };
 
-/// Bundled syntax and background theme used by code-block views.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum SyntaxTheme {
-    /// Base16 Ocean dark theme.
-    #[default]
-    Dark,
-    /// Base16 Ocean light theme.
-    Light,
-}
+use super::SyntaxTheme;
 
 impl SyntaxTheme {
     /// Returns the syntect bundled-theme key for this public theme.

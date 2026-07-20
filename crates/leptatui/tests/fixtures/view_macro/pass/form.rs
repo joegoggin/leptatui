@@ -38,14 +38,14 @@ fn main() {
     assert!(view.has_on_cancel());
 
     let input = view.children()[0]
-        .downcast_ref::<EditableTextView>()
+        .downcast_ref::<InputView>()
         .expect("expected input child");
     assert_eq!(input.value(), "Ada");
     assert_eq!(input.placeholder_text(), Some("Name"));
     assert!(input.has_on_input());
 
     let text_area = view.children()[1]
-        .downcast_ref::<EditableTextView>()
+        .downcast_ref::<TextAreaView>()
         .expect("expected text-area child");
     assert_eq!(text_area.value(), "Notes");
     assert_eq!(text_area.placeholder_text(), Some("Notes"));

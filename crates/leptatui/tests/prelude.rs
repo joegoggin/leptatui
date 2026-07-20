@@ -136,7 +136,7 @@ fn prelude_exposes_reactivity_and_context() {
         });
 
         let form_action: FormAction = std::rc::Rc::new(|| AppControl::Continue);
-        let input_action: InputAction = std::rc::Rc::new(|_| AppControl::Continue);
+        let input_action: EditableAction = std::rc::Rc::new(|_| AppControl::Continue);
         let input_action_for_input = std::rc::Rc::clone(&input_action);
         let input_action_for_text_area = std::rc::Rc::clone(&input_action);
         let form_action_for_submit = std::rc::Rc::clone(&form_action);
@@ -146,7 +146,7 @@ fn prelude_exposes_reactivity_and_context() {
         let input_view = input("Ada").on_input(move |next| input_action_for_input(next));
         let text_area_view =
             text_area("Notes").on_input(move |next| input_action_for_text_area(next));
-        let form_view = form([input_view, text_area_view])
+        let form_view = form((input_view, text_area_view))
             .on_submit(move || form_action_for_submit())
             .on_cancel(|| AppControl::Continue);
         let view = block(column((
