@@ -11,7 +11,7 @@ use leptatui::{
 };
 use ratatui::{style::Style, widgets::Padding};
 
-include!("cascade.rs");
+include!("cascade/mod.rs");
 include!("foundation.rs");
 include!("macro_integration.rs");
 include!("modules.rs");
