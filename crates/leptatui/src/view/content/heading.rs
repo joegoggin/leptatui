@@ -174,23 +174,11 @@ impl HeadingView {
     }
 }
 
+/// Returns the horizontal offset after a Markdown heading marker.
 fn heading_content_offset(level: u16) -> u16 {
     level.saturating_add(1)
 }
 
-/// Returns the one-based level of a semantic heading view.
-///
-/// # Arguments
-///
-/// * `view` — Semantic heading view to classify.
-///
-/// # Returns
-///
-/// A [`u16`] containing the heading level from one through six.
-///
-/// # Panics
-///
-/// Panics if `view` is not a semantic heading variant.
 /// Renders a Markdown-style semantic heading with a hanging content indent.
 ///
 /// The marker occupies only the first row while wrapped content remains aligned
@@ -295,6 +283,12 @@ impl View for HeadingView {
     }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+    fn can_reconcile_from(&self, previous: &dyn View) -> bool {
+        previous
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|previous| self.level == previous.level)
     }
 }
 

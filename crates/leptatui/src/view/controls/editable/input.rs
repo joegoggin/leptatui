@@ -37,14 +37,18 @@ pub struct InputView {
 ///
 /// An [`InputView`] with fresh editing state.
 pub fn input(value: impl Into<String>) -> InputView {
+    let value = value.into();
+    let mut editable_state = EditableState::new();
+    editable_state.set_cursor(value.len());
+
     InputView {
         model: EditableModel {
-            value: value.into(),
+            value,
             placeholder: None,
             kind: EditableControlKind::Input,
             metadata: StyleMetadata::new(ViewType::Input),
             on_input: None,
-            editable_state: EditableState::new(),
+            editable_state,
         },
     }
 }

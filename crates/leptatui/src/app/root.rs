@@ -64,7 +64,7 @@ pub trait AppRoot {
 }
 
 impl AppRoot for AnyView {
-    /// Renders a component root inside a fresh Leptatui context scope.
+    /// Renders a view root inside a fresh Leptatui context scope.
     ///
     /// # Arguments
     ///
@@ -76,7 +76,7 @@ impl AppRoot for AnyView {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::app::Error::Io`] if component rendering performs terminal
+    /// Returns [`crate::app::Error::Io`] if view rendering performs terminal
     /// I/O that fails.
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
         context::hooks::__with_context_scope(|| {
@@ -85,7 +85,7 @@ impl AppRoot for AnyView {
         })
     }
 
-    /// Forwards a terminal event to the component root.
+    /// Forwards a terminal event to the view root.
     ///
     /// # Arguments
     ///
@@ -103,13 +103,13 @@ impl AppRoot for AnyView {
         AnyView::handle_event(self, event)
     }
 
-    /// Forwards pending input flushing into component roots.
+    /// Forwards pending input flushing into the view root.
     #[doc(hidden)]
     fn __flush_pending_input(&mut self) -> Option<AppControl> {
         AnyView::__flush_pending_input(self)
     }
 
-    /// Forwards focused-control metadata from component roots.
+    /// Forwards focused-control metadata from the view root.
     #[doc(hidden)]
     fn __focused_control(&self) -> Option<FocusedControl> {
         AnyView::__focused_control(self)

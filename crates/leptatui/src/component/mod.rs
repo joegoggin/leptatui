@@ -6,7 +6,7 @@
 //! # Modules
 //!
 //! - `children` — Component child callback types.
-//! - `contract` — Component trait and focused-control state.
+//! - `contract` — Internal focused-control metadata.
 //! - `key` — Scoped key-handler registration and dispatch.
 //! - `render` — Frame rendering context and target helpers.
 //! - `stylesheet` — Scoped component stylesheet registration.

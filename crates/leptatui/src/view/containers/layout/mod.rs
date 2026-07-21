@@ -27,6 +27,7 @@ pub struct LayoutView {
     pub(crate) metadata: StyleMetadata,
 }
 
+/// Creates a horizontal layout.
 ///
 /// # Arguments
 ///
@@ -93,6 +94,13 @@ impl View for LayoutView {
     }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    fn can_reconcile_from(&self, previous: &dyn View) -> bool {
+        previous
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|previous| self.default_direction == previous.default_direction)
     }
 
     fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {

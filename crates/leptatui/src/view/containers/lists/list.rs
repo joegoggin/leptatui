@@ -128,6 +128,13 @@ impl View for ListView {
         self
     }
 
+    fn can_reconcile_from(&self, previous: &dyn View) -> bool {
+        previous
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|previous| self.kind == previous.kind)
+    }
+
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         let start = (self.kind == ListKind::Ordered).then_some(self.start);
         focused_control_span_for_list_view(&self.children, start, &self.metadata, ctx)

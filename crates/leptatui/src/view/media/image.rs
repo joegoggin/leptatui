@@ -87,6 +87,7 @@ impl ImageView {
     }
 }
 
+/// Creates an image view.
 ///
 /// # Arguments
 ///

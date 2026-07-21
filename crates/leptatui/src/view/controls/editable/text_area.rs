@@ -37,14 +37,18 @@ pub struct TextAreaView {
 ///
 /// A [`TextAreaView`] with fresh editing state.
 pub fn text_area(value: impl Into<String>) -> TextAreaView {
+    let value = value.into();
+    let mut editable_state = EditableState::new();
+    editable_state.set_cursor(value.len());
+
     TextAreaView {
         model: EditableModel {
-            value: value.into(),
+            value,
             placeholder: None,
             kind: EditableControlKind::TextArea,
             metadata: StyleMetadata::new(ViewType::TextArea),
             on_input: None,
-            editable_state: EditableState::new(),
+            editable_state,
         },
     }
 }

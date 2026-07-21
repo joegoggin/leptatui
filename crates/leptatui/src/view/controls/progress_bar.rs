@@ -42,6 +42,10 @@ impl ProgressBarView {
     }
 }
 
+/// Creates a progress bar.
+///
+/// # Arguments
+///
 /// * `value` — Completion ratio, clamped to `0.0..=1.0`.
 ///
 /// # Returns

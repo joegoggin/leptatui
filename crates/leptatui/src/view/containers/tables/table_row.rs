@@ -13,6 +13,8 @@ pub struct TableRowView {
     pub(crate) metadata: StyleMetadata,
 }
 
+/// Creates a semantic table row.
+///
 /// # Arguments
 ///
 /// * `cells` — Table cells in column order.

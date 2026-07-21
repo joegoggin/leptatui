@@ -104,7 +104,7 @@ pub(super) fn analyze(sig: &Signature) -> syn::Result<Vec<Prop>> {
         ReturnType::Default => {
             return Err(Error::new_spanned(
                 &sig.ident,
-                "#[component] functions must return a value convertible into leptatui::View",
+                "#[component] functions must return a value implementing leptatui::IntoView",
             ));
         }
         ReturnType::Type(_, ty) if is_unit_type(ty) => {

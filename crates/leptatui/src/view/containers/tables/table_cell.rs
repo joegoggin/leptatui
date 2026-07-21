@@ -45,6 +45,8 @@ impl TableCellView {
     }
 }
 
+/// Creates a semantic table cell.
+///
 /// # Arguments
 ///
 /// * `content` — Rich text content to render in the cell.

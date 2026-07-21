@@ -44,6 +44,7 @@ impl ButtonView {
     }
 }
 
+/// Creates an interactive button.
 ///
 /// # Arguments
 ///

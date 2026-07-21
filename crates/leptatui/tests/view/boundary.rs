@@ -246,6 +246,38 @@ fn reconciliation_does_not_leak_editable_state_to_unrelated_views() {
     assert!(!next_button.style_metadata().unwrap().is_focused());
 }
 
+/// Verifies reconciliation distinguishes semantic variants sharing one Rust type.
+///
+/// # Example Under Test
+///
+/// ```text
+/// reconcile(Column, previous Row)
+/// reconcile(UnorderedList, previous OrderedList)
+/// reconcile(TableBody, previous TableHead)
+/// reconcile(H2, previous H1)
+/// ```
+///
+/// # Assertions
+///
+/// - Different layout, list, table-section, and heading variants are incompatible.
+/// - Focused descendant state does not cross a layout variant change.
+#[test]
+fn reconciliation_does_not_cross_semantic_variants() {
+    assert!(!column(()).can_reconcile_from(&row(())));
+    assert!(!unordered_list(()).can_reconcile_from(&ordered_list(())));
+    assert!(!table_body(()).can_reconcile_from(&table_head(())));
+    assert!(!h2("Heading").can_reconcile_from(&h1("Heading")));
+
+    let previous = row([button("Action").with_focus(true)]);
+    let mut next = column([button("Action")]);
+    leptatui::__private::__reconcile_view(&mut next, &previous);
+
+    let button = next.children()[0]
+        .downcast_ref::<ButtonView>()
+        .expect("expected button view");
+    assert!(!button.metadata().is_focused());
+}
+
 /// Verifies dynamic reconciliation replaces newly produced nested dynamic boundaries.
 ///
 /// # Example Under Test

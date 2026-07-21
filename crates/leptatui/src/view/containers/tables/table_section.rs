@@ -24,6 +24,7 @@ pub struct TableSectionView {
     pub(crate) metadata: StyleMetadata,
 }
 
+/// Creates a semantic table header.
 ///
 /// # Arguments
 ///
@@ -88,6 +89,12 @@ impl View for TableSectionView {
     }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+    fn can_reconcile_from(&self, previous: &dyn View) -> bool {
+        previous
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|previous| self.kind == previous.kind)
     }
 }
 

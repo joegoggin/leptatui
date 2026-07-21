@@ -413,6 +413,10 @@ impl View for ComponentView {
     }
 }
 
+/// Wraps a stateful view in a component boundary.
+///
+/// # Arguments
+///
 /// * `component` — View implementation that owns component state and context.
 ///
 /// # Returns

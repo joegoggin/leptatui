@@ -10,7 +10,7 @@
 //! - `error` — Runtime error and result types.
 //! - `event` — Blocking Crossterm event polling helpers.
 //! - `render` — Root drawing helpers.
-//! - `root` — Root component abstraction used by the app runner.
+//! - `root` — Root adapter abstraction used by the app runner.
 //! - `terminal` — Managed terminal setup and cleanup.
 //! - `wakeup` — Async redraw wakeup coordination.
 
@@ -40,17 +40,17 @@ use terminal::TerminalSession;
 /// Time between event polls when no input is available.
 const DEFAULT_REDRAW_INTERVAL: Duration = Duration::from_millis(16);
 
-/// Runs a root component in a managed terminal session.
+/// Runs a root value in a managed terminal session.
 #[derive(Debug)]
 pub struct App<R> {
-    /// Root component or runtime adapter rendered by the app loop.
+    /// Root view or runtime adapter rendered by the app loop.
     root: R,
     /// Polling timeout that also controls idle redraw cadence.
     redraw_interval: Duration,
 }
 
 impl App<AnyView> {
-    /// Creates an app runner for a root component.
+    /// Creates an app runner for a root view.
     ///
     /// # Arguments
     ///
