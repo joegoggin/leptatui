@@ -1,51 +1,42 @@
-//! Semantic table collection, measurement, and rendering.
-//!
-//! This module resolves nested table styles, allocates responsive columns,
-//! wraps rich cell content, and renders bordered table grids.
+//! Semantic collection, responsive sizing, and rich cell wrapping.
 
-use ratatui::{
-    layout::{Alignment, Rect},
-    text::{Line, Text},
-    widgets::{Block, Paragraph},
-};
+use ratatui::text::{Line, Text};
 
+use crate::view::content::code_block::wrap_styled_line;
+use crate::view::core::render::{line_count_height, resolve_style};
 use crate::{
-    app::Result,
     component::RenderCtx,
     style::{Color, TuiStyle},
     view::{AnyView, CellAlignment, StyleMetadata, TableCellView, TableRowView, TableSectionView},
 };
 
-use crate::view::content::code_block::wrap_styled_line;
-use crate::view::core::render::{line_count_height, resolve_style};
-
 /// Render-ready table cell with its resolved text style.
 #[derive(Clone)]
-struct RenderedTableCell {
+pub(super) struct RenderedTableCell {
     /// Rich text rendered inside the cell.
-    content: Text<'static>,
+    pub(super) content: Text<'static>,
     /// Horizontal alignment applied after wrapping.
-    alignment: CellAlignment,
+    pub(super) alignment: CellAlignment,
     /// Fully resolved style for the cell text.
-    style: TuiStyle,
+    pub(super) style: TuiStyle,
 }
 
 /// Render-ready table row containing source-order cells.
-struct RenderedTableRow {
+pub(super) struct RenderedTableRow {
     /// Cells present in the source row before normalization.
-    cells: Vec<RenderedTableCell>,
+    pub(super) cells: Vec<RenderedTableCell>,
     /// Section or row background painted beneath the row cells.
-    background: Option<Color>,
+    pub(super) background: Option<Color>,
 }
 
 /// Resolved semantic table data shared by rendering and measurement.
-struct ResolvedTableLayout {
+pub(super) struct ResolvedTableLayout {
     /// Fully resolved style for the table container and borders.
-    style: TuiStyle,
+    pub(super) style: TuiStyle,
     /// Render-ready rows collected from the table sections.
-    rows: Vec<RenderedTableRow>,
+    pub(super) rows: Vec<RenderedTableRow>,
     /// Responsive content widths for visible leading columns.
-    widths: Vec<u16>,
+    pub(super) widths: Vec<u16>,
 }
 
 /// Collects semantic table rows and resolves nested section, row, and cell styles.
@@ -160,7 +151,7 @@ fn collect_table_cell(cell: &AnyView, ctx: &mut RenderCtx<'_, '_>) -> RenderedTa
 /// # Returns
 ///
 /// A [`ResolvedTableLayout`] shared by rendering and intrinsic measurement.
-fn resolve_table_layout(
+pub(super) fn resolve_table_layout(
     sections: &[AnyView],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
@@ -266,7 +257,7 @@ fn table_column_widths(rows: &[RenderedTableRow], available_width: u16) -> Vec<u
 /// # Returns
 ///
 /// A [`u16`] height of at least one terminal row.
-fn table_row_height(row: &RenderedTableRow, widths: &[u16]) -> u16 {
+pub(super) fn table_row_height(row: &RenderedTableRow, widths: &[u16]) -> u16 {
     widths
         .iter()
         .enumerate()
@@ -294,7 +285,7 @@ fn table_row_height(row: &RenderedTableRow, widths: &[u16]) -> u16 {
 /// # Returns
 ///
 /// A [`Text`] value whose logical lines all fit within `width`.
-fn wrapped_table_cell_text(cell: &RenderedTableCell, width: u16) -> Text<'static> {
+pub(super) fn wrapped_table_cell_text(cell: &RenderedTableCell, width: u16) -> Text<'static> {
     if width == 0 {
         return Text::default();
     }
@@ -312,255 +303,4 @@ fn wrapped_table_cell_text(cell: &RenderedTableCell, width: u16) -> Text<'static
     }
 
     Text::from(wrapped)
-}
-
-/// Creates one horizontal border line for a responsive table.
-///
-/// # Arguments
-///
-/// * `widths` — Visible content widths between border intersections.
-/// * `position` — Whether the line is the top, middle, or bottom boundary.
-///
-/// # Returns
-///
-/// A [`String`] containing plain Unicode terminal border glyphs.
-fn table_border_line(widths: &[u16], position: TableBorderPosition) -> String {
-    let (left, intersection, right) = match position {
-        TableBorderPosition::Top => ('┌', '┬', '┐'),
-        TableBorderPosition::Middle => ('├', '┼', '┤'),
-        TableBorderPosition::Bottom => ('└', '┴', '┘'),
-    };
-    let mut line = String::from(left);
-    for (index, width) in widths.iter().enumerate() {
-        line.push_str(&"─".repeat(usize::from(*width)));
-        line.push(if index + 1 == widths.len() {
-            right
-        } else {
-            intersection
-        });
-    }
-
-    line
-}
-
-/// Creates a vertical table border spanning a row's rendered height.
-///
-/// # Arguments
-///
-/// * `height` — Number of terminal rows to fill.
-///
-/// # Returns
-///
-/// A [`Text`] value containing one vertical border glyph per line.
-fn table_vertical_border(height: u16) -> Text<'static> {
-    Text::from(vec![Line::raw("│"); usize::from(height)])
-}
-
-/// Position of a horizontal table border within the rendered grid.
-#[derive(Clone, Copy)]
-enum TableBorderPosition {
-    /// First boundary above all rows.
-    Top,
-    /// Shared boundary between two rows.
-    Middle,
-    /// Final boundary below all rows.
-    Bottom,
-}
-
-/// Converts public table-cell alignment into Ratatui paragraph alignment.
-///
-/// # Arguments
-///
-/// * `alignment` — Public cell alignment value.
-///
-/// # Returns
-///
-/// The corresponding Ratatui [`Alignment`] value.
-fn ratatui_cell_alignment(alignment: CellAlignment) -> Alignment {
-    match alignment {
-        CellAlignment::Left => Alignment::Left,
-        CellAlignment::Center => Alignment::Center,
-        CellAlignment::Right => Alignment::Right,
-    }
-}
-
-/// Renders a semantic table with responsive columns and variable-height rows.
-///
-/// # Arguments
-///
-/// * `sections` — Header and body sections to render.
-/// * `metadata` — Selector metadata for the table container.
-/// * `ctx` — Rendering context containing the available viewport.
-///
-/// # Returns
-///
-/// An empty [`Result`] on success.
-pub(super) fn render_table_view(
-    sections: &[AnyView],
-    metadata: &StyleMetadata,
-    ctx: &mut RenderCtx<'_, '_>,
-) -> Result<()> {
-    let ResolvedTableLayout {
-        style: table_style,
-        rows,
-        widths,
-    } = resolve_table_layout(sections, metadata, ctx);
-    let area = ctx.area();
-    if widths.is_empty() || rows.is_empty() || area.height == 0 {
-        return Ok(());
-    }
-
-    let table_width = widths
-        .iter()
-        .copied()
-        .fold(
-            u16::try_from(widths.len().saturating_add(1)).unwrap_or(u16::MAX),
-            u16::saturating_add,
-        )
-        .min(area.width);
-    let table_area = Rect {
-        width: table_width,
-        ..area
-    };
-    let border_style = table_style.to_ratatui_style();
-    ctx.with_area(table_area, |ctx| {
-        ctx.render_widget(Block::new().style(border_style));
-    });
-    let mut y = table_area.y;
-    let bottom = table_area.y.saturating_add(table_area.height);
-    ctx.with_area(
-        Rect {
-            height: 1,
-            ..table_area
-        },
-        |ctx| {
-            ctx.render_widget(
-                Paragraph::new(table_border_line(&widths, TableBorderPosition::Top))
-                    .style(border_style),
-            );
-        },
-    );
-    y = y.saturating_add(1);
-
-    for (row_index, row) in rows.iter().enumerate() {
-        if y >= bottom {
-            break;
-        }
-        let requested_height = table_row_height(row, &widths);
-        let rendered_height = requested_height.min(bottom.saturating_sub(y));
-        if let Some(background) = row.background {
-            ctx.with_area(
-                Rect {
-                    y,
-                    height: rendered_height,
-                    ..table_area
-                },
-                |ctx| {
-                    ctx.render_widget(
-                        Block::new().style(ratatui::style::Style::new().bg(background)),
-                    );
-                },
-            );
-        }
-        let mut x = table_area.x;
-        ctx.with_area(
-            Rect {
-                x,
-                y,
-                width: 1,
-                height: rendered_height,
-            },
-            |ctx| {
-                ctx.render_widget(
-                    Paragraph::new(table_vertical_border(rendered_height)).style(border_style),
-                );
-            },
-        );
-        x = x.saturating_add(1);
-
-        for (column, width) in widths.iter().copied().enumerate() {
-            if let Some(cell) = row.cells.get(column) {
-                let cell_area = Rect {
-                    x,
-                    y,
-                    width,
-                    height: rendered_height,
-                };
-                ctx.with_area(cell_area, |ctx| {
-                    ctx.render_widget(
-                        Paragraph::new(wrapped_table_cell_text(cell, width))
-                            .style(cell.style.to_ratatui_style())
-                            .alignment(ratatui_cell_alignment(cell.alignment)),
-                    );
-                });
-            }
-            x = x.saturating_add(width);
-            ctx.with_area(
-                Rect {
-                    x,
-                    y,
-                    width: 1,
-                    height: rendered_height,
-                },
-                |ctx| {
-                    ctx.render_widget(
-                        Paragraph::new(table_vertical_border(rendered_height)).style(border_style),
-                    );
-                },
-            );
-            x = x.saturating_add(1);
-        }
-        y = y.saturating_add(rendered_height);
-        if rendered_height < requested_height || y >= bottom {
-            break;
-        }
-
-        let position = if row_index + 1 == rows.len() {
-            TableBorderPosition::Bottom
-        } else {
-            TableBorderPosition::Middle
-        };
-        ctx.with_area(
-            Rect {
-                y,
-                height: 1,
-                ..table_area
-            },
-            |ctx| {
-                ctx.render_widget(
-                    Paragraph::new(table_border_line(&widths, position)).style(border_style),
-                );
-            },
-        );
-        y = y.saturating_add(1);
-    }
-
-    Ok(())
-}
-
-/// Returns the intrinsic height of a semantic table.
-///
-/// # Arguments
-///
-/// * `sections` — Header and body sections to measure.
-/// * `metadata` — Selector metadata for the table container.
-/// * `ctx` — Rendering context containing the available width.
-///
-/// # Returns
-///
-/// A [`u16`] height including horizontal row boundaries.
-pub(super) fn min_height_for_table_view(
-    sections: &[AnyView],
-    metadata: &StyleMetadata,
-    ctx: &mut RenderCtx<'_, '_>,
-) -> u16 {
-    let ResolvedTableLayout { rows, widths, .. } = resolve_table_layout(sections, metadata, ctx);
-    if widths.is_empty() || rows.is_empty() {
-        return 0;
-    }
-
-    rows.iter().map(|row| table_row_height(row, &widths)).fold(
-        u16::try_from(rows.len().saturating_add(1)).unwrap_or(u16::MAX),
-        u16::saturating_add,
-    )
 }

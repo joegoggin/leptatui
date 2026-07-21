@@ -1,89 +1,11 @@
-//! Theme-aware style declarations stored by stylesheet rules.
+//! Fluent style declaration builders.
 
+use super::{Declaration, StyleDeclarations};
 use crate::style::{
-    BorderType, Borders, Color, LayoutDirection, Modifier, ThemeValue, ThemeVariables, TuiSize,
-    TuiSpacing, TuiStyle,
+    BorderType, Borders, Color, LayoutDirection, Modifier, ThemeValue, TuiSize, TuiSpacing,
 };
 
-/// One style declaration value plus its cascade importance.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct Declaration<T> {
-    /// Declaration payload value.
-    value: T,
-    /// Whether the declaration was marked as important.
-    important: bool,
-}
-
-impl<T> Declaration<T> {
-    /// Creates a non-important declaration.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` — Declaration payload value.
-    ///
-    /// # Returns
-    ///
-    /// A [`Declaration`] containing the normal-priority value.
-    const fn normal(value: T) -> Self {
-        Self {
-            value,
-            important: false,
-        }
-    }
-
-    /// Creates an important declaration.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` — Declaration payload value.
-    ///
-    /// # Returns
-    ///
-    /// A [`Declaration`] containing the important-priority value.
-    const fn important(value: T) -> Self {
-        Self {
-            value,
-            important: true,
-        }
-    }
-}
-
-/// Style declarations before runtime theme variables are resolved.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct StyleDeclarations {
-    /// Foreground color declaration.
-    foreground: Option<Declaration<ThemeValue<Color>>>,
-    /// Background color declaration.
-    background: Option<Declaration<ThemeValue<Color>>>,
-    /// Text modifier declaration.
-    modifiers: Option<Declaration<Modifier>>,
-    /// Border visibility declaration.
-    borders: Option<Declaration<Borders>>,
-    /// Border glyph style declaration.
-    border_type: Option<Declaration<BorderType>>,
-    /// Padding declaration.
-    padding: Option<Declaration<TuiSpacing>>,
-    /// Layout direction declaration.
-    direction: Option<Declaration<LayoutDirection>>,
-    /// Image render size declaration.
-    image_size: Option<Declaration<TuiSize>>,
-}
-
 impl StyleDeclarations {
-    /// Creates an empty declaration set.
-    pub const fn new() -> Self {
-        Self {
-            foreground: None,
-            background: None,
-            modifiers: None,
-            borders: None,
-            border_type: None,
-            padding: None,
-            direction: None,
-            image_size: None,
-        }
-    }
-
     /// Sets the normal foreground color declaration.
     ///
     /// # Arguments
@@ -361,149 +283,13 @@ impl StyleDeclarations {
         self
     }
 
-    /// Overlays another declaration set and returns the updated declarations.
-    pub fn merge(mut self, style: &Self) -> Self {
-        self.overlay(style);
-        self
-    }
-
-    /// Overlays all declarations from another declaration set.
-    ///
-    /// # Arguments
-    ///
-    /// * `style` — Declaration set to cascade over this set.
-    pub(crate) fn overlay(&mut self, style: &Self) {
-        self.overlay_matching_importance(style, |_| true);
-    }
-
-    /// Overlays only normal declarations from another declaration set.
-    ///
-    /// # Arguments
-    ///
-    /// * `style` — Declaration set to cascade over this set.
-    pub(crate) fn overlay_normal(&mut self, style: &Self) {
-        self.overlay_matching_importance(style, |important| !important);
-    }
-
-    /// Overlays only important declarations from another declaration set.
-    ///
-    /// # Arguments
-    ///
-    /// * `style` — Declaration set to cascade over this set.
-    pub(crate) fn overlay_important(&mut self, style: &Self) {
-        self.overlay_matching_importance(style, |important| important);
-    }
-
-    /// Resolves theme-backed declarations into concrete terminal style values.
-    ///
-    /// # Arguments
-    ///
-    /// * `theme` — Active theme variables used for color resolution.
-    ///
-    /// # Returns
-    ///
-    /// A [`TuiStyle`] containing the resolved declarations.
-    pub(crate) fn resolve(&self, theme: &ThemeVariables) -> TuiStyle {
-        let mut style = TuiStyle::new();
-
-        if let Some(color) = &self.foreground {
-            style = style.foreground(color.value.resolve(theme));
-        }
-
-        if let Some(color) = &self.background {
-            style = style.background(color.value.resolve(theme));
-        }
-
-        if let Some(modifiers) = &self.modifiers {
-            style = style.modifier(modifiers.value);
-        }
-
-        if let Some(borders) = &self.borders {
-            style = style.borders(borders.value);
-        }
-
-        if let Some(border_type) = &self.border_type {
-            style = style.border_type(border_type.value);
-        }
-
-        if let Some(padding) = &self.padding {
-            style = style.padding(padding.value);
-        }
-
-        if let Some(direction) = &self.direction {
-            style = style.direction(direction.value);
-        }
-
-        if let Some(size) = &self.image_size {
-            style = style.image_size(size.value);
-        }
-
-        style
-    }
-
-    /// Overlays declarations matching a caller-selected importance predicate.
-    ///
-    /// # Arguments
-    ///
-    /// * `style` — Declaration set to cascade over this set.
-    /// * `matches` — Predicate that accepts declarations by importance.
-    fn overlay_matching_importance(&mut self, style: &Self, matches: impl Fn(bool) -> bool) {
-        if let Some(declaration) = &style.foreground
-            && matches(declaration.important)
-        {
-            self.set_foreground(declaration.value.clone(), declaration.important);
-        }
-
-        if let Some(declaration) = &style.background
-            && matches(declaration.important)
-        {
-            self.set_background(declaration.value.clone(), declaration.important);
-        }
-
-        if let Some(declaration) = &style.modifiers
-            && matches(declaration.important)
-        {
-            self.set_modifier(declaration.value, declaration.important);
-        }
-
-        if let Some(declaration) = &style.borders
-            && matches(declaration.important)
-        {
-            self.set_borders(declaration.value, declaration.important);
-        }
-
-        if let Some(declaration) = &style.border_type
-            && matches(declaration.important)
-        {
-            self.set_border_type(declaration.value, declaration.important);
-        }
-
-        if let Some(declaration) = &style.padding
-            && matches(declaration.important)
-        {
-            self.set_padding(declaration.value, declaration.important);
-        }
-
-        if let Some(declaration) = &style.direction
-            && matches(declaration.important)
-        {
-            self.set_direction(declaration.value, declaration.important);
-        }
-
-        if let Some(declaration) = &style.image_size
-            && matches(declaration.important)
-        {
-            self.set_image_size(declaration.value, declaration.important);
-        }
-    }
-
     /// Sets the foreground declaration.
     ///
     /// # Arguments
     ///
     /// * `color` — Literal or theme-backed foreground color.
     /// * `important` — Whether the declaration has important priority.
-    fn set_foreground(&mut self, color: ThemeValue<Color>, important: bool) {
+    pub(super) fn set_foreground(&mut self, color: ThemeValue<Color>, important: bool) {
         set_declaration(&mut self.foreground, color, important);
     }
 
@@ -513,7 +299,7 @@ impl StyleDeclarations {
     ///
     /// * `color` — Literal or theme-backed background color.
     /// * `important` — Whether the declaration has important priority.
-    fn set_background(&mut self, color: ThemeValue<Color>, important: bool) {
+    pub(super) fn set_background(&mut self, color: ThemeValue<Color>, important: bool) {
         set_declaration(&mut self.background, color, important);
     }
 
@@ -523,7 +309,7 @@ impl StyleDeclarations {
     ///
     /// * `modifier` — Ratatui text modifier to apply.
     /// * `important` — Whether the declaration has important priority.
-    fn set_modifier(&mut self, modifier: Modifier, important: bool) {
+    pub(super) fn set_modifier(&mut self, modifier: Modifier, important: bool) {
         set_declaration(&mut self.modifiers, modifier, important);
     }
 
@@ -533,7 +319,7 @@ impl StyleDeclarations {
     ///
     /// * `borders` — Border sides to render.
     /// * `important` — Whether the declaration has important priority.
-    fn set_borders(&mut self, borders: Borders, important: bool) {
+    pub(super) fn set_borders(&mut self, borders: Borders, important: bool) {
         set_declaration(&mut self.borders, borders, important);
     }
 
@@ -543,7 +329,7 @@ impl StyleDeclarations {
     ///
     /// * `border_type` — Ratatui border glyph set to render.
     /// * `important` — Whether the declaration has important priority.
-    fn set_border_type(&mut self, border_type: BorderType, important: bool) {
+    pub(super) fn set_border_type(&mut self, border_type: BorderType, important: bool) {
         set_declaration(&mut self.border_type, border_type, important);
     }
 
@@ -553,7 +339,7 @@ impl StyleDeclarations {
     ///
     /// * `padding` — Terminal-cell padding around view content.
     /// * `important` — Whether the declaration has important priority.
-    fn set_padding(&mut self, padding: TuiSpacing, important: bool) {
+    pub(super) fn set_padding(&mut self, padding: TuiSpacing, important: bool) {
         set_declaration(&mut self.padding, padding, important);
     }
 
@@ -563,7 +349,7 @@ impl StyleDeclarations {
     ///
     /// * `direction` — Child layout direction for container views.
     /// * `important` — Whether the declaration has important priority.
-    fn set_direction(&mut self, direction: LayoutDirection, important: bool) {
+    pub(super) fn set_direction(&mut self, direction: LayoutDirection, important: bool) {
         set_declaration(&mut self.direction, direction, important);
     }
 
@@ -573,7 +359,7 @@ impl StyleDeclarations {
     ///
     /// * `size` — Terminal-cell size for image views.
     /// * `important` — Whether the declaration has important priority.
-    fn set_image_size(&mut self, size: TuiSize, important: bool) {
+    pub(super) fn set_image_size(&mut self, size: TuiSize, important: bool) {
         set_declaration(&mut self.image_size, size, important);
     }
 }
@@ -590,54 +376,5 @@ fn set_declaration<T>(slot: &mut Option<Declaration<T>>, value: T, important: bo
         Some(existing) if existing.important && !important => {}
         _ if important => *slot = Some(Declaration::important(value)),
         _ => *slot = Some(Declaration::normal(value)),
-    }
-}
-
-impl From<TuiStyle> for StyleDeclarations {
-    /// Creates style declarations from concrete terminal style values.
-    ///
-    /// # Arguments
-    ///
-    /// * `style` — Concrete terminal style to convert.
-    ///
-    /// # Returns
-    ///
-    /// A [`StyleDeclarations`] value containing the present style fields.
-    fn from(style: TuiStyle) -> Self {
-        let mut declarations = Self::new();
-
-        if let Some(color) = style.foreground {
-            declarations = declarations.foreground(color);
-        }
-
-        if let Some(color) = style.background {
-            declarations = declarations.background(color);
-        }
-
-        if let Some(modifiers) = style.modifiers {
-            declarations = declarations.modifier(modifiers);
-        }
-
-        if let Some(borders) = style.borders {
-            declarations = declarations.borders(borders);
-        }
-
-        if let Some(border_type) = style.border_type {
-            declarations = declarations.border_type(border_type);
-        }
-
-        if let Some(padding) = style.padding {
-            declarations = declarations.padding(padding);
-        }
-
-        if let Some(direction) = style.direction {
-            declarations = declarations.direction(direction);
-        }
-
-        if let Some(size) = style.image_size {
-            declarations = declarations.image_size(size);
-        }
-
-        declarations
     }
 }
