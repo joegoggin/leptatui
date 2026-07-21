@@ -2,6 +2,11 @@
 //!
 //! This module validates component function signatures and emits the component
 //! type, view conversion, and render implementation used by the runtime crate.
+//!
+//! # Modules
+//!
+//! - [`mod@expand`] — Component wrapper, props, constructor, and trait generation.
+//! - [`signature`] — Component function signature validation and prop analysis.
 
 mod expand;
 mod signature;

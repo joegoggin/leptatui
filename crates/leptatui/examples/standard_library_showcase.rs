@@ -67,7 +67,7 @@ fn clamp_progress(value: f64) -> f64 {
 ///
 /// A [`View`] containing form controls, image fallback, and progress state.
 #[component]
-fn StandardLibraryShowcase() -> View {
+fn StandardLibraryShowcase() -> impl IntoView {
     let name = RwSignal::new(String::from("Ada Lovelace"));
     let notes = RwSignal::new(String::from("Sketch the first program."));
     let status = RwSignal::new(ShowcaseStatus::Editing);

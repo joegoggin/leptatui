@@ -4,7 +4,7 @@ use leptatui::prelude::*;
 
 /// Triggers direct list-item ancestry validation.
 fn main() {
-    let _: View = view! {
+    let _ = view! {
         <Column>
             <ListItem><Paragraph>"Orphan"</Paragraph></ListItem>
         </Column>

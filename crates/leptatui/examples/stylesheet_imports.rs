@@ -71,7 +71,7 @@ fn button_styles() -> StyleModule {
 
 /// Root component for the stylesheet imports example.
 #[component]
-fn StylesheetImportsDemo() -> View {
+fn StylesheetImportsDemo() -> impl IntoView {
     let launches = RwSignal::new(0);
 
     use_key_event(KeyEventKind::Press, |key| {

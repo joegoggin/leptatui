@@ -9,17 +9,14 @@ use leptatui::prelude::*;
 fn main() {
     let count = 7;
 
-    let view: View = view! {
+    let view = view! {
         <Column>
             {move || text(count.to_string())}
             <Text>"Static"</Text>
         </Column>
     };
 
-    assert!(matches!(
-        view,
-        View::Column { children, .. }
-            if matches!(children.first(), Some(View::Dynamic(_)))
-                && children.get(1) == Some(&text("Static"))
-    ));
+    assert_eq!(view.metadata().view_type(), ViewType::Column);
+    assert!(view.children()[0].is::<DynamicView>());
+    assert_eq!(view.children()[1], text("Static"));
 }

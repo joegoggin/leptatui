@@ -7,7 +7,7 @@ use leptatui::prelude::*;
 
 /// Accepts children from either a prop or nested content.
 #[component]
-fn Panel(children: Children) -> View {
+fn Panel(children: Children) -> impl IntoView {
     column(children())
 }
 

@@ -6,7 +6,7 @@ use leptatui::prelude::*;
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
     let value = String::from("Ada");
-    let view: View = view! {
+    let view = view! {
         <Input
             value=value
             placeholder="Name"
@@ -17,25 +17,14 @@ fn main() {
         />
     };
 
-    match view {
-        View::Input {
-            value,
-            placeholder,
-            metadata,
-            on_input,
-            ..
-        } => {
-            assert_eq!(value, "Ada");
-            assert_eq!(placeholder.as_deref(), Some("Name"));
-            assert_eq!(metadata.view_type(), ViewType::Input);
-            assert_eq!(metadata.id(), Some("name"));
-            assert_eq!(
-                metadata.classes(),
-                &[String::from("field"), String::from("primary")]
-            );
-            assert_eq!(metadata.inline_style(), Some(style));
-            assert!(on_input.is_some());
-        }
-        other => panic!("expected input view, got {other:?}"),
-    }
+    assert_eq!(view.value(), "Ada");
+    assert_eq!(view.placeholder_text(), Some("Name"));
+    assert_eq!(view.metadata().view_type(), ViewType::Input);
+    assert_eq!(view.metadata().id(), Some("name"));
+    assert_eq!(
+        view.metadata().classes(),
+        &[String::from("field"), String::from("primary")]
+    );
+    assert_eq!(view.metadata().inline_style(), Some(style));
+    assert!(view.has_on_input());
 }

@@ -13,7 +13,7 @@ use leptatui::prelude::*;
 ///
 /// * `document` — Semantic Markdown view loaded before terminal startup.
 #[component]
-fn MarkdownReader(document: View) -> View {
+fn MarkdownReader(document: AnyView) -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;

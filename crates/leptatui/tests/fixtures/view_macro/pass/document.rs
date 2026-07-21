@@ -11,7 +11,7 @@ fn main() {
     let markdown_id = String::from("markdown-guide");
     let markdown_style = TuiStyle::new().foreground(Color::Green);
 
-    let view: View = view! {
+    let view = view! {
         <Column>
             <H1 class="title primary" id="guide" style={heading_style}>"Guide"</H1>
             <H2>"Overview"</H2>
@@ -58,7 +58,7 @@ fn main() {
         </Column>
     };
 
-    let expected = column([
+    let expected = column((
         h1("Guide")
             .with_classes("title primary")
             .with_id("guide")
@@ -78,10 +78,10 @@ fn main() {
             .with_classes("markdown guide")
             .with_id("markdown-guide")
             .with_inline_style(markdown_style),
-        ordered_list([list_item([
+        ordered_list([list_item((
             paragraph("First"),
             unordered_list([list_item([paragraph("Nested")])]),
-        ])])
+        ))])
         .start(3),
         table([
             table_head([table_row([
@@ -97,7 +97,7 @@ fn main() {
             .language("rust")
             .line_numbers(true)
             .syntax_theme(SyntaxTheme::Light),
-    ]);
+    ));
 
     assert_eq!(view, expected);
 }

@@ -2,6 +2,10 @@
 //!
 //! These tests ensure common runtime, view, style, context, and Leptos
 //! reactivity APIs are available through [`leptatui::prelude`].
+//!
+//! # Modules
+//!
+//! - [`support`] — Shared async test polling helpers.
 
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
@@ -16,7 +20,7 @@ use support::wait_until;
 ///
 /// A [`View`] containing the context label.
 #[component]
-fn PreludeComponent() -> View {
+fn PreludeComponent() -> impl IntoView {
     provide_context(String::from("from prelude component"));
     let label = expect_context::<String>();
     let _example_key = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE);
@@ -38,7 +42,7 @@ fn PreludeComponent() -> View {
 ///
 /// ```text
 /// #[component]
-/// fn PreludeComponent() -> View {
+/// fn PreludeComponent() -> impl IntoView {
 ///     provide_context(String::from("from prelude component"));
 ///     view! { <Text>{expect_context::<String>()}</Text> }
 /// }
@@ -58,12 +62,12 @@ fn PreludeComponent() -> View {
 fn prelude_exposes_macros_and_required_context() -> Result<()> {
     let backend = TestBackend::new(32, 3);
     let mut terminal = Terminal::new(backend)?;
-    let mut component = PreludeComponent::new();
+    let component = PreludeComponent::new();
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        render_result = Component::render(&mut component, &mut ctx);
+        render_result = View::render(&component, &mut ctx);
     })?;
     render_result?;
 
@@ -136,7 +140,7 @@ fn prelude_exposes_reactivity_and_context() {
         });
 
         let form_action: FormAction = std::rc::Rc::new(|| AppControl::Continue);
-        let input_action: InputAction = std::rc::Rc::new(|_| AppControl::Continue);
+        let input_action: EditableAction = std::rc::Rc::new(|_| AppControl::Continue);
         let input_action_for_input = std::rc::Rc::clone(&input_action);
         let input_action_for_text_area = std::rc::Rc::clone(&input_action);
         let form_action_for_submit = std::rc::Rc::clone(&form_action);
@@ -146,10 +150,10 @@ fn prelude_exposes_reactivity_and_context() {
         let input_view = input("Ada").on_input(move |next| input_action_for_input(next));
         let text_area_view =
             text_area("Notes").on_input(move |next| input_action_for_text_area(next));
-        let form_view = form([input_view, text_area_view])
+        let form_view = form((input_view, text_area_view))
             .on_submit(move || form_action_for_submit())
             .on_cancel(|| AppControl::Continue);
-        let view: View = block(column([
+        let view = block(column((
             text("from prelude"),
             h1("Guide"),
             h2("Section"),
@@ -186,14 +190,14 @@ fn prelude_exposes_reactivity_and_context() {
             image(image_source).alt("Project logo"),
             progress_bar(0.5).label("Half"),
             button("OK"),
-        ]));
+        )));
         let _ = view;
         let markdown_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/markdown/core.md"
         );
 
-        let macro_view: View = view! {
+        let macro_view = view! {
             <Column>
                 <H1>"Guide"</H1>
                 <Paragraph>"Overview"</Paragraph>
@@ -222,21 +226,26 @@ fn prelude_exposes_reactivity_and_context() {
             </Column>
         };
         let _ = macro_view;
-        let macro_markdown: View = view! {
+        let macro_markdown = view! {
             <Markdown
                 src={markdown_path}
                 syntax_theme=SyntaxTheme::Light
                 line_numbers=true
             />
         };
+        let expected_markdown = markdown_with_options(
+            include_str!("fixtures/markdown/core.md"),
+            MarkdownOptions::default()
+                .syntax_theme(SyntaxTheme::Light)
+                .line_numbers(true),
+        );
         assert_eq!(
-            macro_markdown,
-            markdown_with_options(
-                include_str!("fixtures/markdown/core.md"),
-                MarkdownOptions::default()
-                    .syntax_theme(SyntaxTheme::Light)
-                    .line_numbers(true),
-            )
+            macro_markdown
+                .style_metadata()
+                .map(|metadata| metadata.view_type()),
+            expected_markdown
+                .style_metadata()
+                .map(|metadata| metadata.view_type()),
         );
         let _default_file_reader = |path: &str| markdown_file(path);
         let _configured_file_reader =

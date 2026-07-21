@@ -8,7 +8,7 @@ use leptatui::prelude::*;
 
 /// Repeated labeled row for one cascade case.
 #[component]
-fn CaseRow(#[prop(into)] title: String, children: Children) -> View {
+fn CaseRow(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
         <Row class="case-row">
             <Text class="case-label">{title}</Text>
@@ -19,7 +19,7 @@ fn CaseRow(#[prop(into)] title: String, children: Children) -> View {
 
 /// Child component whose internals are styled by the parent component stylesheet.
 #[component]
-fn ChildReceivesParentStyle() -> View {
+fn ChildReceivesParentStyle() -> impl IntoView {
     view! {
         <Text class="parent-reaches-child">"parent stylesheet crosses the component boundary"</Text>
     }
@@ -27,7 +27,7 @@ fn ChildReceivesParentStyle() -> View {
 
 /// Child component with a lower-specificity local stylesheet.
 #[component]
-fn ChildLowerSpecificity() -> View {
+fn ChildLowerSpecificity() -> impl IntoView {
     stylesheet! {
         Text => { fg: Color::LightRed }
     }
@@ -37,7 +37,7 @@ fn ChildLowerSpecificity() -> View {
 
 /// Button component used to show focus selectors across component boundaries.
 #[component]
-fn ActionButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> View {
+fn ActionButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> impl IntoView {
     view! {
         <Button class="focus-button" on_press=on_press>
             {label}
@@ -47,7 +47,7 @@ fn ActionButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> Vi
 
 /// Root component for the cascade showcase.
 #[component]
-fn StyleCascadeShowcase() -> View {
+fn StyleCascadeShowcase() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;

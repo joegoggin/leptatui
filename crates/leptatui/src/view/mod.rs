@@ -1,25 +1,69 @@
 //! Basic renderable terminal views.
 //!
-//! This module provides a small view tree for hand-written interfaces, builder
-//! functions for common and semantic view variants, Ratatui rich-text types
-//! used by headings and paragraphs, nested block-oriented lists, and responsive
-//! semantic tables, and bordered syntax-highlighted code blocks.
+//! Concrete views are organized by domain while this module keeps the public
+//! constructor and type surface flat for application code.
+//!
+//! # Modules
+//!
+//! - `boundary` — Component and dynamic view boundaries.
+//! - `containers` — Layout, list, and table views.
+//! - `content` — Text, paragraph, heading, and code views.
+//! - `controls` — Interactive form and input views.
+//! - `core` — Shared view contracts, conversion, metadata, and rendering.
+//! - `media` — Terminal image views.
+//! - `reconciliation` — Retained view-tree state reconciliation.
 
-mod builders;
-mod code_block;
-mod component_view;
-mod dynamic;
-mod metadata;
-mod model;
-mod render;
+pub(crate) mod boundary;
+pub(crate) mod containers;
+pub(crate) mod content;
+pub(crate) mod controls;
+pub(crate) mod core;
+pub(crate) mod media;
+mod reconciliation;
 
-pub(crate) use builders::component_factory;
-pub use builders::{
-    block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4, h5, h6, image,
-    input, list_item, ordered_list, paragraph, progress_bar, row, table, table_body, table_cell,
-    table_head, table_row, text, text_area, unordered_list,
+pub(crate) use boundary::component::{ComponentView, component_factory};
+pub use boundary::{
+    component::component,
+    dynamic::{DynamicView, dynamic},
 };
-pub use code_block::SyntaxTheme;
-pub use metadata::{EditableState, StyleMetadata, ViewType, VimMode};
-pub use model::{ButtonAction, CellAlignment, FormAction, ImageSource, InputAction, View};
+pub use containers::{
+    block::{BlockView, block},
+    layout::{LayoutView, column, row},
+    lists::{
+        list::{ListKind, ListView, ordered_list, unordered_list},
+        list_item::{ListItemView, list_item},
+    },
+    tables::{
+        table::{TableView, table},
+        table_cell::{CellAlignment, TableCellView, table_cell},
+        table_row::{TableRowView, table_row},
+        table_section::{TableSectionKind, TableSectionView, table_body, table_head},
+    },
+};
+pub use content::{
+    code_block::{CodeBlockView, SyntaxTheme, code_block},
+    heading::{HeadingLevel, HeadingView, h1, h2, h3, h4, h5, h6},
+    paragraph::{ParagraphView, paragraph},
+    text::{TextView, text},
+};
+pub use controls::{
+    button::{ButtonAction, ButtonView, button},
+    editable::{
+        input::{InputView, input},
+        model::EditableAction,
+        state::{EditableState, VimMode},
+        text_area::{TextAreaView, text_area},
+    },
+    form::{FormAction, FormView, form},
+    progress_bar::{ProgressBarView, progress_bar},
+};
+pub use core::{
+    any_view::AnyView,
+    capabilities::{ContainerView, EditableView, StyledView, TextualView},
+    contract::View,
+    conversion::{IntoView, IntoViews},
+    metadata::{StyleMetadata, ViewType},
+};
+pub use media::image::{ImageSource, ImageView, image};
 pub use ratatui::text::{Line, Span, Text};
+pub(crate) use reconciliation::reconcile_views;

@@ -13,7 +13,7 @@ use leptatui::prelude::*;
 ///
 /// A [`View`] containing resource state, action state, and keyboard help.
 #[component]
-fn AsyncRedraw() -> View {
+fn AsyncRedraw() -> impl IntoView {
     let request = RwSignal::new(0usize);
 
     let resource = create_resource(

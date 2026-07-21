@@ -70,17 +70,18 @@ syntax-highlighted code block with line numbers. Scroll with `j`/`k`, Page Up
 and Page Down, `gg`, or `G`. Press `q` to quit.
 
 Semantic views can be assembled with builders. Ordered-list starts, table-cell
-alignment, and code presentation are configured on the returned `View`:
+alignment, and code presentation are configured on the concrete builder return
+types:
 
 ```rust
 use leptatui::prelude::*;
 
-let document = column([
+let document = column((
     h2("Nested list"),
-    ordered_list([list_item([
+    ordered_list([list_item((
         paragraph("Parent item"),
         unordered_list([list_item([paragraph("Nested item")])]),
-    ])])
+    ))])
     .start(3),
     table([
         table_head([table_row([
@@ -96,7 +97,7 @@ let document = column([
         .language("rust")
         .syntax_theme(SyntaxTheme::Dark)
         .line_numbers(true),
-]);
+));
 ```
 
 The showcase uses the equivalent nested tags and semantic stylesheet

@@ -7,7 +7,7 @@ use leptatui::prelude::*;
 
 /// Returns a view from a private component function.
 #[component]
-fn Greeting() -> View {
+fn Greeting() -> impl IntoView {
     text("hello")
 }
 
@@ -17,8 +17,8 @@ pub fn BorrowedText() -> &'static str {
     "borrowed"
 }
 
-/// Requires the generic type to implement [`Component`].
-fn assert_component<T: Component>() {}
+/// Requires the generic type to implement [`View`].
+fn assert_component<T: View>() {}
 
 /// Exercises generated constructors and component trait implementations.
 fn main() {

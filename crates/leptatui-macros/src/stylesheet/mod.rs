@@ -3,12 +3,32 @@
 //! The stylesheet macro accepts flat terminal selector rules, lowers them into
 //! Leptatui stylesheet builder calls, and registers them when invoked during
 //! generated component setup.
+//!
+//! # Modules
+//!
+//! - [`declaration`] — Property declaration parsing and expansion.
+//! - [`import`] — Imported stylesheet module bindings.
+//! - [`media`] — Responsive media-query parsing and expansion.
+//! - [`mixin`] — Mixin definitions, includes, and cycle detection.
+//! - [`root`] — Complete stylesheet invocation parsing and expansion.
+//! - [`rule`] — Selector rule parsing and media-aware expansion.
+//! - [`selector`] — Type, class, id, focus, and descendant selectors.
+//! - [`value`] — Literal, local-variable, and imported-variable values.
+//! - [`variable`] — Stylesheet variable definitions and references.
 
-mod model;
+mod declaration;
+mod import;
+mod media;
+mod mixin;
+mod root;
+mod rule;
+mod selector;
+mod value;
+mod variable;
 
 use proc_macro::TokenStream;
 
-use model::StylesheetRoot;
+use root::StylesheetRoot;
 use syn::Error;
 
 /// Expands `stylesheet!` input into a registered Leptatui `Stylesheet`

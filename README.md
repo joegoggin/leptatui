@@ -13,6 +13,11 @@ macros for building interactive terminal applications.
   `#[component]`, `view!`, and `stylesheet!`.
 - `crates/leptatui/examples`: Runnable examples for the public crate.
 
+Within each crate, domain facades keep public imports stable while substantive
+subdirectories group related implementations. Generic pass-through layers such
+as `model`, `utils`, or `expansion` are avoided; a directory either owns direct
+source files or is flattened into its parent.
+
 ## Quality Gates
 
 CI validates the full workspace with the same commands expected for local
@@ -33,8 +38,8 @@ component, builds a view tree with either builders or `view!`, and runs it with
 `App::new(root).run().await`.
 
 `view!` and `#[component]` are Leptatui-owned macros for terminal UIs. They use
-familiar Leptos-style component syntax, but they create Leptatui `View` values
-and component implementations instead of Leptos DOM nodes.
+familiar Leptos-style component syntax, but they create values implementing
+Leptatui's `View` trait instead of Leptos DOM nodes.
 
 Generated `#[component]` bodies run once when `new()` creates the component,
 under a stored Leptos owner. Create signals directly in the component body, and
@@ -47,7 +52,7 @@ custom key maps and overrides.
 use leptatui::prelude::*;
 
 #[component]
-fn Greeting() -> View {
+fn Greeting() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;
@@ -72,12 +77,12 @@ Children` prop. `#[prop(optional)]`, `#[prop(default = ...)]`, and
 
 ```rust
 #[component]
-fn Label(#[prop(into)] text: String) -> View {
+fn Label(#[prop(into)] text: String) -> impl IntoView {
     view! { <Text>{text}</Text> }
 }
 
 #[component]
-fn Panel(#[prop(into)] title: String, children: Children) -> View {
+fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
         <Block>
             <Column>
@@ -103,6 +108,17 @@ syntax-highlighted code blocks, CommonMark documents, buttons, controlled form
 controls, images, and progress bars.
 All are available through `leptatui::prelude::*` as builders and through
 PascalCase `view!` tags.
+
+`View` is an open, object-safe trait. Built-in builders retain concrete return
+types such as `TextView`, `LayoutView`, `InputView`, and `TextAreaView`, so their
+type-specific configuration remains available without pattern matching.
+Containers accept homogeneous collections or heterogeneous tuples through
+`IntoViews`; type erasure occurs only when children enter the tree as
+`AnyView` values. Application-defined views can implement `View` directly,
+optionally implement `StyledView` or `ContainerView`, and use
+`RenderCtx::resolve_style` to participate in the normal stylesheet cascade.
+Custom selector names are created with `ViewType::new("Name")`, and the same
+name can be used as a `stylesheet!` type selector.
 
 `Input` and `TextArea` are controlled components: pass the displayed `value`
 from caller-owned state and update that state from `on_input` when editing
@@ -135,14 +151,14 @@ PascalCase `view!` tags:
 ```rust
 use leptatui::prelude::*;
 
-let document = column([
+let document = column((
     h1("Leptatui guide"),
     paragraph("Semantic content wraps with the terminal viewport."),
     ordered_list([
-        list_item([
+        list_item((
             paragraph("Compose block-oriented list items."),
             unordered_list([list_item([paragraph("Nest list types freely.")])]),
-        ]),
+        )),
         list_item([paragraph("Choose the first decimal marker.")]),
     ])
     .start(3),
@@ -160,7 +176,7 @@ let document = column([
         .language("rust")
         .syntax_theme(SyntaxTheme::Dark)
         .line_numbers(true),
-]);
+));
 ```
 
 The same document shape can be written and styled with nested tags. Semantic
@@ -170,7 +186,7 @@ view names are also stylesheet type selectors:
 use leptatui::prelude::*;
 
 #[component]
-fn Guide() -> View {
+fn Guide() -> impl IntoView {
     stylesheet! {
         H1 => { fg: Color::LightCyan }
         OrderedList => { fg: Color::LightGreen }
@@ -274,7 +290,7 @@ instead of returning an error.
 use leptatui::prelude::*;
 
 #[component]
-fn StandardControls() -> View {
+fn StandardControls() -> impl IntoView {
     let name = RwSignal::new(String::from("Ada Lovelace"));
     let notes = RwSignal::new(String::from("Sketch the first program."));
     let progress = RwSignal::new(0.4);
@@ -328,7 +344,7 @@ override normal inline styles.
 
 ```rust
 #[component]
-fn Panel() -> View {
+fn Panel() -> impl IntoView {
     stylesheet! {
         .panel => {
             bg: Color::Black
@@ -351,7 +367,7 @@ and `direction` can switch Row/Column layout at a breakpoint.
 
 ```rust
 #[component]
-fn ResponsivePanel() -> View {
+fn ResponsivePanel() -> impl IntoView {
     stylesheet! {
         .panel => { padding: TuiSpacing::uniform(1) }
 
@@ -385,7 +401,7 @@ bodies with `@include`.
 
 ```rust
 #[component]
-fn MixedPanel() -> View {
+fn MixedPanel() -> impl IntoView {
     stylesheet! {
         @mixin panel_chrome {
             bg: Color::Black,
@@ -446,7 +462,7 @@ fn button_mixins() -> StyleModule {
 }
 
 #[component]
-fn Actions() -> View {
+fn Actions() -> impl IntoView {
     stylesheet! {
         @use button_mixins as button;
 
@@ -476,7 +492,7 @@ against variable names:
 
 ```rust
 #[component]
-fn ThemedPanel() -> View {
+fn ThemedPanel() -> impl IntoView {
     provide_context(
         ThemeVariables::new()
             .color("text", Color::Black)
@@ -527,7 +543,7 @@ impl ThemeMode {
 }
 
 #[component]
-fn ThemeLabel() -> View {
+fn ThemeLabel() -> impl IntoView {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
     dynamic(move || {
@@ -536,7 +552,7 @@ fn ThemeLabel() -> View {
 }
 
 #[component]
-fn ThemeRoot() -> View {
+fn ThemeRoot() -> impl IntoView {
     let mode = RwSignal::new(ThemeMode::Light);
     let theme = RwSignal::new(ThemeMode::Light.variables());
 
@@ -599,7 +615,7 @@ enum Page {
 }
 
 #[component]
-fn Nav() -> View {
+fn Nav() -> impl IntoView {
     let navigate = use_navigate::<Page>();
 
     view! {
@@ -621,7 +637,7 @@ fn Nav() -> View {
 }
 
 #[component]
-fn HomePage() -> View {
+fn HomePage() -> impl IntoView {
     let counter = expect_context::<RwSignal<i32>>();
 
     view! {
@@ -637,7 +653,7 @@ fn HomePage() -> View {
 }
 
 #[component]
-fn CounterPage() -> View {
+fn CounterPage() -> impl IntoView {
     let counter = expect_context::<RwSignal<i32>>();
 
     view! {
@@ -654,7 +670,7 @@ fn CounterPage() -> View {
 }
 
 #[component]
-fn SettingsPage() -> View {
+fn SettingsPage() -> impl IntoView {
     let route = use_route::<Page>();
 
     view! {
@@ -667,7 +683,7 @@ fn SettingsPage() -> View {
 }
 
 #[component]
-fn Root() -> View {
+fn Root() -> impl IntoView {
     let counter = RwSignal::new(0);
     let route_state = provide_route(Page::Home);
     let route = route_state.route();
@@ -729,7 +745,7 @@ async fn create_todo(title: String) -> std::result::Result<String, String> {
 }
 
 #[component]
-fn TodoApp() -> View {
+fn TodoApp() -> impl IntoView {
     let (refresh, set_refresh) = signal(0_u64);
 
     let items = create_resource(
@@ -762,18 +778,18 @@ fn TodoApp() -> View {
 }
 
 #[component]
-fn TodoList() -> View {
+fn TodoList() -> impl IntoView {
     let todos = expect_context::<Todos>();
 
     dynamic(move || match todos.items.get_untracked() {
         ResourceState::Pending => text("Loading todos..."),
-        ResourceState::Ready(items) => column(items.into_iter().map(text)),
+        ResourceState::Ready(items) => column(items.into_iter().map(text).collect::<Vec<_>>()),
         ResourceState::Error(error) => text(format!("Load failed: {error}")),
     })
 }
 
 #[component]
-fn TodoActions() -> View {
+fn TodoActions() -> impl IntoView {
     let todos = expect_context::<Todos>();
     let create = todos.create.clone();
     let reload = todos.refresh;

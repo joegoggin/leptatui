@@ -7,13 +7,16 @@
 //!
 //! - [`action`] — Signal-backed async mutation state helpers.
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
-//! - [`mod@component`] — Component rendering contracts and frame contexts.
+//! - [`mod@component`] — Component construction support and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
+//! - `executor` — Leptos executor integration for async reactive work.
+//! - `markdown` — CommonMark parsing and semantic view conversion.
 //! - [`route`] — Signal-backed route state helpers for page switches.
 //! - [`resource`] — Signal-backed async resource state helpers.
 //! - [`mod@view`] — Basic renderable view builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
+//! - `terminal_image` — Terminal graphics detection, caching, and fallbacks.
 //!
 //! # Public API Shape
 //!
@@ -25,7 +28,7 @@
 //! use leptatui::prelude::*;
 //!
 //! #[component]
-//! fn Root() -> View {
+//! fn Root() -> impl IntoView {
 //!     view! { <Text>"Hello from Leptatui"</Text> }
 //! }
 //!
@@ -37,8 +40,8 @@
 //!
 //! The [`macro@view`] and [`macro@component`] macros are Leptatui terminal UI
 //! macros. They use Leptos-style syntax and Leptos reactive primitives, but
-//! they create Leptatui [`View`] trees and [`Component`] implementations rather
-//! than Leptos DOM nodes.
+//! they create values implementing Leptatui's [`View`] protocol rather than
+//! Leptos DOM nodes.
 //!
 //! Standard components are available as builders such as [`input`],
 //! [`text_area`], [`form`], [`image()`], and [`progress_bar`] and as PascalCase
@@ -72,12 +75,12 @@
 //! ```
 //! use leptatui::prelude::*;
 //!
-//! let document = column([
+//! let document = column((
 //!     h1("Guide"),
-//!     ordered_list([list_item([
+//!     ordered_list([list_item((
 //!         paragraph("Parent item"),
 //!         unordered_list([list_item([paragraph("Nested item")])]),
-//!     ])])
+//!     ))])
 //!     .start(3),
 //!     table([
 //!         table_head([table_row([
@@ -93,7 +96,7 @@
 //!         .language("rust")
 //!         .syntax_theme(SyntaxTheme::Dark)
 //!         .line_numbers(true),
-//! ]);
+//! ));
 //! # let _ = document;
 //! ```
 //!
@@ -144,7 +147,7 @@
 //! # let _ = document;
 //! ```
 //!
-//! [`markdown`] and [`markdown_with_options`] convert in-memory CommonMark.
+//! [`markdown()`] and [`markdown_with_options`] convert in-memory CommonMark.
 //! [`markdown_file`] and [`markdown_file_with_options`] synchronously load
 //! UTF-8 paths before returning a view, and `view!` provides the equivalent
 //! path-backed `Markdown` tag:
@@ -208,9 +211,7 @@ extern crate self as leptatui;
 
 pub use action::{Action, ActionState, create_action};
 pub use app::{App, AppControl, AppRoot, Error, Result};
-pub use component::{
-    Children, ChildrenFn, ChildrenMut, Component, KeyControl, RenderCtx, use_key_event,
-};
+pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, use_key_event};
 pub use leptatui_macros::{component, stylesheet, view};
 pub use markdown::{
     MarkdownOptions, markdown, markdown_file, markdown_file_with_options, markdown_with_options,
@@ -223,17 +224,21 @@ pub use style::{
     TuiSize, TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
-    ButtonAction, CellAlignment, EditableState, FormAction, ImageSource, InputAction,
-    StyleMetadata, SyntaxTheme, View, ViewType, VimMode, block, button, code_block, column,
-    component, dynamic, form, h1, h2, h3, h4, h5, h6, image, input, list_item, ordered_list,
-    paragraph, progress_bar, row, table, table_body, table_cell, table_head, table_row, text,
-    text_area, unordered_list,
+    AnyView, BlockView, ButtonAction, ButtonView, CellAlignment, CodeBlockView, ContainerView,
+    DynamicView, EditableAction, EditableState, EditableView, FormAction, FormView, HeadingLevel,
+    HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews, LayoutView, ListItemView,
+    ListKind, ListView, ParagraphView, ProgressBarView, StyleMetadata, StyledView, SyntaxTheme,
+    TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView, TextAreaView,
+    TextView, TextualView, View, ViewType, VimMode, block, button, code_block, column, component,
+    dynamic, form, h1, h2, h3, h4, h5, h6, image, input, list_item, ordered_list, paragraph,
+    progress_bar, row, table, table_body, table_cell, table_head, table_row, text, text_area,
+    unordered_list,
 };
 
 #[doc(hidden)]
 /// Hidden implementation details used by generated macro code.
 pub mod __private {
-    use crate::{StyleMetadata, View};
+    use crate::{AnyView, View};
 
     pub use crate::component::{
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
@@ -252,13 +257,13 @@ pub mod __private {
     ///
     /// # Returns
     ///
-    /// A [`View`] wrapping the generated component factory.
+    /// An [`AnyView`] wrapping the generated component factory.
     pub fn __component_factory<C>(
         preserve_on_reconcile: bool,
         factory: impl FnOnce() -> C + 'static,
-    ) -> View
+    ) -> AnyView
     where
-        C: crate::Component + 'static,
+        C: crate::View + 'static,
     {
         crate::view::component_factory(preserve_on_reconcile, factory)
     }
@@ -269,231 +274,11 @@ pub mod __private {
     ///
     /// * `next` — Newly generated view tree to update in place.
     /// * `previous` — Previously rendered view tree used as reconciliation input.
-    pub fn __reconcile_view(next: &mut View, previous: &View) {
-        if should_preserve_deferred_boundary(next, previous) {
-            *next = previous.clone();
-            return;
-        }
-
-        match (next, previous) {
-            (
-                View::Block {
-                    child: next_child, ..
-                },
-                View::Block {
-                    child: previous_child,
-                    ..
-                },
-            ) => __reconcile_view(next_child, previous_child),
-            (
-                View::Row {
-                    children: next_children,
-                    metadata: next_metadata,
-                },
-                View::Row {
-                    children: previous_children,
-                    metadata: previous_metadata,
-                },
-            )
-            | (
-                View::Column {
-                    children: next_children,
-                    metadata: next_metadata,
-                },
-                View::Column {
-                    children: previous_children,
-                    metadata: previous_metadata,
-                },
-            )
-            | (
-                View::Form {
-                    children: next_children,
-                    metadata: next_metadata,
-                    ..
-                },
-                View::Form {
-                    children: previous_children,
-                    metadata: previous_metadata,
-                    ..
-                },
-            ) => {
-                reconcile_scroll_metadata(next_metadata, previous_metadata);
-                for (next_child, previous_child) in
-                    next_children.iter_mut().zip(previous_children.iter())
-                {
-                    __reconcile_view(next_child, previous_child);
-                }
-            }
-            (
-                View::OrderedList {
-                    items: next_items, ..
-                },
-                View::OrderedList {
-                    items: previous_items,
-                    ..
-                },
-            )
-            | (
-                View::UnorderedList {
-                    items: next_items, ..
-                },
-                View::UnorderedList {
-                    items: previous_items,
-                    ..
-                },
-            ) => {
-                for (next_item, previous_item) in next_items.iter_mut().zip(previous_items.iter()) {
-                    __reconcile_view(next_item, previous_item);
-                }
-            }
-            (
-                View::Table {
-                    sections: next_children,
-                    ..
-                },
-                View::Table {
-                    sections: previous_children,
-                    ..
-                },
-            )
-            | (
-                View::TableHead {
-                    rows: next_children,
-                    ..
-                },
-                View::TableHead {
-                    rows: previous_children,
-                    ..
-                },
-            )
-            | (
-                View::TableBody {
-                    rows: next_children,
-                    ..
-                },
-                View::TableBody {
-                    rows: previous_children,
-                    ..
-                },
-            )
-            | (
-                View::TableRow {
-                    cells: next_children,
-                    ..
-                },
-                View::TableRow {
-                    cells: previous_children,
-                    ..
-                },
-            ) => {
-                for (next_child, previous_child) in
-                    next_children.iter_mut().zip(previous_children.iter())
-                {
-                    __reconcile_view(next_child, previous_child);
-                }
-            }
-            (
-                View::ListItem {
-                    children: next_children,
-                    ..
-                },
-                View::ListItem {
-                    children: previous_children,
-                    ..
-                },
-            ) => {
-                for (next_child, previous_child) in
-                    next_children.iter_mut().zip(previous_children.iter())
-                {
-                    __reconcile_view(next_child, previous_child);
-                }
-            }
-            (
-                View::Button {
-                    metadata: next_metadata,
-                    ..
-                },
-                View::Button {
-                    metadata: previous_metadata,
-                    ..
-                },
-            ) => reconcile_focus_metadata(next_metadata, previous_metadata),
-            (
-                View::Input {
-                    metadata: next_metadata,
-                    editable_state: next_editable_state,
-                    ..
-                },
-                View::Input {
-                    metadata: previous_metadata,
-                    editable_state: previous_editable_state,
-                    ..
-                },
-            ) => {
-                reconcile_focus_metadata(next_metadata, previous_metadata);
-                *next_editable_state = previous_editable_state.clone();
-            }
-            (
-                View::TextArea {
-                    metadata: next_metadata,
-                    editable_state: next_editable_state,
-                    ..
-                },
-                View::TextArea {
-                    metadata: previous_metadata,
-                    editable_state: previous_editable_state,
-                    ..
-                },
-            ) => {
-                reconcile_focus_metadata(next_metadata, previous_metadata);
-                *next_editable_state = previous_editable_state.clone();
-            }
-            _ => {}
-        }
-    }
-
-    /// Copies focus metadata that should survive view reconciliation.
-    ///
-    /// # Arguments
-    ///
-    /// * `next_metadata` — Metadata on the newly generated view node.
-    /// * `previous_metadata` — Metadata from the previously rendered view node.
-    fn reconcile_focus_metadata(
-        next_metadata: &mut StyleMetadata,
-        previous_metadata: &StyleMetadata,
-    ) {
-        next_metadata.set_focused(previous_metadata.is_focused());
-        if previous_metadata.scroll_into_view_requested() {
-            next_metadata.request_scroll_into_view();
-        }
-    }
-
-    /// Copies layout scroll metadata that should survive view reconciliation.
-    ///
-    /// # Arguments
-    ///
-    /// * `next_metadata` — Layout metadata on the newly generated view node.
-    /// * `previous_metadata` — Layout metadata from the previous view node.
-    fn reconcile_scroll_metadata(next_metadata: &StyleMetadata, previous_metadata: &StyleMetadata) {
-        next_metadata.set_max_scroll_offset(previous_metadata.max_scroll_offset());
-        next_metadata.set_scroll_offset(previous_metadata.scroll_offset());
-    }
-
-    /// Returns whether the previous deferred boundary should be preserved.
-    ///
-    /// # Arguments
-    ///
-    /// * `next` — Newly generated view node.
-    /// * `previous` — Previously rendered view node.
-    ///
-    /// # Returns
-    ///
-    /// A [`bool`] indicating whether reconciliation should keep the previous node.
-    fn should_preserve_deferred_boundary(next: &View, previous: &View) -> bool {
-        match (next, previous) {
-            (View::Component(next), View::Component(previous)) => next.can_reconcile_from(previous),
-            (View::Dynamic(next), View::Dynamic(previous)) => next.ptr_eq(previous),
-            _ => false,
-        }
+    pub fn __reconcile_view<N, P>(next: &mut N, previous: &P)
+    where
+        N: View,
+        P: View,
+    {
+        crate::view::reconcile_views(next, previous);
     }
 }

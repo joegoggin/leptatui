@@ -5,7 +5,7 @@ use leptatui::prelude::*;
 /// Exercises `Form` attributes, callbacks, and editable child lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
-    let view: View = view! {
+    let view = view! {
         <Form
             on_submit={|| AppControl::Continue}
             on_cancel={|| AppControl::Exit}
@@ -26,52 +26,28 @@ fn main() {
         </Form>
     };
 
-    match view {
-        View::Form {
-            children,
-            metadata,
-            on_submit,
-            on_cancel,
-        } => {
-            assert_eq!(children.len(), 2);
-            assert_eq!(metadata.view_type(), ViewType::Form);
-            assert_eq!(metadata.id(), Some("profile"));
-            assert_eq!(
-                metadata.classes(),
-                &[String::from("form"), String::from("primary")]
-            );
-            assert_eq!(metadata.inline_style(), Some(style));
-            assert!(on_submit.is_some());
-            assert!(on_cancel.is_some());
+    assert_eq!(view.children().len(), 2);
+    assert_eq!(view.metadata().view_type(), ViewType::Form);
+    assert_eq!(view.metadata().id(), Some("profile"));
+    assert_eq!(
+        view.metadata().classes(),
+        &[String::from("form"), String::from("primary")]
+    );
+    assert_eq!(view.metadata().inline_style(), Some(style));
+    assert!(view.has_on_submit());
+    assert!(view.has_on_cancel());
 
-            match &children[0] {
-                View::Input {
-                    value,
-                    placeholder,
-                    on_input,
-                    ..
-                } => {
-                    assert_eq!(value, "Ada");
-                    assert_eq!(placeholder.as_deref(), Some("Name"));
-                    assert!(on_input.is_some());
-                }
-                other => panic!("expected input child, got {other:?}"),
-            }
+    let input = view.children()[0]
+        .downcast_ref::<InputView>()
+        .expect("expected input child");
+    assert_eq!(input.value(), "Ada");
+    assert_eq!(input.placeholder_text(), Some("Name"));
+    assert!(input.has_on_input());
 
-            match &children[1] {
-                View::TextArea {
-                    value,
-                    placeholder,
-                    on_input,
-                    ..
-                } => {
-                    assert_eq!(value, "Notes");
-                    assert_eq!(placeholder.as_deref(), Some("Notes"));
-                    assert!(on_input.is_some());
-                }
-                other => panic!("expected text-area child, got {other:?}"),
-            }
-        }
-        other => panic!("expected form view, got {other:?}"),
-    }
+    let text_area = view.children()[1]
+        .downcast_ref::<TextAreaView>()
+        .expect("expected text-area child");
+    assert_eq!(text_area.value(), "Notes");
+    assert_eq!(text_area.placeholder_text(), Some("Notes"));
+    assert!(text_area.has_on_input());
 }
