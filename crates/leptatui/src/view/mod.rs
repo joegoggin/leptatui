@@ -2,6 +2,15 @@
 //!
 //! Concrete views are organized by domain while this module keeps the public
 //! constructor and type surface flat for application code.
+//!
+//! # Modules
+//!
+//! - `boundary` - Component and dynamic view boundaries.
+//! - `containers` - Layout, list, and table views.
+//! - `content` - Text, paragraph, heading, and code views.
+//! - `controls` - Interactive form and input views.
+//! - `core` - Shared view contracts, conversion, metadata, and rendering.
+//! - `media` - Terminal image views.
 
 pub(crate) mod boundary;
 pub(crate) mod containers;
@@ -9,6 +18,7 @@ pub(crate) mod content;
 pub(crate) mod controls;
 pub(crate) mod core;
 pub(crate) mod media;
+mod reconciliation;
 
 pub(crate) use boundary::component::{ComponentView, component_factory};
 pub use boundary::{
@@ -46,7 +56,6 @@ pub use controls::{
     form::{FormAction, FormView, form},
     progress_bar::{ProgressBarView, progress_bar},
 };
-pub(crate) use core::reconciliation::reconcile_views;
 pub use core::{
     any_view::AnyView,
     capabilities::{ContainerView, EditableView, StyledView, TextualView},
@@ -56,3 +65,4 @@ pub use core::{
 };
 pub use media::image::{ImageSource, ImageView, image};
 pub use ratatui::text::{Line, Span, Text};
+pub(crate) use reconciliation::reconcile_views;

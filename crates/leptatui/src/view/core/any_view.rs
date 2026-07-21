@@ -14,11 +14,9 @@ use crate::{
     style::TuiStyle,
 };
 
-use super::{
-    contract::View, events, metadata::StyleMetadata, reconciliation::reconcile_views,
-    render::resolve_style,
-};
+use super::{contract::View, events, metadata::StyleMetadata, render::resolve_style};
 use crate::view::media::image::{ImageSource, image_render_area};
+use crate::view::reconciliation::reconcile_views;
 use crate::view::{
     BlockView, ButtonView, CodeBlockView, ComponentView, DynamicView, FormView, HeadingView,
     ImageView, InputView, LayoutView, ListItemView, ListView, ParagraphView, ProgressBarView,

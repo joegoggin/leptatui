@@ -13,6 +13,11 @@ macros for building interactive terminal applications.
   `#[component]`, `view!`, and `stylesheet!`.
 - `crates/leptatui/examples`: Runnable examples for the public crate.
 
+Within each crate, domain facades keep public imports stable while substantive
+subdirectories group related implementations. Generic pass-through layers such
+as `model`, `utils`, or `expansion` are avoided; a directory either owns direct
+source files or is flattened into its parent.
+
 ## Quality Gates
 
 CI validates the full workspace with the same commands expected for local
