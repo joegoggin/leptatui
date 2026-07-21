@@ -2,10 +2,10 @@
 //!
 //! # Modules
 //!
-//! - [`declarations`] - Optional style properties authored by rules.
-//! - [`media`] - Terminal viewport constraints.
-//! - [`selector`] - View selector matching.
-//! - [`stylesheet`] - Rule storage and cascade resolution.
+//! - [`declarations`] — Optional style properties authored by rules.
+//! - [`media`] — Terminal viewport constraints.
+//! - [`selector`] — View selector matching.
+//! - [`stylesheet`] — Rule storage and cascade resolution.
 
 mod declarations;
 mod media;

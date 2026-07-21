@@ -6,8 +6,15 @@
 //!
 //! # Modules
 //!
-//! Each syntax concept has a direct parser module; [`root`] coordinates parsing
-//! and expansion for the complete invocation.
+//! - [`declaration`] — Property declaration parsing and expansion.
+//! - [`import`] — Imported stylesheet module bindings.
+//! - [`media`] — Responsive media-query parsing and expansion.
+//! - [`mixin`] — Mixin definitions, includes, and cycle detection.
+//! - [`root`] — Complete stylesheet invocation parsing and expansion.
+//! - [`rule`] — Selector rule parsing and media-aware expansion.
+//! - [`selector`] — Type, class, id, focus, and descendant selectors.
+//! - [`value`] — Literal, local-variable, and imported-variable values.
+//! - [`variable`] — Stylesheet variable definitions and references.
 
 mod declaration;
 mod import;

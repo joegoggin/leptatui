@@ -1,5 +1,12 @@
 /// Verifies a bare `stylesheet!` statement registers with its component.
 ///
+/// # Example Under Test
+///
+/// ```text
+/// MacroStyledText::new()
+/// local Text rule: yellow on blue
+/// ```
+///
 /// # Assertions
 ///
 /// - The component's text receives the foreground and background from the
@@ -19,6 +26,12 @@ fn generated_component_stylesheet_styles_own_views() -> Result<()> {
 
 /// Verifies component styles do not leak into sibling component subtrees.
 ///
+/// # Example Under Test
+///
+/// ```text
+/// MacroSiblingStyleRoot(MacroStyledSibling, MacroPlainSibling)
+/// ```
+///
 /// # Assertions
 ///
 /// - The styled sibling receives the shared class style.
@@ -36,6 +49,12 @@ fn generated_component_stylesheets_do_not_leak_to_siblings() -> Result<()> {
 
 /// Verifies parent component styles apply through child component boundaries.
 ///
+/// # Example Under Test
+///
+/// ```text
+/// MacroParentStylesChild -> MacroPlainSibling
+/// ```
+///
 /// # Assertions
 ///
 /// - A child component's text receives the parent component stylesheet.
@@ -50,6 +69,13 @@ fn generated_component_stylesheets_apply_to_child_component_subtrees() -> Result
 }
 
 /// Verifies equal-specificity child component styles win by source order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroParentWithChildOverride -> MacroChildStyleOverride
+/// parent Text rule, then child Text rule
+/// ```
 ///
 /// # Assertions
 ///
@@ -66,6 +92,13 @@ fn generated_equal_specificity_child_stylesheet_wins_by_source_order() -> Result
 
 /// Verifies parent component specificity participates in the CSS cascade.
 ///
+/// # Example Under Test
+///
+/// ```text
+/// MacroParentSpecificityBeatsChild -> MacroChildLowerSpecificity
+/// parent class rule, child Text rule
+/// ```
+///
 /// # Assertions
 ///
 /// - A parent class rule overrides a lower-specificity child text rule.
@@ -80,6 +113,13 @@ fn generated_higher_specificity_parent_stylesheet_overrides_child_stylesheet() -
 }
 
 /// Verifies component stylesheets resolve against component-provided themes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroThemedStylesheet::new()
+/// theme_color(...) -> LightCyan
+/// ```
 ///
 /// # Assertions
 ///

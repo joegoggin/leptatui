@@ -5,8 +5,11 @@
 //!
 //! # Modules
 //!
-//! Expansion is separated into attribute, built-in element, child, custom
-//! component, and validation concerns.
+//! - [`attributes`] — Supported-attribute validation and lookup.
+//! - [`builtins`] — Built-in terminal element expansion.
+//! - [`children`] — Element and component child expansion.
+//! - [`custom_component`] — Application component tag expansion.
+//! - [`validation`] — Built-in element and component-name validation.
 
 mod attributes;
 mod builtins;

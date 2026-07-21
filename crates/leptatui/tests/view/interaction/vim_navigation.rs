@@ -337,6 +337,19 @@ fn focused_text_area_supports_vim_normal_mode_movement() -> Result<()> {
 }
 
 /// Verifies focused text areas keep trailing blank lines reachable in normal mode.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("one\ntwo\n").with_focus(true)
+/// Insert at trailing blank line, Esc, k, j
+/// ```
+///
+/// # Assertions
+///
+/// - Esc enters normal mode without moving off the trailing blank line.
+/// - `k` moves to the previous logical line.
+/// - `j` returns to the trailing blank line.
 #[test]
 fn focused_text_area_supports_trailing_blank_line_normal_mode_movement() -> Result<()> {
     let value = "one\ntwo\n";

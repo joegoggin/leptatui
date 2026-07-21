@@ -2,6 +2,13 @@
 //!
 //! This crate contains procedural macros that support the public `leptatui`
 //! runtime crate.
+//!
+//! # Modules
+//!
+//! - `component` — Component attribute parsing and code generation.
+//! - `crate_path` — Runtime-crate path resolution for generated code.
+//! - `stylesheet` — Stylesheet syntax parsing and expansion.
+//! - `view` — Declarative view syntax parsing and expansion.
 
 mod component;
 mod crate_path;

@@ -129,7 +129,7 @@ pub(super) fn separate_blocks(blocks: Vec<AnyView>) -> Vec<AnyView> {
 ///
 /// # Returns
 ///
-/// A left-bordered [`View::Block`] containing the quote children.
+/// A left-bordered [`crate::BlockView`] containing the quote children.
 pub(super) fn block_quote(children: Vec<AnyView>) -> AnyView {
     block(column(children))
         .with_inline_style(
@@ -144,7 +144,7 @@ pub(super) fn block_quote(children: Vec<AnyView>) -> AnyView {
 ///
 /// # Returns
 ///
-/// A one-row [`View::Block`] whose top border fills the available width.
+/// A one-row [`crate::BlockView`] whose top border fills the available width.
 pub(super) fn thematic_break() -> AnyView {
     block(column(Vec::<AnyView>::new()))
         .with_inline_style(TuiStyle::new().borders(Borders::TOP))

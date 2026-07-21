@@ -2,7 +2,7 @@
 //!
 //! This module converts pulldown-cmark's balanced event stream into the
 //! semantic headings, paragraphs, lists, tables, highlighted code blocks, and
-//! styled inline spans exposed by [`crate::view`]. Readable styled-block or
+//! styled inline spans exposed by [`mod@crate::view`]. Readable styled-block or
 //! text fallbacks retain CommonMark content without dedicated semantic views.
 //! In-memory and explicit file readers are infallible; file failures become
 //! path-aware semantic fallback content. The compatibility promise is core
@@ -12,8 +12,12 @@
 //!
 //! # Modules
 //!
-//! Parsing is divided into block, inline, code, list, and table concerns while
-//! this facade owns public options and file-loading entry points.
+//! - [`block`] — Block event parsing and semantic view construction.
+//! - [`code`] — Fenced and indented code-block conversion.
+//! - [`inline`] — Inline text and style span collection.
+//! - [`inline_events`] — Inline event rendering and fallback handling.
+//! - [`list`] — Ordered and unordered list parsing.
+//! - [`table`] — Table section, row, cell, and alignment parsing.
 
 mod block;
 mod code;

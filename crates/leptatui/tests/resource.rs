@@ -1,6 +1,10 @@
 //! Resource tests.
 //!
 //! These tests verify Leptatui's signal-backed async read state transitions.
+//!
+//! # Modules
+//!
+//! - [`support`] — Shared rendering and async polling helpers.
 
 use std::{
     collections::HashMap,

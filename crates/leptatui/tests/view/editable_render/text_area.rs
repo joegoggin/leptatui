@@ -186,6 +186,18 @@ fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
 }
 
 /// Verifies visual-line text-area selections render selected lines in reverse video.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("one\ntwo\nthree").with_focus(true)
+/// mode = VisualLine, selection = second and third lines
+/// ```
+///
+/// # Assertions
+///
+/// - The first logical line remains unselected.
+/// - The second and third logical lines render in reverse video.
 #[test]
 fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
     let backend = TestBackend::new(10, 5);
@@ -205,6 +217,19 @@ fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
 }
 
 /// Verifies a wrapped pending insert-mode `j` renders where the preview wraps.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada").with_focus(true)
+/// width = 5, mode = Insert, key = j
+/// ```
+///
+/// # Assertions
+///
+/// - The pending key is handled without committing the controlled value.
+/// - The preview character wraps to the next row in reverse video.
+/// - The terminal cursor is placed on the wrapped preview character.
 #[test]
 fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
     let backend = TestBackend::new(5, 4);

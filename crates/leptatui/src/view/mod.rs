@@ -5,12 +5,13 @@
 //!
 //! # Modules
 //!
-//! - `boundary` - Component and dynamic view boundaries.
-//! - `containers` - Layout, list, and table views.
-//! - `content` - Text, paragraph, heading, and code views.
-//! - `controls` - Interactive form and input views.
-//! - `core` - Shared view contracts, conversion, metadata, and rendering.
-//! - `media` - Terminal image views.
+//! - `boundary` — Component and dynamic view boundaries.
+//! - `containers` — Layout, list, and table views.
+//! - `content` — Text, paragraph, heading, and code views.
+//! - `controls` — Interactive form and input views.
+//! - `core` — Shared view contracts, conversion, metadata, and rendering.
+//! - `media` — Terminal image views.
+//! - `reconciliation` — Retained view-tree state reconciliation.
 
 pub(crate) mod boundary;
 pub(crate) mod containers;

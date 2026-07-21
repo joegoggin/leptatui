@@ -9,11 +9,14 @@
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
 //! - [`mod@component`] — Component construction support and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
+//! - `executor` — Leptos executor integration for async reactive work.
+//! - `markdown` — CommonMark parsing and semantic view conversion.
 //! - [`route`] — Signal-backed route state helpers for page switches.
 //! - [`resource`] — Signal-backed async resource state helpers.
 //! - [`mod@view`] — Basic renderable view builders for hand-written terminal UI.
 //! - [`prelude`] — Common imports for application code.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
+//! - `terminal_image` — Terminal graphics detection, caching, and fallbacks.
 //!
 //! # Public API Shape
 //!
@@ -144,7 +147,7 @@
 //! # let _ = document;
 //! ```
 //!
-//! [`markdown`] and [`markdown_with_options`] convert in-memory CommonMark.
+//! [`markdown()`] and [`markdown_with_options`] convert in-memory CommonMark.
 //! [`markdown_file`] and [`markdown_file_with_options`] synchronously load
 //! UTF-8 paths before returning a view, and `view!` provides the equivalent
 //! path-backed `Markdown` tag:

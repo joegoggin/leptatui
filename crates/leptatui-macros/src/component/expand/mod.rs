@@ -6,8 +6,8 @@
 //!
 //! # Modules
 //!
-//! - [`constructors`] - Generated constructors, setup, and defaults.
-//! - [`props`] - Generated props types and builder APIs.
+//! - [`constructors`] — Generated constructors, setup, and defaults.
+//! - [`props`] — Generated props types and builder APIs.
 
 mod constructors;
 mod props;

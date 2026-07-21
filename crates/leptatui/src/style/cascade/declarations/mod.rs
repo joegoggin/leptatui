@@ -80,6 +80,10 @@ pub struct StyleDeclarations {
 
 impl StyleDeclarations {
     /// Creates an empty declaration set.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleDeclarations`] value with every property unset.
     pub const fn new() -> Self {
         Self {
             foreground: None,

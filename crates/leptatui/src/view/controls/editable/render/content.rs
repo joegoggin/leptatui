@@ -14,11 +14,30 @@ use ratatui::{
 };
 
 /// Returns extra empty rows dropped by string-backed paragraph conversion.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value to inspect.
+///
+/// # Returns
+///
+/// A [`usize`] count containing one row for a trailing newline or zero.
 pub(super) fn trailing_text_area_empty_line_rows(value: &str) -> usize {
     usize::from(value.ends_with('\n'))
 }
 
 /// Returns a single-line paragraph with scrolling and selection styling.
+///
+/// # Arguments
+///
+/// * `value` — Input value to render.
+/// * `style` — Resolved terminal style for the input.
+/// * `horizontal_scroll` — Horizontal viewport offset.
+/// * `selection` — Optional selected byte range to render in reverse video.
+///
+/// # Returns
+///
+/// A [`Paragraph`] configured for single-line input rendering.
 pub(super) fn input_paragraph<'a>(
     value: &'a str,
     style: TuiStyle,
@@ -43,6 +62,7 @@ pub(super) fn input_paragraph<'a>(
 /// * `style` — Resolved view style applied to the paragraph.
 /// * `vertical_scroll` — Vertical viewport offset applied to the paragraph.
 /// * `horizontal_scroll` — Horizontal viewport offset applied to the paragraph.
+/// * `selection` — Optional selected byte range to render in reverse video.
 ///
 /// # Returns
 ///
@@ -66,6 +86,16 @@ pub(super) fn text_area_paragraph<'a>(
 }
 
 /// Returns logical text lines with the selected bytes rendered in reverse video.
+///
+/// # Arguments
+///
+/// * `value` — Text value to split into logical lines.
+/// * `selection` — Selected byte range to highlight.
+/// * `style` — Resolved terminal style used as the selection base.
+///
+/// # Returns
+///
+/// A [`Vec`] containing one styled [`Line`] per logical input line.
 fn selected_text_lines<'a>(
     value: &'a str,
     selection: Range<usize>,
@@ -101,6 +131,17 @@ fn selected_text_lines<'a>(
 }
 
 /// Returns spans for one logical line with the selection split out.
+///
+/// # Arguments
+///
+/// * `value` — Complete text value containing the line.
+/// * `line` — Byte range occupied by the logical line.
+/// * `selection` — Selected byte range within the complete value.
+/// * `selection_style` — Ratatui style applied to selected bytes.
+///
+/// # Returns
+///
+/// A [`Vec`] containing unselected and selected spans for the line.
 fn selected_line_spans<'a>(
     value: &'a str,
     line: Range<usize>,
@@ -145,6 +186,16 @@ pub(super) struct PendingInsertRender {
 }
 
 /// Returns render-only display state for a pending insert-mode key.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `editable_state` — Editing state containing any pending insert key.
+///
+/// # Returns
+///
+/// An optional [`PendingInsertRender`] when an insert key is pending in insert
+/// mode.
 pub(super) fn pending_insert_render(
     value: &str,
     editable_state: &EditableState,

@@ -22,6 +22,20 @@ use crate::{
 };
 
 /// Renders a controlled input or text area.
+///
+/// # Arguments
+///
+/// * `view` — Editable control model to render.
+/// * `ctx` — Active rendering context containing the target area and styles.
+///
+/// # Returns
+///
+/// An empty [`Result`] on success.
+///
+/// # Errors
+///
+/// This implementation currently renders only infallible widgets and does not
+/// produce an error.
 pub(crate) fn render_editable_text_view(
     view: &EditableModel,
     ctx: &mut RenderCtx<'_, '_>,
@@ -147,6 +161,15 @@ pub(crate) fn render_editable_text_view(
 }
 
 /// Returns the intrinsic height of a controlled input or text area.
+///
+/// # Arguments
+///
+/// * `view` — Editable control model to measure.
+/// * `ctx` — Rendering context containing the available width and styles.
+///
+/// # Returns
+///
+/// A [`u16`] intrinsic height including borders and padding.
 pub(crate) fn min_height_for_editable_text_view(
     view: &EditableModel,
     ctx: &mut RenderCtx<'_, '_>,

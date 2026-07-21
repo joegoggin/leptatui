@@ -153,6 +153,21 @@ fn focused_input_sets_terminal_cursor_position() -> Result<()> {
 }
 
 /// Verifies component-backed roots expose focused editable control mode.
+///
+/// # Example Under Test
+///
+/// ```text
+/// focused Input: Normal, Insert, pending jk exit, Visual
+/// focused TextArea: Normal, Insert, pending jk exit, VisualLine
+/// focused Button and unfocused Input
+/// ```
+///
+/// # Assertions
+///
+/// - Focused inputs and text areas report their normal, insert, and visual state.
+/// - A pending `jk` sequence reports normal mode before the controlled value updates.
+/// - A focused button reports button state.
+/// - An unfocused input reports no focused control.
 #[test]
 fn app_root_reports_focused_editable_control_mode() -> Result<()> {
     let normal_input = input("Ada").with_focus(true);
@@ -276,6 +291,18 @@ fn input_rendering_clips_and_scrolls_around_cursor() -> Result<()> {
 }
 
 /// Verifies visual-mode input selections render selected cells in reverse video.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("abcd").with_focus(true)
+/// mode = Visual, selection = bytes 1..=2
+/// ```
+///
+/// # Assertions
+///
+/// - Cells inside the selected byte range use reverse-video styling.
+/// - Cells outside the selected byte range do not use reverse-video styling.
 #[test]
 fn input_visual_selection_renders_reversed_cells() -> Result<()> {
     let backend = TestBackend::new(8, 3);
@@ -296,6 +323,19 @@ fn input_visual_selection_renders_reversed_cells() -> Result<()> {
 }
 
 /// Verifies a pending insert-mode `j` renders as a reversed preview character.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true)
+/// mode = Insert, key = j
+/// ```
+///
+/// # Assertions
+///
+/// - The pending key is handled without committing the controlled value.
+/// - The preview character renders in reverse video.
+/// - The terminal cursor remains on the preview character.
 #[test]
 fn input_pending_insert_j_renders_reversed_preview() -> Result<()> {
     let backend = TestBackend::new(8, 3);
@@ -317,6 +357,19 @@ fn input_pending_insert_j_renders_reversed_preview() -> Result<()> {
 }
 
 /// Verifies an expired pending insert-mode `j` renders without preview styling.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true)
+/// mode = Insert, key = j, elapsed = 1100 ms
+/// ```
+///
+/// # Assertions
+///
+/// - The expired pending character remains visible without reverse video.
+/// - The terminal cursor advances past the expired character.
+/// - The focused input remains in insert mode.
 #[test]
 fn input_pending_insert_j_preview_expires_to_insert_cursor() -> Result<()> {
     let backend = TestBackend::new(8, 3);

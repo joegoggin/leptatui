@@ -3,6 +3,10 @@
 //! These tests exercise the public routing, shared state, and component style
 //! used by the `multi_page_demo` example without running an interactive
 //! terminal session.
+//!
+//! # Modules
+//!
+//! - [`support`] — Shared component rendering and key-event helpers.
 
 use std::process::Command;
 
@@ -198,6 +202,19 @@ fn DemoWorkflowSettings() -> impl IntoView {
 }
 
 /// Verifies the demo workflow routes between pages while preserving shared state.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Home -> Counter (+) -> Settings (toggle) -> Home -> Counter
+/// ```
+///
+/// # Assertions
+///
+/// - Each navigation key selects the expected page.
+/// - Counter changes remain visible after navigating away and back.
+/// - Theme changes remain visible after navigating away and back.
+/// - Every handled workflow key returns `AppControl::Continue`.
 #[test]
 fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     let mut component = DemoWorkflowRoot::new();
@@ -271,6 +288,17 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
 }
 
 /// Verifies the runnable multi-page demo example compiles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// cargo check --quiet --example multi_page_demo
+/// ```
+///
+/// # Assertions
+///
+/// - Cargo launches successfully for the example target.
+/// - The example target exits with a successful status.
 #[test]
 fn multi_page_demo_example_compiles() {
     let output = Command::new("cargo")

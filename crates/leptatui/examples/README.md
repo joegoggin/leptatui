@@ -70,7 +70,8 @@ syntax-highlighted code block with line numbers. Scroll with `j`/`k`, Page Up
 and Page Down, `gg`, or `G`. Press `q` to quit.
 
 Semantic views can be assembled with builders. Ordered-list starts, table-cell
-alignment, and code presentation are configured on the returned `View`:
+alignment, and code presentation are configured on the concrete builder return
+types:
 
 ```rust
 use leptatui::prelude::*;

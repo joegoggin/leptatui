@@ -2,6 +2,14 @@
 //!
 //! Components render into a [`RenderCtx`], which wraps a Ratatui frame and the
 //! rectangular area currently assigned to the component.
+//!
+//! # Modules
+//!
+//! - `children` — Component child callback types.
+//! - `contract` — Component trait and focused-control state.
+//! - `key` — Scoped key-handler registration and dispatch.
+//! - `render` — Frame rendering context and target helpers.
+//! - `stylesheet` — Scoped component stylesheet registration.
 
 mod children;
 mod contract;

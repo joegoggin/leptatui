@@ -49,6 +49,13 @@ pub(super) fn input_horizontal_scroll(
 }
 
 /// Sets the terminal cursor for a focused single-line input.
+///
+/// # Arguments
+///
+/// * `value` — Input value used to locate the cursor column.
+/// * `cursor` — Cursor byte index within the input value.
+/// * `horizontal_scroll` — Horizontal viewport offset.
+/// * `ctx` — Active rendering context receiving the cursor position.
 pub(super) fn set_input_cursor(
     value: &str,
     cursor: usize,
@@ -65,6 +72,14 @@ pub(super) fn set_input_cursor(
 }
 
 /// Sets the terminal cursor for a focused multiline text area.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value used to locate the cursor.
+/// * `cursor` — Cursor byte index within the text-area value.
+/// * `vertical_scroll` — Vertical viewport offset.
+/// * `horizontal_scroll` — Horizontal viewport offset.
+/// * `ctx` — Active rendering context receiving the cursor position.
 pub(super) fn set_text_area_cursor(
     value: &str,
     cursor: usize,
@@ -84,6 +99,14 @@ pub(super) fn set_text_area_cursor(
 }
 
 /// Sets the terminal cursor on a pending inserted text-area character.
+///
+/// # Arguments
+///
+/// * `value` — Display value containing the pending character.
+/// * `cursor` — Byte index of the pending character.
+/// * `vertical_scroll` — Vertical viewport offset.
+/// * `horizontal_scroll` — Horizontal viewport offset.
+/// * `ctx` — Active rendering context receiving the cursor position.
 pub(super) fn set_text_area_pending_insert_cursor(
     value: &str,
     cursor: usize,
@@ -103,6 +126,16 @@ pub(super) fn set_text_area_pending_insert_cursor(
 }
 
 /// Returns an absolute cursor position clamped inside a render area.
+///
+/// # Arguments
+///
+/// * `area` — Render area that bounds the cursor position.
+/// * `column` — Zero-based cursor column relative to the area.
+/// * `row` — Zero-based cursor row relative to the area.
+///
+/// # Returns
+///
+/// A [`Position`] clamped to the render area's terminal coordinates.
 fn cursor_position_in_area(area: Rect, column: usize, row: usize) -> Position {
     Position {
         x: area.x.saturating_add(
@@ -210,6 +243,16 @@ fn text_area_cursor_row(value: &str, cursor: usize, width: u16) -> usize {
 }
 
 /// Returns the wrapped render row and column represented by a text-area cursor.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value used to map the cursor byte index.
+/// * `cursor` — Cursor byte index to locate.
+/// * `width` — Available text-area render width.
+///
+/// # Returns
+///
+/// A `(row, column)` tuple containing the wrapped cursor position.
 fn text_area_cursor_position(value: &str, cursor: usize, width: u16) -> (usize, usize) {
     if width == 0 {
         return (0, 0);
@@ -242,6 +285,16 @@ fn text_area_cursor_position(value: &str, cursor: usize, width: u16) -> (usize, 
 }
 
 /// Returns the wrapped render row and column for the character at a byte index.
+///
+/// # Arguments
+///
+/// * `value` — Text-area value containing the character.
+/// * `cursor` — Character byte index to locate.
+/// * `width` — Available text-area render width.
+///
+/// # Returns
+///
+/// A `(row, column)` tuple containing the wrapped character position.
 fn text_area_character_position(value: &str, cursor: usize, width: u16) -> (usize, usize) {
     if width == 0 {
         return (0, 0);
@@ -278,6 +331,15 @@ fn text_area_character_position(value: &str, cursor: usize, width: u16) -> (usiz
 }
 
 /// Returns the focus visibility span for an editable text control.
+///
+/// # Arguments
+///
+/// * `view` — Editable control whose focused position should be measured.
+/// * `ctx` — Rendering context containing the available area and styles.
+///
+/// # Returns
+///
+/// An optional [`VerticalSpan`] when the control requests focus visibility.
 pub(crate) fn focused_control_span_for_editor(
     view: &EditableModel,
     ctx: &mut RenderCtx<'_, '_>,

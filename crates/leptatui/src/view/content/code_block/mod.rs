@@ -1,4 +1,8 @@
 //! Bordered syntax-highlighted code-block view.
+//!
+//! # Modules
+//!
+//! - [`highlight`] — Bundled syntax-set and theme-based source highlighting.
 
 mod highlight;
 

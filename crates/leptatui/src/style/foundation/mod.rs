@@ -2,11 +2,11 @@
 //!
 //! # Modules
 //!
-//! - [`layout`] - Layout direction values.
-//! - [`size`] - Terminal width and height constraints.
-//! - [`spacing`] - Padding and gap values.
-//! - [`theme`] - Theme variables and color lookup.
-//! - [`tui_style`] - Fully resolved terminal styles.
+//! - [`layout`] — Layout direction values.
+//! - [`size`] — Terminal width and height constraints.
+//! - [`spacing`] — Padding and gap values.
+//! - [`theme`] — Theme variables and color lookup.
+//! - [`tui_style`] — Fully resolved terminal styles.
 
 mod layout;
 mod size;

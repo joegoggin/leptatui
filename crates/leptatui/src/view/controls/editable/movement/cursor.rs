@@ -60,6 +60,15 @@ pub(crate) fn normal_last_char_cursor(value: &str) -> usize {
 }
 
 /// Returns whether a cursor addresses the empty logical line after a final newline.
+///
+/// # Arguments
+///
+/// * `value` — Current controlled editable value.
+/// * `cursor` — Cursor byte index to inspect.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the cursor addresses a trailing empty line.
 pub(crate) fn is_trailing_empty_line_cursor(value: &str, cursor: usize) -> bool {
     cursor == value.len() && value.ends_with('\n')
 }

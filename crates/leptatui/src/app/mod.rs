@@ -4,7 +4,7 @@
 //! for Leptatui applications. It adapts either an [`AppRoot`] implementation or
 //! a [`View`](crate::View) to a managed Ratatui/Crossterm terminal session.
 //!
-//! # Implementation modules
+//! # Modules
 //!
 //! - `control` — App-loop control-flow decisions returned by roots.
 //! - `error` — Runtime error and result types.

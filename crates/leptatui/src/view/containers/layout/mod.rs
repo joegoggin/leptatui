@@ -1,4 +1,8 @@
 //! Row and column layout view.
+//!
+//! # Modules
+//!
+//! - [`render`] — Layout rendering, measurement, and focus geometry.
 
 pub(crate) mod render;
 

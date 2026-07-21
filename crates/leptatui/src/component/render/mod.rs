@@ -6,8 +6,8 @@
 //!
 //! # Modules
 //!
-//! - [`image`] - Image rendering and fallback methods on [`RenderCtx`].
-//! - [`target`] - Frame and buffer render targets.
+//! - [`image`] — Image rendering and fallback methods on [`RenderCtx`].
+//! - [`target`] — Frame and buffer render targets.
 
 mod image;
 mod target;

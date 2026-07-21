@@ -5,9 +5,9 @@
 //!
 //! # Modules
 //!
-//! - `cascade` - Selectors, declarations, media queries, and stylesheets.
-//! - `foundation` - Layout, size, spacing, theme, and resolved style values.
-//! - `style_module` - Named collections of stylesheet and theme values.
+//! - `cascade` — Selectors, declarations, media queries, and stylesheets.
+//! - `foundation` — Layout, size, spacing, theme, and resolved style values.
+//! - `style_module` — Named collections of stylesheet and theme values.
 
 pub use ratatui::{
     style::{Color, Modifier},

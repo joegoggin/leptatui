@@ -212,6 +212,19 @@ fn generated_component_focus_crosses_sibling_component_boundaries() -> Result<()
 }
 
 /// Verifies built-in buttons and component-wrapped buttons share focus order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroMixedButtonSiblings(BuiltIn, MacroWrappedButton)
+/// Tab, Enter, Tab, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - The first activation invokes only the built-in button callback.
+/// - The second activation invokes only the wrapped button callback.
+/// - Focus and activation events continue through the component root.
 #[test]
 fn generated_component_focus_mixes_static_and_component_buttons() -> Result<()> {
     MACRO_MIXED_BUILTIN_BUTTON_PRESSES.store(0, Ordering::SeqCst);

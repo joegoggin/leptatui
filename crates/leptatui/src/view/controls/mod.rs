@@ -1,4 +1,11 @@
 //! Interactive terminal controls.
+//!
+//! # Modules
+//!
+//! - [`button`] — Focusable action buttons.
+//! - [`editable`] — Controlled input and text-area editing.
+//! - [`form`] — Submit and cancel boundaries for editable controls.
+//! - [`progress_bar`] — Clamped terminal gauge views.
 
 use std::rc::Rc;
 

@@ -5,9 +5,9 @@
 //!
 //! # Modules
 //!
-//! - [`backend`] - Protocol detection and state for the active render pass.
-//! - [`cache`] - Decoded image and protocol cache management.
-//! - [`fallback`] - Deterministic text rendering when images are unavailable.
+//! - [`backend`] — Protocol detection and state for the active render pass.
+//! - [`cache`] — Decoded image and protocol cache management.
+//! - [`fallback`] — Deterministic text rendering when images are unavailable.
 
 mod backend;
 mod cache;

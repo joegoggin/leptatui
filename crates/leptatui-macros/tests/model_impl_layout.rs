@@ -27,7 +27,7 @@ const SYNTAX_TYPES: &[(&str, &str)] = &[
 /// ```text
 /// src/view/attr.rs
 /// src/view/child.rs
-/// src/view/element/{mod,attributes,builtins,children,custom_component}.rs
+/// src/view/element/{mod,attributes,builtins,children,custom_component,validation}.rs
 /// src/view/text_content.rs
 /// src/view/root.rs
 /// ```

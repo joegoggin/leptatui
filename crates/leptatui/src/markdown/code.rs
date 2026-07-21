@@ -61,7 +61,7 @@ pub(super) fn parse_code_block<'a>(
 ///
 /// # Returns
 ///
-/// A semantic H1 through H6 [`View`].
+/// A semantic H1 through H6 [`crate::HeadingView`].
 pub(super) fn heading(level: HeadingLevel, content: Text<'static>) -> AnyView {
     match level {
         HeadingLevel::H1 => h1(content),

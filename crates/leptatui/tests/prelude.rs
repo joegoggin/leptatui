@@ -2,6 +2,10 @@
 //!
 //! These tests ensure common runtime, view, style, context, and Leptos
 //! reactivity APIs are available through [`leptatui::prelude`].
+//!
+//! # Modules
+//!
+//! - [`support`] — Shared async test polling helpers.
 
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};

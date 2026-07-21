@@ -4,6 +4,14 @@ use super::StyleDeclarations;
 
 impl StyleDeclarations {
     /// Overlays another declaration set and returns the updated declarations.
+    ///
+    /// # Arguments
+    ///
+    /// * `style` — Declaration set to cascade over this set.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleDeclarations`] value containing the merged declarations.
     pub fn merge(mut self, style: &Self) -> Self {
         self.overlay(style);
         self

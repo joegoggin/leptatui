@@ -1,4 +1,4 @@
-//! Terminal-image rendering integration for [`RenderCtx`](super::RenderCtx).
+//! Terminal-image rendering integration for [`RenderCtx`].
 
 use std::path::Path;
 

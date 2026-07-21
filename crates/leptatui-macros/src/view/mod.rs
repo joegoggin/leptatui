@@ -5,8 +5,12 @@
 //!
 //! # Modules
 //!
-//! Attributes, children, elements, roots, text content, and syntax lookahead
-//! each live in direct modules beneath this facade.
+//! - [`attr`] — Element attribute parsing and value classification.
+//! - [`child`] — Nested element and text-like child parsing.
+//! - [`element`] — Built-in and component element validation and expansion.
+//! - [`root`] — Single-root view invocation parsing and expansion.
+//! - [`syntax`] — Token lookahead and braced-expression validation.
+//! - [`text_content`] — Literal and expression text-content parsing.
 
 mod attr;
 mod child;

@@ -1,5 +1,11 @@
 /// Verifies generated props are available while the component tree is built.
 ///
+/// # Example Under Test
+///
+/// ```text
+/// MacroPropPanel(title = "Panel", children = [MacroPropLabel("Child")])
+/// ```
+///
 /// # Assertions
 ///
 /// - A required `into` prop renders as text.
@@ -29,6 +35,19 @@ fn generated_component_props_render() -> Result<()> {
 }
 
 /// Verifies generated component boundaries report responsive internal height.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroResponsiveCaseRoot::new()
+/// viewport width = 40, height = 3
+/// ```
+///
+/// # Assertions
+///
+/// - The root content renders successfully.
+/// - The responsive class rule wins over the lower-specificity type rule.
+/// - Content below the responsive row remains visible within the measured height.
 #[test]
 fn generated_component_min_height_tracks_responsive_internal_layout() -> Result<()> {
     let mut component = MacroResponsiveCaseRoot::new();

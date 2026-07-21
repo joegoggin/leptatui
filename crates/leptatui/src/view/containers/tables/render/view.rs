@@ -28,6 +28,11 @@ use crate::{
 /// # Returns
 ///
 /// An empty [`Result`] on success.
+///
+/// # Errors
+///
+/// This implementation currently renders only infallible widgets and does not
+/// produce an error.
 pub(in crate::view::containers::tables) fn render_table_view(
     sections: &[AnyView],
     metadata: &StyleMetadata,

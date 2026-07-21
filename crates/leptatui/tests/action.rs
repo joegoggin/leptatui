@@ -1,6 +1,10 @@
 //! Action tests.
 //!
 //! These tests verify Leptatui's signal-backed async mutation state transitions.
+//!
+//! # Modules
+//!
+//! - [`support`] — Shared async test polling helpers.
 
 use std::{
     collections::HashMap,
