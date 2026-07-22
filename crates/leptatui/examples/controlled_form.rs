@@ -47,7 +47,7 @@ impl FormStatus {
 ///
 /// A [`View`] containing the controlled form demo.
 #[component]
-fn ControlledForm() -> View {
+fn ControlledForm() -> impl IntoView {
     let name = RwSignal::new(String::from("Ada Lovelace"));
     let notes = RwSignal::new(String::from("Sketch the first program."));
     let status = RwSignal::new(FormStatus::Editing);

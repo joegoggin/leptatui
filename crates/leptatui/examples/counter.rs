@@ -7,7 +7,7 @@ use leptatui::prelude::*;
 
 /// Root component for the interactive counter example.
 #[component]
-fn Counter() -> View {
+fn Counter() -> impl IntoView {
     let count = RwSignal::new(0);
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {

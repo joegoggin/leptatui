@@ -7,7 +7,7 @@ use leptatui::prelude::*;
 
 /// Returns a view built from `view!` syntax.
 #[component]
-fn Greeting() -> View {
+fn Greeting() -> impl IntoView {
     view! {
         <Text>"hello"</Text>
     }
@@ -15,7 +15,5 @@ fn Greeting() -> View {
 
 /// Exercises conversion from a generated component into [`View`].
 fn main() {
-    let view: View = Greeting::new().into();
-
-    assert!(matches!(view, View::Component(_)));
+    let _view: AnyView = Greeting::new().into_view();
 }

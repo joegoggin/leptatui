@@ -2,16 +2,15 @@
 //!
 //! This module owns terminal setup, event polling, root rendering, and cleanup
 //! for Leptatui applications. It adapts either an [`AppRoot`] implementation or
-//! a [`Component`](crate::Component) to a managed Ratatui/Crossterm terminal
-//! session.
+//! a [`View`](crate::View) to a managed Ratatui/Crossterm terminal session.
 //!
-//! # Implementation modules
+//! # Modules
 //!
 //! - `control` — App-loop control-flow decisions returned by roots.
 //! - `error` — Runtime error and result types.
 //! - `event` — Blocking Crossterm event polling helpers.
 //! - `render` — Root drawing helpers.
-//! - `root` — Root component abstraction used by the app runner.
+//! - `root` — Root adapter abstraction used by the app runner.
 //! - `terminal` — Managed terminal setup and cleanup.
 //! - `wakeup` — Async redraw wakeup coordination.
 
@@ -24,6 +23,8 @@ mod terminal;
 mod wakeup;
 
 use std::time::Duration;
+
+use crate::{AnyView, IntoView};
 
 pub use control::AppControl;
 pub use error::{Error, Result};
@@ -39,26 +40,44 @@ use terminal::TerminalSession;
 /// Time between event polls when no input is available.
 const DEFAULT_REDRAW_INTERVAL: Duration = Duration::from_millis(16);
 
-/// Runs a root component in a managed terminal session.
+/// Runs a root value in a managed terminal session.
 #[derive(Debug)]
 pub struct App<R> {
-    /// Root component or runtime adapter rendered by the app loop.
+    /// Root view or runtime adapter rendered by the app loop.
     root: R,
     /// Polling timeout that also controls idle redraw cadence.
     redraw_interval: Duration,
 }
 
-impl<R> App<R> {
-    /// Creates an app runner for a root component.
+impl App<AnyView> {
+    /// Creates an app runner for a root view.
     ///
     /// # Arguments
     ///
-    /// * `root` — Root component or [`AppRoot`] adapter to render.
+    /// * `root` — View-compatible root value to render.
     ///
     /// # Returns
     ///
     /// An [`App`] configured with the default redraw interval.
-    pub fn new(root: R) -> Self {
+    pub fn new(root: impl IntoView) -> Self {
+        Self {
+            root: root.into_view(),
+            redraw_interval: DEFAULT_REDRAW_INTERVAL,
+        }
+    }
+}
+
+impl<R> App<R> {
+    /// Creates an app from a low-level root adapter.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` — Root adapter that owns frame and event integration.
+    ///
+    /// # Returns
+    ///
+    /// An [`App`] configured with the default redraw interval.
+    pub fn from_root(root: R) -> Self {
         Self {
             root,
             redraw_interval: DEFAULT_REDRAW_INTERVAL,

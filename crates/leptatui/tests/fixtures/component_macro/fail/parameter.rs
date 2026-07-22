@@ -8,7 +8,7 @@ use leptatui::prelude::*;
 /// Defines an unsupported component function with a destructuring prop.
 ///
 #[component]
-fn WithProps((label,): (String,)) -> leptatui::View {
+fn WithProps((label,): (String,)) -> impl leptatui::IntoView {
     leptatui::text(label)
 }
 

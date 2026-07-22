@@ -6,7 +6,7 @@ use leptatui::prelude::*;
 
 /// Root component for the Hello World example.
 #[component]
-fn Root() -> View {
+fn Root() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;

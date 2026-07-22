@@ -3,6 +3,10 @@
 //! These tests exercise the public routing, shared state, and component style
 //! used by the `multi_page_demo` example without running an interactive
 //! terminal session.
+//!
+//! # Modules
+//!
+//! - [`support`] — Shared component rendering and key-event helpers.
 
 use std::process::Command;
 
@@ -54,7 +58,7 @@ impl DemoTestTheme {
 
 /// Root component that mirrors the multi-page demo's route and shared state.
 #[component]
-fn DemoWorkflowRoot() -> View {
+fn DemoWorkflowRoot() -> impl IntoView {
     let counter = RwSignal::new(0);
     let theme_mode = RwSignal::new(DemoTestTheme::Light);
     let theme = RwSignal::new(DemoTestTheme::Light.variables());
@@ -90,7 +94,7 @@ fn DemoWorkflowRoot() -> View {
 
 /// Navigation component using route context.
 #[component]
-fn DemoWorkflowNav() -> View {
+fn DemoWorkflowNav() -> impl IntoView {
     let navigate = use_navigate::<DemoTestPage>();
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {
@@ -120,7 +124,7 @@ fn DemoWorkflowNav() -> View {
 
 /// Home page that reads shared state.
 #[component]
-fn DemoWorkflowHome() -> View {
+fn DemoWorkflowHome() -> impl IntoView {
     let counter = expect_context::<RwSignal<i32>>();
     let theme_mode = expect_context::<RwSignal<DemoTestTheme>>();
 
@@ -144,7 +148,7 @@ fn DemoWorkflowHome() -> View {
 
 /// Counter page that updates shared counter state.
 #[component]
-fn DemoWorkflowCounter() -> View {
+fn DemoWorkflowCounter() -> impl IntoView {
     let counter = expect_context::<RwSignal<i32>>();
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {
@@ -173,7 +177,7 @@ fn DemoWorkflowCounter() -> View {
 
 /// Settings page that updates shared theme state.
 #[component]
-fn DemoWorkflowSettings() -> View {
+fn DemoWorkflowSettings() -> impl IntoView {
     let mode = expect_context::<RwSignal<DemoTestTheme>>();
     let theme = expect_context::<RwSignal<ThemeVariables>>();
 
@@ -198,6 +202,19 @@ fn DemoWorkflowSettings() -> View {
 }
 
 /// Verifies the demo workflow routes between pages while preserving shared state.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Home -> Counter (+) -> Settings (toggle) -> Home -> Counter
+/// ```
+///
+/// # Assertions
+///
+/// - Each navigation key selects the expected page.
+/// - Counter changes remain visible after navigating away and back.
+/// - Theme changes remain visible after navigating away and back.
+/// - Every handled workflow key returns `AppControl::Continue`.
 #[test]
 fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     let mut component = DemoWorkflowRoot::new();
@@ -211,7 +228,7 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     );
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('c')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('c')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 48, 6)?;
@@ -220,7 +237,7 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     assert!(text.contains("Count: 0"), "rendered text: {text:?}");
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('+')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('+')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 48, 6)?;
@@ -229,7 +246,7 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     assert!(text.contains("Count: 1"), "rendered text: {text:?}");
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('s')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('s')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 48, 6)?;
@@ -238,7 +255,7 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     assert!(text.contains("Theme: Light"), "rendered text: {text:?}");
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('t')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('t')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 48, 6)?;
@@ -247,7 +264,7 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     assert!(text.contains("Theme: Dark"), "rendered text: {text:?}");
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('h')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('h')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 48, 6)?;
@@ -259,7 +276,7 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
     );
 
     assert_eq!(
-        Component::handle_event(&mut component, key(KeyCode::Char('c')))?,
+        View::handle_event(&mut component, key(KeyCode::Char('c')))?,
         AppControl::Continue
     );
     let terminal = render_component(&mut component, 48, 6)?;
@@ -271,6 +288,17 @@ fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
 }
 
 /// Verifies the runnable multi-page demo example compiles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// cargo check --quiet --example multi_page_demo
+/// ```
+///
+/// # Assertions
+///
+/// - Cargo launches successfully for the example target.
+/// - The example target exits with a successful status.
 #[test]
 fn multi_page_demo_example_compiles() {
     let output = Command::new("cargo")

@@ -4,7 +4,7 @@ use leptatui::prelude::*;
 
 /// Exercises rejection of literal `on_press` callback values.
 fn main() {
-    let _view: View = view! {
+    let _view = view! {
         <Button on_press="save">"Save"</Button>
     };
 }

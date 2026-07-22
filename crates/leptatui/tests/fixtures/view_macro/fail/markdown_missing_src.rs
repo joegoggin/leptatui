@@ -4,7 +4,7 @@ use leptatui::prelude::*;
 
 /// Triggers the `Markdown` missing-src validation failure.
 fn main() {
-    let _: View = view! {
+    let _ = view! {
         <Markdown />
     };
 }

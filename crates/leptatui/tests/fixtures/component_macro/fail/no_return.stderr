@@ -1,4 +1,4 @@
-error: #[component] functions must return a value convertible into leptatui::View
+error: #[component] functions must return a value implementing leptatui::IntoView
   --> tests/fixtures/component_macro/fail/no_return.rs:10:4
    |
 10 | fn NoReturn() {}

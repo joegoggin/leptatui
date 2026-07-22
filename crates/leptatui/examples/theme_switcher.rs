@@ -55,7 +55,7 @@ impl ThemeMode {
 ///
 /// A [`View`] containing the active theme status text.
 #[component]
-fn ThemeStatus() -> View {
+fn ThemeStatus() -> impl IntoView {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
     dynamic(move || {
@@ -69,7 +69,7 @@ fn ThemeStatus() -> View {
 ///
 /// A [`View`] containing themed content and toggle controls.
 #[component]
-fn ThemeDemo() -> View {
+fn ThemeDemo() -> impl IntoView {
     let mode = RwSignal::new(ThemeMode::Light);
     let theme = RwSignal::new(ThemeMode::Light.variables());
 

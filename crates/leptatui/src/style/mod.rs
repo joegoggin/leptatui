@@ -2,30 +2,26 @@
 //!
 //! This module wraps common Ratatui style, border, and padding configuration in
 //! small builder-style value types.
+//!
+//! # Modules
+//!
+//! - `cascade` — Selectors, declarations, media queries, and stylesheets.
+//! - `foundation` — Layout, size, spacing, theme, and resolved style values.
+//! - `style_module` — Named collections of stylesheet and theme values.
 
 pub use ratatui::{
     style::{Color, Modifier},
     widgets::{BorderType, Borders},
 };
 
-mod declarations;
-mod layout;
-mod media;
-mod selector;
-mod size;
-mod spacing;
+mod cascade;
+mod foundation;
 mod style_module;
-mod stylesheet;
-mod theme;
-mod tui_style;
 
-pub use declarations::StyleDeclarations;
-pub use layout::LayoutDirection;
-pub use media::{MediaQuery, ViewportSize};
-pub use selector::StyleSelector;
-pub use size::TuiSize;
-pub use spacing::TuiSpacing;
+pub use cascade::{
+    MediaQuery, StyleDeclarations, StyleRule, StyleSelector, Stylesheet, ViewportSize,
+};
+pub use foundation::{
+    LayoutDirection, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, theme_color,
+};
 pub use style_module::{StyleModule, StyleValue};
-pub use stylesheet::{StyleRule, Stylesheet};
-pub use theme::{ThemeValue, ThemeVariables, theme_color};
-pub use tui_style::TuiStyle;

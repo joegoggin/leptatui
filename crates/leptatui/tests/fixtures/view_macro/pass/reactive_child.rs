@@ -9,7 +9,7 @@ use leptatui::prelude::*;
 fn main() {
     let count = 7;
 
-    let view: View = view! { <Text>{move || count.to_string()}</Text> };
+    let view = view! { <Text>{move || count.to_string()}</Text> };
 
     assert_eq!(view, text("7"));
 }

@@ -8,7 +8,7 @@ use leptatui::prelude::*;
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
     let path = PathBuf::from("assets/logo.png");
-    let view: View = view! {
+    let view = view! {
         <Image
             src={ImageSource::Path(path.clone())}
             alt="Project logo"
@@ -18,22 +18,13 @@ fn main() {
         />
     };
 
-    match view {
-        View::Image {
-            source,
-            alt,
-            metadata,
-        } => {
-            assert_eq!(source, ImageSource::Path(path));
-            assert_eq!(alt.as_deref(), Some("Project logo"));
-            assert_eq!(metadata.view_type(), ViewType::Image);
-            assert_eq!(metadata.id(), Some("logo"));
-            assert_eq!(
-                metadata.classes(),
-                &[String::from("media"), String::from("primary")]
-            );
-            assert_eq!(metadata.inline_style(), Some(style));
-        }
-        other => panic!("expected image view, got {other:?}"),
-    }
+    assert_eq!(view.source(), &ImageSource::Path(path));
+    assert_eq!(view.alt_text(), Some("Project logo"));
+    assert_eq!(view.metadata().view_type(), ViewType::Image);
+    assert_eq!(view.metadata().id(), Some("logo"));
+    assert_eq!(
+        view.metadata().classes(),
+        &[String::from("media"), String::from("primary")]
+    );
+    assert_eq!(view.metadata().inline_style(), Some(style));
 }

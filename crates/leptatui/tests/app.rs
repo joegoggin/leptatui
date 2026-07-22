@@ -3,19 +3,19 @@
 //! These tests cover the public app traits and control values without entering
 //! a real terminal session.
 
-use std::time::Duration;
+use std::{cell::Cell, time::Duration};
 
 use crossterm::event::Event;
-use leptatui::{App, AppControl, AppRoot, Component, RenderCtx, Result, button};
+use leptatui::{App, AppControl, IntoView, RenderCtx, Result, View, button};
 
-/// Test component used to prove component-to-root adaptation.
+/// Test view used to prove view-to-root adaptation.
 struct TestRoot {
-    /// Number of terminal events observed by the test component.
-    events: usize,
+    /// Number of terminal events observed by the test view.
+    events: Cell<usize>,
 }
 
-impl Component for TestRoot {
-    /// Renders the test component as an empty frame.
+impl View for TestRoot {
+    /// Renders the test view as an empty frame.
     ///
     /// # Arguments
     ///
@@ -24,7 +24,7 @@ impl Component for TestRoot {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         Ok(())
     }
 
@@ -38,12 +38,20 @@ impl Component for TestRoot {
     ///
     /// An [`AppControl`] value requesting exit.
     fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
-        self.events += 1;
+        self.events.set(self.events.get().saturating_add(1));
         Ok(AppControl::Exit)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
-/// Verifies a component satisfies the app root contract.
+/// Verifies an application-defined view satisfies the app root contract.
 ///
 /// # Example Under Test
 ///
@@ -56,17 +64,19 @@ impl Component for TestRoot {
 /// - `TestRoot` type-checks as an [`AppRoot`].
 /// - An [`App`] can be constructed with a non-default redraw interval.
 #[test]
-fn app_accepts_component_contract() {
-    /// Accepts any root type that implements [`AppRoot`].
+fn app_accepts_custom_view_contract() {
+    /// Accepts any root type that converts into a view.
     ///
     /// # Arguments
     ///
     /// * `root` — Root value to pass into the app constructor.
-    fn assert_app_root<R: AppRoot>(root: R) {
+    fn assert_app_root<R: IntoView>(root: R) {
         let _app = App::new(root).with_redraw_interval(Duration::from_millis(50));
     }
 
-    assert_app_root(TestRoot { events: 0 });
+    assert_app_root(TestRoot {
+        events: Cell::new(0),
+    });
 }
 
 /// Verifies app control values implement equality.
@@ -107,12 +117,12 @@ fn app_control_is_comparable() {
 /// app roots.
 #[test]
 fn app_accepts_view_root_with_button_action() {
-    /// Accepts any root type that implements [`AppRoot`].
+    /// Accepts any root type that converts into a view.
     ///
     /// # Arguments
     ///
     /// * `root` — Root value to pass into the app constructor.
-    fn assert_app_root<R: AppRoot>(root: R) {
+    fn assert_app_root<R: IntoView>(root: R) {
         let _app = App::new(root);
     }
 

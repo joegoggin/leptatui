@@ -2,13 +2,26 @@
 //!
 //! The view macro accepts a small XML-like syntax and lowers supported terminal
 //! elements into Leptatui view builder calls.
+//!
+//! # Modules
+//!
+//! - [`attr`] — Element attribute parsing and value classification.
+//! - [`child`] — Nested element and text-like child parsing.
+//! - [`element`] — Built-in and component element validation and expansion.
+//! - [`root`] — Single-root view invocation parsing and expansion.
+//! - [`syntax`] — Token lookahead and braced-expression validation.
+//! - [`text_content`] — Literal and expression text-content parsing.
 
-mod model;
-mod utils;
+mod attr;
+mod child;
+mod element;
+mod root;
+mod syntax;
+mod text_content;
 
 use proc_macro::TokenStream;
 
-use model::ViewRoot;
+use root::ViewRoot;
 use syn::Error;
 
 /// Expands `view!` input into Leptatui view builder calls.

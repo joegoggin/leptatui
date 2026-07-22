@@ -13,7 +13,7 @@
 //! use leptatui::prelude::*;
 //!
 //! #[component]
-//! fn Root() -> View {
+//! fn Root() -> impl IntoView {
 //!     view! { <Text>"Hello"</Text> }
 //! }
 //!
@@ -29,13 +29,17 @@
 //! render metadata and generated-code hooks stay outside the default import.
 
 pub use crate::{
-    Action, ActionState, App, AppControl, AppRoot, BorderType, Borders, CellAlignment, Children,
-    ChildrenFn, ChildrenMut, Color, Component, Error, FormAction, ImageSource, InputAction,
-    KeyControl, LayoutDirection, LinkTarget, MarkdownOptions, MarkdownView, MediaQuery, Modifier,
+    Action, ActionState, AnyView, App, AppControl, AppRoot, BlockView, BorderType, Borders,
+    ButtonView, CellAlignment, Children, ChildrenFn, ChildrenMut, CodeBlockView, Color,
+    ContainerView, DynamicView, EditableAction, EditableState, EditableView, Error, FormAction,
+    FormView, HeadingLevel, HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews,
+    KeyControl, LayoutDirection, LayoutView, LinkTarget, LinkView, ListItemView, ListKind,
+    ListView, MarkdownOptions, MarkdownView, MediaQuery, Modifier, ParagraphView, ProgressBarView,
     RenderCtx, Resource, ResourceState, Result, RichText, RouteState, StyleDeclarations,
-    StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, SyntaxTheme, ThemeValue,
-    ThemeVariables, TuiSize, TuiSpacing, TuiStyle, View, ViewType, ViewportSize, block, button,
-    code_block, column,
+    StyleMetadata, StyleModule, StyleRule, StyleSelector, StyleValue, StyledView, Stylesheet,
+    SyntaxTheme, TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView,
+    TextAreaView, TextView, TextualView, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle,
+    View, ViewType, ViewportSize, VimMode, block, button, code_block, column,
     context::{expect_context, provide_context, use_context},
     create_action, create_resource, form, h1, h2, h3, h4, h5, h6, image, input, link, list_item,
     markdown, markdown_file, markdown_file_with_options, markdown_with_options, ordered_list,

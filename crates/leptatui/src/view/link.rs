@@ -7,14 +7,31 @@
 use std::{
     ffi::OsStr,
     fmt, io,
+    ops::Deref,
     path::{Path, PathBuf},
 };
 
-use ratatui::text::{Line, Span, Text};
+use ratatui::{
+    layout::Rect,
+    style::Style,
+    text::{Line, Span, Text},
+    widgets::{Paragraph, Wrap},
+};
+use unicode_width::UnicodeWidthStr;
 
-use crate::app::{AppControl, Error, Result};
+use crate::{
+    TuiStyle,
+    app::{AppControl, Error, Result},
+    component::{FocusedControl, RenderCtx},
+};
 
-use super::metadata::{StyleMetadata, ViewType};
+use super::{
+    CellAlignment,
+    core::{
+        metadata::{StyleMetadata, ViewType},
+        render::{VerticalSpan, resolve_style},
+    },
+};
 
 /// Destination retained by a standalone or embedded link.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -211,22 +228,207 @@ impl RichText {
         Self { text, links }
     }
 
-    /// Returns inline links in source order.
-    ///
-    /// # Returns
-    ///
-    /// A slice containing the retained inline links.
-    pub(crate) fn links(&self) -> &[InlineLink] {
-        &self.links
+    /// Returns the number of actionable links embedded in this text.
+    pub(crate) fn focusable_count(&self) -> usize {
+        self.links
+            .iter()
+            .filter(|link| link.target.is_actionable())
+            .count()
     }
 
-    /// Returns mutable inline links in source order.
-    ///
-    /// # Returns
-    ///
-    /// A mutable slice containing the retained inline links.
-    pub(crate) fn links_mut(&mut self) -> &mut [InlineLink] {
-        &mut self.links
+    /// Returns the focused embedded-link index during flattened traversal.
+    pub(crate) fn focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        for link in &self.links {
+            if !link.target.is_actionable() {
+                continue;
+            }
+            let current = *index;
+            *index = index.saturating_add(1);
+            if link.metadata.is_focused() {
+                return Some(current);
+            }
+        }
+        None
+    }
+
+    /// Sets embedded-link focus during flattened traversal.
+    pub(crate) fn set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        for link in &mut self.links {
+            if !link.target.is_actionable() {
+                link.metadata.set_focused(false);
+                link.metadata.clear_scroll_into_view_request();
+                continue;
+            }
+            let focused = *index == target;
+            link.metadata.set_focused(focused);
+            if focused {
+                link.metadata.request_scroll_into_view();
+            } else {
+                link.metadata.clear_scroll_into_view_request();
+            }
+            *index = index.saturating_add(1);
+        }
+    }
+
+    /// Opens the focused embedded link, if any.
+    pub(crate) fn activate_focused_link(&self) -> Result<Option<AppControl>> {
+        for link in &self.links {
+            if link.metadata.is_focused() && link.target.is_actionable() {
+                return open_link_target(&link.target).map(Some);
+            }
+        }
+        Ok(None)
+    }
+
+    /// Returns the target of the focused actionable embedded link.
+    pub(crate) fn focused_link_target(&self) -> Option<LinkTarget> {
+        self.links
+            .iter()
+            .find(|link| link.metadata.is_focused() && link.target.is_actionable())
+            .map(|link| link.target.clone())
+    }
+
+    /// Returns focused-control metadata for an embedded link.
+    pub(crate) fn focused_control(&self) -> Option<FocusedControl> {
+        self.links
+            .iter()
+            .any(|link| link.metadata.is_focused() && link.target.is_actionable())
+            .then_some(FocusedControl::Link)
+    }
+
+    /// Returns whether a focused embedded link requested scrolling.
+    pub(crate) fn focused_link_requested_scroll(&self) -> bool {
+        self.links
+            .iter()
+            .any(|link| link.metadata.is_focused() && link.metadata.scroll_into_view_requested())
+    }
+
+    /// Returns the wrapped row span of the focused embedded link.
+    pub(crate) fn focused_link_span(&self, width: u16) -> Option<VerticalSpan> {
+        if width == 0 {
+            return None;
+        }
+
+        let link = self.links.iter().find(|link| {
+            link.metadata.is_focused() && link.metadata.scroll_into_view_requested()
+        })?;
+        let first = *link.spans.first()?;
+        let last = *link.spans.last()?;
+        let before = rich_text_prefix(&self.text, first, false)?;
+        let through = rich_text_prefix(&self.text, last, true)?;
+        let top = wrapped_text_height(&before, width).saturating_sub(1);
+        let bottom = wrapped_text_height(&through, width).max(top.saturating_add(1));
+
+        Some(VerticalSpan { top, bottom })
+    }
+
+    /// Clears completed embedded-link scroll requests after rendering.
+    pub(crate) fn clear_link_scroll_requests(&self) {
+        for link in &self.links {
+            link.metadata.clear_scroll_into_view_request();
+        }
+    }
+
+    /// Clears last-rendered hit areas for embedded links.
+    pub(crate) fn clear_link_hit_areas(&self) {
+        for link in &self.links {
+            link.metadata.clear_hit_areas();
+        }
+    }
+
+    /// Records last-rendered hit areas for embedded links.
+    pub(crate) fn record_link_hit_areas(
+        &self,
+        area: Rect,
+        width: u16,
+        alignment: CellAlignment,
+        ctx: &RenderCtx<'_, '_>,
+    ) {
+        self.clear_link_hit_areas();
+        if width == 0 || area.height == 0 || self.links.is_empty() {
+            return;
+        }
+
+        let link_spans = self
+            .links
+            .iter()
+            .enumerate()
+            .flat_map(|(link, inline_link)| {
+                inline_link
+                    .spans
+                    .iter()
+                    .copied()
+                    .map(move |span| (span, link))
+            })
+            .collect::<Vec<_>>();
+
+        let mut row_offset = 0u16;
+        for (line_index, line) in self.text.lines.iter().enumerate() {
+            let wrapped = linked_visual_segments_for_line(line, line_index, &link_spans, width);
+            for segment in wrapped {
+                let row = row_offset.saturating_add(segment.row);
+                if row >= area.height {
+                    continue;
+                }
+
+                let line_offset = aligned_line_offset(segment.line_width, width, alignment);
+                let hit_area = Rect {
+                    x: area
+                        .x
+                        .saturating_add(line_offset)
+                        .saturating_add(segment.start),
+                    y: area.y.saturating_add(row),
+                    width: segment.end.saturating_sub(segment.start),
+                    height: 1,
+                };
+                if let Some(hit_area) = ctx.map_hit_area(hit_area)
+                    && let Some(link) = self.links.get(segment.link)
+                {
+                    link.metadata.push_hit_area(hit_area);
+                }
+            }
+            row_offset = row_offset.saturating_add(line_visual_height(line, width));
+            if row_offset >= area.height {
+                break;
+            }
+        }
+    }
+
+    /// Returns the embedded-link index under a terminal position.
+    pub(crate) fn focusable_index_at_position(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        for link in &self.links {
+            if !link.target.is_actionable() {
+                continue;
+            }
+            let current = *index;
+            *index = index.saturating_add(1);
+            if link.metadata.contains_hit_position(column, row) {
+                return Some(current);
+            }
+        }
+        None
+    }
+
+    /// Reconciles retained focus and hit-test state for matching links.
+    pub(crate) fn reconcile_links(&mut self, previous: &Self) {
+        for (next, previous) in self.links.iter_mut().zip(&previous.links) {
+            if next.target == previous.target {
+                next.metadata.reconcile_runtime_state(&previous.metadata);
+            }
+        }
+    }
+}
+
+impl Deref for RichText {
+    type Target = Text<'static>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.text
     }
 }
 
@@ -395,42 +597,211 @@ impl InlineLink {
             spans,
         }
     }
+}
 
-    /// Returns the link target.
-    ///
-    /// # Returns
-    ///
-    /// A [`LinkTarget`] reference for this inline link.
-    pub(crate) const fn target(&self) -> &LinkTarget {
-        &self.target
+/// Resolves styles for links embedded in semantic rich text.
+///
+/// The semantic container is exposed as the immediate selector ancestor so
+/// descendant selectors such as `Paragraph Link` retain their expected shape.
+pub(crate) fn resolved_rich_text(
+    content: &RichText,
+    metadata: &StyleMetadata,
+    style: TuiStyle,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Text<'static> {
+    let mut text = content.text.clone();
+    let area = ctx.area();
+    ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        style.inherited_values(),
+        metadata.clone(),
+        |ctx| {
+            for link in &content.links {
+                let link_style = resolve_style(&link.metadata, ctx).to_ratatui_style();
+                for position in &link.spans {
+                    if let Some(span) = text
+                        .lines
+                        .get_mut(position.line)
+                        .and_then(|line| line.spans.get_mut(position.span))
+                    {
+                        span.style = span.style.patch(link_style);
+                    }
+                }
+            }
+        },
+    );
+    text
+}
+
+/// Returns the number of wrapped visual rows for one rich-text line.
+fn line_visual_height(line: &Line<'static>, width: u16) -> u16 {
+    u16::try_from(wrap_styled_line(line, width, Style::new()).len()).unwrap_or(u16::MAX)
+}
+
+/// One visual terminal segment occupied by an inline link.
+#[derive(Clone, Copy)]
+struct LinkedVisualSegment {
+    link: usize,
+    row: u16,
+    start: u16,
+    end: u16,
+    line_width: u16,
+}
+
+/// Returns link-bearing visual segments for one logical rich-text line.
+fn linked_visual_segments_for_line(
+    line: &Line<'static>,
+    line_index: usize,
+    link_spans: &[(LinkedSpan, usize)],
+    width: u16,
+) -> Vec<LinkedVisualSegment> {
+    let mut segments = Vec::new();
+    let mut pending: Option<LinkedVisualSegment> = None;
+    let mut row_widths = Vec::new();
+    let mut row = 0u16;
+    let mut column = 0u16;
+
+    for (span_index, span) in line.spans.iter().enumerate() {
+        let link = link_spans
+            .iter()
+            .find(|(position, _)| position.line == line_index && position.span == span_index)
+            .map(|(_, link)| *link);
+
+        for grapheme in span.styled_graphemes(Style::new()) {
+            let grapheme_width =
+                u16::try_from(UnicodeWidthStr::width(grapheme.symbol)).unwrap_or(u16::MAX);
+            if grapheme_width == 0 || grapheme_width > width {
+                continue;
+            }
+
+            if column.saturating_add(grapheme_width) > width && column > 0 {
+                finish_linked_segment(&mut segments, &mut pending);
+                row_widths.push(column);
+                row = row.saturating_add(1);
+                column = 0;
+            }
+
+            match link {
+                Some(link) => {
+                    if let Some(segment) = pending.as_mut()
+                        && segment.link == link
+                        && segment.row == row
+                        && segment.end == column
+                    {
+                        segment.end = column.saturating_add(grapheme_width);
+                    } else {
+                        finish_linked_segment(&mut segments, &mut pending);
+                        pending = Some(LinkedVisualSegment {
+                            link,
+                            row,
+                            start: column,
+                            end: column.saturating_add(grapheme_width),
+                            line_width: 0,
+                        });
+                    }
+                }
+                None => finish_linked_segment(&mut segments, &mut pending),
+            }
+
+            column = column.saturating_add(grapheme_width);
+        }
     }
 
-    /// Returns selector and focus metadata.
-    ///
-    /// # Returns
-    ///
-    /// A [`StyleMetadata`] reference for this inline link.
-    pub(crate) const fn metadata(&self) -> &StyleMetadata {
-        &self.metadata
+    finish_linked_segment(&mut segments, &mut pending);
+    row_widths.push(column);
+    for segment in &mut segments {
+        segment.line_width = row_widths
+            .get(usize::from(segment.row))
+            .copied()
+            .unwrap_or(segment.end);
+    }
+    segments
+}
+
+/// Completes the pending inline-link segment.
+fn finish_linked_segment(
+    segments: &mut Vec<LinkedVisualSegment>,
+    pending: &mut Option<LinkedVisualSegment>,
+) {
+    if let Some(segment) = pending.take() {
+        segments.push(segment);
+    }
+}
+
+/// Returns left padding for a line inside an aligned rich-text area.
+fn aligned_line_offset(line_width: u16, width: u16, alignment: CellAlignment) -> u16 {
+    match alignment {
+        CellAlignment::Left => 0,
+        CellAlignment::Center => width.saturating_sub(line_width) / 2,
+        CellAlignment::Right => width.saturating_sub(line_width),
+    }
+}
+
+/// Copies rich text through one parsed span position.
+fn rich_text_prefix(
+    text: &Text<'static>,
+    position: LinkedSpan,
+    include: bool,
+) -> Option<Text<'static>> {
+    let mut lines = text
+        .lines
+        .iter()
+        .take(position.line)
+        .cloned()
+        .collect::<Vec<_>>();
+    let line = text.lines.get(position.line)?;
+    let span_count = position.span.saturating_add(usize::from(include));
+    lines.push(Line::from(
+        line.spans
+            .iter()
+            .take(span_count)
+            .cloned()
+            .collect::<Vec<_>>(),
+    ));
+    Some(Text::from(lines))
+}
+
+/// Returns the wrapped height of semantic rich text.
+fn wrapped_text_height(text: &Text<'static>, width: u16) -> u32 {
+    u32::try_from(
+        Paragraph::new(text.clone())
+            .wrap(Wrap { trim: false })
+            .line_count(width),
+    )
+    .unwrap_or(u32::MAX)
+}
+
+/// Wraps one styled logical line at grapheme boundaries.
+fn wrap_styled_line(line: &Line<'static>, width: u16, base_style: Style) -> Vec<Line<'static>> {
+    let width = usize::from(width);
+    if width == 0 {
+        return vec![Line::default()];
     }
 
-    /// Returns mutable selector and focus metadata.
-    ///
-    /// # Returns
-    ///
-    /// A mutable [`StyleMetadata`] reference for this inline link.
-    pub(crate) fn metadata_mut(&mut self) -> &mut StyleMetadata {
-        &mut self.metadata
+    let mut wrapped = Vec::new();
+    let mut spans = Vec::new();
+    let mut line_width = 0usize;
+    for grapheme in line.styled_graphemes(base_style) {
+        let grapheme_width = UnicodeWidthStr::width(grapheme.symbol);
+        if grapheme_width > width {
+            if !spans.is_empty() {
+                wrapped.push(Line::from(std::mem::take(&mut spans)));
+                line_width = 0;
+            }
+            continue;
+        }
+        if line_width.saturating_add(grapheme_width) > width && !spans.is_empty() {
+            wrapped.push(Line::from(std::mem::take(&mut spans)));
+            line_width = 0;
+        }
+        let grapheme_style = base_style
+            .bg
+            .map_or(grapheme.style, |background| grapheme.style.bg(background));
+        spans.push(Span::styled(grapheme.symbol.to_owned(), grapheme_style));
+        line_width = line_width.saturating_add(grapheme_width);
     }
-
-    /// Returns the retained text-span positions for this link.
-    ///
-    /// # Returns
-    ///
-    /// A slice containing the linked span positions.
-    pub(crate) fn spans(&self) -> &[LinkedSpan] {
-        &self.spans
-    }
+    wrapped.push(Line::from(spans));
+    wrapped
 }
 
 /// Returns whether destination text begins with an RFC-style URI scheme.

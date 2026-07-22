@@ -15,19 +15,19 @@ enum Page {
 
 /// Home page branch.
 #[component]
-fn HomePage() -> View {
+fn HomePage() -> impl IntoView {
     view! { <Text>"Home"</Text> }
 }
 
 /// Counter page branch.
 #[component]
-fn CounterPage() -> View {
+fn CounterPage() -> impl IntoView {
     view! { <Text>"Counter"</Text> }
 }
 
 /// Settings page branch.
 #[component]
-fn SettingsPage() -> View {
+fn SettingsPage() -> impl IntoView {
     view! { <Text>"Settings"</Text> }
 }
 
@@ -41,7 +41,7 @@ fn main() {
         navigate.update(|route| *route = Page::Counter);
         navigate.update(|route| *route = Page::Settings);
 
-        let view: View = view! {
+        let view = view! {
             <Column>
                 {move || match route.get_untracked() {
                     Page::Home => view! { <HomePage /> },
@@ -51,6 +51,6 @@ fn main() {
             </Column>
         };
 
-        assert!(matches!(view, View::Column { .. }));
+        assert_eq!(view.metadata().view_type(), ViewType::Column);
     });
 }

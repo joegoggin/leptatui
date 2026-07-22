@@ -12,13 +12,13 @@ use leptatui::prelude::*;
 ///
 /// A [`View`] containing the supplied children.
 #[component]
-fn Panel(children: Children) -> View {
+fn Panel(children: Children) -> impl IntoView {
     column(children())
 }
 
 /// Exercises path-backed Markdown fallback through component children.
 fn main() {
-    let view: View = view! {
+    let view = view! {
         <Panel>
             <Markdown src="guide.md" />
         </Panel>
