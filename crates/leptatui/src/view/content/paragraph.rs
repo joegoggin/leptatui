@@ -6,13 +6,9 @@ use crate::view::core::{
 };
 use crate::view::{
     CellAlignment, StyleMetadata, View, ViewType,
-    link::{RichTextWrapMode, resolved_rich_text},
+    link::{RichTextWrapMode, impl_rich_text_view, resolved_rich_text},
 };
-use crate::{
-    RichText,
-    app::{AppControl, Result},
-    component::{FocusedControl, RenderCtx},
-};
+use crate::{RichText, app::Result, component::RenderCtx};
 
 /// Semantic paragraph content.
 #[derive(Debug, PartialEq)]
@@ -76,54 +72,12 @@ impl View for ParagraphView {
         self
     }
 
-    fn reconcile(&mut self, previous: &dyn View) {
-        if let Some(previous) = previous.as_any().downcast_ref::<Self>() {
-            self.content.reconcile_links(&previous.content);
-        }
-    }
-
-    fn __focusable_count(&self) -> usize {
-        self.content.focusable_count()
-    }
-
-    fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
-        self.content.focused_index_inner(index)
-    }
-
-    fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
-        self.content.set_focus_by_index_inner(target, index);
-    }
-
-    fn __focusable_index_at_position_inner(
-        &self,
-        column: u16,
-        row: u16,
-        index: &mut usize,
-    ) -> Option<usize> {
-        self.content.focusable_index_at_position(column, row, index)
-    }
+    impl_rich_text_view!();
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         self.content
             .focused_link_span(ctx.area().width)
             .map(|span| span.into_tuple())
-    }
-
-    fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
-        self.content.activate_focused_link()
-    }
-
-    fn __focused_control(&self) -> Option<FocusedControl> {
-        self.content.focused_control()
-    }
-
-    fn __focused_link_target(&self) -> Option<crate::LinkTarget> {
-        self.content.focused_link_target()
-    }
-
-    fn __clear_hit_areas(&self) {
-        self.metadata.clear_hit_areas();
-        self.content.clear_link_hit_areas();
     }
 }
 
