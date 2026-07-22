@@ -6,7 +6,10 @@ use crate::view::core::{
     capabilities::{impl_styled_view, impl_textual_view},
     render::{line_count_height, resolve_style, semantic_paragraph},
 };
-use crate::view::{CellAlignment, StyleMetadata, View, ViewType, link::resolved_rich_text};
+use crate::view::{
+    CellAlignment, StyleMetadata, View, ViewType,
+    link::{RichTextWrapMode, resolved_rich_text},
+};
 use crate::{
     RichText, TuiStyle,
     app::{AppControl, Result},
@@ -227,7 +230,13 @@ fn render_heading(
         ctx.with_area(content_area, |ctx| {
             ctx.render_widget(semantic_paragraph(&rendered, style));
         });
-        content.record_link_hit_areas(content_area, content_area.width, CellAlignment::Left, ctx);
+        content.record_link_hit_areas(
+            content_area,
+            content_area.width,
+            CellAlignment::Left,
+            RichTextWrapMode::Word,
+            ctx,
+        );
     } else if area.height > 1 {
         let content_area = Rect {
             y: area.y.saturating_add(1),
@@ -237,7 +246,13 @@ fn render_heading(
         ctx.with_area(content_area, |ctx| {
             ctx.render_widget(semantic_paragraph(&rendered, style));
         });
-        content.record_link_hit_areas(content_area, content_area.width, CellAlignment::Left, ctx);
+        content.record_link_hit_areas(
+            content_area,
+            content_area.width,
+            CellAlignment::Left,
+            RichTextWrapMode::Word,
+            ctx,
+        );
     }
     content.clear_link_scroll_requests();
 }

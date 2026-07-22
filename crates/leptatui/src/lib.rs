@@ -56,6 +56,9 @@
 //! optional label. [`link`] creates a standalone URL or local-path control;
 //! the equivalent tag is `<Link href="https://example.com">"label"</Link>`.
 //! Links receive focus with Tab or Shift+Tab and activate with Enter or Space.
+//! Moving the pointer over an interactive control focuses it, left-clicking a
+//! button or link activates it, and the mouse wheel scrolls the overflowing
+//! layout under the pointer.
 //!
 //! # Semantic Documents and Markdown
 //!

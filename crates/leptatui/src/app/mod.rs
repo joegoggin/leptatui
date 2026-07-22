@@ -122,6 +122,7 @@ where
     ///
     /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup
     /// fails. Returns [`Error::EventTask`] if the blocking event task fails.
+    /// Returns [`Error::LinkOpen`] if an activated link cannot be opened.
     pub async fn run(mut self) -> Result<()> {
         let mut session = TerminalSession::enter()?;
 
@@ -148,6 +149,7 @@ where
     ///
     /// Returns [`Error::Io`] if drawing, event polling, or event reading fails.
     /// Returns [`Error::EventTask`] if the blocking event task fails.
+    /// Returns [`Error::LinkOpen`] if an activated link cannot be opened.
     async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
         let mut redraw_requests = subscribe_redraws();
         let mut should_draw = true;

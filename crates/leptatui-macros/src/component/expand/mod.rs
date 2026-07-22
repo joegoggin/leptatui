@@ -234,6 +234,16 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __clear_hit_areas(&self) {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__clear_hit_areas();
+                });
+            }
+
+            #[doc(hidden)]
             fn __focusable_index_at_position_inner(
                 &self,
                 column: u16,

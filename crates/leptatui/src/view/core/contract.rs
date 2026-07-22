@@ -60,7 +60,8 @@ pub trait View: Any {
     /// # Errors
     ///
     /// Returns [`crate::Error::Io`] if custom event handling performs terminal
-    /// I/O that fails.
+    /// I/O that fails. Returns [`crate::Error::LinkOpen`] if an activated link
+    /// cannot be opened.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         super::events::handle_view_event(self, event)
     }
@@ -78,7 +79,8 @@ pub trait View: Any {
     /// # Errors
     ///
     /// Returns [`crate::Error::Io`] if custom key handling performs terminal
-    /// I/O that fails.
+    /// I/O that fails. Returns [`crate::Error::LinkOpen`] if an activated link
+    /// cannot be opened.
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
         super::events::handle_view_key_event(self, key)
     }

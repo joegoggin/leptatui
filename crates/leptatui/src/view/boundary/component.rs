@@ -123,7 +123,8 @@ impl ComponentView {
     /// # Errors
     ///
     /// Returns [`crate::app::Error::Io`] if the component event path performs
-    /// terminal I/O that fails.
+    /// terminal I/O that fails. Returns [`crate::app::Error::LinkOpen`] if an
+    /// activated link cannot be opened.
     pub(crate) fn dispatch_event(&self, event: Event) -> Result<AppControl> {
         self.with_component_mut(|component| component.handle_event(event))
     }
@@ -150,6 +151,12 @@ impl ComponentView {
     #[doc(hidden)]
     pub(crate) fn set_focus_by_index_inner(&self, target: usize, index: &mut usize) {
         self.with_component_mut(|component| component.__set_focus_by_index_inner(target, index));
+    }
+
+    /// Clears last-rendered mouse hit areas inside this component boundary.
+    #[doc(hidden)]
+    pub(crate) fn clear_hit_areas(&self) {
+        self.with_component(|component| component.__clear_hit_areas());
     }
 
     /// Returns the focused control index under a terminal position.
@@ -401,6 +408,10 @@ impl View for ComponentView {
 
     fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
         self.set_focus_by_index_inner(target, index);
+    }
+
+    fn __clear_hit_areas(&self) {
+        self.clear_hit_areas();
     }
 
     fn __focusable_index_at_position_inner(

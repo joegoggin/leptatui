@@ -2,7 +2,7 @@
 
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt, fs,
     path::{Path, PathBuf},
     rc::Rc,
@@ -358,9 +358,14 @@ impl View for MarkdownView {
 
 /// Per-document context used while parsing links and heading anchors.
 pub(super) struct MarkdownParseContext<'a> {
+    /// Directory used to resolve relative local link targets.
     link_base: &'a Path,
+    /// Current file path when parsing file-backed Markdown.
     source_path: Option<&'a Path>,
+    /// Next numeric suffix to try for each base heading slug.
     heading_counts: HashMap<String, usize>,
+    /// Every heading slug already assigned in the current document.
+    heading_slugs: HashSet<String>,
 }
 
 impl<'a> MarkdownParseContext<'a> {
@@ -370,6 +375,7 @@ impl<'a> MarkdownParseContext<'a> {
             link_base,
             source_path,
             heading_counts: HashMap::new(),
+            heading_slugs: HashSet::new(),
         }
     }
 
@@ -388,14 +394,20 @@ impl<'a> MarkdownParseContext<'a> {
             .map(|span| span.content.as_ref())
             .collect::<String>();
         let base = github_heading_slug(&visible);
-        let count = self.heading_counts.entry(base.clone()).or_default();
-        let slug = if *count == 0 {
-            base
-        } else {
-            format!("{base}-{count}")
-        };
-        *count = count.saturating_add(1);
-        slug
+        let next = self.heading_counts.entry(base.clone()).or_default();
+
+        loop {
+            let slug = if *next == 0 {
+                base.clone()
+            } else {
+                format!("{base}-{next}")
+            };
+            *next = next.saturating_add(1);
+
+            if self.heading_slugs.insert(slug.clone()) {
+                return slug;
+            }
+        }
     }
 
     /// Classifies a parsed Markdown link for this document boundary.
@@ -415,6 +427,7 @@ impl<'a> MarkdownParseContext<'a> {
                 .map_or((destination, None), |(path, fragment)| {
                     (path, Some(fragment))
                 });
+            let decoded_path = percent_decode_str(path).decode_utf8_lossy();
             if path.is_empty() {
                 if let Some(fragment) = fragment.filter(|fragment| !fragment.is_empty()) {
                     return LinkTarget::Markdown {
@@ -422,9 +435,9 @@ impl<'a> MarkdownParseContext<'a> {
                         fragment: Some(fragment.to_owned()),
                     };
                 }
-            } else if is_markdown_path(Path::new(path)) {
+            } else if is_markdown_path(Path::new(decoded_path.as_ref())) {
                 return LinkTarget::Markdown {
-                    path: absolute_path_from(Path::new(path), self.link_base),
+                    path: absolute_path_from(Path::new(decoded_path.as_ref()), self.link_base),
                     fragment: fragment
                         .filter(|fragment| !fragment.is_empty())
                         .map(str::to_owned),

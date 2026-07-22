@@ -44,3 +44,18 @@ fn MacroScrollableList() -> impl leptatui::IntoView {
 fn MacroScrollableBoundaryRoot() -> impl leptatui::IntoView {
     row([component(MacroScrollableList::new())])
 }
+
+/// View containing the button scrolled out of a parent viewport.
+#[component]
+fn MacroMouseBoundaryButton() -> impl leptatui::IntoView {
+    button("Hidden")
+}
+
+/// Parent view that replaces an off-screen component button visually.
+#[component]
+fn MacroScrolledMouseRoot() -> impl leptatui::IntoView {
+    column((
+        component(MacroMouseBoundaryButton::new()),
+        button("Visible"),
+    ))
+}

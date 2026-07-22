@@ -5,6 +5,8 @@
 //! links share the same target resolution and system-opening behavior.
 
 use std::{
+    borrow::Cow,
+    collections::VecDeque,
     ffi::OsStr,
     fmt, io,
     ops::Deref,
@@ -15,7 +17,6 @@ use ratatui::{
     layout::Rect,
     style::Style,
     text::{Line, Span, Text},
-    widgets::{Paragraph, Wrap},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -127,7 +128,7 @@ impl From<String> for LinkTarget {
     fn from(value: String) -> Self {
         if value.is_empty() || value.starts_with('#') {
             Self::Fragment(value)
-        } else if has_uri_scheme(&value) {
+        } else if !has_windows_drive_prefix(&value) && has_uri_scheme(&value) {
             Self::Url(value)
         } else {
             Self::Path(PathBuf::from(value))
@@ -309,15 +310,21 @@ impl RichText {
             return None;
         }
 
-        let link = self.links.iter().find(|link| {
+        let link = self.links.iter().position(|link| {
             link.metadata.is_focused() && link.metadata.scroll_into_view_requested()
         })?;
-        let first = *link.spans.first()?;
-        let last = *link.spans.last()?;
-        let before = rich_text_prefix(&self.text, first, false)?;
-        let through = rich_text_prefix(&self.text, last, true)?;
-        let top = wrapped_text_height(&before, width).saturating_sub(1);
-        let bottom = wrapped_text_height(&through, width).max(top.saturating_add(1));
+        let segments =
+            linked_visual_segments(&self.text, &self.links, width, RichTextWrapMode::Word);
+        let top = segments
+            .iter()
+            .filter(|segment| segment.link == link)
+            .map(|segment| u32::from(segment.row))
+            .min()?;
+        let bottom = segments
+            .iter()
+            .filter(|segment| segment.link == link)
+            .map(|segment| u32::from(segment.row).saturating_add(1))
+            .max()?;
 
         Some(VerticalSpan { top, bottom })
     }
@@ -337,11 +344,20 @@ impl RichText {
     }
 
     /// Records last-rendered hit areas for embedded links.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Visible rich-text render area.
+    /// * `width` — Width used to wrap the rich text.
+    /// * `alignment` — Horizontal alignment applied to wrapped rows.
+    /// * `wrap_mode` — Wrapping behavior used by the renderer.
+    /// * `ctx` — Render context used to map local areas to terminal coordinates.
     pub(crate) fn record_link_hit_areas(
         &self,
         area: Rect,
         width: u16,
         alignment: CellAlignment,
+        wrap_mode: RichTextWrapMode,
         ctx: &RenderCtx<'_, '_>,
     ) {
         self.clear_link_hit_areas();
@@ -349,47 +365,25 @@ impl RichText {
             return;
         }
 
-        let link_spans = self
-            .links
-            .iter()
-            .enumerate()
-            .flat_map(|(link, inline_link)| {
-                inline_link
-                    .spans
-                    .iter()
-                    .copied()
-                    .map(move |span| (span, link))
-            })
-            .collect::<Vec<_>>();
-
-        let mut row_offset = 0u16;
-        for (line_index, line) in self.text.lines.iter().enumerate() {
-            let wrapped = linked_visual_segments_for_line(line, line_index, &link_spans, width);
-            for segment in wrapped {
-                let row = row_offset.saturating_add(segment.row);
-                if row >= area.height {
-                    continue;
-                }
-
-                let line_offset = aligned_line_offset(segment.line_width, width, alignment);
-                let hit_area = Rect {
-                    x: area
-                        .x
-                        .saturating_add(line_offset)
-                        .saturating_add(segment.start),
-                    y: area.y.saturating_add(row),
-                    width: segment.end.saturating_sub(segment.start),
-                    height: 1,
-                };
-                if let Some(hit_area) = ctx.map_hit_area(hit_area)
-                    && let Some(link) = self.links.get(segment.link)
-                {
-                    link.metadata.push_hit_area(hit_area);
-                }
+        for segment in linked_visual_segments(&self.text, &self.links, width, wrap_mode) {
+            if segment.row >= area.height {
+                continue;
             }
-            row_offset = row_offset.saturating_add(line_visual_height(line, width));
-            if row_offset >= area.height {
-                break;
+
+            let line_offset = aligned_line_offset(segment.line_width, width, alignment);
+            let hit_area = Rect {
+                x: area
+                    .x
+                    .saturating_add(line_offset)
+                    .saturating_add(segment.start),
+                y: area.y.saturating_add(segment.row),
+                width: segment.end.saturating_sub(segment.start),
+                height: 1,
+            };
+            if let Some(hit_area) = ctx.map_hit_area(hit_area)
+                && let Some(link) = self.links.get(segment.link)
+            {
+                link.metadata.push_hit_area(hit_area);
             }
         }
     }
@@ -465,6 +459,39 @@ impl From<Line<'static>> for RichText {
     }
 }
 
+impl From<Vec<Line<'static>>> for RichText {
+    /// Converts owned Ratatui lines into rich text without embedded links.
+    ///
+    /// # Arguments
+    ///
+    /// * `lines` — Owned Ratatui lines to retain.
+    ///
+    /// # Returns
+    ///
+    /// A [`RichText`] value containing the lines.
+    fn from(lines: Vec<Line<'static>>) -> Self {
+        Self::from(Text::from(lines))
+    }
+}
+
+impl<T> From<&[T]> for RichText
+where
+    T: Into<Line<'static>> + Clone,
+{
+    /// Copies line-compatible values into rich text without embedded links.
+    ///
+    /// # Arguments
+    ///
+    /// * `lines` — Borrowed line-compatible values to copy.
+    ///
+    /// # Returns
+    ///
+    /// A [`RichText`] value containing the copied lines.
+    fn from(lines: &[T]) -> Self {
+        Self::from(Text::from(lines))
+    }
+}
+
 impl From<Span<'static>> for RichText {
     /// Converts one Ratatui span into rich text without embedded links.
     ///
@@ -477,6 +504,21 @@ impl From<Span<'static>> for RichText {
     /// A [`RichText`] value containing the span.
     fn from(span: Span<'static>) -> Self {
         Self::from(Text::from(Line::from(span)))
+    }
+}
+
+impl From<Cow<'static, str>> for RichText {
+    /// Converts static or owned copy-on-write text into unlinked rich text.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Static or owned text to retain.
+    ///
+    /// # Returns
+    ///
+    /// A [`RichText`] value containing the text.
+    fn from(value: Cow<'static, str>) -> Self {
+        Self::from(Text::from(value))
     }
 }
 
@@ -633,9 +675,32 @@ pub(crate) fn resolved_rich_text(
     text
 }
 
-/// Returns the number of wrapped visual rows for one rich-text line.
-fn line_visual_height(line: &Line<'static>, width: u16) -> u16 {
-    u16::try_from(wrap_styled_line(line, width, Style::new()).len()).unwrap_or(u16::MAX)
+/// Wrapping behavior used by one rich-text renderer.
+#[derive(Clone, Copy)]
+pub(crate) enum RichTextWrapMode {
+    /// Ratatui paragraph word wrapping with leading whitespace preserved.
+    Word,
+    /// Table-cell wrapping at individual grapheme boundaries.
+    Grapheme,
+}
+
+/// One visual grapheme retained while computing inline-link geometry.
+#[derive(Clone, Copy)]
+struct LinkedVisualGrapheme {
+    /// Embedded link index owning the grapheme.
+    link: Option<usize>,
+    /// Terminal-cell width of the grapheme.
+    width: u16,
+    /// Whether Ratatui treats the grapheme as wrappable whitespace.
+    whitespace: bool,
+}
+
+/// One wrapped visual row containing link-aware graphemes.
+struct LinkedVisualRow {
+    /// Graphemes rendered on this row.
+    graphemes: Vec<LinkedVisualGrapheme>,
+    /// Total terminal-cell width of the row.
+    width: u16,
 }
 
 /// One visual terminal segment occupied by an inline link.
@@ -648,74 +713,270 @@ struct LinkedVisualSegment {
     line_width: u16,
 }
 
-/// Returns link-bearing visual segments for one logical rich-text line.
-fn linked_visual_segments_for_line(
-    line: &Line<'static>,
-    line_index: usize,
-    link_spans: &[(LinkedSpan, usize)],
+/// Returns link-bearing visual segments using the renderer's wrapping behavior.
+///
+/// # Arguments
+///
+/// * `text` — Rich text rendered by the semantic view.
+/// * `links` — Inline link metadata associated with text spans.
+/// * `width` — Width used to wrap the text.
+/// * `wrap_mode` — Wrapping behavior used by the renderer.
+///
+/// # Returns
+///
+/// A [`Vec`] containing each visible linked segment in render order.
+fn linked_visual_segments(
+    text: &Text<'static>,
+    links: &[InlineLink],
     width: u16,
+    wrap_mode: RichTextWrapMode,
 ) -> Vec<LinkedVisualSegment> {
     let mut segments = Vec::new();
-    let mut pending: Option<LinkedVisualSegment> = None;
-    let mut row_widths = Vec::new();
-    let mut row = 0u16;
-    let mut column = 0u16;
-
-    for (span_index, span) in line.spans.iter().enumerate() {
-        let link = link_spans
-            .iter()
-            .find(|(position, _)| position.line == line_index && position.span == span_index)
-            .map(|(_, link)| *link);
-
-        for grapheme in span.styled_graphemes(Style::new()) {
-            let grapheme_width =
-                u16::try_from(UnicodeWidthStr::width(grapheme.symbol)).unwrap_or(u16::MAX);
-            if grapheme_width == 0 || grapheme_width > width {
+    for (row, visual_row) in linked_visual_rows(text, links, width, wrap_mode)
+        .into_iter()
+        .enumerate()
+    {
+        let row = u16::try_from(row).unwrap_or(u16::MAX);
+        let mut pending: Option<LinkedVisualSegment> = None;
+        let mut column = 0u16;
+        for grapheme in visual_row.graphemes {
+            if grapheme.width == 0 {
                 continue;
             }
 
-            if column.saturating_add(grapheme_width) > width && column > 0 {
-                finish_linked_segment(&mut segments, &mut pending);
-                row_widths.push(column);
-                row = row.saturating_add(1);
-                column = 0;
-            }
-
-            match link {
-                Some(link) => {
-                    if let Some(segment) = pending.as_mut()
-                        && segment.link == link
-                        && segment.row == row
-                        && segment.end == column
-                    {
-                        segment.end = column.saturating_add(grapheme_width);
-                    } else {
-                        finish_linked_segment(&mut segments, &mut pending);
-                        pending = Some(LinkedVisualSegment {
-                            link,
-                            row,
-                            start: column,
-                            end: column.saturating_add(grapheme_width),
-                            line_width: 0,
-                        });
-                    }
+            if let Some(link) = grapheme.link {
+                if let Some(segment) = pending.as_mut()
+                    && segment.link == link
+                    && segment.end == column
+                {
+                    segment.end = column.saturating_add(grapheme.width);
+                } else {
+                    finish_linked_segment(&mut segments, &mut pending);
+                    pending = Some(LinkedVisualSegment {
+                        link,
+                        row,
+                        start: column,
+                        end: column.saturating_add(grapheme.width),
+                        line_width: visual_row.width,
+                    });
                 }
-                None => finish_linked_segment(&mut segments, &mut pending),
+            } else {
+                finish_linked_segment(&mut segments, &mut pending);
             }
 
-            column = column.saturating_add(grapheme_width);
+            column = column.saturating_add(grapheme.width);
         }
+        finish_linked_segment(&mut segments, &mut pending);
     }
 
-    finish_linked_segment(&mut segments, &mut pending);
-    row_widths.push(column);
-    for segment in &mut segments {
-        segment.line_width = row_widths
-            .get(usize::from(segment.row))
-            .copied()
-            .unwrap_or(segment.end);
-    }
     segments
+}
+
+/// Returns wrapped visual rows while retaining each grapheme's link index.
+///
+/// # Arguments
+///
+/// * `text` — Rich text rendered by the semantic view.
+/// * `links` — Inline link metadata associated with text spans.
+/// * `width` — Width used to wrap the text.
+/// * `wrap_mode` — Wrapping behavior used by the renderer.
+///
+/// # Returns
+///
+/// A [`Vec`] containing link-aware visual rows in render order.
+fn linked_visual_rows(
+    text: &Text<'static>,
+    links: &[InlineLink],
+    width: u16,
+    wrap_mode: RichTextWrapMode,
+) -> Vec<LinkedVisualRow> {
+    let link_spans = links
+        .iter()
+        .enumerate()
+        .flat_map(|(link, inline_link)| {
+            inline_link
+                .spans
+                .iter()
+                .copied()
+                .map(move |span| (span, link))
+        })
+        .collect::<Vec<_>>();
+    let mut rows = Vec::new();
+
+    for (line_index, line) in text.lines.iter().enumerate() {
+        let graphemes = line
+            .spans
+            .iter()
+            .enumerate()
+            .flat_map(|(span_index, span)| {
+                let link = link_spans
+                    .iter()
+                    .find(|(position, _)| {
+                        position.line == line_index && position.span == span_index
+                    })
+                    .map(|(_, link)| *link);
+                span.styled_graphemes(Style::new())
+                    .map(move |grapheme| LinkedVisualGrapheme {
+                        link,
+                        width: u16::try_from(UnicodeWidthStr::width(grapheme.symbol))
+                            .unwrap_or(u16::MAX),
+                        whitespace: grapheme.is_whitespace(),
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        rows.extend(match wrap_mode {
+            RichTextWrapMode::Word => word_wrapped_visual_rows(graphemes, width),
+            RichTextWrapMode::Grapheme => grapheme_wrapped_visual_rows(graphemes, width),
+        });
+    }
+
+    rows
+}
+
+/// Wraps link-aware graphemes like Ratatui's `WordWrapper` with `trim: false`.
+fn word_wrapped_visual_rows(
+    graphemes: Vec<LinkedVisualGrapheme>,
+    width: u16,
+) -> Vec<LinkedVisualRow> {
+    if width == 0 {
+        return vec![LinkedVisualRow {
+            graphemes: Vec::new(),
+            width: 0,
+        }];
+    }
+
+    let mut rows = Vec::new();
+    let mut pending_line = Vec::new();
+    let mut pending_word = Vec::new();
+    let mut pending_whitespace: VecDeque<LinkedVisualGrapheme> = VecDeque::new();
+    let mut line_width = 0u16;
+    let mut word_width = 0u16;
+    let mut whitespace_width = 0u16;
+    let mut non_whitespace_previous = false;
+
+    for grapheme in graphemes {
+        if grapheme.width > width {
+            continue;
+        }
+
+        let word_found = non_whitespace_previous && grapheme.whitespace;
+        let untrimmed_overflow = pending_line.is_empty()
+            && word_width
+                .saturating_add(whitespace_width)
+                .saturating_add(grapheme.width)
+                > width;
+
+        if word_found || untrimmed_overflow {
+            pending_line.extend(pending_whitespace.drain(..));
+            line_width = line_width.saturating_add(whitespace_width);
+            pending_line.append(&mut pending_word);
+            line_width = line_width.saturating_add(word_width);
+            whitespace_width = 0;
+            word_width = 0;
+        }
+
+        let line_full = line_width >= width;
+        let pending_word_overflow = grapheme.width > 0
+            && line_width
+                .saturating_add(whitespace_width)
+                .saturating_add(word_width)
+                >= width;
+
+        if line_full || pending_word_overflow {
+            let mut remaining_width = width.saturating_sub(line_width);
+            rows.push(LinkedVisualRow {
+                graphemes: std::mem::take(&mut pending_line),
+                width: line_width,
+            });
+            line_width = 0;
+
+            while let Some(whitespace) = pending_whitespace.front() {
+                if whitespace.width > remaining_width {
+                    break;
+                }
+                whitespace_width = whitespace_width.saturating_sub(whitespace.width);
+                remaining_width = remaining_width.saturating_sub(whitespace.width);
+                pending_whitespace.pop_front();
+            }
+
+            if grapheme.whitespace && pending_whitespace.is_empty() {
+                continue;
+            }
+        }
+
+        if grapheme.whitespace {
+            whitespace_width = whitespace_width.saturating_add(grapheme.width);
+            pending_whitespace.push_back(grapheme);
+        } else {
+            word_width = word_width.saturating_add(grapheme.width);
+            pending_word.push(grapheme);
+        }
+
+        non_whitespace_previous = !grapheme.whitespace;
+    }
+
+    pending_line.extend(pending_whitespace);
+    line_width = line_width.saturating_add(whitespace_width);
+    pending_line.append(&mut pending_word);
+    line_width = line_width.saturating_add(word_width);
+    if !pending_line.is_empty() {
+        rows.push(LinkedVisualRow {
+            graphemes: pending_line,
+            width: line_width,
+        });
+    }
+    if rows.is_empty() {
+        rows.push(LinkedVisualRow {
+            graphemes: Vec::new(),
+            width: 0,
+        });
+    }
+
+    rows
+}
+
+/// Wraps link-aware graphemes at individual grapheme boundaries.
+fn grapheme_wrapped_visual_rows(
+    graphemes: Vec<LinkedVisualGrapheme>,
+    width: u16,
+) -> Vec<LinkedVisualRow> {
+    if width == 0 {
+        return vec![LinkedVisualRow {
+            graphemes: Vec::new(),
+            width: 0,
+        }];
+    }
+
+    let mut rows = Vec::new();
+    let mut current = Vec::new();
+    let mut current_width = 0u16;
+    for grapheme in graphemes {
+        if grapheme.width > width {
+            if !current.is_empty() {
+                rows.push(LinkedVisualRow {
+                    graphemes: std::mem::take(&mut current),
+                    width: current_width,
+                });
+                current_width = 0;
+            }
+            continue;
+        }
+        if current_width.saturating_add(grapheme.width) > width && !current.is_empty() {
+            rows.push(LinkedVisualRow {
+                graphemes: std::mem::take(&mut current),
+                width: current_width,
+            });
+            current_width = 0;
+        }
+        current_width = current_width.saturating_add(grapheme.width);
+        current.push(grapheme);
+    }
+    rows.push(LinkedVisualRow {
+        graphemes: current,
+        width: current_width,
+    });
+    rows
 }
 
 /// Completes the pending inline-link segment.
@@ -735,73 +996,6 @@ fn aligned_line_offset(line_width: u16, width: u16, alignment: CellAlignment) ->
         CellAlignment::Center => width.saturating_sub(line_width) / 2,
         CellAlignment::Right => width.saturating_sub(line_width),
     }
-}
-
-/// Copies rich text through one parsed span position.
-fn rich_text_prefix(
-    text: &Text<'static>,
-    position: LinkedSpan,
-    include: bool,
-) -> Option<Text<'static>> {
-    let mut lines = text
-        .lines
-        .iter()
-        .take(position.line)
-        .cloned()
-        .collect::<Vec<_>>();
-    let line = text.lines.get(position.line)?;
-    let span_count = position.span.saturating_add(usize::from(include));
-    lines.push(Line::from(
-        line.spans
-            .iter()
-            .take(span_count)
-            .cloned()
-            .collect::<Vec<_>>(),
-    ));
-    Some(Text::from(lines))
-}
-
-/// Returns the wrapped height of semantic rich text.
-fn wrapped_text_height(text: &Text<'static>, width: u16) -> u32 {
-    u32::try_from(
-        Paragraph::new(text.clone())
-            .wrap(Wrap { trim: false })
-            .line_count(width),
-    )
-    .unwrap_or(u32::MAX)
-}
-
-/// Wraps one styled logical line at grapheme boundaries.
-fn wrap_styled_line(line: &Line<'static>, width: u16, base_style: Style) -> Vec<Line<'static>> {
-    let width = usize::from(width);
-    if width == 0 {
-        return vec![Line::default()];
-    }
-
-    let mut wrapped = Vec::new();
-    let mut spans = Vec::new();
-    let mut line_width = 0usize;
-    for grapheme in line.styled_graphemes(base_style) {
-        let grapheme_width = UnicodeWidthStr::width(grapheme.symbol);
-        if grapheme_width > width {
-            if !spans.is_empty() {
-                wrapped.push(Line::from(std::mem::take(&mut spans)));
-                line_width = 0;
-            }
-            continue;
-        }
-        if line_width.saturating_add(grapheme_width) > width && !spans.is_empty() {
-            wrapped.push(Line::from(std::mem::take(&mut spans)));
-            line_width = 0;
-        }
-        let grapheme_style = base_style
-            .bg
-            .map_or(grapheme.style, |background| grapheme.style.bg(background));
-        spans.push(Span::styled(grapheme.symbol.to_owned(), grapheme_style));
-        line_width = line_width.saturating_add(grapheme_width);
-    }
-    wrapped.push(Line::from(spans));
-    wrapped
 }
 
 /// Returns whether destination text begins with an RFC-style URI scheme.
@@ -824,6 +1018,24 @@ fn has_uri_scheme(value: &str) -> bool {
         && chars.all(|character| {
             character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
         })
+}
+
+/// Returns whether destination text begins with a Windows drive prefix.
+///
+/// # Arguments
+///
+/// * `value` — Destination text to inspect.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the text begins with a drive letter, colon,
+/// and path separator.
+fn has_windows_drive_prefix(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'/' | b'\\')
 }
 
 /// Opens one actionable target with the operating system's default handler.
@@ -903,7 +1115,7 @@ mod tests {
     /// # Assertions
     ///
     /// - Empty and hash-prefixed targets become inactive fragments.
-    /// - Relative text becomes a filesystem path.
+    /// - Relative and Windows drive-prefixed text become filesystem paths.
     /// - HTTP and mail targets become URLs.
     #[test]
     fn string_targets_are_classified() {
@@ -915,6 +1127,14 @@ mod tests {
         assert_eq!(
             LinkTarget::from("guide.md"),
             LinkTarget::Path(PathBuf::from("guide.md"))
+        );
+        assert_eq!(
+            LinkTarget::from("C:/guide.md"),
+            LinkTarget::Path(PathBuf::from("C:/guide.md"))
+        );
+        assert_eq!(
+            LinkTarget::from(r"C:\guide.md"),
+            LinkTarget::Path(PathBuf::from(r"C:\guide.md"))
         );
         assert_eq!(
             LinkTarget::from("https://example.com"),

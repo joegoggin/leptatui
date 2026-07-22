@@ -51,6 +51,36 @@ fn mouse_wheel_scrolls_overflowing_column_under_pointer() -> Result<()> {
     Ok(())
 }
 
+/// Verifies wheel scrolling moves to a parent after an inner boundary.
+#[test]
+fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
+    let inner = component(ConstrainedScrollPanel {
+        view: column([
+            text("one"),
+            text("two"),
+            text("three"),
+            text("four"),
+            text("five"),
+            text("six"),
+        ])
+        .into_view(),
+    });
+    let mut view = column((inner, button("Visible")));
+
+    draw_view(&mut terminal, &view)?;
+    assert!(rendered_text(&terminal).contains("one"));
+
+    for _ in 0..6 {
+        view.handle_event(mouse(MouseEventKind::ScrollDown, 0, 0))?;
+    }
+    draw_view(&mut terminal, &view)?;
+
+    assert!(rendered_text(&terminal).contains("Visible"));
+
+    Ok(())
+}
+
 /// Verifies moving over an inline Markdown link focuses it.
 #[test]
 fn mouse_move_focuses_inline_markdown_link_under_pointer() -> Result<()> {
@@ -61,5 +91,20 @@ fn mouse_move_focuses_inline_markdown_link_under_pointer() -> Result<()> {
     view.handle_event(mouse(MouseEventKind::Moved, 0, 0))?;
 
     assert_eq!(view.__focused_control(), Some(FocusedControl::Link));
+    Ok(())
+}
+
+/// Verifies mouse hit testing follows Markdown word wrapping.
+#[test]
+fn mouse_move_focuses_word_wrapped_markdown_link() -> Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(10, 2))?;
+    let mut view = markdown("123456 [Link](https://example.com)");
+
+    draw_view(&mut terminal, view.as_view())?;
+    assert_eq!(symbol_position(&terminal, "L", 10), (0, 1));
+    view.handle_event(mouse(MouseEventKind::Moved, 1, 1))?;
+
+    assert_eq!(view.__focused_control(), Some(FocusedControl::Link));
+
     Ok(())
 }

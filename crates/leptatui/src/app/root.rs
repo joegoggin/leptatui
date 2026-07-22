@@ -45,7 +45,8 @@ pub trait AppRoot {
     /// # Errors
     ///
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
+    /// I/O that fails. Returns [`crate::app::Error::LinkOpen`] if an activated
+    /// link cannot be opened.
     fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
         Ok(AppControl::Continue)
     }
@@ -98,7 +99,8 @@ impl AppRoot for AnyView {
     /// # Errors
     ///
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
+    /// I/O that fails. Returns [`crate::app::Error::LinkOpen`] if an activated
+    /// link cannot be opened.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         AnyView::handle_event(self, event)
     }

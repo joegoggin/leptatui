@@ -4,7 +4,10 @@ use crate::view::core::{
     capabilities::{impl_styled_view, impl_textual_view},
     render::{line_count_height, resolve_style, semantic_paragraph},
 };
-use crate::view::{CellAlignment, StyleMetadata, View, ViewType, link::resolved_rich_text};
+use crate::view::{
+    CellAlignment, StyleMetadata, View, ViewType,
+    link::{RichTextWrapMode, resolved_rich_text},
+};
 use crate::{
     RichText,
     app::{AppControl, Result},
@@ -42,8 +45,13 @@ impl View for ParagraphView {
         let rendered = resolved_rich_text(&self.content, &self.metadata, style, ctx);
         let area = ctx.area();
         ctx.render_widget(semantic_paragraph(&rendered, style));
-        self.content
-            .record_link_hit_areas(area, area.width, CellAlignment::Left, ctx);
+        self.content.record_link_hit_areas(
+            area,
+            area.width,
+            CellAlignment::Left,
+            RichTextWrapMode::Word,
+            ctx,
+        );
         self.content.clear_link_scroll_requests();
         Ok(())
     }

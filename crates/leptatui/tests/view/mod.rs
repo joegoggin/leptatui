@@ -4,6 +4,7 @@
 //! resulting terminal buffer.
 
 use std::{
+    borrow::Cow,
     cell::{Cell, RefCell},
     rc::Rc,
     thread,

@@ -16,7 +16,7 @@ use crate::{
     component::RenderCtx,
     view::{
         AnyView, StyleMetadata, TableCellView, TableRowView, TableSectionView,
-        core::render::VerticalSpan,
+        core::render::VerticalSpan, link::RichTextWrapMode,
     },
 };
 
@@ -144,6 +144,7 @@ pub(in crate::view::containers::tables) fn render_table_view(
                         cell_area,
                         width,
                         source_cell.alignment,
+                        RichTextWrapMode::Grapheme,
                         ctx,
                     );
                 }

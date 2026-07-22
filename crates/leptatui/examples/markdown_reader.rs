@@ -3,7 +3,8 @@
 //! This binary loads one UTF-8 Markdown file before terminal startup and
 //! renders it as a responsive, syntax-highlighted semantic document. Local
 //! Markdown links and heading fragments remain inside the reader with cached
-//! back/forward history.
+//! back/forward history. Pointer movement focuses links, left click activates
+//! them, and the mouse wheel scrolls document content.
 
 use std::{env, error::Error, ffi::OsString, io, path::PathBuf};
 

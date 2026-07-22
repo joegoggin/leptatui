@@ -143,3 +143,4 @@ include!("inline.rs");
 include!("structures.rs");
 include!("fallbacks.rs");
 include!("ordering.rs");
+include!("navigation.rs");

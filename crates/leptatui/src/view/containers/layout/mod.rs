@@ -151,8 +151,7 @@ impl View for LayoutView {
         }
         if self.metadata.max_scroll_offset() > 0 && self.metadata.contains_hit_position(column, row)
         {
-            self.metadata.scroll_by(delta);
-            return true;
+            return self.metadata.scroll_by(delta);
         }
         false
     }

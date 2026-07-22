@@ -72,3 +72,16 @@ fn semantic_table_builders_store_structure_content_and_alignment() {
     let body = table_body(());
     assert_eq!(body.metadata().view_type(), ViewType::TableBody);
 }
+
+/// Verifies semantic builders retain standard Ratatui text conversions.
+#[test]
+fn semantic_builders_accept_text_compatible_inputs() {
+    let heading = h1(vec![Line::raw("First"), Line::raw("Second")]);
+    let paragraph = paragraph(Cow::Borrowed("Borrowed"));
+    let cell_lines = [Line::raw("Cell one"), Line::raw("Cell two")];
+    let cell = table_cell(cell_lines.as_slice());
+
+    assert_eq!(heading.content().to_string(), "First\nSecond");
+    assert_eq!(paragraph.content().to_string(), "Borrowed");
+    assert_eq!(cell.content().to_string(), "Cell one\nCell two");
+}

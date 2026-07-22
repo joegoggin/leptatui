@@ -102,3 +102,36 @@ impl View for FocusPanel {
         self
     }
 }
+
+/// Component that constrains an overflowing child to three terminal rows.
+struct ConstrainedScrollPanel {
+    /// Scrollable child view owned by this component boundary.
+    view: AnyView,
+}
+
+impl View for ConstrainedScrollPanel {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        ctx.render_view(&self.view)
+    }
+
+    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        3
+    }
+
+    fn __clear_hit_areas(&self) {
+        self.view.__clear_hit_areas();
+    }
+
+    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+        self.view
+            .__scroll_overflowing_at_position(column, row, delta)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}

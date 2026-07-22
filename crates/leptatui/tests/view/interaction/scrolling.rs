@@ -221,3 +221,21 @@ fn tab_focus_scrolls_to_focused_button_inside_component_boundary() -> Result<()>
 
     Ok(())
 }
+
+/// Verifies focus scrolling follows the word wrapping used for Markdown links.
+#[test]
+fn focused_word_wrapped_markdown_link_scrolls_into_view() -> Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(10, 1))?;
+    let mut view = markdown("123456 [Link](https://example.com)");
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_view(&mut terminal, view.as_view())?;
+
+    assert_eq!(scroll_offset(view.as_view()), 1);
+    assert_eq!(cell_symbol(&terminal, 0, 0, 10), "L");
+
+    Ok(())
+}
