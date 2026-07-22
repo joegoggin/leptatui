@@ -25,28 +25,48 @@ use super::{
 /// restore their retained focus and scroll state.
 #[derive(Clone)]
 pub struct MarkdownView {
+    /// Shared navigation state retained across reconciled view boundaries.
     state: Rc<RefCell<MarkdownState>>,
 }
 
 /// Mutable navigation state shared across reconciled Markdown boundaries.
 #[derive(Debug, PartialEq)]
 struct MarkdownState {
+    /// Absolute path of the declarative root used for reconciliation identity.
     root_path: PathBuf,
+    /// Rendering options applied to every page loaded by this boundary.
     options: MarkdownOptions,
+    /// Page currently displayed by the boundary.
     current: MarkdownPage,
+    /// Previously visited pages ordered from oldest to newest.
     back: Vec<MarkdownPage>,
+    /// Forward-history pages ordered from farthest to nearest.
     forward: Vec<MarkdownPage>,
 }
 
 /// One cached page in a [`MarkdownView`] navigation history.
 #[derive(Debug, PartialEq)]
 struct MarkdownPage {
+    /// Absolute or working-directory-relative path represented by the page.
     path: PathBuf,
+    /// Parsed document or rendered file-read failure retained for the page.
     document: AnyView,
 }
 
 impl MarkdownView {
     /// Creates a file-backed Markdown boundary rooted at `path`.
+    ///
+    /// The initial page is loaded immediately. Read failures are retained as
+    /// navigable in-app content rather than returned as errors.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Markdown file that identifies the declarative root.
+    /// * `options` — Rendering options applied to every loaded page.
+    ///
+    /// # Returns
+    ///
+    /// A [`MarkdownView`] displaying the initial page or its read failure.
     pub(in crate::markdown) fn new(path: &Path, options: MarkdownOptions) -> Self {
         let root_path = absolute_path(path);
         let current = load_markdown_page(root_path.clone(), options, None);
@@ -62,21 +82,41 @@ impl MarkdownView {
     }
 
     /// Returns the path of the currently displayed Markdown page.
+    ///
+    /// # Returns
+    ///
+    /// An owned [`PathBuf`] containing the current page path.
     pub fn current_path(&self) -> PathBuf {
         self.state.borrow().current.path.clone()
     }
 
     /// Returns whether a cached page is available in back history.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether backward navigation can restore a page.
     pub fn can_go_back(&self) -> bool {
         !self.state.borrow().back.is_empty()
     }
 
     /// Returns whether a cached page is available in forward history.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether forward navigation can restore a page.
     pub fn can_go_forward(&self) -> bool {
         !self.state.borrow().forward.is_empty()
     }
 
     /// Returns whether this boundary belongs to the same declarative root.
+    ///
+    /// # Arguments
+    ///
+    /// * `previous` — Earlier Markdown boundary considered for reconciliation.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether root path and rendering options match.
     fn can_reconcile_from(&self, previous: &Self) -> bool {
         let state = self.state.borrow();
         let previous = previous.state.borrow();
@@ -86,6 +126,13 @@ impl MarkdownView {
 
 impl MarkdownState {
     /// Navigates to the focused in-app Markdown target, if one exists.
+    ///
+    /// Successful navigation pushes the current page into back history and
+    /// clears forward history.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether a focused Markdown target was opened.
     fn navigate_focused_link(&mut self) -> bool {
         let Some(LinkTarget::Markdown { path, fragment }) =
             self.current.document.__focused_link_target()
@@ -101,6 +148,10 @@ impl MarkdownState {
     }
 
     /// Restores the most recent cached page from back history.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether backward navigation restored a page.
     fn go_back(&mut self) -> bool {
         let Some(previous) = self.back.pop() else {
             return false;
@@ -111,6 +162,10 @@ impl MarkdownState {
     }
 
     /// Restores the next cached page from forward history.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether forward navigation restored a page.
     fn go_forward(&mut self) -> bool {
         let Some(next) = self.forward.pop() else {
             return false;
@@ -356,6 +411,16 @@ impl View for MarkdownView {
 }
 
 /// Loads one page, retaining read failures as navigable in-app content.
+///
+/// # Arguments
+///
+/// * `path` — Markdown file path represented by the loaded page.
+/// * `options` — Rendering options applied while parsing the file.
+/// * `fragment` — Optional heading fragment requested after parsing.
+///
+/// # Returns
+///
+/// A [`MarkdownPage`] containing parsed content or a rendered read failure.
 fn load_markdown_page(
     path: PathBuf,
     options: MarkdownOptions,

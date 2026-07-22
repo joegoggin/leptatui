@@ -238,6 +238,16 @@ impl AnyView {
     }
 
     /// Returns the focusable control index under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `index` — Running flattened focus index to inspect and advance.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the flattened index under the position.
     #[doc(hidden)]
     pub fn __focusable_index_at_position_inner(
         &self,
@@ -255,7 +265,15 @@ impl AnyView {
         self.inner.__focused_control_span(ctx)
     }
 
-    /// Activates the focused button in the stored subtree.
+    /// Activates the focused button or actionable link in the stored subtree.
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`] containing the activated control value, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if a focused link cannot be opened.
     #[doc(hidden)]
     pub fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
         self.inner.__activate_focused_button()
@@ -304,18 +322,50 @@ impl AnyView {
     }
 
     /// Handles built-in mouse behavior in the stored subtree.
+    ///
+    /// # Arguments
+    ///
+    /// * `mouse` — Crossterm mouse event to handle.
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`] containing the [`AppControl`] produced by mouse handling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if clicking a focused link cannot
+    /// open its target.
     #[doc(hidden)]
     pub fn __handle_mouse_event(&mut self, mouse: MouseEvent) -> Result<AppControl> {
         self.inner.__handle_mouse_event(mouse)
     }
 
     /// Moves focus to the control under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a focusable control was found.
     #[doc(hidden)]
     pub fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
         self.inner.__focus_control_at_position(column, row)
     }
 
     /// Scrolls the innermost overflowing layout under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `delta` — Signed row count to apply to the scroll offset.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a positioned layout consumed the scroll.
     #[doc(hidden)]
     pub fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
         self.inner
@@ -335,24 +385,48 @@ impl AnyView {
     }
 
     /// Returns the focused actionable link target in the stored subtree.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing a clone of the focused actionable target.
     #[doc(hidden)]
     pub fn __focused_link_target(&self) -> Option<crate::LinkTarget> {
         self.inner.__focused_link_target()
     }
 
     /// Requests top-aligned scrolling to the first stored view with `id`.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` — Selector identifier of the destination view.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a matching view accepted the request.
     #[doc(hidden)]
     pub fn __request_scroll_to_id(&mut self, id: &str) -> bool {
         self.inner.__request_scroll_to_id(id)
     }
 
     /// Returns whether the stored subtree contains a pending heading anchor.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether anchor scrolling remains pending.
     #[doc(hidden)]
     pub fn __has_scroll_to_anchor_request(&self) -> bool {
         self.inner.__has_scroll_to_anchor_request()
     }
 
     /// Moves the first eligible Markdown boundary through cached history.
+    ///
+    /// # Arguments
+    ///
+    /// * `back` — Whether to move backward instead of forward.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a Markdown boundary changed pages.
     #[doc(hidden)]
     pub fn __navigate_markdown_history(&mut self, back: bool) -> bool {
         self.inner.__navigate_markdown_history(back)
@@ -447,6 +521,22 @@ where
 
 impl AnyView {
     /// Renders the stored concrete node.
+    ///
+    /// Prior hit areas are cleared before the current root metadata and
+    /// concrete node are rendered.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Render context containing the target area and stylesheets.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] after the concrete node renders successfully.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Io`] if concrete rendering performs terminal
+    /// I/O that fails.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         self.inner.__clear_hit_areas();
         if let Some(metadata) = self.inner.style_metadata() {

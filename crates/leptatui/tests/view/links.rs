@@ -28,6 +28,18 @@ fn link_builder_stores_rich_text_target_and_metadata() {
 }
 
 /// Verifies links render recognizable default and focused states.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Link("Guide", "https://example.com")
+/// render, Tab, render
+/// ```
+///
+/// # Assertions
+///
+/// - The default link style is underlined but not reversed.
+/// - The focused link style is both underlined and reversed.
 #[test]
 fn link_renders_default_and_focused_styles() -> Result<()> {
     let mut view = link("Guide", "https://example.com");
@@ -48,6 +60,19 @@ fn link_renders_default_and_focused_styles() -> Result<()> {
 }
 
 /// Verifies inactive fragments are skipped and link-open failures propagate.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Column(Link("Fragment", "#part"), Link("Missing", missing_path))
+/// Tab, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - The fragment-only link is excluded from focus traversal.
+/// - Focus moves to the missing filesystem target.
+/// - Activating that target returns a link-open error.
 #[test]
 fn link_focus_skips_fragments_and_propagates_open_errors() -> Result<()> {
     let missing = std::env::temp_dir().join(format!(
@@ -70,6 +95,19 @@ fn link_focus_skips_fragments_and_propagates_open_errors() -> Result<()> {
 }
 
 /// Verifies standalone link focus survives matching view reconciliation.
+///
+/// # Example Under Test
+///
+/// ```text
+/// previous = Link("Guide", "https://example.com"), focused
+/// matching = Link("Updated", "https://example.com")
+/// different = Link("Other", "https://example.org")
+/// ```
+///
+/// # Assertions
+///
+/// - Reconciliation preserves focus when the link target is unchanged.
+/// - Reconciliation clears focus when the link target changes.
 #[test]
 fn link_reconciliation_retains_focus_only_for_matching_targets() -> Result<()> {
     let mut previous = link("Guide", "https://example.com");

@@ -223,6 +223,18 @@ fn tab_focus_scrolls_to_focused_button_inside_component_boundary() -> Result<()>
 }
 
 /// Verifies focus scrolling follows the word wrapping used for Markdown links.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 123456 [Link](https://example.com), viewport = 10x1
+/// Tab, render
+/// ```
+///
+/// # Assertions
+///
+/// - Focusing the wrapped link scrolls the Markdown view down one row.
+/// - The focused link is visible at the start of the viewport.
 #[test]
 fn focused_word_wrapped_markdown_link_scrolls_into_view() -> Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(10, 1))?;

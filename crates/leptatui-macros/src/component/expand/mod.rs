@@ -141,10 +141,6 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 &mut self,
                 event: &#leptatui::__private::Event,
             ) -> #leptatui::Result<#leptatui::AppControl> {
-                if let #leptatui::__private::Event::Mouse(__leptatui_mouse) = event {
-                    return self.__handle_mouse_event(*__leptatui_mouse);
-                }
-
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &mut self.__leptatui_view;
 
@@ -420,6 +416,16 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                 __leptatui_owner.with(|| {
                     __leptatui_view.__take_scroll_to_top_key_pending()
+                })
+            }
+
+            #[doc(hidden)]
+            fn __navigate_markdown_history(&mut self, back: bool) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__navigate_markdown_history(back)
                 })
             }
 

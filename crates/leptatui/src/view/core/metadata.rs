@@ -160,6 +160,14 @@ impl ViewType {
     }
 
     /// Returns low-precedence defaults for the current pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `focused` — Whether the view currently matches the focus pseudo-class.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] containing defaults contributed by the current state.
     pub(crate) fn default_state_style(self, focused: bool) -> TuiStyle {
         if self == Self::Link && focused {
             TuiStyle::new().modifier(Modifier::UNDERLINED | Modifier::REVERSED)
@@ -178,10 +186,12 @@ pub struct StyleMetadata {
     inline_style: Option<TuiStyle>,
     focused: bool,
     scroll_into_view_requested: Cell<bool>,
+    /// Pending request to align this view with an overflowing parent's top.
     scroll_to_anchor_requested: Cell<bool>,
     scroll_to_top_key_pending: Cell<bool>,
     scroll_offset: Cell<u16>,
     max_scroll_offset: Cell<u16>,
+    /// Terminal-coordinate hit areas recorded during the latest render.
     hit_areas: RefCell<Vec<Rect>>,
 }
 
@@ -350,6 +360,11 @@ impl StyleMetadata {
     }
 
     /// Returns whether top-aligned anchor scrolling is pending.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether an overflowing parent should align this
+    /// view with its top edge.
     pub(crate) fn scroll_to_anchor_requested(&self) -> bool {
         self.scroll_to_anchor_requested.get()
     }
@@ -360,6 +375,15 @@ impl StyleMetadata {
     }
 
     /// Returns whether any last-rendered hit area contains a position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to test.
+    /// * `row` — Zero-based terminal row to test.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether any retained hit area contains the cell.
     pub(crate) fn contains_hit_position(&self, column: u16, row: u16) -> bool {
         self.hit_areas
             .borrow()
@@ -373,6 +397,12 @@ impl StyleMetadata {
     }
 
     /// Replaces last-rendered hit areas with one optional area.
+    ///
+    /// Empty rectangles are discarded after all prior areas are cleared.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Optional terminal-coordinate rectangle to retain.
     pub(crate) fn set_hit_area(&self, area: Option<Rect>) {
         let mut hit_areas = self.hit_areas.borrow_mut();
         hit_areas.clear();
@@ -385,6 +415,10 @@ impl StyleMetadata {
     }
 
     /// Appends one last-rendered hit area.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Non-empty terminal-coordinate rectangle to append.
     pub(crate) fn push_hit_area(&self, area: Rect) {
         if area.width > 0 && area.height > 0 {
             self.hit_areas.borrow_mut().push(area);
@@ -457,6 +491,18 @@ impl PartialEq for StyleMetadata {
 impl Eq for StyleMetadata {}
 
 /// Returns whether a terminal rectangle contains a cell position.
+///
+/// Rectangle right and bottom edges are treated as exclusive.
+///
+/// # Arguments
+///
+/// * `area` — Terminal-coordinate rectangle to inspect.
+/// * `column` — Zero-based terminal column to test.
+/// * `row` — Zero-based terminal row to test.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the cell falls within the half-open bounds.
 pub(crate) fn rect_contains(area: Rect, column: u16, row: u16) -> bool {
     column >= area.x
         && column < area.x.saturating_add(area.width)

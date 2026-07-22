@@ -264,6 +264,16 @@ pub trait View: Any {
     }
 
     /// Returns the focusable control index under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `index` — Running flattened focus index to inspect and advance.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the flattened index under the position.
     #[doc(hidden)]
     fn __focusable_index_at_position_inner(
         &self,
@@ -282,7 +292,15 @@ pub trait View: Any {
         None
     }
 
-    /// Activates the focused button in this subtree.
+    /// Activates the focused button or actionable link in this subtree.
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`] containing the activated control value, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if a focused link cannot be opened.
     #[doc(hidden)]
     fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
         for child in self.children() {
@@ -348,12 +366,34 @@ pub trait View: Any {
     }
 
     /// Handles built-in mouse focus, activation, and scrolling behavior.
+    ///
+    /// # Arguments
+    ///
+    /// * `mouse` — Crossterm mouse event to handle.
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`] containing the [`AppControl`] produced by mouse handling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if clicking a focused link cannot
+    /// open its target.
     #[doc(hidden)]
     fn __handle_mouse_event(&mut self, mouse: MouseEvent) -> Result<AppControl> {
         super::events::handle_default_view_mouse_event(self, mouse)
     }
 
     /// Moves focus to the control under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a focusable control was found.
     #[doc(hidden)]
     fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
         let mut index = 0;
@@ -366,6 +406,16 @@ pub trait View: Any {
     }
 
     /// Scrolls the innermost overflowing layout under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `delta` — Signed row count to apply to the scroll offset.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a positioned layout consumed the scroll.
     #[doc(hidden)]
     fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
         self.children_mut()
@@ -399,6 +449,10 @@ pub trait View: Any {
     }
 
     /// Returns the focused actionable link target in this subtree.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing a clone of the focused actionable target.
     #[doc(hidden)]
     fn __focused_link_target(&self) -> Option<LinkTarget> {
         self.children()
@@ -407,6 +461,14 @@ pub trait View: Any {
     }
 
     /// Requests top-aligned scrolling to the first view with `id`.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` — Selector identifier of the destination view.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a matching view accepted the request.
     #[doc(hidden)]
     fn __request_scroll_to_id(&mut self, id: &str) -> bool {
         if let Some(metadata) = self.style_metadata_mut()
@@ -422,6 +484,10 @@ pub trait View: Any {
     }
 
     /// Returns whether this subtree contains a pending heading anchor.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether anchor scrolling remains pending.
     #[doc(hidden)]
     fn __has_scroll_to_anchor_request(&self) -> bool {
         self.style_metadata()
@@ -433,6 +499,14 @@ pub trait View: Any {
     }
 
     /// Moves the first eligible Markdown boundary through cached history.
+    ///
+    /// # Arguments
+    ///
+    /// * `back` — Whether to move backward instead of forward.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a Markdown boundary changed pages.
     #[doc(hidden)]
     fn __navigate_markdown_history(&mut self, back: bool) -> bool {
         self.children_mut()

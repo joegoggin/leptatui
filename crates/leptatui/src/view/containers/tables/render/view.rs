@@ -196,6 +196,16 @@ pub(in crate::view::containers::tables) fn render_table_view(
 }
 
 /// Returns source table rows in the same order used by resolved rendering.
+///
+/// Non-section and non-row views are omitted to match layout resolution.
+///
+/// # Arguments
+///
+/// * `sections` — Semantic table sections containing source rows and cells.
+///
+/// # Returns
+///
+/// A [`Vec`] of borrowed source-cell slices in rendered row order.
 fn table_source_rows(sections: &[AnyView]) -> Vec<&[AnyView]> {
     sections
         .iter()
@@ -209,6 +219,10 @@ fn table_source_rows(sections: &[AnyView]) -> Vec<&[AnyView]> {
 }
 
 /// Clears completed inline-link scroll requests throughout a semantic table.
+///
+/// # Arguments
+///
+/// * `sections` — Semantic table sections whose source cells should be reset.
 fn clear_table_link_scroll_requests(sections: &[AnyView]) {
     for cells in table_source_rows(sections) {
         for cell in cells {
@@ -247,6 +261,20 @@ pub(in crate::view::containers::tables) fn min_height_for_table_view(
 }
 
 /// Returns the focused linked table row's vertical span.
+///
+/// The returned coordinates include the table's top border and inter-row
+/// borders used by resolved rendering.
+///
+/// # Arguments
+///
+/// * `sections` — Semantic table sections to resolve and inspect.
+/// * `metadata` — Table metadata used during layout resolution.
+/// * `ctx` — Render context supplying the available area and stylesheets.
+///
+/// # Returns
+///
+/// An [`Option`] containing the rendered row span with a pending focused-link
+/// scroll request.
 pub(in crate::view::containers::tables) fn focused_link_span_for_table_view(
     sections: &[AnyView],
     metadata: &StyleMetadata,

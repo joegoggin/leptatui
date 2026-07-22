@@ -19,6 +19,10 @@ where
         return Ok(handle_view_key_event(view, key)?.into());
     }
     if let Event::Mouse(mouse) = event {
+        let control = view.__dispatch_event(&event)?;
+        if control == AppControl::Exit {
+            return Ok(control);
+        }
         return view.__handle_mouse_event(mouse);
     }
 
@@ -26,6 +30,20 @@ where
 }
 
 /// Handles built-in mouse focus, activation, and positioned scrolling.
+///
+/// # Arguments
+///
+/// * `view` — View tree receiving built-in mouse behavior.
+/// * `mouse` — Crossterm mouse event to handle.
+///
+/// # Returns
+///
+/// A [`Result`] containing the [`AppControl`] produced by mouse handling.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::LinkOpen`] if clicking a focused link cannot open
+/// its target.
 pub(crate) fn handle_default_view_mouse_event<V>(
     view: &mut V,
     mouse: MouseEvent,

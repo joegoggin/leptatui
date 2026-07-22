@@ -31,12 +31,31 @@ pub struct LinkView {
 /// Relative filesystem paths are resolved from the process working directory.
 /// Empty and hash-prefixed fragment targets render without participating in
 /// focus traversal.
+///
+/// # Arguments
+///
+/// * `label` — Rich text displayed by the link.
+/// * `target` — URL, filesystem path, Markdown target, or fragment.
+///
+/// # Returns
+///
+/// A [`LinkView`] containing the resolved destination and fresh metadata.
 pub fn link(label: impl Into<RichText>, target: impl Into<LinkTarget>) -> LinkView {
     let base = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     link_with_base(label, target, base)
 }
 
 /// Creates a rich-text link resolved against an explicit directory.
+///
+/// # Arguments
+///
+/// * `label` — Rich text displayed by the link.
+/// * `target` — URL, filesystem path, Markdown target, or fragment.
+/// * `base` — Directory used to resolve relative filesystem targets.
+///
+/// # Returns
+///
+/// A [`LinkView`] containing the resolved destination and fresh metadata.
 pub(crate) fn link_with_base(
     label: impl Into<RichText>,
     target: impl Into<LinkTarget>,
@@ -160,11 +179,19 @@ impl crate::view::TextualView for LinkView {
 
 impl LinkView {
     /// Returns the visible rich-text label.
+    ///
+    /// # Returns
+    ///
+    /// A [`ratatui::text::Text`] reference containing the visible label.
     pub fn content(&self) -> &ratatui::text::Text<'static> {
         self.label.text()
     }
 
     /// Returns the classified destination activated by this link.
+    ///
+    /// # Returns
+    ///
+    /// A [`LinkTarget`] reference containing the classified destination.
     pub const fn target(&self) -> &LinkTarget {
         &self.target
     }

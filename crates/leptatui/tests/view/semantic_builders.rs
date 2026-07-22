@@ -74,6 +74,20 @@ fn semantic_table_builders_store_structure_content_and_alignment() {
 }
 
 /// Verifies semantic builders retain standard Ratatui text conversions.
+///
+/// # Example Under Test
+///
+/// ```text
+/// h1(Vec<Line>)
+/// paragraph(Cow<str>)
+/// table_cell(&[Line])
+/// ```
+///
+/// # Assertions
+///
+/// - Headings retain multi-line `Vec<Line>` content.
+/// - Paragraphs retain borrowed string content.
+/// - Table cells retain borrowed line-slice content.
 #[test]
 fn semantic_builders_accept_text_compatible_inputs() {
     let heading = h1(vec![Line::raw("First"), Line::raw("Second")]);

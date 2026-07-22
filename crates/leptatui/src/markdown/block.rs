@@ -28,6 +28,7 @@ use super::{
 /// * `events` — CommonMark event stream positioned inside a block.
 /// * `end` — Optional closing tag that terminates the current block sequence.
 /// * `options` — Code-block presentation defaults for the document.
+/// * `context` — Shared link-resolution and heading-slug state for the document.
 ///
 /// # Returns
 ///

@@ -125,6 +125,10 @@ where
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
         context::hooks::__with_context_scope(|| {
             let mut ctx = RenderCtx::new(frame);
+            View::__clear_hit_areas(self);
+            if let Some(metadata) = View::style_metadata(self) {
+                ctx.record_metadata_hit_area(metadata);
+            }
             View::render(self, &mut ctx)
         })
     }

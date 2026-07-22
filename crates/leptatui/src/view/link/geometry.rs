@@ -39,10 +39,15 @@ struct LinkedVisualRow {
 /// One visual terminal segment occupied by an inline link.
 #[derive(Clone, Copy)]
 pub(super) struct LinkedVisualSegment {
+    /// Source-order index of the embedded link occupying the segment.
     pub(super) link: usize,
+    /// Zero-based wrapped visual row containing the segment.
     pub(super) row: u16,
+    /// Inclusive terminal-cell offset where the segment begins.
     pub(super) start: u16,
+    /// Exclusive terminal-cell offset where the segment ends.
     pub(super) end: u16,
+    /// Total terminal-cell width of the wrapped visual row.
     pub(super) line_width: u16,
 }
 
@@ -168,6 +173,15 @@ fn linked_visual_rows(
 }
 
 /// Wraps link-aware graphemes like Ratatui's `WordWrapper` with `trim: false`.
+///
+/// # Arguments
+///
+/// * `graphemes` — Link-aware graphemes from one logical text line.
+/// * `width` — Maximum terminal-cell width of each visual row.
+///
+/// # Returns
+///
+/// A [`Vec`] containing wrapped visual rows in render order.
 fn word_wrapped_visual_rows(
     graphemes: Vec<LinkedVisualGrapheme>,
     width: u16,
@@ -270,6 +284,15 @@ fn word_wrapped_visual_rows(
 }
 
 /// Wraps link-aware graphemes at individual grapheme boundaries.
+///
+/// # Arguments
+///
+/// * `graphemes` — Link-aware graphemes from one logical text line.
+/// * `width` — Maximum terminal-cell width of each visual row.
+///
+/// # Returns
+///
+/// A [`Vec`] containing grapheme-wrapped visual rows in render order.
 fn grapheme_wrapped_visual_rows(
     graphemes: Vec<LinkedVisualGrapheme>,
     width: u16,
@@ -313,6 +336,11 @@ fn grapheme_wrapped_visual_rows(
 }
 
 /// Completes the pending inline-link segment.
+///
+/// # Arguments
+///
+/// * `segments` — Completed segment collection receiving the pending value.
+/// * `pending` — Optional segment to remove and append when present.
 fn finish_linked_segment(
     segments: &mut Vec<LinkedVisualSegment>,
     pending: &mut Option<LinkedVisualSegment>,
@@ -323,6 +351,16 @@ fn finish_linked_segment(
 }
 
 /// Returns left padding for a line inside an aligned rich-text area.
+///
+/// # Arguments
+///
+/// * `line_width` — Rendered terminal-cell width of the line.
+/// * `width` — Total terminal-cell width available to the line.
+/// * `alignment` — Horizontal alignment applied within the available width.
+///
+/// # Returns
+///
+/// A terminal-cell offset from the area's left edge.
 pub(super) fn aligned_line_offset(line_width: u16, width: u16, alignment: CellAlignment) -> u16 {
     match alignment {
         CellAlignment::Left => 0,

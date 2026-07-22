@@ -137,6 +137,18 @@ pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) 
 }
 
 /// Converts CommonMark with an explicit link base and optional source path.
+///
+/// # Arguments
+///
+/// * `source` — CommonMark source text to parse.
+/// * `options` — Code-block presentation defaults for the document.
+/// * `link_base` — Directory used to resolve relative local links.
+/// * `source_path` — Current Markdown file path used for in-app navigation.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing semantic document blocks with resolved links and
+/// file-navigation anchors when a source path is present.
 fn markdown_with_options_and_source(
     source: &str,
     options: MarkdownOptions,
@@ -148,10 +160,11 @@ fn markdown_with_options_and_source(
     column(parse_blocks(&mut parser, None, options, &mut context)).into_view()
 }
 
-/// Loads a UTF-8 Markdown file into a scrollable semantic document view.
+/// Loads a UTF-8 Markdown file into a navigable semantic document view.
 ///
-/// Uses [`MarkdownOptions::default`] and performs all filesystem access before
-/// returning the view.
+/// Uses [`MarkdownOptions::default`] and reads the initial file before
+/// returning. Activating an in-app Markdown link reads its target during event
+/// handling.
 ///
 /// # Examples
 ///
@@ -168,17 +181,16 @@ fn markdown_with_options_and_source(
 ///
 /// # Returns
 ///
-/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
-/// the parsed document or a path-aware fallback paragraph when the file cannot
-/// be read as UTF-8.
+/// An [`AnyView`] containing a [`MarkdownView`] with the parsed document or a
+/// path-aware fallback page when the file cannot be read as UTF-8.
 pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
     markdown_file_with_options(path, MarkdownOptions::default())
 }
 
 /// Loads a UTF-8 Markdown file with explicit presentation options.
 ///
-/// All filesystem access completes before the returned view enters render
-/// traversal.
+/// The initial file is read before this function returns. Activating an in-app
+/// Markdown link reads its target during event handling.
 ///
 /// # Examples
 ///
@@ -201,9 +213,8 @@ pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
 ///
 /// # Returns
 ///
-/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
-/// the parsed document or a path-aware fallback paragraph when the file cannot
-/// be read as UTF-8.
+/// An [`AnyView`] containing a [`MarkdownView`] with the parsed document or a
+/// path-aware fallback page when the file cannot be read as UTF-8.
 pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptions) -> AnyView {
     MarkdownView::new(path.as_ref(), options).into_view()
 }

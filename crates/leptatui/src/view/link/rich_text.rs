@@ -59,6 +59,10 @@ impl RichText {
     }
 
     /// Returns the number of actionable links embedded in this text.
+    ///
+    /// # Returns
+    ///
+    /// A [`usize`] count of links that participate in focus traversal.
     pub(crate) fn focusable_count(&self) -> usize {
         self.links
             .iter()
@@ -67,6 +71,16 @@ impl RichText {
     }
 
     /// Returns the focused embedded-link index during flattened traversal.
+    ///
+    /// The traversal index advances once for every actionable embedded link.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` — Running flattened focus index to inspect and advance.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the focused link's flattened index.
     pub(crate) fn focused_index_inner(&self, index: &mut usize) -> Option<usize> {
         for link in &self.links {
             if !link.target.is_actionable() {
@@ -82,6 +96,14 @@ impl RichText {
     }
 
     /// Sets embedded-link focus during flattened traversal.
+    ///
+    /// The selected link requests scrolling into view while all other embedded
+    /// links clear retained focus and scroll requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `target` — Flattened focus index that should become focused.
+    /// * `index` — Running flattened focus index to inspect and advance.
     pub(crate) fn set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
         for link in &mut self.links {
             if !link.target.is_actionable() {
@@ -101,6 +123,16 @@ impl RichText {
     }
 
     /// Opens the focused embedded link, if any.
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`] containing the activated link's control value, or [`None`]
+    /// when no actionable embedded link is focused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if the focused target cannot be
+    /// opened.
     pub(crate) fn activate_focused_link(&self) -> Result<Option<AppControl>> {
         for link in &self.links {
             if link.metadata.is_focused() && link.target.is_actionable() {
@@ -111,6 +143,10 @@ impl RichText {
     }
 
     /// Returns the target of the focused actionable embedded link.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing a clone of the focused link target.
     pub(crate) fn focused_link_target(&self) -> Option<LinkTarget> {
         self.links
             .iter()
@@ -119,6 +155,11 @@ impl RichText {
     }
 
     /// Returns focused-control metadata for an embedded link.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing [`FocusedControl::Link`] when an actionable
+    /// embedded link is focused.
     pub(crate) fn focused_control(&self) -> Option<FocusedControl> {
         self.links
             .iter()
@@ -127,6 +168,10 @@ impl RichText {
     }
 
     /// Returns whether a focused embedded link requested scrolling.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the focused link should scroll into view.
     pub(crate) fn focused_link_requested_scroll(&self) -> bool {
         self.links
             .iter()
@@ -134,6 +179,14 @@ impl RichText {
     }
 
     /// Returns the wrapped row span of the focused embedded link.
+    ///
+    /// # Arguments
+    ///
+    /// * `width` — Terminal-cell width used for word wrapping.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the focused link's half-open vertical span.
     pub(crate) fn focused_link_span(&self, width: u16) -> Option<VerticalSpan> {
         if width == 0 {
             return None;
@@ -218,6 +271,18 @@ impl RichText {
     }
 
     /// Returns the embedded-link index under a terminal position.
+    ///
+    /// The traversal index advances once for every actionable embedded link.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `index` — Running flattened focus index to inspect and advance.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the flattened index under the position.
     pub(crate) fn focusable_index_at_position(
         &self,
         column: u16,
@@ -238,6 +303,13 @@ impl RichText {
     }
 
     /// Reconciles retained focus and hit-test state for matching links.
+    ///
+    /// Links are paired in source order and retain runtime state only when
+    /// their targets match.
+    ///
+    /// # Arguments
+    ///
+    /// * `previous` — Previously rendered rich text supplying runtime state.
     pub(crate) fn reconcile_links(&mut self, previous: &Self) {
         for (next, previous) in self.links.iter_mut().zip(&previous.links) {
             if next.target == previous.target {
@@ -474,6 +546,17 @@ impl InlineLink {
 ///
 /// The semantic container is exposed as the immediate selector ancestor so
 /// descendant selectors such as `Paragraph Link` retain their expected shape.
+///
+/// # Arguments
+///
+/// * `content` — Rich text and embedded-link metadata to style.
+/// * `metadata` — Selector metadata for the containing semantic view.
+/// * `style` — Resolved style inherited from the containing view.
+/// * `ctx` — Render context used to resolve descendant link selectors.
+///
+/// # Returns
+///
+/// A [`Text`] value with resolved link styles patched onto linked spans.
 pub(crate) fn resolved_rich_text(
     content: &RichText,
     metadata: &StyleMetadata,

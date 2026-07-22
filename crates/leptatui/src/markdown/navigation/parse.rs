@@ -24,6 +24,15 @@ pub(in crate::markdown) struct MarkdownParseContext<'a> {
 
 impl<'a> MarkdownParseContext<'a> {
     /// Creates parsing context for in-memory or file-backed Markdown.
+    ///
+    /// # Arguments
+    ///
+    /// * `link_base` — Directory used to resolve relative local targets.
+    /// * `source_path` — Current Markdown file path, when parsing from disk.
+    ///
+    /// # Returns
+    ///
+    /// A [`MarkdownParseContext`] with empty heading-slug state.
     pub(in crate::markdown) fn new(link_base: &'a Path, source_path: Option<&'a Path>) -> Self {
         Self {
             link_base,
@@ -34,11 +43,26 @@ impl<'a> MarkdownParseContext<'a> {
     }
 
     /// Returns whether headings should receive file-navigation anchors.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether the context has a source file path.
     pub(in crate::markdown) const fn has_source_path(&self) -> bool {
         self.source_path.is_some()
     }
 
     /// Returns the unique GitHub-style slug for one heading.
+    ///
+    /// Previously assigned slugs are retained so duplicate headings receive
+    /// collision-free numeric suffixes.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` — Rich heading content whose visible text forms the slug.
+    ///
+    /// # Returns
+    ///
+    /// A unique [`String`] containing the normalized heading slug.
     pub(in crate::markdown) fn heading_slug(&mut self, content: &RichText) -> String {
         let visible = content
             .text()
@@ -65,6 +89,15 @@ impl<'a> MarkdownParseContext<'a> {
     }
 
     /// Classifies a parsed Markdown link for this document boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `link_type` — Link classification emitted by the Markdown parser.
+    /// * `destination` — Raw, potentially percent-encoded destination.
+    ///
+    /// # Returns
+    ///
+    /// A [`LinkTarget`] resolved relative to this document's link base.
     pub(in crate::markdown) fn link_target(
         &self,
         link_type: LinkType,
@@ -103,11 +136,27 @@ impl<'a> MarkdownParseContext<'a> {
             }
         }
 
-        ordinary.resolve_against(self.link_base)
+        LinkTarget::from(
+            percent_decode_str(destination)
+                .decode_utf8_lossy()
+                .into_owned(),
+        )
+        .resolve_against(self.link_base)
     }
 }
 
 /// Returns an absolute path without requiring the target to exist.
+///
+/// Relative paths are joined to the process working directory, or `.` when
+/// the working directory cannot be read.
+///
+/// # Arguments
+///
+/// * `path` — Absolute or working-directory-relative path to normalize.
+///
+/// # Returns
+///
+/// A [`PathBuf`] containing the absolute or joined path.
 pub(super) fn absolute_path(path: &Path) -> PathBuf {
     if path.is_absolute() {
         path.to_path_buf()
@@ -118,6 +167,15 @@ pub(super) fn absolute_path(path: &Path) -> PathBuf {
 }
 
 /// Resolves `path` against `base` without requiring the target to exist.
+///
+/// # Arguments
+///
+/// * `path` — Absolute or base-relative path to resolve.
+/// * `base` — Directory joined to relative paths.
+///
+/// # Returns
+///
+/// A [`PathBuf`] containing the absolute path or base-relative result.
 fn absolute_path_from(path: &Path, base: &Path) -> PathBuf {
     if path.is_absolute() {
         path.to_path_buf()
@@ -127,6 +185,15 @@ fn absolute_path_from(path: &Path, base: &Path) -> PathBuf {
 }
 
 /// Returns whether a local path names a supported Markdown file extension.
+///
+/// # Arguments
+///
+/// * `path` — Local path whose extension should be inspected.
+///
+/// # Returns
+///
+/// A boolean indicating whether the extension is `md` or `markdown`, ignoring
+/// ASCII case.
 fn is_markdown_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
@@ -136,6 +203,14 @@ fn is_markdown_path(path: &Path) -> bool {
 }
 
 /// Produces the base anchor used for GitHub-style heading fragments.
+///
+/// # Arguments
+///
+/// * `heading` — Visible heading text to normalize.
+///
+/// # Returns
+///
+/// A [`String`] containing the lowercase base slug before collision handling.
 fn github_heading_slug(heading: &str) -> String {
     let mut slug = String::new();
     for character in heading.chars().flat_map(char::to_lowercase) {
@@ -149,6 +224,14 @@ fn github_heading_slug(heading: &str) -> String {
 }
 
 /// Normalizes a percent-encoded fragment for heading-id comparison.
+///
+/// # Arguments
+///
+/// * `fragment` — Raw, potentially percent-encoded fragment identifier.
+///
+/// # Returns
+///
+/// A lowercase [`String`] containing the decoded fragment.
 pub(super) fn normalized_fragment(fragment: &str) -> String {
     percent_decode_str(fragment)
         .decode_utf8_lossy()

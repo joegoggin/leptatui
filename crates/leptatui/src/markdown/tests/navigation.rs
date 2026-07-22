@@ -1,4 +1,17 @@
 /// Verifies percent-encoded local Markdown paths load decoded filenames.
+///
+/// # Example Under Test
+///
+/// ```text
+/// reader.md: [Guide](Target%20Guide.md)
+/// Target Guide.md: # Encoded target
+/// Tab, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - Activating the link navigates to the decoded `Target Guide.md` path.
+/// - The linked Markdown document is loaded and rendered.
 #[test]
 fn markdown_file_links_decode_percent_encoded_paths() -> Result<()> {
     let fixture_dir = markdown_fixture_dir("encoded-link-path");
@@ -25,7 +38,55 @@ fn markdown_file_links_decode_percent_encoded_paths() -> Result<()> {
     Ok(())
 }
 
+/// Verifies percent-encoded non-Markdown paths resolve to decoded filenames.
+///
+/// # Example Under Test
+///
+/// ```text
+/// [Guide](User%20Guide.pdf)
+/// ```
+///
+/// # Assertions
+///
+/// - The focused link is a filesystem target.
+/// - Its resolved path ends in `User Guide.pdf`, not `User%20Guide.pdf`.
+#[test]
+fn markdown_local_links_decode_percent_encoded_paths() -> Result<()> {
+    let fixture_dir = markdown_fixture_dir("encoded-local-link-path");
+    let markdown_path = fixture_dir.join("reader.md");
+    let target_path = fixture_dir.join("User Guide.pdf");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    fs::write(&markdown_path, "[Guide](User%20Guide.pdf)")
+        .expect("source Markdown fixture should be written");
+
+    let mut document = markdown_file(&markdown_path);
+    document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+
+    assert_eq!(
+        document.__focused_link_target(),
+        Some(LinkTarget::Path(target_path))
+    );
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+    Ok(())
+}
+
 /// Verifies explicit suffixed headings do not collide with duplicate slugs.
+///
+/// # Example Under Test
+///
+/// ```text
+/// [Third heading](target.md#foo-2)
+///
+/// # Foo
+/// # Foo-1
+/// # Foo
+/// ```
+///
+/// # Assertions
+///
+/// - Activating the link navigates to `target.md`.
+/// - The generated `foo-2` anchor selects the third heading.
 #[test]
 fn markdown_heading_slugs_avoid_explicit_suffix_collisions() -> Result<()> {
     let fixture_dir = markdown_fixture_dir("heading-slug-collisions");
