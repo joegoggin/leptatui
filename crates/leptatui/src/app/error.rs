@@ -16,6 +16,16 @@ pub enum Error {
     /// Tokio failed to join the blocking event polling task.
     #[error("event polling task failed")]
     EventTask(#[from] tokio::task::JoinError),
+
+    /// The operating system could not open an activated link target.
+    #[error("failed to open link target `{target}`: {source}")]
+    LinkOpen {
+        /// Target that could not be opened.
+        target: String,
+        /// Underlying filesystem or process-launch failure.
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 impl From<std::convert::Infallible> for Error {

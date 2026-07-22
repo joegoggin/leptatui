@@ -253,7 +253,9 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
-            fn __activate_focused_button(&self) -> ::core::option::Option<#leptatui::AppControl> {
+            fn __activate_focused_button(
+                &self,
+            ) -> #leptatui::Result<::core::option::Option<#leptatui::AppControl>> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;
 

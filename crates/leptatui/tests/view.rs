@@ -17,8 +17,8 @@ use leptatui::{
     KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations,
     StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme, TuiSize, TuiSpacing, TuiStyle, View,
     ViewType, VimMode, block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4,
-    h5, h6, image, input, list_item, ordered_list, paragraph, progress_bar, row, table, table_body,
-    table_cell, table_head, table_row, text, text_area, unordered_list,
+    h5, h6, image, input, link, list_item, ordered_list, paragraph, progress_bar, row, table,
+    table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{
@@ -76,6 +76,7 @@ fn button_focuses(view: &View) -> Vec<bool> {
         | View::H5 { .. }
         | View::H6 { .. }
         | View::Paragraph { .. }
+        | View::Link { .. }
         | View::CodeBlock { .. }
         | View::Table { .. }
         | View::TableHead { .. }
@@ -86,6 +87,7 @@ fn button_focuses(view: &View) -> Vec<bool> {
         | View::TextArea { .. }
         | View::Image { .. }
         | View::ProgressBar { .. }
+        | View::Markdown { .. }
         | View::Dynamic(_)
         | View::Component(_) => Vec::new(),
     }
@@ -103,6 +105,7 @@ fn button_focuses(view: &View) -> Vec<bool> {
 fn control_focuses(view: &View) -> Vec<bool> {
     match view {
         View::Button { metadata, .. }
+        | View::Link { metadata, .. }
         | View::Input { metadata, .. }
         | View::TextArea { metadata, .. } => vec![metadata.is_focused()],
         View::Block { child, .. } => control_focuses(child),
@@ -132,6 +135,7 @@ fn control_focuses(view: &View) -> Vec<bool> {
         | View::TableCell { .. }
         | View::Image { .. }
         | View::ProgressBar { .. }
+        | View::Markdown { .. }
         | View::Dynamic(_)
         | View::Component(_) => Vec::new(),
     }
@@ -750,6 +754,142 @@ fn semantic_text_builders_store_rich_text_and_metadata() {
         assert_eq!(actual_content, &content);
         assert_eq!(metadata.view_type(), expected_type);
     }
+}
+
+/// Verifies the link builder retains rich text, target classification, and metadata.
+///
+/// # Example Under Test
+///
+/// ```text
+/// link(Text::from("Guide"), "https://example.com")
+/// ```
+///
+/// # Assertions
+///
+/// - The builder creates a Link view with the supplied rich text.
+/// - The string destination is classified as an absolute URL.
+/// - Selector metadata uses `ViewType::Link`.
+#[test]
+fn link_builder_stores_rich_text_target_and_metadata() {
+    let label = Text::from(Line::from(vec![
+        Span::raw("Gui"),
+        Span::styled("de", Style::new().fg(Color::Yellow)),
+    ]));
+    let view = link(label.clone(), "https://example.com");
+    let View::Link {
+        label: actual,
+        target,
+        metadata,
+    } = view
+    else {
+        panic!("expected link view");
+    };
+
+    assert_eq!(actual, label);
+    assert_eq!(
+        target,
+        leptatui::LinkTarget::Url("https://example.com".to_owned())
+    );
+    assert_eq!(metadata.view_type(), ViewType::Link);
+}
+
+/// Verifies links render recognizable default and focused states.
+///
+/// # Example Under Test
+///
+/// ```text
+/// link("Guide", "https://example.com")
+/// Tab
+/// ```
+///
+/// # Assertions
+///
+/// - An unfocused link is underlined by default.
+/// - Tab focuses the link.
+/// - The focused link retains underline and adds reverse video.
+#[test]
+fn link_renders_default_and_focused_styles() -> Result<()> {
+    let mut view = link("Guide", "https://example.com");
+    let mut terminal = Terminal::new(TestBackend::new(8, 1))?;
+    draw_view(&mut terminal, &view)?;
+    assert!(cell_modifiers(&terminal, 0, 0, 8).contains(Modifier::UNDERLINED));
+    assert!(!cell_modifiers(&terminal, 0, 0, 8).contains(Modifier::REVERSED));
+
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    draw_view(&mut terminal, &view)?;
+    let focused = cell_modifiers(&terminal, 0, 0, 8);
+    assert!(focused.contains(Modifier::UNDERLINED));
+    assert!(focused.contains(Modifier::REVERSED));
+    Ok(())
+}
+
+/// Verifies inactive fragments are skipped and link-open failures propagate.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([link("Fragment", "#part"), link("Missing", missing_path)])
+/// Tab, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - Only the filesystem link contributes to focus traversal.
+/// - Tab skips the fragment and focuses the filesystem link.
+/// - Enter returns a target-aware `Error::LinkOpen` for a missing path.
+#[test]
+fn link_focus_skips_fragments_and_propagates_open_errors() -> Result<()> {
+    let missing = std::env::temp_dir().join(format!(
+        "leptatui-missing-link-target-{}",
+        std::process::id()
+    ));
+    let mut view = column([link("Fragment", "#part"), link("Missing", missing)]);
+    assert_eq!(view.__focusable_count(), 1);
+    assert_eq!(
+        view.handle_key_event(key_event(KeyCode::Tab))?,
+        KeyControl::Handled
+    );
+    assert_eq!(control_focuses(&view), vec![false, true]);
+
+    let error = view
+        .handle_key_event(key_event(KeyCode::Enter))
+        .expect_err("missing link target should fail");
+    assert!(matches!(error, leptatui::Error::LinkOpen { .. }));
+    Ok(())
+}
+
+/// Verifies standalone link focus survives matching view reconciliation.
+///
+/// # Example Under Test
+///
+/// ```text
+/// previous = link("Guide", "https://example.com") + Tab
+/// next = link("Updated", "https://example.com")
+/// reconcile(next, previous)
+/// ```
+///
+/// # Assertions
+///
+/// - The previous link receives focus.
+/// - A regenerated link with the same target retains focus.
+/// - A regenerated link with a different target does not inherit focus.
+#[test]
+fn link_reconciliation_retains_focus_only_for_matching_targets() -> Result<()> {
+    let mut previous = link("Guide", "https://example.com");
+    previous.handle_key_event(key_event(KeyCode::Tab))?;
+    assert_eq!(control_focuses(&previous), vec![true]);
+
+    let mut matching = link("Updated", "https://example.com");
+    leptatui::__private::__reconcile_view(&mut matching, &previous);
+    assert_eq!(control_focuses(&matching), vec![true]);
+
+    let mut different = link("Other", "https://example.org");
+    leptatui::__private::__reconcile_view(&mut different, &previous);
+    assert_eq!(control_focuses(&different), vec![false]);
+    Ok(())
 }
 
 /// Verifies semantic text views render their documented hierarchy and modifiers.
@@ -6902,7 +7042,7 @@ impl Component for FocusPanel {
 
     /// Activates the focused control inside the child view, if any.
     #[doc(hidden)]
-    fn __activate_focused_button(&self) -> Option<AppControl> {
+    fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
         self.view.__activate_focused_button()
     }
 

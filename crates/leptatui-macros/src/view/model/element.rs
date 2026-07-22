@@ -150,6 +150,10 @@ impl Element {
             return self.expand_markdown();
         }
 
+        if self.name == "Link" {
+            return self.expand_link();
+        }
+
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 let leptatui = crate::utils::crate_path::leptatui();
@@ -420,6 +424,44 @@ impl Element {
         )
     }
 
+    /// Expands a rich-text link with one required `href` attribute.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] constructing a standalone link view.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if text content or `href` is missing, attributes
+    /// are duplicated, or an unsupported attribute is supplied.
+    fn expand_link(&self) -> Result<TokenStream> {
+        let attrs = self.validate_attrs()?;
+        let hrefs = attrs
+            .iter()
+            .filter(|validated| validated.kind == AttrKind::Href)
+            .collect::<Vec<_>>();
+        let href = match hrefs.as_slice() {
+            [href] => href.attr.value.to_tokens(),
+            [] => {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    "Link requires an href attribute",
+                ));
+            }
+            [first, ..] => {
+                return Err(Error::new_spanned(
+                    &first.attr.name,
+                    "Link expects exactly one href attribute",
+                ));
+            }
+        };
+        let leptatui = crate::utils::crate_path::leptatui();
+        let view = self.expand_text_like("Link", |content| {
+            quote! { #leptatui::link(#content, #href) }
+        })?;
+        self.expand_attrs(view, &attrs)
+    }
+
     /// Expands a self-contained element with one required attribute.
     ///
     /// # Arguments
@@ -595,6 +637,13 @@ impl Element {
                         "view! src attribute is only supported on Image or Markdown",
                     ));
                 }
+                "href" if element_name == "Link" => AttrKind::Href,
+                "href" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! href attribute is only supported on Link",
+                    ));
+                }
                 "alt" if element_name == "Image" => AttrKind::Alt,
                 "alt" => {
                     return Err(Error::new_spanned(
@@ -702,6 +751,7 @@ impl Element {
                         "Button" => {
                             "unsupported view! attribute; expected class, id, style, or on_press"
                         }
+                        "Link" => "unsupported view! attribute; expected class, id, style, or href",
                         "Form" => {
                             "unsupported view! attribute; expected class, id, style, on_submit, or on_cancel"
                         }
@@ -803,6 +853,7 @@ impl Element {
                 AttrKind::ImageSource => expanded,
                 AttrKind::ProgressValue => expanded,
                 AttrKind::MarkdownSrc => expanded,
+                AttrKind::Href => expanded,
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
                 AttrKind::Alt => quote! { (#expanded).alt(#value) },
                 AttrKind::Label => quote! { (#expanded).label(#value) },
@@ -847,6 +898,7 @@ impl Element {
                     | AttrKind::ImageSource
                     | AttrKind::ProgressValue
                     | AttrKind::MarkdownSrc
+                    | AttrKind::Href
                     | AttrKind::Style
                     | AttrKind::Start
                     | AttrKind::Alignment
@@ -1174,6 +1226,7 @@ fn is_builtin_element(name: &Ident) -> bool {
             | "H5"
             | "H6"
             | "Paragraph"
+            | "Link"
             | "Markdown"
             | "CodeBlock"
             | "OrderedList"
@@ -1221,6 +1274,8 @@ mod attr_validation {
         ProgressValue,
         /// Required Markdown file path.
         MarkdownSrc,
+        /// Required standalone link destination.
+        Href,
         /// Input placeholder text.
         Placeholder,
         /// Image fallback text.

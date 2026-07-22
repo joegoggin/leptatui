@@ -3,13 +3,12 @@
 //! This module provides the public helper functions re-exported by
 //! [`mod@crate::view`] and [`crate::prelude`].
 
-use ratatui::text::Text;
-
 use crate::component::Component;
 
 use super::{
     code_block::{SyntaxTheme, highlighted_source_lines},
     component_view::ComponentView,
+    link::{LinkTarget, RichText},
     metadata::{EditableState, StyleMetadata, ViewType},
     model::{CellAlignment, ImageSource, View, clamped_progress_value},
 };
@@ -55,7 +54,7 @@ pub fn text(content: impl Into<String>) -> View {
 /// # Returns
 ///
 /// A [`View::H1`] containing the provided content.
-pub fn h1(content: impl Into<Text<'static>>) -> View {
+pub fn h1(content: impl Into<RichText>) -> View {
     View::H1 {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::H1),
@@ -71,7 +70,7 @@ pub fn h1(content: impl Into<Text<'static>>) -> View {
 /// # Returns
 ///
 /// A [`View::H2`] containing the provided content.
-pub fn h2(content: impl Into<Text<'static>>) -> View {
+pub fn h2(content: impl Into<RichText>) -> View {
     View::H2 {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::H2),
@@ -87,7 +86,7 @@ pub fn h2(content: impl Into<Text<'static>>) -> View {
 /// # Returns
 ///
 /// A [`View::H3`] containing the provided content.
-pub fn h3(content: impl Into<Text<'static>>) -> View {
+pub fn h3(content: impl Into<RichText>) -> View {
     View::H3 {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::H3),
@@ -103,7 +102,7 @@ pub fn h3(content: impl Into<Text<'static>>) -> View {
 /// # Returns
 ///
 /// A [`View::H4`] containing the provided content.
-pub fn h4(content: impl Into<Text<'static>>) -> View {
+pub fn h4(content: impl Into<RichText>) -> View {
     View::H4 {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::H4),
@@ -119,7 +118,7 @@ pub fn h4(content: impl Into<Text<'static>>) -> View {
 /// # Returns
 ///
 /// A [`View::H5`] containing the provided content.
-pub fn h5(content: impl Into<Text<'static>>) -> View {
+pub fn h5(content: impl Into<RichText>) -> View {
     View::H5 {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::H5),
@@ -135,7 +134,7 @@ pub fn h5(content: impl Into<Text<'static>>) -> View {
 /// # Returns
 ///
 /// A [`View::H6`] containing the provided content.
-pub fn h6(content: impl Into<Text<'static>>) -> View {
+pub fn h6(content: impl Into<RichText>) -> View {
     View::H6 {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::H6),
@@ -151,10 +150,52 @@ pub fn h6(content: impl Into<Text<'static>>) -> View {
 /// # Returns
 ///
 /// A [`View::Paragraph`] containing the provided content.
-pub fn paragraph(content: impl Into<Text<'static>>) -> View {
+pub fn paragraph(content: impl Into<RichText>) -> View {
     View::Paragraph {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::Paragraph),
+    }
+}
+
+/// Creates a focusable rich-text link.
+///
+/// Relative filesystem paths are resolved from the process working directory
+/// when the view is constructed. Empty and hash-prefixed fragment targets are
+/// rendered but do not participate in keyboard focus traversal.
+///
+/// # Arguments
+///
+/// * `label` — Rich text displayed as the link label.
+/// * `target` — URL, filesystem path, or fragment destination.
+///
+/// # Returns
+///
+/// A [`View::Link`] containing the label and resolved destination.
+pub fn link(label: impl Into<RichText>, target: impl Into<LinkTarget>) -> View {
+    let base = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    link_with_base(label, target, base)
+}
+
+/// Creates a rich-text link resolved against an explicit directory.
+///
+/// # Arguments
+///
+/// * `label` — Rich text displayed as the link label.
+/// * `target` — URL, filesystem path, or fragment destination.
+/// * `base` — Directory used for relative filesystem targets.
+///
+/// # Returns
+///
+/// A [`View::Link`] containing the label and resolved destination.
+pub(crate) fn link_with_base(
+    label: impl Into<RichText>,
+    target: impl Into<LinkTarget>,
+    base: impl AsRef<std::path::Path>,
+) -> View {
+    View::Link {
+        label: label.into(),
+        target: target.into().resolve_against(base),
+        metadata: StyleMetadata::new(ViewType::Link),
     }
 }
 
@@ -312,7 +353,7 @@ pub fn table_row(cells: impl IntoIterator<Item = View>) -> View {
 ///
 /// A [`View::TableCell`] containing the provided content and default
 /// [`CellAlignment::Left`] alignment.
-pub fn table_cell(content: impl Into<Text<'static>>) -> View {
+pub fn table_cell(content: impl Into<RichText>) -> View {
     View::TableCell {
         content: content.into(),
         alignment: CellAlignment::Left,

@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-use super::{line_count_height, resolve_style, wrap_styled_line};
+use super::{VerticalSpan, line_count_height, resolve_style, resolved_rich_text, wrap_styled_line};
 
 /// Render-ready table cell with its resolved text style.
 #[derive(Clone)]
@@ -30,6 +30,8 @@ struct RenderedTableCell {
     alignment: CellAlignment,
     /// Fully resolved style for the cell text.
     style: TuiStyle,
+    /// Whether a focused inline link requested scrolling into view.
+    link_scroll_requested: bool,
 }
 
 /// Render-ready table row containing source-order cells.
@@ -143,10 +145,12 @@ fn collect_table_cell(cell: &View, ctx: &mut RenderCtx<'_, '_>) -> RenderedTable
         metadata,
     } = cell
     {
+        let style = resolve_style(metadata, ctx);
         return RenderedTableCell {
-            content: content.clone(),
+            content: resolved_rich_text(content, metadata, style, ctx),
             alignment: *alignment,
-            style: resolve_style(metadata, ctx),
+            style,
+            link_scroll_requested: content.focused_link_requested_scroll(),
         };
     }
 
@@ -154,6 +158,7 @@ fn collect_table_cell(cell: &View, ctx: &mut RenderCtx<'_, '_>) -> RenderedTable
         content: Text::default(),
         alignment: CellAlignment::Left,
         style: ctx.inherited_style(),
+        link_scroll_requested: false,
     }
 }
 
@@ -543,7 +548,28 @@ pub(super) fn render_table_view(
         y = y.saturating_add(1);
     }
 
+    clear_table_link_scroll_requests(sections);
+
     Ok(())
+}
+
+/// Clears completed inline-link scroll requests throughout a semantic table.
+///
+/// # Arguments
+///
+/// * `views` — Table sections, rows, or cells to traverse.
+fn clear_table_link_scroll_requests(views: &[View]) {
+    for view in views {
+        match view {
+            View::TableHead { rows: children, .. }
+            | View::TableBody { rows: children, .. }
+            | View::TableRow {
+                cells: children, ..
+            } => clear_table_link_scroll_requests(children),
+            View::TableCell { content, .. } => content.clear_link_scroll_requests(),
+            _ => {}
+        }
+    }
 }
 
 /// Returns the intrinsic height of a semantic table.
@@ -571,4 +597,40 @@ pub(super) fn min_height_for_table_view(
         u16::try_from(rows.len().saturating_add(1)).unwrap_or(u16::MAX),
         u16::saturating_add,
     )
+}
+
+/// Returns the focused linked table row's vertical span.
+///
+/// # Arguments
+///
+/// * `sections` — Header and body sections to inspect.
+/// * `metadata` — Selector metadata for the table container.
+/// * `ctx` — Rendering context containing the available width.
+///
+/// # Returns
+///
+/// An [`Option`] containing the focused row span between table borders.
+pub(super) fn focused_link_span_for_table_view(
+    sections: &[View],
+    metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    let ResolvedTableLayout { rows, widths, .. } = resolve_table_layout(sections, metadata, ctx);
+    if rows.is_empty() || widths.is_empty() {
+        return None;
+    }
+
+    let mut top = 1u32;
+    for row in &rows {
+        let height = u32::from(table_row_height(row, &widths));
+        if row.cells.iter().any(|cell| cell.link_scroll_requested) {
+            return Some(VerticalSpan {
+                top,
+                bottom: top.saturating_add(height),
+            });
+        }
+        top = top.saturating_add(height).saturating_add(1);
+    }
+
+    None
 }

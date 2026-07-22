@@ -229,14 +229,12 @@ fn prelude_exposes_reactivity_and_context() {
                 line_numbers=true
             />
         };
+        let markdown_options = MarkdownOptions::default()
+            .syntax_theme(SyntaxTheme::Light)
+            .line_numbers(true);
         assert_eq!(
             macro_markdown,
-            markdown_with_options(
-                include_str!("fixtures/markdown/core.md"),
-                MarkdownOptions::default()
-                    .syntax_theme(SyntaxTheme::Light)
-                    .line_numbers(true),
-            )
+            markdown_file_with_options(markdown_path, markdown_options)
         );
         let _default_file_reader = |path: &str| markdown_file(path);
         let _configured_file_reader =

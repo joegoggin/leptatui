@@ -155,8 +155,17 @@ impl ComponentView {
     }
 
     /// Activates the focused control inside the component boundary, if any.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<AppControl>`] containing the focused control's activation
+    /// result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::LinkOpen`] if a focused link cannot be opened.
     #[doc(hidden)]
-    pub(crate) fn activate_focused_button(&self) -> Option<AppControl> {
+    pub(crate) fn activate_focused_button(&self) -> Result<Option<AppControl>> {
         self.with_component(|component| component.__activate_focused_button())
     }
 

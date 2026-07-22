@@ -104,6 +104,13 @@ controls, images, and progress bars.
 All are available through `leptatui::prelude::*` as builders and through
 PascalCase `view!` tags.
 
+`Link` opens URLs and local paths with the operating system's configured
+handler. Use `link("Project site", "https://example.com")` or
+`<Link href="https://example.com">"Project site"</Link>` anywhere in a view.
+Links are underlined by default; use Tab and Shift+Tab to move focus and Enter
+or Space to activate the focused link. Empty and `#fragment` targets remain
+visible but are intentionally not focusable.
+
 `Input` and `TextArea` are controlled components: pass the displayed `value`
 from caller-owned state and update that state from `on_input` when editing
 proposes a new value. Both support optional `placeholder` text. Wrap editable
@@ -263,12 +270,20 @@ let tagged_file = view! {
 ```
 
 The compatibility promise is CommonMark plus tables. Optional GFM task lists,
-strikethrough, footnotes, and other extensions are deferred. Links are styled
-and include otherwise-hidden destinations, but they are not interactive.
+strikethrough, footnotes, and other extensions are deferred. Markdown links
+retain their inline labels and are navigable with the same focus and activation
+keys as standalone `Link` views. In a file-backed reader, relative and absolute
+`.md` or `.markdown` targets open inside the same app boundary. Non-empty
+fragments scroll to GitHub-style heading anchors; duplicate headings receive
+`-1`, `-2`, and later suffixes. Use Shift+H and Shift+L to move backward and
+forward through cached pages, restoring each page's focus and scroll state.
+URLs and other local files use the system handler. Standalone links and
+in-memory Markdown keep that external behavior. Empty destinations and a bare
+`#` remain inactive.
 Images become deterministic descriptive text; local and remote image targets
 are never fetched. Raw HTML and unsupported blocks remain readable fallbacks.
-Unreadable paths and invalid UTF-8 also render a path-aware fallback paragraph
-instead of returning an error.
+Unreadable paths and invalid UTF-8 also render a path-aware in-app page instead
+of returning an error, so back navigation remains available.
 
 ```rust
 use leptatui::prelude::*;

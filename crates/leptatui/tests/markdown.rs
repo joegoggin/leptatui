@@ -87,55 +87,82 @@ fn thematic_break() -> View {
 ///
 /// - H1 through H6 retain their levels and source order.
 /// - Unicode paragraph content and nested inline modifiers remain intact.
-/// - Link labels are underlined and display a readable destination.
+/// - Link labels retain visible text while their target becomes focusable metadata.
 /// - Mixed nested lists retain loose paragraphs, empty items, and non-one starts.
 /// - Empty separator paragraphs retain one terminal row between blocks.
 #[test]
 fn markdown_core_fixture_builds_semantic_views() {
     let italic = Style::new().add_modifier(Modifier::ITALIC);
-    let underline = Style::new().add_modifier(Modifier::UNDERLINED);
-
-    assert_eq!(
-        markdown(CORE_FIXTURE),
-        column(separated_blocks([
-            h1("One"),
-            h2("Two"),
-            h3("Three"),
-            h4("Four"),
-            h5("Five"),
-            h6("Six"),
-            paragraph(
-                "This paragraph is deliberately long enough to wrap in a narrow terminal while preserving Unicode 界 characters.",
-            ),
-            paragraph(Text::from(Line::from(vec![
-                Span::styled("outer ", italic),
-                Span::styled("bold 界", italic.add_modifier(Modifier::BOLD)),
-                Span::styled(" tail", italic),
-                Span::raw(" and "),
-                Span::styled("plain", Style::new().add_modifier(Modifier::BOLD)),
-                Span::raw(" with "),
-                Span::styled("code", Style::new().add_modifier(Modifier::REVERSED)),
-                Span::raw(" plus "),
-                Span::styled("the guide (https://example.com/guide)", underline),
-                Span::raw("."),
-            ]))),
-            ordered_list([
-                list_item(separated_blocks([
-                    paragraph("First"),
-                    paragraph("Second paragraph."),
-                    unordered_list([
-                        list_item(separated_blocks([
-                            paragraph("Nested bullet"),
-                            ordered_list([list_item([paragraph("Nested number")])]).start(7),
-                        ])),
-                        list_item([]),
-                    ]),
-                ])),
-                list_item([paragraph("Last")]),
-            ])
-            .start(3),
-        ])),
-    );
+    let actual = markdown(CORE_FIXTURE);
+    let expected = column(separated_blocks([
+        h1("One"),
+        h2("Two"),
+        h3("Three"),
+        h4("Four"),
+        h5("Five"),
+        h6("Six"),
+        paragraph(
+            "This paragraph is deliberately long enough to wrap in a narrow terminal while preserving Unicode 界 characters.",
+        ),
+        paragraph(Text::from(Line::from(vec![
+            Span::styled("outer ", italic),
+            Span::styled("bold 界", italic.add_modifier(Modifier::BOLD)),
+            Span::styled(" tail", italic),
+            Span::raw(" and "),
+            Span::styled("plain", Style::new().add_modifier(Modifier::BOLD)),
+            Span::raw(" with "),
+            Span::styled("code", Style::new().add_modifier(Modifier::REVERSED)),
+            Span::raw(" plus "),
+            Span::raw("the guide"),
+            Span::raw("."),
+        ]))),
+        ordered_list([
+            list_item(separated_blocks([
+                paragraph("First"),
+                paragraph("Second paragraph."),
+                unordered_list([
+                    list_item(separated_blocks([
+                        paragraph("Nested bullet"),
+                        ordered_list([list_item([paragraph("Nested number")])]).start(7),
+                    ])),
+                    list_item([]),
+                ]),
+            ])),
+            list_item([paragraph("Last")]),
+        ])
+        .start(3),
+    ]));
+    assert_eq!(actual.__focusable_count(), 1);
+    let (
+        View::Column {
+            children: actual, ..
+        },
+        View::Column {
+            children: expected, ..
+        },
+    ) = (&actual, &expected)
+    else {
+        panic!("expected Markdown columns");
+    };
+    assert_eq!(actual.len(), expected.len());
+    for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+        if index == 14 {
+            let (
+                View::Paragraph {
+                    content: actual, ..
+                },
+                View::Paragraph {
+                    content: expected, ..
+                },
+            ) = (actual, expected)
+            else {
+                panic!("expected linked paragraphs");
+            };
+            assert_eq!(actual.text(), expected.text());
+        } else {
+            assert_eq!(actual, expected);
+        }
+    }
 }
 
 /// Verifies fallback fixture blocks remain readable and semantically ordered.
@@ -228,7 +255,7 @@ fn markdown_code_fixture_builds_semantic_views() {
 /// # Example Under Test
 ///
 /// ```text
-/// core.md at 24x80
+/// core.md at 40x80
 /// fallbacks.md at 48x80
 /// ```
 ///
@@ -237,11 +264,11 @@ fn markdown_code_fixture_builds_semantic_views() {
 /// - Markdown H1 through H6 use the same repeated `#` heading hierarchy.
 /// - Long Unicode prose wraps across multiple terminal rows.
 /// - Ordered and unordered list markers remain visible.
-/// - Links expose their destinations in terminal text.
+/// - Link labels remain visible without appended destinations.
 /// - Quote prefixes, rules, image fallbacks, literal HTML, and tables render visibly.
 #[test]
 fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
-    let core = render_view(&markdown(CORE_FIXTURE), 24, 80)?;
+    let core = render_view(&markdown(CORE_FIXTURE), 40, 80)?;
     let core_lines = rendered_lines(&core);
     for expected_heading in [
         "# One",
@@ -258,10 +285,11 @@ fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
         );
     }
     assert!(core_lines.iter().any(|line| line.contains("Unicode 界")));
+    assert!(core_lines.iter().any(|line| line.contains("the guide")));
     assert!(
-        core_lines
+        !core_lines
             .iter()
-            .any(|line| line.contains("https://example.com"))
+            .any(|line| line.contains("https://example.com/guide"))
     );
     assert!(
         core_lines

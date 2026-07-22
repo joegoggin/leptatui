@@ -67,7 +67,9 @@ fn cursor_style_for_focused_control(focused_control: Option<FocusedControl>) -> 
         | Some(FocusedControl::TextArea {
             insert_mode: false, ..
         }) => SetCursorStyle::BlinkingBlock,
-        Some(FocusedControl::Button) | None => SetCursorStyle::DefaultUserShape,
+        Some(FocusedControl::Button | FocusedControl::Link) | None => {
+            SetCursorStyle::DefaultUserShape
+        }
     }
 }
 

@@ -14,6 +14,8 @@ use crate::app::{AppControl, Result};
 pub enum FocusedControl {
     /// A button is focused.
     Button,
+    /// A link is focused.
+    Link,
     /// A single-line input is focused.
     Input {
         /// Whether the input is currently in insert mode.
@@ -123,9 +125,18 @@ pub trait Component {
     }
 
     /// Activates the focused control inside this component, if any.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<AppControl>`] containing the focused control's activation
+    /// result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::LinkOpen`] if a focused link cannot be opened.
     #[doc(hidden)]
-    fn __activate_focused_button(&self) -> Option<AppControl> {
-        None
+    fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
+        Ok(None)
     }
 
     /// Handles a key on the focused input inside this component, if any.

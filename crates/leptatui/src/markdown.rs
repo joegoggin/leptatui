@@ -5,14 +5,22 @@
 //! styled inline spans exposed by [`crate::view`]. Readable styled-block or
 //! text fallbacks retain CommonMark content without dedicated semantic views.
 //! In-memory and explicit file readers are infallible; file failures become
-//! path-aware semantic fallback content. The compatibility promise is core
-//! CommonMark plus tables. Optional GFM extensions are deferred, links remain
-//! readable but non-interactive, and images become descriptive text without
-//! fetching local or remote targets.
+//! path-aware semantic fallback content. File-backed views navigate local
+//! Markdown targets and heading fragments in-app with cached page history.
+//! The compatibility promise is core CommonMark plus tables. Optional GFM
+//! extensions are deferred. Links retain focusable target metadata, while
+//! images become descriptive text without fetching local or remote targets.
 
-use std::{fs, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
-use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use percent_encoding::percent_decode_str;
+use pulldown_cmark::{
+    Alignment, CodeBlockKind, Event, HeadingLevel, LinkType, Options, Parser, Tag, TagEnd,
+};
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span, Text},
@@ -23,6 +31,8 @@ use crate::{
     h2, h3, h4, h5, h6, list_item, ordered_list, paragraph, table, table_body, table_cell,
     table_head, table_row, unordered_list,
 };
+
+use crate::view::{InlineLink, LinkTarget, LinkedSpan, RichText};
 
 /// Default presentation options applied while converting Markdown documents.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -60,6 +70,194 @@ impl MarkdownOptions {
     pub fn line_numbers(mut self, line_numbers: bool) -> Self {
         self.line_numbers = line_numbers;
         self
+    }
+}
+
+/// Stateful, file-backed Markdown document boundary.
+///
+/// A Markdown view keeps previously visited pages in memory so back and
+/// forward navigation restore their exact focus and scroll state. Construct
+/// one with [`markdown_file`] or [`markdown_file_with_options`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarkdownView {
+    root_path: PathBuf,
+    options: MarkdownOptions,
+    current: MarkdownPage,
+    back: Vec<MarkdownPage>,
+    forward: Vec<MarkdownPage>,
+}
+
+/// One cached page in a [`MarkdownView`] navigation history.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct MarkdownPage {
+    path: PathBuf,
+    document: Box<View>,
+}
+
+impl MarkdownView {
+    /// Returns the path of the currently displayed Markdown page.
+    ///
+    /// # Returns
+    ///
+    /// A [`Path`] identifying the current page, including failed load targets.
+    pub fn current_path(&self) -> &Path {
+        &self.current.path
+    }
+
+    /// Returns whether a cached page is available in back history.
+    ///
+    /// # Returns
+    ///
+    /// `true` when Shift+H can restore a previous page.
+    pub fn can_go_back(&self) -> bool {
+        !self.back.is_empty()
+    }
+
+    /// Returns whether a cached page is available in forward history.
+    ///
+    /// # Returns
+    ///
+    /// `true` when Shift+L can restore a forward page.
+    pub fn can_go_forward(&self) -> bool {
+        !self.forward.is_empty()
+    }
+
+    /// Creates a file-backed Markdown boundary rooted at `path`.
+    fn new(path: &Path, options: MarkdownOptions) -> Self {
+        let root_path = absolute_path(path);
+        let current = load_markdown_page(root_path.clone(), options, None);
+        Self {
+            root_path,
+            options,
+            current,
+            back: Vec::new(),
+            forward: Vec::new(),
+        }
+    }
+
+    /// Returns the current parsed document.
+    pub(crate) fn document(&self) -> &View {
+        &self.current.document
+    }
+
+    /// Returns the current parsed document mutably.
+    pub(crate) fn document_mut(&mut self) -> &mut View {
+        &mut self.current.document
+    }
+
+    /// Returns whether this state belongs to the same declarative root.
+    pub(crate) fn can_reconcile_from(&self, previous: &Self) -> bool {
+        self.root_path == previous.root_path && self.options == previous.options
+    }
+
+    /// Navigates to the focused in-app Markdown target, if one exists.
+    pub(crate) fn navigate_focused_link(&mut self) -> bool {
+        let Some(LinkTarget::Markdown { path, fragment }) =
+            self.current.document.focused_link_target().cloned()
+        else {
+            return false;
+        };
+
+        let next = load_markdown_page(path, self.options, fragment.as_deref());
+        let previous = std::mem::replace(&mut self.current, next);
+        self.back.push(previous);
+        self.forward.clear();
+        true
+    }
+
+    /// Restores the most recent cached page from back history.
+    pub(crate) fn go_back(&mut self) -> bool {
+        let Some(previous) = self.back.pop() else {
+            return false;
+        };
+        let current = std::mem::replace(&mut self.current, previous);
+        self.forward.push(current);
+        true
+    }
+
+    /// Restores the next cached page from forward history.
+    pub(crate) fn go_forward(&mut self) -> bool {
+        let Some(next) = self.forward.pop() else {
+            return false;
+        };
+        let current = std::mem::replace(&mut self.current, next);
+        self.back.push(current);
+        true
+    }
+}
+
+/// Per-document context used while parsing links and heading anchors.
+struct MarkdownParseContext<'a> {
+    link_base: &'a Path,
+    source_path: Option<&'a Path>,
+    heading_counts: HashMap<String, usize>,
+}
+
+impl<'a> MarkdownParseContext<'a> {
+    /// Creates parsing context for in-memory or file-backed Markdown.
+    fn new(link_base: &'a Path, source_path: Option<&'a Path>) -> Self {
+        Self {
+            link_base,
+            source_path,
+            heading_counts: HashMap::new(),
+        }
+    }
+
+    /// Returns the unique GitHub-style slug for one heading.
+    fn heading_slug(&mut self, content: &RichText) -> String {
+        let visible = content
+            .text()
+            .lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .map(|span| span.content.as_ref())
+            .collect::<String>();
+        let base = github_heading_slug(&visible);
+        let count = self.heading_counts.entry(base.clone()).or_default();
+        let slug = if *count == 0 {
+            base
+        } else {
+            format!("{base}-{count}")
+        };
+        *count = count.saturating_add(1);
+        slug
+    }
+
+    /// Classifies a parsed Markdown link for this document boundary.
+    fn link_target(&self, link_type: LinkType, destination: &str) -> LinkTarget {
+        if link_type == LinkType::Email && !destination.starts_with("mailto:") {
+            return LinkTarget::Url(format!("mailto:{destination}"));
+        }
+
+        let ordinary = LinkTarget::from(destination);
+        if matches!(ordinary, LinkTarget::Url(_)) {
+            return ordinary;
+        }
+
+        if let Some(source_path) = self.source_path {
+            let (path, fragment) = destination
+                .split_once('#')
+                .map_or((destination, None), |(path, fragment)| {
+                    (path, Some(fragment))
+                });
+            if path.is_empty() {
+                if let Some(fragment) = fragment.filter(|fragment| !fragment.is_empty()) {
+                    return LinkTarget::Markdown {
+                        path: source_path.to_path_buf(),
+                        fragment: Some(fragment.to_owned()),
+                    };
+                }
+            } else if is_markdown_path(Path::new(path)) {
+                return LinkTarget::Markdown {
+                    path: absolute_path_from(Path::new(path), self.link_base),
+                    fragment: fragment
+                        .filter(|fragment| !fragment.is_empty())
+                        .map(str::to_owned),
+                };
+            }
+        }
+
+        ordinary.resolve_against(self.link_base)
     }
 }
 
@@ -117,14 +315,38 @@ pub fn markdown(source: impl AsRef<str>) -> View {
 /// A [`View::Column`] containing semantic document blocks separated by empty
 /// terminal rows in source order.
 pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) -> View {
-    let mut parser = Parser::new_ext(source.as_ref(), Options::ENABLE_TABLES);
-    column(parse_blocks(&mut parser, None, options))
+    let link_base = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    markdown_with_options_and_source(source.as_ref(), options, &link_base, None)
+}
+
+/// Converts CommonMark source using an explicit link base directory.
+///
+/// # Arguments
+///
+/// * `source` — CommonMark source text to parse.
+/// * `options` — Code-block presentation defaults for the document.
+/// * `link_base` — Directory used to resolve relative local targets.
+/// * `source_path` — File path used to enable in-app Markdown navigation.
+///
+/// # Returns
+///
+/// A [`View::Column`] containing semantic document blocks.
+fn markdown_with_options_and_source(
+    source: &str,
+    options: MarkdownOptions,
+    link_base: &Path,
+    source_path: Option<&Path>,
+) -> View {
+    let mut parser = Parser::new_ext(source, Options::ENABLE_TABLES);
+    let mut context = MarkdownParseContext::new(link_base, source_path);
+    column(parse_blocks(&mut parser, None, options, &mut context))
 }
 
 /// Loads a UTF-8 Markdown file into a scrollable semantic document view.
 ///
-/// Uses [`MarkdownOptions::default`] and performs all filesystem access before
-/// returning the view.
+/// Uses [`MarkdownOptions::default`] and loads the initial file before
+/// returning the view. Activating a local Markdown link synchronously loads its
+/// target into the same file-backed boundary.
 ///
 /// # Examples
 ///
@@ -141,16 +363,17 @@ pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) 
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing the parsed document or a path-aware fallback
-/// paragraph when the file cannot be read as UTF-8.
+/// A [`View::Markdown`] boundary containing the parsed document, navigation
+/// history, or a path-aware fallback when the file cannot be read as UTF-8.
 pub fn markdown_file(path: impl AsRef<Path>) -> View {
     markdown_file_with_options(path, MarkdownOptions::default())
 }
 
 /// Loads a UTF-8 Markdown file with explicit presentation options.
 ///
-/// All filesystem access completes before the returned view enters render
-/// traversal.
+/// The initial filesystem load completes before the returned view enters
+/// render traversal. Later local Markdown navigation loads during key-event
+/// handling, never during rendering.
 ///
 /// # Examples
 ///
@@ -173,16 +396,90 @@ pub fn markdown_file(path: impl AsRef<Path>) -> View {
 ///
 /// # Returns
 ///
-/// A [`View::Column`] containing the parsed document or a path-aware fallback
-/// paragraph when the file cannot be read as UTF-8.
+/// A [`View::Markdown`] boundary containing the parsed document or a
+/// path-aware fallback paragraph when the file cannot be read as UTF-8.
 pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptions) -> View {
-    let path = path.as_ref();
-    match fs::read_to_string(path) {
-        Ok(source) => markdown_with_options(source, options),
+    View::Markdown {
+        state: MarkdownView::new(path.as_ref(), options),
+    }
+}
+
+/// Returns an absolute path without requiring the target to exist.
+fn absolute_path(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        let base = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        base.join(path)
+    }
+}
+
+/// Resolves `path` against `base` without requiring the target to exist.
+fn absolute_path_from(path: &Path, base: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base.join(path)
+    }
+}
+
+/// Returns whether a local path names a supported Markdown file extension.
+fn is_markdown_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
+        })
+}
+
+/// Produces the base anchor used for GitHub-style heading fragments.
+fn github_heading_slug(heading: &str) -> String {
+    let mut slug = String::new();
+
+    for character in heading.chars().flat_map(char::to_lowercase) {
+        if character.is_alphanumeric() || character == '-' || character == '_' {
+            slug.push(character);
+        } else if character.is_whitespace() {
+            slug.push('-');
+        }
+    }
+
+    slug
+}
+
+/// Normalizes a percent-encoded fragment for heading-id comparison.
+fn normalized_fragment(fragment: &str) -> String {
+    percent_decode_str(fragment)
+        .decode_utf8_lossy()
+        .chars()
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Loads one page, retaining read failures as navigable in-app content.
+fn load_markdown_page(
+    path: PathBuf,
+    options: MarkdownOptions,
+    fragment: Option<&str>,
+) -> MarkdownPage {
+    let mut document = match fs::read_to_string(&path) {
+        Ok(source) => {
+            let link_base = path.parent().unwrap_or_else(|| Path::new("."));
+            markdown_with_options_and_source(&source, options, link_base, Some(&path))
+        }
         Err(error) => column([paragraph(format!(
             "failed to read Markdown file `{}`: {error}",
             path.display()
         ))]),
+    };
+
+    if let Some(fragment) = fragment {
+        document.request_scroll_to_id(&normalized_fragment(fragment));
+    }
+
+    MarkdownPage {
+        path,
+        document: Box::new(document),
     }
 }
 
@@ -194,9 +491,19 @@ pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptio
 /// line created by a Markdown break.
 struct InlineText {
     /// Styled spans grouped by logical output line.
-    lines: Vec<Vec<Span<'static>>>,
+    lines: Vec<Vec<ParsedInlineSpan>>,
+    /// Link targets retained in source order.
+    links: Vec<LinkTarget>,
     /// Whether the parser emitted text or a line break into this accumulator.
     has_content: bool,
+}
+
+/// One parsed inline span and its optional owning link index.
+struct ParsedInlineSpan {
+    /// Visible Ratatui span.
+    span: Span<'static>,
+    /// Index into [`InlineText::links`] when this span is a link label.
+    link: Option<usize>,
 }
 
 impl InlineText {
@@ -208,6 +515,7 @@ impl InlineText {
     fn new() -> Self {
         Self {
             lines: vec![Vec::new()],
+            links: Vec::new(),
             has_content: false,
         }
     }
@@ -230,6 +538,17 @@ impl InlineText {
     /// * `content` — Text emitted by the Markdown parser.
     /// * `style` — Ratatui style applied to the appended text.
     fn push_text(&mut self, content: &str, style: Style) {
+        self.push_text_for_link(content, style, None);
+    }
+
+    /// Appends styled text associated with an optional link.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` — Text emitted by the Markdown parser.
+    /// * `style` — Ratatui style applied to the appended text.
+    /// * `link` — Optional source-order link index owning the text.
+    fn push_text_for_link(&mut self, content: &str, style: Style, link: Option<usize>) {
         if content.is_empty() {
             return;
         }
@@ -238,7 +557,7 @@ impl InlineText {
         let mut parts = content.split('\n').peekable();
         while let Some(part) = parts.next() {
             if !part.is_empty() {
-                self.push_span(part, style);
+                self.push_span(part, style, link);
             }
             if parts.peek().is_some() {
                 self.lines.push(Vec::new());
@@ -252,25 +571,35 @@ impl InlineText {
         self.lines.push(Vec::new());
     }
 
-    /// Appends another rich-text accumulator without losing its first line.
+    /// Registers a link target and returns its source-order index.
     ///
     /// # Arguments
     ///
-    /// * `other` — Parsed inline content to append at the current position.
-    fn append(&mut self, other: Self) {
-        if !other.has_content {
-            return;
-        }
+    /// * `target` — Link target to retain.
+    ///
+    /// # Returns
+    ///
+    /// A [`usize`] index identifying the retained link.
+    fn push_link(&mut self, target: LinkTarget) -> usize {
+        let index = self.links.len();
+        self.links.push(target);
+        index
+    }
 
-        self.has_content = true;
-        for (index, line) in other.lines.into_iter().enumerate() {
-            if index > 0 {
-                self.lines.push(Vec::new());
-            }
-            for span in line {
-                self.push_span(&span.content, span.style);
-            }
-        }
+    /// Returns whether visible text has been assigned to a link index.
+    ///
+    /// # Arguments
+    ///
+    /// * `link` — Source-order link index to inspect.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether any span belongs to the link.
+    fn link_has_text(&self, link: usize) -> bool {
+        self.lines
+            .iter()
+            .flatten()
+            .any(|span| span.link == Some(link))
     }
 
     /// Returns the visible unstyled content represented by the accumulator.
@@ -283,7 +612,7 @@ impl InlineText {
             .iter()
             .map(|line| {
                 line.iter()
-                    .map(|span| span.content.as_ref())
+                    .map(|span| span.span.content.as_ref())
                     .collect::<String>()
             })
             .collect::<Vec<_>>()
@@ -294,9 +623,39 @@ impl InlineText {
     ///
     /// # Returns
     ///
-    /// A [`Text`] containing every logical line and styled span.
-    fn into_text(self) -> Text<'static> {
-        Text::from(self.lines.into_iter().map(Line::from).collect::<Vec<_>>())
+    /// A [`RichText`] containing every logical line, styled span, and link.
+    fn into_rich_text(self) -> RichText {
+        let mut linked_spans = vec![Vec::new(); self.links.len()];
+        let lines = self
+            .lines
+            .into_iter()
+            .enumerate()
+            .map(|(line_index, line)| {
+                Line::from(
+                    line.into_iter()
+                        .enumerate()
+                        .map(|(span_index, parsed)| {
+                            if let Some(link_index) = parsed.link
+                                && let Some(positions) = linked_spans.get_mut(link_index)
+                            {
+                                positions.push(LinkedSpan {
+                                    line: line_index,
+                                    span: span_index,
+                                });
+                            }
+                            parsed.span
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let links = self
+            .links
+            .into_iter()
+            .zip(linked_spans)
+            .map(|(target, spans)| InlineLink::new(target, spans))
+            .collect();
+        RichText::from_parts(Text::from(lines), links)
     }
 
     /// Appends one span or merges it with the matching previous span.
@@ -305,15 +664,22 @@ impl InlineText {
     ///
     /// * `content` — Non-empty text for the span.
     /// * `style` — Ratatui style applied to the span.
-    fn push_span(&mut self, content: &str, style: Style) {
+    /// * `link` — Optional source-order link index owning the span.
+    fn push_span(&mut self, content: &str, style: Style, link: Option<usize>) {
         let line = self
             .lines
             .last_mut()
             .expect("inline text always retains one logical line");
-        if let Some(span) = line.last_mut().filter(|span| span.style == style) {
-            span.content.to_mut().push_str(content);
+        if let Some(span) = line
+            .last_mut()
+            .filter(|span| span.span.style == style && span.link == link)
+        {
+            span.span.content.to_mut().push_str(content);
         } else {
-            line.push(Span::styled(content.to_owned(), style));
+            line.push(ParsedInlineSpan {
+                span: Span::styled(content.to_owned(), style),
+                link,
+            });
         }
     }
 }
@@ -339,6 +705,7 @@ impl Default for InlineText {
 /// * `events` — CommonMark event stream positioned inside a block.
 /// * `end` — Optional closing tag that terminates the current block sequence.
 /// * `options` — Code-block presentation defaults for the document.
+/// * `link_base` — Directory used to resolve relative link targets.
 ///
 /// # Returns
 ///
@@ -348,6 +715,7 @@ fn parse_blocks<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     end: Option<TagEnd>,
     options: MarkdownOptions,
+    context: &mut MarkdownParseContext<'_>,
 ) -> Vec<View> {
     let mut views = Vec::new();
     let mut inline = InlineText::new();
@@ -356,20 +724,26 @@ fn parse_blocks<'a>(
         match event {
             Event::Start(Tag::Paragraph) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(paragraph(parse_inline(events, TagEnd::Paragraph)));
+                views.push(paragraph(parse_inline(events, TagEnd::Paragraph, context)));
             }
             Event::Start(Tag::Heading { level, .. }) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                let content = parse_inline(events, TagEnd::Heading(level));
-                views.push(heading(level, content));
+                let content = parse_inline(events, TagEnd::Heading(level), context);
+                let view = if context.source_path.is_some() {
+                    let slug = context.heading_slug(&content);
+                    heading(level, content).with_id(slug)
+                } else {
+                    heading(level, content)
+                };
+                views.push(view);
             }
             Event::Start(Tag::List(start)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(parse_list(events, start, options));
+                views.push(parse_list(events, start, options, context));
             }
             Event::Start(Tag::Table(alignments)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(parse_table(events, &alignments));
+                views.push(parse_table(events, &alignments, context));
             }
             Event::Start(Tag::BlockQuote(kind)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
@@ -377,6 +751,7 @@ fn parse_blocks<'a>(
                     events,
                     Some(TagEnd::BlockQuote(kind)),
                     options,
+                    context,
                 )));
             }
             Event::Start(Tag::CodeBlock(kind)) => {
@@ -395,7 +770,7 @@ fn parse_blocks<'a>(
                 flush_inline_paragraph(&mut inline, &mut views);
                 break;
             }
-            event => parse_inline_event(events, event, Style::new(), &mut inline),
+            event => parse_inline_event(events, event, Style::new(), None, context, &mut inline),
         }
     }
 
@@ -485,17 +860,17 @@ fn parse_html_block<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> View {
             | Event::Html(text)
             | Event::InlineHtml(text) => content.push_text(&text, Style::new()),
             Event::FootnoteReference(label) => {
-                push_footnote_reference(&mut content, &label, Style::new());
+                push_footnote_reference(&mut content, &label, Style::new(), None);
             }
             Event::SoftBreak | Event::HardBreak => content.push_break(),
             Event::TaskListMarker(checked) => {
-                push_task_list_marker(&mut content, checked, Style::new());
+                push_task_list_marker(&mut content, checked, Style::new(), None);
             }
             Event::Start(_) | Event::End(_) | Event::Rule => {}
         }
     }
 
-    paragraph(content.into_text())
+    paragraph(content.into_rich_text())
 }
 
 /// Converts accumulated direct inline content into a semantic paragraph.
@@ -506,7 +881,7 @@ fn parse_html_block<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> View {
 /// * `views` — Destination block sequence for the resulting paragraph.
 fn flush_inline_paragraph(inline: &mut InlineText, views: &mut Vec<View>) {
     if inline.has_content() {
-        views.push(paragraph(std::mem::take(inline).into_text()));
+        views.push(paragraph(std::mem::take(inline).into_rich_text()));
     }
 }
 
@@ -516,14 +891,19 @@ fn flush_inline_paragraph(inline: &mut InlineText, views: &mut Vec<View>) {
 ///
 /// * `events` — CommonMark event stream positioned after an opening tag.
 /// * `end` — Closing tag that terminates the inline content.
+/// * `context` — File and link-resolution context for this document.
 ///
 /// # Returns
 ///
-/// An owned [`Text`] containing styled spans and retained line breaks.
-fn parse_inline<'a>(events: &mut impl Iterator<Item = Event<'a>>, end: TagEnd) -> Text<'static> {
+/// An owned [`RichText`] containing styled spans, links, and retained breaks.
+fn parse_inline<'a>(
+    events: &mut impl Iterator<Item = Event<'a>>,
+    end: TagEnd,
+    context: &MarkdownParseContext<'_>,
+) -> RichText {
     let mut content = InlineText::new();
-    parse_inline_events(events, end, Style::new(), &mut content);
-    content.into_text()
+    parse_inline_events(events, end, Style::new(), None, context, &mut content);
+    content.into_rich_text()
 }
 
 /// Parses inline events into an accumulator using the inherited span style.
@@ -536,18 +916,22 @@ fn parse_inline<'a>(events: &mut impl Iterator<Item = Event<'a>>, end: TagEnd) -
 /// * `events` — CommonMark event stream positioned inside inline content.
 /// * `end` — Closing tag that terminates the current inline scope.
 /// * `style` — Span style inherited by text in the current scope.
+/// * `active_link` — Optional source-order link index owning nested text.
+/// * `context` — File and link-resolution context for this document.
 /// * `content` — Destination rich-text accumulator.
 fn parse_inline_events<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     end: TagEnd,
     style: Style,
+    active_link: Option<usize>,
+    context: &MarkdownParseContext<'_>,
     content: &mut InlineText,
 ) {
     while let Some(event) = events.next() {
         if event == Event::End(end) {
             break;
         }
-        parse_inline_event(events, event, style, content);
+        parse_inline_event(events, event, style, active_link, context, content);
     }
 }
 
@@ -562,11 +946,15 @@ fn parse_inline_events<'a>(
 /// * `events` — CommonMark event stream positioned after the current event.
 /// * `event` — Inline or fallback event to convert.
 /// * `style` — Span style inherited by the event's content.
+/// * `active_link` — Optional source-order link index owning the event.
+/// * `context` — File and link-resolution context for this document.
 /// * `content` — Destination rich-text accumulator.
 fn parse_inline_event<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     event: Event<'a>,
     style: Style,
+    active_link: Option<usize>,
+    context: &MarkdownParseContext<'_>,
     content: &mut InlineText,
 ) {
     match event {
@@ -574,36 +962,44 @@ fn parse_inline_event<'a>(
         | Event::InlineMath(text)
         | Event::DisplayMath(text)
         | Event::Html(text)
-        | Event::InlineHtml(text) => content.push_text(&text, style),
+        | Event::InlineHtml(text) => content.push_text_for_link(&text, style, active_link),
         Event::Code(text) => {
-            content.push_text(&text, style.add_modifier(Modifier::REVERSED));
+            content.push_text_for_link(&text, style.add_modifier(Modifier::REVERSED), active_link);
         }
         Event::SoftBreak | Event::HardBreak => content.push_break(),
         Event::Start(Tag::Emphasis) => parse_inline_events(
             events,
             TagEnd::Emphasis,
             style.add_modifier(Modifier::ITALIC),
+            active_link,
+            context,
             content,
         ),
         Event::Start(Tag::Strong) => parse_inline_events(
             events,
             TagEnd::Strong,
             style.add_modifier(Modifier::BOLD),
+            active_link,
+            context,
             content,
         ),
-        Event::Start(Tag::Link { dest_url, .. }) => {
-            parse_link(events, &dest_url, style, content);
+        Event::Start(Tag::Link {
+            link_type,
+            dest_url,
+            ..
+        }) => {
+            parse_link(events, link_type, &dest_url, style, context, content);
         }
         Event::Start(Tag::Image { dest_url, .. }) => {
-            parse_image(events, &dest_url, style, content);
+            parse_image(events, &dest_url, style, active_link, context, content);
         }
         Event::Start(Tag::CodeBlock(_)) => skip_until(events, TagEnd::CodeBlock),
         Event::Start(Tag::HtmlBlock) => skip_until(events, TagEnd::HtmlBlock),
         Event::FootnoteReference(label) => {
-            push_footnote_reference(content, &label, style);
+            push_footnote_reference(content, &label, style, active_link);
         }
         Event::TaskListMarker(checked) => {
-            push_task_list_marker(content, checked, style);
+            push_task_list_marker(content, checked, style, active_link);
         }
         Event::Start(_) | Event::End(_) | Event::Rule => {}
     }
@@ -620,15 +1016,19 @@ fn parse_inline_event<'a>(
 /// * `events` — CommonMark event stream positioned inside an image.
 /// * `destination` — Parsed image source URL or path.
 /// * `style` — Span style inherited from the surrounding inline scope.
+/// * `active_link` — Optional outer link index owning the fallback text.
+/// * `context` — File and link-resolution context for nested image content.
 /// * `content` — Destination rich-text accumulator.
 fn parse_image<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     destination: &str,
     style: Style,
+    active_link: Option<usize>,
+    context: &MarkdownParseContext<'_>,
     content: &mut InlineText,
 ) {
     let mut alt = InlineText::new();
-    parse_inline_events(events, TagEnd::Image, style, &mut alt);
+    parse_inline_events(events, TagEnd::Image, style, None, context, &mut alt);
     let alt = alt.plain_text();
     let fallback = match (alt.is_empty(), destination.is_empty()) {
         (false, false) => format!("Image: {alt} ({destination})"),
@@ -636,7 +1036,7 @@ fn parse_image<'a>(
         (true, false) => format!("Image: {destination}"),
         (true, true) => "Image".to_owned(),
     };
-    content.push_text(&fallback, style);
+    content.push_text_for_link(&fallback, style, active_link);
 }
 
 /// Appends a readable footnote reference when such an event is enabled.
@@ -646,8 +1046,14 @@ fn parse_image<'a>(
 /// * `content` — Destination rich-text accumulator.
 /// * `label` — Parsed footnote label.
 /// * `style` — Span style inherited from the surrounding inline scope.
-fn push_footnote_reference(content: &mut InlineText, label: &str, style: Style) {
-    content.push_text(&format!("[^{label}]"), style);
+/// * `active_link` — Optional link index owning the reference text.
+fn push_footnote_reference(
+    content: &mut InlineText,
+    label: &str,
+    style: Style,
+    active_link: Option<usize>,
+) {
+    content.push_text_for_link(&format!("[^{label}]"), style, active_link);
 }
 
 /// Appends a readable checkbox marker when task-list events are enabled.
@@ -657,60 +1063,43 @@ fn push_footnote_reference(content: &mut InlineText, label: &str, style: Style) 
 /// * `content` — Destination rich-text accumulator.
 /// * `checked` — Whether the parsed task marker is checked.
 /// * `style` — Span style inherited from the surrounding inline scope.
-fn push_task_list_marker(content: &mut InlineText, checked: bool, style: Style) {
-    content.push_text(if checked { "[x] " } else { "[ ] " }, style);
+/// * `active_link` — Optional link index owning the task marker.
+fn push_task_list_marker(
+    content: &mut InlineText,
+    checked: bool,
+    style: Style,
+    active_link: Option<usize>,
+) {
+    content.push_text_for_link(if checked { "[x] " } else { "[ ] " }, style, active_link);
 }
 
-/// Parses a Markdown link and appends a terminal-readable destination.
+/// Parses a Markdown link into a focusable label range.
 ///
-/// Link labels are underlined and retain surrounding emphasis or strong
-/// modifiers. Non-empty destinations are appended only when the visible label
-/// does not already expose the exact URL or an email address without its
-/// `mailto:` scheme.
+/// Link labels retain surrounding emphasis or strong modifiers. The target is
+/// stored as metadata rather than appended to non-empty visible labels.
 ///
 /// # Arguments
 ///
 /// * `events` — CommonMark event stream positioned inside a link.
+/// * `link_type` — Parser classification used to retain `mailto:` activation.
 /// * `destination` — Parsed link destination.
 /// * `style` — Span style inherited from the surrounding inline scope.
+/// * `context` — File and link-resolution context for this document.
 /// * `content` — Destination rich-text accumulator.
 fn parse_link<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
+    link_type: LinkType,
     destination: &str,
     style: Style,
+    context: &MarkdownParseContext<'_>,
     content: &mut InlineText,
 ) {
-    let link_style = style.add_modifier(Modifier::UNDERLINED);
-    let mut link = InlineText::new();
-    parse_inline_events(events, TagEnd::Link, link_style, &mut link);
-
-    let label = link.plain_text();
-    if !destination.is_empty() && !link_destination_is_visible(&label, destination) {
-        if label.is_empty() {
-            link.push_text(destination, link_style);
-        } else {
-            link.push_text(&format!(" ({destination})"), link_style);
-        }
+    let target = context.link_target(link_type, destination);
+    let link = content.push_link(target);
+    parse_inline_events(events, TagEnd::Link, style, Some(link), context, content);
+    if !content.link_has_text(link) && !destination.is_empty() {
+        content.push_text_for_link(destination, style, Some(link));
     }
-
-    content.append(link);
-}
-
-/// Returns whether a link label already displays its destination.
-///
-/// Email autolinks omit the `mailto:` scheme from their visible label, so that
-/// prefix is ignored for the comparison.
-///
-/// # Arguments
-///
-/// * `label` — Visible unstyled link-label content.
-/// * `destination` — Parsed link destination.
-///
-/// # Returns
-///
-/// A boolean indicating whether appending the destination would duplicate it.
-fn link_destination_is_visible(label: &str, destination: &str) -> bool {
-    label == destination || destination.strip_prefix("mailto:") == Some(label)
 }
 
 /// Converts one fenced or indented Markdown code block into a code-block view.
@@ -766,7 +1155,7 @@ fn parse_code_block<'a>(
 /// # Returns
 ///
 /// A semantic H1 through H6 [`View`].
-fn heading(level: HeadingLevel, content: Text<'static>) -> View {
+fn heading(level: HeadingLevel, content: RichText) -> View {
     match level {
         HeadingLevel::H1 => h1(content),
         HeadingLevel::H2 => h2(content),
@@ -784,6 +1173,7 @@ fn heading(level: HeadingLevel, content: Text<'static>) -> View {
 /// * `events` — CommonMark event stream positioned after the list opening tag.
 /// * `start` — First ordered marker, or [`None`] for an unordered list.
 /// * `options` — Code-block presentation defaults for nested list content.
+/// * `context` — File/link context and heading state for nested content.
 ///
 /// # Returns
 ///
@@ -792,13 +1182,19 @@ fn parse_list<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     start: Option<u64>,
     options: MarkdownOptions,
+    context: &mut MarkdownParseContext<'_>,
 ) -> View {
     let mut items = Vec::new();
 
     while let Some(event) = events.next() {
         match event {
             Event::Start(Tag::Item) => {
-                items.push(list_item(parse_blocks(events, Some(TagEnd::Item), options)));
+                items.push(list_item(parse_blocks(
+                    events,
+                    Some(TagEnd::Item),
+                    options,
+                    context,
+                )));
             }
             Event::End(TagEnd::List(_)) => break,
             _ => {}
@@ -823,21 +1219,36 @@ fn parse_list<'a>(
 ///
 /// * `events` — CommonMark event stream positioned after the table opening tag.
 /// * `alignments` — Parsed alignment for each source column.
+/// * `context` — File and link-resolution context for the table.
 ///
 /// # Returns
 ///
 /// A semantic table containing one header section and one body section.
-fn parse_table<'a>(events: &mut impl Iterator<Item = Event<'a>>, alignments: &[Alignment]) -> View {
+fn parse_table<'a>(
+    events: &mut impl Iterator<Item = Event<'a>>,
+    alignments: &[Alignment],
+    context: &MarkdownParseContext<'_>,
+) -> View {
     let mut header_rows = Vec::new();
     let mut body_rows = Vec::new();
 
     while let Some(event) = events.next() {
         match event {
             Event::Start(Tag::TableHead) => {
-                header_rows.push(parse_table_cells(events, alignments, TagEnd::TableHead));
+                header_rows.push(parse_table_cells(
+                    events,
+                    alignments,
+                    TagEnd::TableHead,
+                    context,
+                ));
             }
             Event::Start(Tag::TableRow) => {
-                body_rows.push(parse_table_cells(events, alignments, TagEnd::TableRow));
+                body_rows.push(parse_table_cells(
+                    events,
+                    alignments,
+                    TagEnd::TableRow,
+                    context,
+                ));
             }
             Event::End(TagEnd::Table) => break,
             _ => {}
@@ -854,6 +1265,7 @@ fn parse_table<'a>(events: &mut impl Iterator<Item = Event<'a>>, alignments: &[A
 /// * `events` — CommonMark event stream positioned inside a table row.
 /// * `alignments` — Parsed alignment for each source column.
 /// * `end` — Closing tag that terminates the header or body row.
+/// * `context` — File and link-resolution context for table cells.
 ///
 /// # Returns
 ///
@@ -862,6 +1274,7 @@ fn parse_table_cells<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     alignments: &[Alignment],
     end: TagEnd,
+    context: &MarkdownParseContext<'_>,
 ) -> View {
     let mut cells = Vec::new();
 
@@ -869,8 +1282,10 @@ fn parse_table_cells<'a>(
         match event {
             Event::Start(Tag::TableCell) => {
                 let alignment = alignment_at(alignments, cells.len());
-                cells
-                    .push(table_cell(parse_inline(events, TagEnd::TableCell)).alignment(alignment));
+                cells.push(
+                    table_cell(parse_inline(events, TagEnd::TableCell, context))
+                        .alignment(alignment),
+                );
             }
             Event::End(tag) if tag == end => break,
             _ => {}
@@ -947,6 +1362,22 @@ mod tests {
         ))
     }
 
+    /// Returns the state inside a file-backed Markdown boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` — View expected to have been built by a Markdown file reader.
+    ///
+    /// # Returns
+    ///
+    /// The boundary's retained [`MarkdownView`] state.
+    fn markdown_file_state(view: &View) -> &MarkdownView {
+        let View::Markdown { state } = view else {
+            panic!("expected file-backed Markdown boundary, got {view:?}");
+        };
+        state
+    }
+
     /// Returns code-block options from a single-block Markdown document.
     ///
     /// # Arguments
@@ -957,6 +1388,10 @@ mod tests {
     ///
     /// A tuple containing line-number visibility and the syntax theme.
     fn parsed_code_block_options(view: &View) -> (bool, SyntaxTheme) {
+        let view = match view {
+            View::Markdown { state } => state.document(),
+            view => view,
+        };
         let View::Column { children, .. } = view else {
             panic!("expected Markdown column, got {view:?}");
         };
@@ -984,6 +1419,10 @@ mod tests {
     ///
     /// A tuple containing the current and maximum vertical scroll offsets.
     fn markdown_scroll_state(view: &View) -> (u16, u16) {
+        let view = match view {
+            View::Markdown { state } => state.document(),
+            view => view,
+        };
         let View::Column { metadata, .. } = view else {
             panic!("expected Markdown column, got {view:?}");
         };
@@ -1101,7 +1540,11 @@ mod tests {
         fs::write(&fixture_path, source).expect("Markdown fixture should be written");
 
         let default = markdown_file(&fixture_path);
-        assert_eq!(default, markdown(source));
+        let View::Markdown { state } = &default else {
+            panic!("expected file-backed Markdown boundary");
+        };
+        assert_eq!(state.current_path(), fixture_path);
+        assert_eq!(state.document(), &markdown(source));
 
         let options = MarkdownOptions::default()
             .syntax_theme(SyntaxTheme::Light)
@@ -1154,7 +1597,13 @@ mod tests {
             fs::read_to_string(&missing_path).expect_err("missing fixture should fail to read");
         assert_eq!(missing_error.kind(), io::ErrorKind::NotFound);
         let missing = markdown_file(&missing_path);
-        assert_eq!(missing, expected_fallback(&missing_path, &missing_error));
+        let View::Markdown { state } = &missing else {
+            panic!("expected file-backed Markdown boundary");
+        };
+        assert_eq!(
+            state.document(),
+            &expected_fallback(&missing_path, &missing_error)
+        );
         let rendered = rendered_view_lines(&missing, 120, 2)
             .expect("missing-file fallback should render without failure")
             .concat();
@@ -1164,17 +1613,25 @@ mod tests {
         let directory_error =
             fs::read_to_string(&directory_path).expect_err("directory fixture should fail to read");
         assert_ne!(directory_error.kind(), io::ErrorKind::NotFound);
+        let directory = markdown_file(&directory_path);
+        let View::Markdown { state } = &directory else {
+            panic!("expected file-backed Markdown boundary");
+        };
         assert_eq!(
-            markdown_file(&directory_path),
-            expected_fallback(&directory_path, &directory_error)
+            state.document(),
+            &expected_fallback(&directory_path, &directory_error)
         );
 
         let invalid_utf8_error = fs::read_to_string(&invalid_utf8_path)
             .expect_err("invalid UTF-8 fixture should fail to read");
         assert_eq!(invalid_utf8_error.kind(), io::ErrorKind::InvalidData);
+        let invalid = markdown_file_with_options(&invalid_utf8_path, MarkdownOptions::default());
+        let View::Markdown { state } = &invalid else {
+            panic!("expected file-backed Markdown boundary");
+        };
         assert_eq!(
-            markdown_file_with_options(&invalid_utf8_path, MarkdownOptions::default()),
-            expected_fallback(&invalid_utf8_path, &invalid_utf8_error)
+            state.document(),
+            &expected_fallback(&invalid_utf8_path, &invalid_utf8_error)
         );
 
         fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
@@ -1487,7 +1944,7 @@ mod tests {
         );
     }
 
-    /// Verifies Markdown links remain readable without terminal link interaction.
+    /// Verifies Markdown links retain focusable targets without exposing destinations.
     ///
     /// # Example Under Test
     ///
@@ -1499,38 +1956,475 @@ mod tests {
     ///
     /// # Assertions
     ///
-    /// - Link labels are underlined and retain nested emphasis.
-    /// - A descriptive label is followed by its parenthesized destination.
-    /// - URL labels and URL autolinks do not duplicate their destinations.
-    /// - Email autolinks do not expose or duplicate the `mailto:` scheme.
-    /// - Links with empty destinations do not display empty parentheses.
+    /// - Four non-empty URL and email targets participate in focus traversal.
+    /// - Link labels retain nested emphasis in visible rich text.
+    /// - Descriptive labels do not append their hidden destination.
+    /// - Email labels do not expose the `mailto:` activation scheme.
+    /// - Empty destinations remain visible but inactive.
     #[test]
-    fn markdown_styles_links_and_appends_hidden_destinations() {
+    fn markdown_retains_actionable_links_with_label_only_text() {
         let source = concat!(
             "Read [the *guide*](https://example.com/guide), ",
             "[https://example.com](https://example.com), ",
             "<https://example.org>, and <reader@example.com>, plus [empty]().\n",
         );
-        let underline = Style::new().add_modifier(Modifier::UNDERLINED);
+        let document = markdown(source);
+        assert_eq!(document.__focusable_count(), 4);
+        let View::Column { children, .. } = &document else {
+            panic!("expected Markdown column, got {document:?}");
+        };
+        let [View::Paragraph { content, .. }] = children.as_slice() else {
+            panic!("expected one Markdown paragraph, got {children:?}");
+        };
+        assert_eq!(
+            content.to_string(),
+            concat!(
+                "Read the guide, https://example.com, https://example.org, and ",
+                "reader@example.com, plus empty."
+            )
+        );
+        assert!(
+            content.text().lines[0].spans[2]
+                .style
+                .add_modifier
+                .contains(Modifier::ITALIC)
+        );
+    }
+
+    /// Verifies links remain focusable across semantic Markdown containers.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// # [Heading](https://example.com/heading)
+    /// - [List](https://example.com/list)
+    /// | [Head](https://example.com/head) |
+    /// | --- |
+    /// | [Cell](https://example.com/cell) |
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Heading links participate in focus traversal.
+    /// - Links nested in list paragraphs participate in focus traversal.
+    /// - Header and body table-cell links participate in focus traversal.
+    #[test]
+    fn markdown_links_survive_heading_list_and_table_conversion() {
+        let source = concat!(
+            "# [Heading](https://example.com/heading)\n\n",
+            "- [List](https://example.com/list)\n\n",
+            "| [Head](https://example.com/head) |\n",
+            "| --- |\n",
+            "| [Cell](https://example.com/cell) |\n",
+        );
+
+        assert_eq!(markdown(source).__focusable_count(), 4);
+    }
+
+    /// Verifies Markdown links participate in focus and default link styling.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// [Guide](https://example.com) and [Section](#part)
+    /// Tab
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Only the absolute URL contributes to focus traversal.
+    /// - The initial URL label is underlined without reverse video.
+    /// - Tab focuses the URL and adds the default focused reverse modifier.
+    #[test]
+    fn markdown_links_render_and_receive_focus() -> Result<()> {
+        let mut document = markdown("[Guide](https://example.com) and [Section](#part)");
+        assert_eq!(document.__focusable_count(), 1);
+        let mut terminal = Terminal::new(TestBackend::new(24, 1))?;
+        let mut initial_render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            initial_render_result = document.render(&mut ctx);
+        })?;
+        initial_render_result?;
+        let initial = terminal.backend().buffer().content()[0].modifier;
+        assert!(initial.contains(Modifier::UNDERLINED));
+        assert!(!initial.contains(Modifier::REVERSED));
 
         assert_eq!(
-            markdown(source),
-            column([paragraph(Text::from(Line::from(vec![
-                Span::raw("Read "),
-                Span::styled("the ", underline),
-                Span::styled("guide", underline.add_modifier(Modifier::ITALIC),),
-                Span::styled(" (https://example.com/guide)", underline),
-                Span::raw(", "),
-                Span::styled("https://example.com", underline),
-                Span::raw(", "),
-                Span::styled("https://example.org", underline),
-                Span::raw(", and "),
-                Span::styled("reader@example.com", underline),
-                Span::raw(", plus "),
-                Span::styled("empty", underline),
-                Span::raw("."),
-            ])))]),
+            document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?,
+            crate::KeyControl::Handled
         );
+        let mut focused_render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            focused_render_result = document.render(&mut ctx);
+        })?;
+        focused_render_result?;
+        let focused = terminal.backend().buffer().content()[0].modifier;
+        assert!(focused.contains(Modifier::UNDERLINED));
+        assert!(focused.contains(Modifier::REVERSED));
+        Ok(())
+    }
+
+    /// Verifies focusing a wrapped Markdown link scrolls its exact text rows into view.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// one two three four five six [Guide](https://example.com)
+    /// terminal size = 10x2
+    /// Tab, render
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Focus causes the overflowing document column to scroll downward.
+    /// - The focused link label becomes visible in the terminal buffer.
+    ///
+    /// # Why
+    ///
+    /// Treating an entire wrapped paragraph as the focused span would keep its
+    /// first row visible while leaving a link near the end offscreen.
+    #[test]
+    fn focused_wrapped_markdown_link_scrolls_into_view() -> Result<()> {
+        let mut document = markdown("one two three four five six [Guide](https://example.com)");
+        assert_eq!(
+            document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?,
+            crate::KeyControl::Handled
+        );
+
+        let mut terminal = Terminal::new(TestBackend::new(10, 2))?;
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            render_result = document.render(&mut ctx);
+        })?;
+        render_result?;
+
+        let (scroll_offset, _) = markdown_scroll_state(&document);
+        assert!(scroll_offset > 0);
+        assert!(
+            terminal
+                .backend()
+                .buffer()
+                .content()
+                .iter()
+                .any(|cell| cell.symbol() == "G")
+        );
+        Ok(())
+    }
+
+    /// Verifies focused Markdown links survive regenerated-view reconciliation.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// previous = markdown("[Guide](https://example.com)") + Tab
+    /// next = markdown("[Updated](https://example.com)")
+    /// reconcile(next, previous)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - A regenerated inline link with the same target retains focus.
+    /// - Its updated visible label remains intact.
+    #[test]
+    fn markdown_link_focus_survives_reconciliation() -> Result<()> {
+        let mut previous = markdown("[Guide](https://example.com)");
+        previous.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+        let mut next = markdown("[Updated](https://example.com)");
+
+        crate::__private::__reconcile_view(&mut next, &previous);
+        let mut index = 0;
+        assert_eq!(next.__focused_index_inner(&mut index), Some(0));
+        let View::Column { children, .. } = &next else {
+            panic!("expected Markdown column");
+        };
+        let [View::Paragraph { content, .. }] = children.as_slice() else {
+            panic!("expected Markdown paragraph");
+        };
+        assert_eq!(content.to_string(), "Updated");
+        Ok(())
+    }
+
+    /// Verifies file-backed Markdown resolves relative links from its own directory.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// /tmp/fixture/reader.md contains [Missing](nested/missing.md)
+    /// Tab, Enter
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The relative link is focusable.
+    /// - Activation opens the missing target as an in-app error page.
+    /// - The current path is resolved below the Markdown file's directory.
+    /// - Back history retains the source page.
+    #[test]
+    fn markdown_file_links_resolve_from_source_directory() {
+        let fixture_dir = markdown_fixture_dir("link-base");
+        fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+        let markdown_path = fixture_dir.join("reader.md");
+        fs::write(&markdown_path, "[Missing](nested/missing.md)")
+            .expect("Markdown fixture should be written");
+
+        let mut document = markdown_file(&markdown_path);
+        assert_eq!(document.__focusable_count(), 1);
+        document
+            .handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))
+            .expect("link focus should succeed");
+        assert_eq!(
+            document
+                .handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+                .expect("missing relative Markdown should open its error page"),
+            crate::KeyControl::Handled,
+        );
+        let View::Markdown { state } = &document else {
+            panic!("expected file-backed Markdown boundary");
+        };
+        assert_eq!(state.current_path(), fixture_dir.join("nested/missing.md"));
+        assert!(state.can_go_back());
+        assert!(!state.can_go_forward());
+
+        fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+    }
+
+    /// Verifies in-app targets are classified only for file-backed Markdown.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// [Guide](nested/Guide.MD#part)
+    /// [Long](other.MarkDown)
+    /// [Remote](https://example.com/remote.md)
+    /// [Section](#part)
+    /// [Bare](#)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Markdown extensions are recognized case-insensitively and resolved
+    ///   from the source directory.
+    /// - Non-empty fragments target the current file.
+    /// - Remote Markdown URLs remain external URLs and bare hashes stay inert.
+    /// - In-memory Markdown retains its existing path/fragment targets.
+    #[test]
+    fn markdown_file_classifies_in_app_targets_at_its_boundary() {
+        let fixture_dir = markdown_fixture_dir("target-classification");
+        let markdown_path = fixture_dir.join("reader.md");
+        let source = concat!(
+            "[Guide](nested/Guide.MD#part) ",
+            "[Long](other.MarkDown) ",
+            "[Remote](https://example.com/remote.md) ",
+            "[Section](#part) ",
+            "[Bare](#)",
+        );
+        fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+        fs::write(&markdown_path, source).expect("Markdown fixture should be written");
+
+        let file = markdown_file(&markdown_path);
+        let View::Column { children, .. } = markdown_file_state(&file).document() else {
+            panic!("expected parsed Markdown column");
+        };
+        let [View::Paragraph { content, .. }] = children.as_slice() else {
+            panic!("expected one linked paragraph");
+        };
+        let targets = content
+            .links()
+            .iter()
+            .map(|link| link.target().clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            targets,
+            vec![
+                LinkTarget::Markdown {
+                    path: fixture_dir.join("nested/Guide.MD"),
+                    fragment: Some("part".to_owned()),
+                },
+                LinkTarget::Markdown {
+                    path: fixture_dir.join("other.MarkDown"),
+                    fragment: None,
+                },
+                LinkTarget::Url("https://example.com/remote.md".to_owned()),
+                LinkTarget::Markdown {
+                    path: markdown_path.clone(),
+                    fragment: Some("part".to_owned()),
+                },
+                LinkTarget::Fragment("#".to_owned()),
+            ]
+        );
+
+        let View::Column { children, .. } = markdown("[Guide](guide.md) [Section](#part)") else {
+            panic!("expected in-memory Markdown column");
+        };
+        let [View::Paragraph { content, .. }] = children.as_slice() else {
+            panic!("expected one in-memory paragraph");
+        };
+        assert_eq!(
+            content.links()[0].target(),
+            &LinkTarget::Path(
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join("guide.md")
+            )
+        );
+        assert_eq!(content.links()[1].target(), &LinkTarget::from("#part"));
+
+        fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+    }
+
+    /// Verifies back/forward navigation swaps complete cached Markdown pages.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// root.md -> b.md -> Shift+H -> Shift+L
+    /// root.md -> b.md -> Shift+H -> c.md
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Shift+H and Shift+L traverse cached page history.
+    /// - Returning to a page restores its exact focus and scroll offset.
+    /// - A new navigation after going back clears forward history.
+    /// - Reconciliation preserves state for the same root/options and resets it
+    ///   when options change.
+    #[test]
+    fn markdown_file_history_restores_cached_state_and_reconciles() -> Result<()> {
+        let fixture_dir = markdown_fixture_dir("history");
+        let root_path = fixture_dir.join("root.md");
+        let b_path = fixture_dir.join("b.md");
+        let c_path = fixture_dir.join("c.md");
+        let mut source = (0..12)
+            .map(|index| format!("Paragraph {index}.\n\n"))
+            .collect::<String>();
+        source.push_str("[B](b.md) [C](c.md)\n");
+        fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+        fs::write(&root_path, source).expect("root Markdown fixture should be written");
+        fs::write(&b_path, "# Page B\n").expect("B fixture should be written");
+        fs::write(&c_path, "# Page C\n").expect("C fixture should be written");
+
+        let mut document = markdown_file(&root_path);
+        rendered_view_lines(&document, 30, 5)?;
+        document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+        rendered_view_lines(&document, 30, 5)?;
+        let root_scroll = markdown_scroll_state(&document);
+        assert!(root_scroll.0 > 0);
+
+        assert_eq!(
+            document.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
+            crate::KeyControl::Handled
+        );
+        assert_eq!(markdown_file_state(&document).current_path(), b_path);
+        assert!(markdown_file_state(&document).can_go_back());
+
+        assert_eq!(
+            document.handle_key_event(KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT,))?,
+            crate::KeyControl::Handled
+        );
+        assert_eq!(markdown_file_state(&document).current_path(), root_path);
+        assert!(markdown_file_state(&document).can_go_forward());
+        assert_eq!(markdown_scroll_state(&document), root_scroll);
+        let mut focused_index = 0;
+        assert_eq!(document.__focused_index_inner(&mut focused_index), Some(0));
+
+        assert_eq!(
+            document.handle_key_event(KeyEvent::new(KeyCode::Char('L'), KeyModifiers::SHIFT,))?,
+            crate::KeyControl::Handled
+        );
+        assert_eq!(markdown_file_state(&document).current_path(), b_path);
+
+        document.handle_key_event(KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT))?;
+        document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+        document.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?;
+        assert_eq!(markdown_file_state(&document).current_path(), c_path);
+        assert!(!markdown_file_state(&document).can_go_forward());
+
+        let previous = document.clone();
+        let mut reconciled = markdown_file(&root_path);
+        crate::__private::__reconcile_view(&mut reconciled, &previous);
+        assert_eq!(markdown_file_state(&reconciled).current_path(), c_path);
+        assert!(markdown_file_state(&reconciled).can_go_back());
+
+        let mut reset =
+            markdown_file_with_options(&root_path, MarkdownOptions::default().line_numbers(true));
+        crate::__private::__reconcile_view(&mut reset, &previous);
+        assert_eq!(markdown_file_state(&reset).current_path(), root_path);
+        assert!(!markdown_file_state(&reset).can_go_back());
+
+        fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+        Ok(())
+    }
+
+    /// Verifies heading fragments load in-app and align their heading at top.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// [Duplicate](target.md#repeat-heading-1)
+    /// [Same file](#caf%C3%A9)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Duplicate GitHub-style slugs receive numeric suffixes.
+    /// - Percent-encoded Unicode fragments are decoded case-insensitively.
+    /// - Cross-file and same-file fragments create history entries and scroll
+    ///   the matching heading to the top.
+    /// - Missing anchors leave the loaded page at its default top position.
+    #[test]
+    fn markdown_file_fragments_use_heading_anchors() -> Result<()> {
+        let fixture_dir = markdown_fixture_dir("anchors");
+        let root_path = fixture_dir.join("root.md");
+        let target_path = fixture_dir.join("target.md");
+        fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+        fs::write(
+            &root_path,
+            "[Duplicate](target.md#repeat-heading-1) [Missing](target.md#missing)\n\n\
+             Filler.\n\nFiller.\n\nFiller.\n\nFiller.\n\n## Café\n",
+        )
+        .expect("root Markdown fixture should be written");
+        let target = format!(
+            "{}## Repeat Heading\n\nBetween.\n\n## Repeat Heading\n",
+            (0..12)
+                .map(|index| format!("Target paragraph {index}.\n\n"))
+                .collect::<String>()
+        );
+        fs::write(&target_path, target).expect("target Markdown fixture should be written");
+
+        let mut document = markdown_file(&root_path);
+        document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+        document.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?;
+        let lines = rendered_view_lines(&document, 32, 5)?;
+        assert_eq!(markdown_file_state(&document).current_path(), target_path);
+        assert!(lines[0].starts_with("## Repeat Heading"));
+        assert!(markdown_scroll_state(&document).0 > 0);
+
+        document.handle_key_event(KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT))?;
+        document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+        document.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?;
+        let missing_lines = rendered_view_lines(&document, 32, 5)?;
+        assert_eq!(markdown_file_state(&document).current_path(), target_path);
+        assert_eq!(markdown_scroll_state(&document).0, 0);
+        assert!(missing_lines[0].starts_with("Target paragraph 0."));
+
+        fs::write(
+            &root_path,
+            "[Café](#caf%C3%A9)\n\nFiller.\n\n## Café\n\nAfter.\n\nAfter.\n",
+        )
+        .expect("same-file fragment fixture should be written");
+        let mut same_file = markdown_file(&root_path);
+        same_file.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+        same_file.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?;
+        let same_file_lines = rendered_view_lines(&same_file, 24, 2)?;
+        assert_eq!(markdown_file_state(&same_file).current_path(), root_path);
+        assert!(markdown_file_state(&same_file).can_go_back());
+        assert!(same_file_lines[0].starts_with("## Café"));
+
+        fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+        Ok(())
     }
 
     /// Verifies Markdown lists retain starts, blocks, nesting, and empty items.
@@ -1806,9 +2700,15 @@ mod tests {
             | Options::ENABLE_MATH
             | Options::ENABLE_FOOTNOTES;
         let mut parser = Parser::new_ext(source, options);
+        let mut context = MarkdownParseContext::new(Path::new("."), None);
 
         assert_eq!(
-            column(parse_blocks(&mut parser, None, MarkdownOptions::default(),)),
+            column(parse_blocks(
+                &mut parser,
+                None,
+                MarkdownOptions::default(),
+                &mut context,
+            )),
             column(separate_blocks(vec![
                 unordered_list([list_item([paragraph("[x] done and x + y[^note]")])]),
                 paragraph("z"),

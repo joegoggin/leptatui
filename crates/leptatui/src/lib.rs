@@ -50,7 +50,9 @@
 //! [`ImageSource`] values, renders through supported terminal graphics
 //! protocols, and falls back to deterministic text when graphics support is
 //! unavailable. `ProgressBar` renders a clamped `0.0..=1.0` gauge with an
-//! optional label.
+//! optional label. [`link`] creates a standalone URL or local-path control;
+//! the equivalent tag is `<Link href="https://example.com">"label"</Link>`.
+//! Links receive focus with Tab or Shift+Tab and activate with Enter or Space.
 //!
 //! # Semantic Documents and Markdown
 //!
@@ -168,11 +170,16 @@
 //! ```
 //!
 //! Markdown compatibility covers CommonMark plus tables. Optional GFM
-//! extensions are deferred. Links are readable but non-interactive; images
-//! become descriptive text without fetching local or remote targets; and raw
-//! HTML or unsupported blocks retain readable fallbacks. File readers are
-//! infallible and render a path-aware paragraph for unreadable or non-UTF-8
-//! input.
+//! extensions are deferred. Links retain their inline labels and participate
+//! in normal focus traversal. Inside a file-backed Markdown view, local
+//! `.md`/`.markdown` links open in the same reader and non-empty fragments
+//! scroll to GitHub-style heading anchors. Shift+H and Shift+L move through
+//! cached page history. Other local targets and all URLs use the system
+//! handler; in-memory Markdown and standalone [`View::Link`] values keep that
+//! external behavior. Images become descriptive text without fetching local
+//! or remote targets, and raw HTML or unsupported blocks retain readable
+//! fallbacks. File readers are infallible and render a path-aware page for
+//! unreadable or non-UTF-8 input.
 //!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
@@ -213,7 +220,8 @@ pub use component::{
 };
 pub use leptatui_macros::{component, stylesheet, view};
 pub use markdown::{
-    MarkdownOptions, markdown, markdown_file, markdown_file_with_options, markdown_with_options,
+    MarkdownOptions, MarkdownView, markdown, markdown_file, markdown_file_with_options,
+    markdown_with_options,
 };
 pub use resource::{Resource, ResourceState, create_resource};
 pub use route::{RouteState, provide_route, use_navigate, use_route};
@@ -223,11 +231,11 @@ pub use style::{
     TuiSize, TuiSpacing, TuiStyle, ViewportSize, theme_color,
 };
 pub use view::{
-    ButtonAction, CellAlignment, EditableState, FormAction, ImageSource, InputAction,
-    StyleMetadata, SyntaxTheme, View, ViewType, VimMode, block, button, code_block, column,
-    component, dynamic, form, h1, h2, h3, h4, h5, h6, image, input, list_item, ordered_list,
-    paragraph, progress_bar, row, table, table_body, table_cell, table_head, table_row, text,
-    text_area, unordered_list,
+    ButtonAction, CellAlignment, EditableState, FormAction, ImageSource, InputAction, LinkTarget,
+    RichText, StyleMetadata, SyntaxTheme, View, ViewType, VimMode, block, button, code_block,
+    column, component, dynamic, form, h1, h2, h3, h4, h5, h6, image, input, link, list_item,
+    ordered_list, paragraph, progress_bar, row, table, table_body, table_cell, table_head,
+    table_row, text, text_area, unordered_list,
 };
 
 #[doc(hidden)]
@@ -276,6 +284,14 @@ pub mod __private {
         }
 
         match (next, previous) {
+            (
+                View::Markdown { state: next_state },
+                View::Markdown {
+                    state: previous_state,
+                },
+            ) if next_state.can_reconcile_from(previous_state) => {
+                *next_state = previous_state.clone();
+            }
             (
                 View::Block {
                     child: next_child, ..
@@ -419,6 +435,100 @@ pub mod __private {
                 },
             ) => reconcile_focus_metadata(next_metadata, previous_metadata),
             (
+                View::Link {
+                    target: next_target,
+                    metadata: next_metadata,
+                    ..
+                },
+                View::Link {
+                    target: previous_target,
+                    metadata: previous_metadata,
+                    ..
+                },
+            ) if next_target == previous_target => {
+                reconcile_focus_metadata(next_metadata, previous_metadata);
+            }
+            (
+                View::H1 {
+                    content: next_content,
+                    ..
+                },
+                View::H1 {
+                    content: previous_content,
+                    ..
+                },
+            )
+            | (
+                View::H2 {
+                    content: next_content,
+                    ..
+                },
+                View::H2 {
+                    content: previous_content,
+                    ..
+                },
+            )
+            | (
+                View::H3 {
+                    content: next_content,
+                    ..
+                },
+                View::H3 {
+                    content: previous_content,
+                    ..
+                },
+            )
+            | (
+                View::H4 {
+                    content: next_content,
+                    ..
+                },
+                View::H4 {
+                    content: previous_content,
+                    ..
+                },
+            )
+            | (
+                View::H5 {
+                    content: next_content,
+                    ..
+                },
+                View::H5 {
+                    content: previous_content,
+                    ..
+                },
+            )
+            | (
+                View::H6 {
+                    content: next_content,
+                    ..
+                },
+                View::H6 {
+                    content: previous_content,
+                    ..
+                },
+            )
+            | (
+                View::Paragraph {
+                    content: next_content,
+                    ..
+                },
+                View::Paragraph {
+                    content: previous_content,
+                    ..
+                },
+            )
+            | (
+                View::TableCell {
+                    content: next_content,
+                    ..
+                },
+                View::TableCell {
+                    content: previous_content,
+                    ..
+                },
+            ) => reconcile_rich_text(next_content, previous_content),
+            (
                 View::Input {
                     metadata: next_metadata,
                     editable_state: next_editable_state,
@@ -465,6 +575,20 @@ pub mod __private {
         next_metadata.set_focused(previous_metadata.is_focused());
         if previous_metadata.scroll_into_view_requested() {
             next_metadata.request_scroll_into_view();
+        }
+    }
+
+    /// Copies focus metadata for matching inline links in semantic rich text.
+    ///
+    /// # Arguments
+    ///
+    /// * `next` — Newly generated rich text to update.
+    /// * `previous` — Previously rendered rich text used as reconciliation input.
+    fn reconcile_rich_text(next: &mut crate::RichText, previous: &crate::RichText) {
+        for (next_link, previous_link) in next.links_mut().iter_mut().zip(previous.links()) {
+            if next_link.target() == previous_link.target() {
+                reconcile_focus_metadata(next_link.metadata_mut(), previous_link.metadata());
+            }
         }
     }
 

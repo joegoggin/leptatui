@@ -30,11 +30,12 @@ use crate::{
 
 use super::{
     code_block::SyntaxTheme,
+    link::{LinkTarget, LinkedSpan, RichText, open_link_target},
     metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
     model::{FormAction, InputAction, View, clamped_progress_value},
 };
 
-use self::table::{min_height_for_table_view, render_table_view};
+use self::table::{focused_link_span_for_table_view, min_height_for_table_view, render_table_view};
 
 /// Maximum time allowed between insert-mode `j` and `k` escape keys.
 const INSERT_ESCAPE_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -94,6 +95,249 @@ fn semantic_paragraph(content: &Text<'static>, style: TuiStyle) -> Paragraph<'st
         .wrap(Wrap { trim: false })
 }
 
+/// Resolves styles for links embedded in semantic rich text.
+///
+/// The semantic container is exposed as the immediate selector ancestor so
+/// descendant selectors such as `Paragraph Link` retain their expected shape.
+///
+/// # Arguments
+///
+/// * `content` — Rich text containing optional inline link ranges.
+/// * `metadata` — Selector metadata for the semantic text container.
+/// * `style` — Resolved style inherited from the semantic container.
+/// * `ctx` — Rendering context containing active stylesheets and ancestors.
+///
+/// # Returns
+///
+/// A [`Text`] clone with resolved link styles patched into linked spans.
+pub(super) fn resolved_rich_text(
+    content: &RichText,
+    metadata: &StyleMetadata,
+    style: TuiStyle,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Text<'static> {
+    let mut text = content.text().clone();
+    let area = ctx.area();
+    ctx.with_area_inherited_style_and_selector_ancestor(
+        area,
+        style.inherited_values(),
+        metadata.clone(),
+        |ctx| {
+            for link in content.links() {
+                let link_style = resolve_style(link.metadata(), ctx).to_ratatui_style();
+                for position in link.spans() {
+                    if let Some(span) = text
+                        .lines
+                        .get_mut(position.line)
+                        .and_then(|line| line.spans.get_mut(position.span))
+                    {
+                        span.style = span.style.patch(link_style);
+                    }
+                }
+            }
+        },
+    );
+    text
+}
+
+impl RichText {
+    /// Returns the number of actionable links embedded in this text.
+    ///
+    /// # Returns
+    ///
+    /// A [`usize`] count of actionable embedded links.
+    fn focusable_count(&self) -> usize {
+        self.links()
+            .iter()
+            .filter(|link| link.target().is_actionable())
+            .count()
+    }
+
+    /// Returns the focused embedded-link index during flattened traversal.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` — Mutable flattened traversal index.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the focused link index when one is found.
+    fn focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        for link in self.links() {
+            if !link.target().is_actionable() {
+                continue;
+            }
+            let current = *index;
+            *index += 1;
+            if link.metadata().is_focused() {
+                return Some(current);
+            }
+        }
+        None
+    }
+
+    /// Sets embedded-link focus during flattened traversal.
+    ///
+    /// # Arguments
+    ///
+    /// * `target` — Flattened focus index that should receive focus.
+    /// * `index` — Mutable flattened traversal index.
+    fn set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        for link in self.links_mut() {
+            if !link.target().is_actionable() {
+                link.metadata_mut().set_focused(false);
+                link.metadata().clear_scroll_into_view_request();
+                continue;
+            }
+            let focused = *index == target;
+            link.metadata_mut().set_focused(focused);
+            if focused {
+                link.metadata().request_scroll_into_view();
+            } else {
+                link.metadata().clear_scroll_into_view_request();
+            }
+            *index += 1;
+        }
+    }
+
+    /// Opens the focused embedded link, if any.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<AppControl>`] containing the activation result when a link
+    /// is focused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if the focused target cannot be opened.
+    fn activate_focused_link(&self) -> Result<Option<AppControl>> {
+        for link in self.links() {
+            if link.metadata().is_focused() && link.target().is_actionable() {
+                return open_link_target(link.target()).map(Some);
+            }
+        }
+        Ok(None)
+    }
+
+    /// Returns the target of the focused embedded link.
+    fn focused_link_target(&self) -> Option<&LinkTarget> {
+        self.links()
+            .iter()
+            .find(|link| link.metadata().is_focused() && link.target().is_actionable())
+            .map(|link| link.target())
+    }
+
+    /// Returns focused-control metadata for an embedded link.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing [`FocusedControl::Link`] when a link is focused.
+    fn focused_control(&self) -> Option<FocusedControl> {
+        self.links()
+            .iter()
+            .any(|link| link.metadata().is_focused())
+            .then_some(FocusedControl::Link)
+    }
+
+    /// Returns whether a focused embedded link requested scrolling.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether focused-link scrolling is pending.
+    fn focused_link_requested_scroll(&self) -> bool {
+        self.links().iter().any(|link| {
+            link.metadata().is_focused() && link.metadata().scroll_into_view_requested()
+        })
+    }
+
+    /// Returns the wrapped row span of the focused embedded link.
+    ///
+    /// # Arguments
+    ///
+    /// * `width` — Available rich-text width in terminal cells.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the focused link's zero-based vertical span.
+    fn focused_link_span(&self, width: u16) -> Option<VerticalSpan> {
+        if width == 0 {
+            return None;
+        }
+
+        let link = self.links().iter().find(|link| {
+            link.metadata().is_focused() && link.metadata().scroll_into_view_requested()
+        })?;
+        let first = *link.spans().first()?;
+        let last = *link.spans().last()?;
+        let before = rich_text_prefix(self.text(), first, false)?;
+        let through = rich_text_prefix(self.text(), last, true)?;
+        let top = wrapped_text_height(&before, width).saturating_sub(1);
+        let bottom = wrapped_text_height(&through, width).max(top.saturating_add(1));
+
+        Some(VerticalSpan { top, bottom })
+    }
+
+    /// Clears completed embedded-link scroll requests after rendering.
+    fn clear_link_scroll_requests(&self) {
+        for link in self.links() {
+            link.metadata().clear_scroll_into_view_request();
+        }
+    }
+}
+
+/// Copies rich text through one parsed span position.
+///
+/// # Arguments
+///
+/// * `text` — Source rich text containing the positioned span.
+/// * `position` — Logical line and span index where the prefix ends.
+/// * `include` — Whether the positioned span is included in the prefix.
+///
+/// # Returns
+///
+/// An [`Option`] containing a [`Text`] prefix when the position exists.
+fn rich_text_prefix(
+    text: &Text<'static>,
+    position: LinkedSpan,
+    include: bool,
+) -> Option<Text<'static>> {
+    let mut lines = text
+        .lines
+        .iter()
+        .take(position.line)
+        .cloned()
+        .collect::<Vec<_>>();
+    let line = text.lines.get(position.line)?;
+    let span_count = position.span.saturating_add(usize::from(include));
+    lines.push(Line::from(
+        line.spans
+            .iter()
+            .take(span_count)
+            .cloned()
+            .collect::<Vec<_>>(),
+    ));
+    Some(Text::from(lines))
+}
+
+/// Returns the wrapped height of semantic rich text.
+///
+/// # Arguments
+///
+/// * `text` — Rich text to measure.
+/// * `width` — Available terminal width.
+///
+/// # Returns
+///
+/// A [`u32`] row count after Ratatui wrapping.
+fn wrapped_text_height(text: &Text<'static>, width: u16) -> u32 {
+    u32::try_from(
+        Paragraph::new(text.clone())
+            .wrap(Wrap { trim: false })
+            .line_count(width),
+    )
+    .unwrap_or(u32::MAX)
+}
+
 /// Returns the horizontal offset for a semantic heading's content.
 ///
 /// The offset includes one `#` per heading level and one separating space.
@@ -146,12 +390,13 @@ fn heading_level(view: &View) -> u16 {
 /// * `level` — One-based semantic heading level.
 /// * `ctx` — Rendering context containing the target area and stylesheets.
 fn render_heading(
-    content: &Text<'static>,
+    content: &RichText,
     metadata: &StyleMetadata,
     level: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) {
     let style = resolve_style(metadata, ctx);
+    let rendered = resolved_rich_text(content, metadata, style, ctx);
     let area = ctx.area();
     if area.width == 0 || area.height == 0 {
         return;
@@ -175,7 +420,7 @@ fn render_heading(
             ..area
         };
         ctx.with_area(content_area, |ctx| {
-            ctx.render_widget(semantic_paragraph(content, style));
+            ctx.render_widget(semantic_paragraph(&rendered, style));
         });
     } else if area.height > 1 {
         let content_area = Rect {
@@ -184,9 +429,11 @@ fn render_heading(
             ..area
         };
         ctx.with_area(content_area, |ctx| {
-            ctx.render_widget(semantic_paragraph(content, style));
+            ctx.render_widget(semantic_paragraph(&rendered, style));
         });
     }
+    content.clear_link_scroll_requests();
+    metadata.clear_scroll_to_anchor_request();
 }
 
 /// Returns the minimum height required by a Markdown-style semantic heading.
@@ -201,7 +448,7 @@ fn render_heading(
 /// # Returns
 ///
 /// A [`u16`] row count that includes wrapping after the heading marker.
-fn heading_min_height(content: &Text<'static>, style: TuiStyle, level: u16, width: u16) -> u16 {
+fn heading_min_height(content: &RichText, style: TuiStyle, level: u16, width: u16) -> u16 {
     let content_width = width.saturating_sub(heading_content_offset(level));
     if content_width == 0 {
         if width == 0 {
@@ -209,11 +456,11 @@ fn heading_min_height(content: &Text<'static>, style: TuiStyle, level: u16, widt
         }
 
         return 1u16.saturating_add(line_count_height(
-            semantic_paragraph(content, style).line_count(width),
+            semantic_paragraph(content.text(), style).line_count(width),
         ));
     }
 
-    line_count_height(semantic_paragraph(content, style).line_count(content_width)).max(1)
+    line_count_height(semantic_paragraph(content.text(), style).line_count(content_width)).max(1)
 }
 
 /// Wraps retained code lines for the available inner width.
@@ -550,6 +797,255 @@ fn image_render_area(area: Rect, image_size: Option<TuiSize>) -> Rect {
 }
 
 impl View {
+    /// Returns the target of the focused link in this static view tree.
+    pub(crate) fn focused_link_target(&self) -> Option<&LinkTarget> {
+        match self {
+            Self::Link {
+                target, metadata, ..
+            } if metadata.is_focused() && target.is_actionable() => Some(target),
+            Self::H1 { content, .. }
+            | Self::H2 { content, .. }
+            | Self::H3 { content, .. }
+            | Self::H4 { content, .. }
+            | Self::H5 { content, .. }
+            | Self::H6 { content, .. }
+            | Self::Paragraph { content, .. }
+            | Self::TableCell { content, .. } => content.focused_link_target(),
+            Self::Block { child, .. } => child.focused_link_target(),
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. }
+            | Self::OrderedList {
+                items: children, ..
+            }
+            | Self::UnorderedList {
+                items: children, ..
+            }
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children.iter().find_map(Self::focused_link_target),
+            Self::Markdown { state } => state.document().focused_link_target(),
+            Self::Text { .. }
+            | Self::CodeBlock { .. }
+            | Self::Button { .. }
+            | Self::Link { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. }
+            | Self::Dynamic(_)
+            | Self::Component(_) => None,
+        }
+    }
+
+    /// Requests top-aligned scrolling to the first heading with `id`.
+    pub(crate) fn request_scroll_to_id(&mut self, id: &str) -> bool {
+        match self {
+            Self::H1 { metadata, .. }
+            | Self::H2 { metadata, .. }
+            | Self::H3 { metadata, .. }
+            | Self::H4 { metadata, .. }
+            | Self::H5 { metadata, .. }
+            | Self::H6 { metadata, .. }
+                if metadata.id() == Some(id) =>
+            {
+                metadata.request_scroll_to_anchor();
+                true
+            }
+            Self::Block { child, .. } => child.request_scroll_to_id(id),
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. }
+            | Self::OrderedList {
+                items: children, ..
+            }
+            | Self::UnorderedList {
+                items: children, ..
+            }
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children
+                .iter_mut()
+                .any(|child| child.request_scroll_to_id(id)),
+            Self::Markdown { state } => state.document_mut().request_scroll_to_id(id),
+            Self::Dynamic(child) => child.with_view_mut(|child| child.request_scroll_to_id(id)),
+            Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
+            | Self::Link { .. }
+            | Self::CodeBlock { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::TableCell { .. }
+            | Self::ProgressBar { .. }
+            | Self::Component(_) => false,
+        }
+    }
+
+    /// Returns whether this tree contains a pending heading-anchor request.
+    fn has_scroll_to_anchor_request(&self) -> bool {
+        match self {
+            Self::H1 { metadata, .. }
+            | Self::H2 { metadata, .. }
+            | Self::H3 { metadata, .. }
+            | Self::H4 { metadata, .. }
+            | Self::H5 { metadata, .. }
+            | Self::H6 { metadata, .. } => metadata.scroll_to_anchor_requested(),
+            Self::Block { child, .. } => child.has_scroll_to_anchor_request(),
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. }
+            | Self::OrderedList {
+                items: children, ..
+            }
+            | Self::UnorderedList {
+                items: children, ..
+            }
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children.iter().any(Self::has_scroll_to_anchor_request),
+            Self::Markdown { state } => state.document().has_scroll_to_anchor_request(),
+            Self::Dynamic(child) => child.with_view(Self::has_scroll_to_anchor_request),
+            Self::Text { .. }
+            | Self::Paragraph { .. }
+            | Self::Link { .. }
+            | Self::CodeBlock { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::TableCell { .. }
+            | Self::ProgressBar { .. }
+            | Self::Component(_) => false,
+        }
+    }
+
+    /// Lets the first file-backed boundary activate its focused Markdown link.
+    fn navigate_focused_markdown_link(&mut self) -> bool {
+        match self {
+            Self::Markdown { state } => state.navigate_focused_link(),
+            Self::Block { child, .. } => child.navigate_focused_markdown_link(),
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. }
+            | Self::OrderedList {
+                items: children, ..
+            }
+            | Self::UnorderedList {
+                items: children, ..
+            }
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children
+                .iter_mut()
+                .any(Self::navigate_focused_markdown_link),
+            Self::Dynamic(child) => child.with_view_mut(Self::navigate_focused_markdown_link),
+            Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
+            | Self::Link { .. }
+            | Self::CodeBlock { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::TableCell { .. }
+            | Self::ProgressBar { .. }
+            | Self::Component(_) => false,
+        }
+    }
+
+    /// Moves the first eligible Markdown boundary through cached history.
+    fn navigate_markdown_history(&mut self, back: bool) -> bool {
+        match self {
+            Self::Markdown { state } => {
+                let moved = if back {
+                    state.go_back()
+                } else {
+                    state.go_forward()
+                };
+                moved || state.document_mut().navigate_markdown_history(back)
+            }
+            Self::Block { child, .. } => child.navigate_markdown_history(back),
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. }
+            | Self::OrderedList {
+                items: children, ..
+            }
+            | Self::UnorderedList {
+                items: children, ..
+            }
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children
+                .iter_mut()
+                .any(|child| child.navigate_markdown_history(back)),
+            Self::Dynamic(child) => {
+                child.with_view_mut(|child| child.navigate_markdown_history(back))
+            }
+            Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
+            | Self::Link { .. }
+            | Self::CodeBlock { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::TableCell { .. }
+            | Self::ProgressBar { .. }
+            | Self::Component(_) => false,
+        }
+    }
+
     /// Renders this view into a context.
     ///
     /// # Arguments
@@ -594,7 +1090,19 @@ impl View {
             }
             Self::Paragraph { content, metadata } => {
                 let style = resolve_style(metadata, ctx);
-                ctx.render_widget(semantic_paragraph(content, style));
+                let rendered = resolved_rich_text(content, metadata, style, ctx);
+                ctx.render_widget(semantic_paragraph(&rendered, style));
+                for link in content.links() {
+                    link.metadata().clear_scroll_into_view_request();
+                }
+                Ok(())
+            }
+            Self::Link {
+                label, metadata, ..
+            } => {
+                let style = resolve_style(metadata, ctx);
+                ctx.render_widget(semantic_paragraph(label.text(), style));
+                metadata.clear_scroll_into_view_request();
                 Ok(())
             }
             Self::CodeBlock {
@@ -832,6 +1340,7 @@ impl View {
                 metadata.clear_scroll_into_view_request();
                 Ok(())
             }
+            Self::Markdown { state } => state.document().render(ctx),
             Self::Dynamic(child) => child.with_view(|child| child.render(ctx)),
             Self::Component(component) => component.render(ctx),
         }
@@ -954,7 +1463,7 @@ impl View {
     /// Handles built-in key behavior for this view tree.
     #[doc(hidden)]
     pub fn __handle_default_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        Ok(self.handle_default_key_event_ref(&key))
+        self.handle_default_key_event_ref(&key)
     }
 
     /// Emits an expired pending insert-mode key at the provided time.
@@ -971,6 +1480,7 @@ impl View {
                 items: children, ..
             }
             | Self::ListItem { children, .. } => flush_child_pending_input(children, now),
+            Self::Markdown { state } => state.document_mut().flush_pending_input_at(now),
             Self::Dynamic(child) => child.with_view_mut(|child| child.flush_pending_input_at(now)),
             Self::Component(component) => component.flush_pending_input(),
             Self::Input {
@@ -993,6 +1503,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. } => None,
             Self::Image { .. }
@@ -1035,9 +1546,18 @@ impl View {
         focused_control_span_for_view(self, ctx).map(VerticalSpan::into_tuple)
     }
 
-    /// Activates the focused button if this view tree contains one.
+    /// Activates the focused button or link if this view tree contains one.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<AppControl>`] containing the focused control's activation
+    /// result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if a focused link cannot be opened.
     #[doc(hidden)]
-    pub fn __activate_focused_button(&self) -> Option<AppControl> {
+    pub fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
         self.activate_focused_button()
     }
 
@@ -1134,6 +1654,7 @@ impl View {
                 items: children, ..
             }
             | Self::ListItem { children, .. } => handle_child_key_events(children, key),
+            Self::Markdown { state } => state.document_mut().dispatch_key_event_ref(key),
             Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_key_event_ref(key)),
             Self::Component(component) => component.dispatch_key_event(*key),
             Self::Text { .. }
@@ -1144,6 +1665,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
@@ -1167,38 +1689,55 @@ impl View {
     /// # Returns
     ///
     /// A [`KeyControl`] value indicating whether the key was handled.
-    fn handle_default_key_event_ref(&mut self, key: &KeyEvent) -> KeyControl {
+    fn handle_default_key_event_ref(&mut self, key: &KeyEvent) -> Result<KeyControl> {
         if key.kind != KeyEventKind::Press {
-            return KeyControl::Pass;
+            return Ok(KeyControl::Pass);
         }
 
         if let Some(control) = self.handle_form_key_ref(key) {
             self.clear_scroll_to_top_key_pending();
-            return control;
+            return Ok(control);
         }
 
         if let Some(control) = self.handle_focused_input_key_ref(key) {
             self.clear_scroll_to_top_key_pending();
-            return control;
+            return Ok(control);
+        }
+
+        let history_direction = match key.code {
+            KeyCode::Char('H') => Some(true),
+            KeyCode::Char('L') => Some(false),
+            KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::SHIFT) => Some(true),
+            KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::SHIFT) => Some(false),
+            _ => None,
+        };
+        if let Some(back) = history_direction
+            && self.navigate_markdown_history(back)
+        {
+            self.clear_scroll_to_top_key_pending();
+            return Ok(KeyControl::Handled);
         }
 
         match key.code {
             KeyCode::Down | KeyCode::Char('j') => {
-                self.handle_scroll_key(|view| view.scroll_first_overflowing(1))
+                Ok(self.handle_scroll_key(|view| view.scroll_first_overflowing(1)))
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                self.handle_scroll_key(|view| view.scroll_first_overflowing(-1))
+                Ok(self.handle_scroll_key(|view| view.scroll_first_overflowing(-1)))
             }
-            KeyCode::PageDown => self.handle_scroll_key(|view| view.scroll_first_overflowing(5)),
-            KeyCode::PageUp => self.handle_scroll_key(|view| view.scroll_first_overflowing(-5)),
-            KeyCode::Char('g') => self.handle_scroll_to_top_key(),
-            KeyCode::Char('G') => self
-                .handle_scroll_key(|view| view.scroll_first_overflowing_to(ScrollBoundary::Bottom)),
+            KeyCode::PageDown => {
+                Ok(self.handle_scroll_key(|view| view.scroll_first_overflowing(5)))
+            }
+            KeyCode::PageUp => Ok(self.handle_scroll_key(|view| view.scroll_first_overflowing(-5))),
+            KeyCode::Char('g') => Ok(self.handle_scroll_to_top_key()),
+            KeyCode::Char('G') => Ok(self.handle_scroll_key(|view| {
+                view.scroll_first_overflowing_to(ScrollBoundary::Bottom)
+            })),
             KeyCode::Tab | KeyCode::BackTab => {
                 self.clear_scroll_to_top_key_pending();
                 let count = self.focusable_count();
                 if count == 0 {
-                    return KeyControl::Pass;
+                    return Ok(KeyControl::Pass);
                 }
 
                 let direction = match key.code {
@@ -1207,16 +1746,20 @@ impl View {
                     _ => unreachable!("only tab keys are matched"),
                 };
                 self.move_focus(direction, count);
-                KeyControl::Handled
+                Ok(KeyControl::Handled)
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
                 self.clear_scroll_to_top_key_pending();
-                self.activate_focused_button()
-                    .map_or(KeyControl::Pass, KeyControl::from)
+                if self.navigate_focused_markdown_link() {
+                    return Ok(KeyControl::Handled);
+                }
+                Ok(self
+                    .activate_focused_button()?
+                    .map_or(KeyControl::Pass, KeyControl::from))
             }
             _ => {
                 self.clear_scroll_to_top_key_pending();
-                KeyControl::Pass
+                Ok(KeyControl::Pass)
             }
         }
     }
@@ -1270,6 +1813,7 @@ impl View {
             Self::ListItem { children, .. } => children
                 .iter_mut()
                 .any(|child| child.scroll_first_overflowing(delta)),
+            Self::Markdown { state } => state.document_mut().scroll_first_overflowing(delta),
             Self::Dynamic(child) => {
                 child.with_view_mut(|child| child.scroll_first_overflowing(delta))
             }
@@ -1282,6 +1826,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
@@ -1331,6 +1876,7 @@ impl View {
                 ScrollBoundary::Top => component.scroll_first_overflowing_to_top(),
                 ScrollBoundary::Bottom => component.scroll_first_overflowing_to_bottom(),
             },
+            Self::Markdown { state } => state.document_mut().scroll_first_overflowing_to(boundary),
             Self::Dynamic(child) => {
                 child.with_view_mut(|child| child.scroll_first_overflowing_to(boundary))
             }
@@ -1342,6 +1888,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
@@ -1374,6 +1921,7 @@ impl View {
             Self::ListItem { children, .. } => {
                 children.iter().any(Self::has_overflowing_scroll_target)
             }
+            Self::Markdown { state } => state.document().has_overflowing_scroll_target(),
             Self::Dynamic(child) => child.with_view(Self::has_overflowing_scroll_target),
             Self::Component(component) => component.has_overflowing_scroll_target(),
             Self::Text { .. }
@@ -1384,6 +1932,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
@@ -1410,6 +1959,7 @@ impl View {
             | Self::H5 { metadata, .. }
             | Self::H6 { metadata, .. }
             | Self::Paragraph { metadata, .. }
+            | Self::Link { metadata, .. }
             | Self::CodeBlock { metadata, .. }
             | Self::OrderedList { metadata, .. }
             | Self::UnorderedList { metadata, .. }
@@ -1427,6 +1977,7 @@ impl View {
             | Self::TableRow { metadata, .. }
             | Self::TableCell { metadata, .. }
             | Self::ProgressBar { metadata, .. } => Some(metadata),
+            Self::Markdown { state } => state.document().key_sequence_metadata(),
             Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
@@ -1497,6 +2048,7 @@ impl View {
             | Self::ListItem { children, .. } => children
                 .iter_mut()
                 .find_map(|child| child.handle_focused_input_key_ref(key)),
+            Self::Markdown { state } => state.document_mut().handle_focused_input_key_ref(key),
             Self::Dynamic(child) => {
                 child.with_view_mut(|child| child.handle_focused_input_key_ref(key))
             }
@@ -1509,6 +2061,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
@@ -1532,6 +2085,15 @@ impl View {
     fn focused_control(&self) -> Option<FocusedControl> {
         match self {
             Self::Button { metadata, .. } if metadata.is_focused() => Some(FocusedControl::Button),
+            Self::Link { metadata, .. } if metadata.is_focused() => Some(FocusedControl::Link),
+            Self::H1 { content, .. }
+            | Self::H2 { content, .. }
+            | Self::H3 { content, .. }
+            | Self::H4 { content, .. }
+            | Self::H5 { content, .. }
+            | Self::H6 { content, .. }
+            | Self::Paragraph { content, .. }
+            | Self::TableCell { content, .. } => content.focused_control(),
             Self::Input {
                 metadata,
                 editable_state,
@@ -1560,27 +2122,25 @@ impl View {
             | Self::UnorderedList {
                 items: children, ..
             }
-            | Self::ListItem { children, .. } => children.iter().find_map(Self::focused_control),
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children.iter().find_map(Self::focused_control),
+            Self::Markdown { state } => state.document().focused_control(),
             Self::Dynamic(child) => child.with_view(Self::focused_control),
             Self::Component(component) => component.focused_control(),
             Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
+            | Self::Link { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => None,
         }
     }
@@ -1625,6 +2185,7 @@ impl View {
             | Self::ListItem { children, .. } => children
                 .iter_mut()
                 .find_map(|child| child.handle_form_key_ref(key)),
+            Self::Markdown { state } => state.document_mut().handle_form_key_ref(key),
             Self::Dynamic(child) => child.with_view_mut(|child| child.handle_form_key_ref(key)),
             Self::Component(component) => component.handle_form_key(*key),
             Self::Text { .. }
@@ -1635,6 +2196,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
@@ -1657,6 +2219,15 @@ impl View {
     fn focusable_count(&self) -> usize {
         match self {
             Self::Button { .. } | Self::Input { .. } | Self::TextArea { .. } => 1,
+            Self::Link { target, .. } => usize::from(target.is_actionable()),
+            Self::H1 { content, .. }
+            | Self::H2 { content, .. }
+            | Self::H3 { content, .. }
+            | Self::H4 { content, .. }
+            | Self::H5 { content, .. }
+            | Self::H6 { content, .. }
+            | Self::Paragraph { content, .. }
+            | Self::TableCell { content, .. } => content.focusable_count(),
             Self::Block { child, .. } => child.focusable_count(),
             Self::Row { children, .. }
             | Self::Column { children, .. }
@@ -1667,24 +2238,21 @@ impl View {
             | Self::UnorderedList {
                 items: children, ..
             }
-            | Self::ListItem { children, .. } => children.iter().map(Self::focusable_count).sum(),
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children.iter().map(Self::focusable_count).sum(),
+            Self::Markdown { state } => state.document().focusable_count(),
             Self::Dynamic(child) => child.with_view(Self::focusable_count),
             Self::Component(component) => component.focusable_count(),
             Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
             | Self::CodeBlock { .. }
             | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => 0,
         }
     }
@@ -1739,6 +2307,21 @@ impl View {
                 *index += 1;
                 metadata.is_focused().then_some(current)
             }
+            Self::Link {
+                target, metadata, ..
+            } if target.is_actionable() => {
+                let current = *index;
+                *index += 1;
+                metadata.is_focused().then_some(current)
+            }
+            Self::H1 { content, .. }
+            | Self::H2 { content, .. }
+            | Self::H3 { content, .. }
+            | Self::H4 { content, .. }
+            | Self::H5 { content, .. }
+            | Self::H6 { content, .. }
+            | Self::Paragraph { content, .. }
+            | Self::TableCell { content, .. } => content.focused_index_inner(index),
             Self::Block { child, .. } => child.focused_index_inner(index),
             Self::Row { children, .. }
             | Self::Column { children, .. }
@@ -1749,26 +2332,24 @@ impl View {
             | Self::UnorderedList {
                 items: children, ..
             }
-            | Self::ListItem { children, .. } => children
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children
                 .iter()
                 .find_map(|child| child.focused_index_inner(index)),
+            Self::Markdown { state } => state.document().focused_index_inner(index),
             Self::Dynamic(child) => child.with_view(|child| child.focused_index_inner(index)),
             Self::Component(component) => component.focused_index_inner(index),
             Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => None,
         }
     }
@@ -1801,6 +2382,35 @@ impl View {
                 }
                 *index += 1;
             }
+            Self::Link {
+                target: link_target,
+                metadata,
+                ..
+            } => {
+                if link_target.is_actionable() {
+                    let focused = *index == target;
+                    metadata.set_focused(focused);
+                    if focused {
+                        metadata.request_scroll_into_view();
+                    } else {
+                        metadata.clear_scroll_into_view_request();
+                    }
+                    *index += 1;
+                } else {
+                    metadata.set_focused(false);
+                    metadata.clear_scroll_into_view_request();
+                }
+            }
+            Self::H1 { content, .. }
+            | Self::H2 { content, .. }
+            | Self::H3 { content, .. }
+            | Self::H4 { content, .. }
+            | Self::H5 { content, .. }
+            | Self::H6 { content, .. }
+            | Self::Paragraph { content, .. }
+            | Self::TableCell { content, .. } => {
+                content.set_focus_by_index_inner(target, index);
+            }
             Self::Input {
                 metadata,
                 editable_state,
@@ -1831,48 +2441,64 @@ impl View {
             | Self::UnorderedList {
                 items: children, ..
             }
-            | Self::ListItem { children, .. } => {
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => {
                 for child in children {
                     child.set_focus_by_index_inner(target, index);
                 }
+            }
+            Self::Markdown { state } => {
+                state.document_mut().set_focus_by_index_inner(target, index)
             }
             Self::Dynamic(child) => {
                 child.with_view_mut(|child| child.set_focus_by_index_inner(target, index));
             }
             Self::Component(component) => component.set_focus_by_index_inner(target, index),
             Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
             | Self::CodeBlock { .. }
             | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
             | Self::ProgressBar { .. } => {}
         }
     }
 
-    /// Activates the focused button if this view tree contains one.
+    /// Activates the focused button or link if this view tree contains one.
     ///
     /// # Returns
     ///
-    /// An [`Option<AppControl>`] containing the focused button action result.
-    fn activate_focused_button(&self) -> Option<AppControl> {
+    /// An [`Option<AppControl>`] containing the focused control action result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if a focused link cannot be opened.
+    fn activate_focused_button(&self) -> Result<Option<AppControl>> {
         match self {
             Self::Button {
                 metadata, on_press, ..
-            } if metadata.is_focused() => Some(
+            } if metadata.is_focused() => Ok(Some(
                 on_press
                     .as_ref()
                     .map_or(AppControl::Continue, |action| action()),
-            ),
+            )),
+            Self::Link {
+                target, metadata, ..
+            } if metadata.is_focused() && target.is_actionable() => {
+                open_link_target(target).map(Some)
+            }
+            Self::H1 { content, .. }
+            | Self::H2 { content, .. }
+            | Self::H3 { content, .. }
+            | Self::H4 { content, .. }
+            | Self::H5 { content, .. }
+            | Self::H6 { content, .. }
+            | Self::Paragraph { content, .. }
+            | Self::TableCell { content, .. } => content.activate_focused_link(),
             Self::Block { child, .. } => child.activate_focused_button(),
             Self::Row { children, .. }
             | Self::Column { children, .. }
@@ -1883,30 +2509,33 @@ impl View {
             | Self::UnorderedList {
                 items: children, ..
             }
-            | Self::ListItem { children, .. } => {
-                children.iter().find_map(Self::activate_focused_button)
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
             }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => {
+                for child in children {
+                    if let Some(control) = child.activate_focused_button()? {
+                        return Ok(Some(control));
+                    }
+                }
+                Ok(None)
+            }
+            Self::Markdown { state } => state.document().activate_focused_button(),
             Self::Dynamic(child) => child.with_view(Self::activate_focused_button),
             Self::Component(component) => component.activate_focused_button(),
             Self::Text { .. }
-            | Self::H1 { .. }
-            | Self::H2 { .. }
-            | Self::H3 { .. }
-            | Self::H4 { .. }
-            | Self::H5 { .. }
-            | Self::H6 { .. }
-            | Self::Paragraph { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
+            | Self::Link { .. }
             | Self::Input { .. }
             | Self::TextArea { .. }
             | Self::Image { .. }
-            | Self::Table { .. }
-            | Self::TableHead { .. }
-            | Self::TableBody { .. }
-            | Self::TableRow { .. }
-            | Self::TableCell { .. }
-            | Self::ProgressBar { .. } => None,
+            | Self::ProgressBar { .. } => Ok(None),
         }
     }
 
@@ -1937,6 +2566,7 @@ impl View {
                 items: children, ..
             }
             | Self::ListItem { children, .. } => handle_child_events(children, event),
+            Self::Markdown { state } => state.document_mut().dispatch_event_ref(event),
             Self::Dynamic(child) => child.with_view_mut(|child| child.dispatch_event_ref(event)),
             Self::Component(component) => component.handle_event(event.clone()),
             Self::Text { .. }
@@ -1947,6 +2577,7 @@ impl View {
             | Self::H5 { .. }
             | Self::H6 { .. }
             | Self::Paragraph { .. }
+            | Self::Link { .. }
             | Self::CodeBlock { .. }
             | Self::Button { .. }
             | Self::Input { .. }
@@ -2053,9 +2684,18 @@ impl Component for View {
         View::__focused_button_span(self, ctx)
     }
 
-    /// Activates the focused button in the view tree, if any.
+    /// Activates the focused button or link in the view tree, if any.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<AppControl>`] containing the focused control's activation
+    /// result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::LinkOpen`] if a focused link cannot be opened.
     #[doc(hidden)]
-    fn __activate_focused_button(&self) -> Option<AppControl> {
+    fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
         View::__activate_focused_button(self)
     }
 
@@ -4559,10 +5199,46 @@ fn scroll_span_into_view(
 /// Returns the focused control's vertical span within a view's render area.
 fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Option<VerticalSpan> {
     match view {
-        View::Button { metadata, .. } | View::Input { metadata, .. }
+        View::Button { metadata, .. }
+        | View::Link { metadata, .. }
+        | View::Input { metadata, .. }
             if metadata.is_focused() && metadata.scroll_into_view_requested() =>
         {
             Some(VerticalSpan::from_height(ctx.area().height))
+        }
+        View::H1 { metadata, .. }
+        | View::H2 { metadata, .. }
+        | View::H3 { metadata, .. }
+        | View::H4 { metadata, .. }
+        | View::H5 { metadata, .. }
+        | View::H6 { metadata, .. }
+            if metadata.scroll_to_anchor_requested() =>
+        {
+            Some(VerticalSpan::from_height(ctx.area().height))
+        }
+        View::H1 { content, .. }
+        | View::H2 { content, .. }
+        | View::H3 { content, .. }
+        | View::H4 { content, .. }
+        | View::H5 { content, .. }
+        | View::H6 { content, .. }
+            if content.focused_link_requested_scroll() =>
+        {
+            let area = ctx.area();
+            let offset = heading_content_offset(heading_level(view)).min(area.width);
+            let content_width = area.width.saturating_sub(offset);
+            if content_width > 0 {
+                content.focused_link_span(content_width)
+            } else {
+                content
+                    .focused_link_span(area.width)
+                    .map(|span| span.offset_by(1))
+            }
+        }
+        View::Paragraph { content, .. } | View::TableCell { content, .. }
+            if content.focused_link_requested_scroll() =>
+        {
+            content.focused_link_span(ctx.area().width)
         }
         View::TextArea {
             value,
@@ -4624,6 +5300,10 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
         View::ListItem { children, metadata } => {
             focused_control_span_for_layout_view(children, metadata, LayoutDirection::Column, ctx)
         }
+        View::Table { sections, metadata } => {
+            focused_link_span_for_table_view(sections, metadata, ctx)
+        }
+        View::Markdown { state } => focused_control_span_for_view(state.document(), ctx),
         View::Dynamic(child) => child.with_view(|child| focused_control_span_for_view(child, ctx)),
         View::Component(component) => component
             .focused_control_span(ctx)
@@ -4638,10 +5318,10 @@ fn focused_control_span_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> Op
         | View::Paragraph { .. }
         | View::CodeBlock { .. }
         | View::Button { .. }
+        | View::Link { .. }
         | View::Input { .. }
         | View::TextArea { .. }
         | View::Image { .. }
-        | View::Table { .. }
         | View::TableHead { .. }
         | View::TableBody { .. }
         | View::TableRow { .. }
@@ -5312,6 +5992,7 @@ fn try_render_overflowing_column_children(
         u16::try_from(content_height.saturating_sub(u32::from(area_height))).unwrap_or(u16::MAX);
     parent_metadata.set_max_scroll_offset(max_scroll_offset);
 
+    let scroll_to_anchor = children.iter().any(View::has_scroll_to_anchor_request);
     if let Some(span) = ctx.with_area(content_area, |ctx| {
         focused_control_span_in_column_children(
             children,
@@ -5321,7 +6002,12 @@ fn try_render_overflowing_column_children(
             ctx,
         )
     }) {
-        scroll_span_into_view(parent_metadata, span, area_height, max_scroll_offset);
+        if scroll_to_anchor {
+            let top = span.top.min(u32::from(max_scroll_offset));
+            parent_metadata.set_scroll_offset(u16::try_from(top).unwrap_or(u16::MAX));
+        } else {
+            scroll_span_into_view(parent_metadata, span, area_height, max_scroll_offset);
+        }
     }
 
     let row_offset = parent_metadata.scroll_offset().min(max_scroll_offset);
@@ -5527,7 +6213,15 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         }
         View::Paragraph { content, metadata } => {
             let style = resolve_style(metadata, ctx);
-            line_count_height(semantic_paragraph(content, style).line_count(ctx.area().width))
+            line_count_height(
+                semantic_paragraph(content.text(), style).line_count(ctx.area().width),
+            )
+        }
+        View::Link {
+            label, metadata, ..
+        } => {
+            let style = resolve_style(metadata, ctx);
+            line_count_height(semantic_paragraph(label.text(), style).line_count(ctx.area().width))
         }
         View::CodeBlock {
             line_numbers,
@@ -5556,6 +6250,7 @@ fn min_height_for_view(view: &View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         | View::TableBody { .. }
         | View::TableRow { .. }
         | View::TableCell { .. } => 0,
+        View::Markdown { state } => min_height_for_view(state.document(), ctx),
         View::Dynamic(child) => child.with_view(|child| min_height_for_view(child, ctx)),
         View::Button { metadata, .. } => {
             let style = resolve_style(metadata, ctx);

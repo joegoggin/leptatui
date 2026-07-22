@@ -1,7 +1,9 @@
 //! Full-screen local Markdown reader.
 //!
 //! This binary loads one UTF-8 Markdown file before terminal startup and
-//! renders it as a responsive, syntax-highlighted semantic document.
+//! renders it as a responsive, syntax-highlighted semantic document. Local
+//! Markdown links and heading fragments remain inside the reader with cached
+//! back/forward history.
 
 use std::{env, error::Error, ffi::OsString, io, path::PathBuf};
 
@@ -41,6 +43,7 @@ fn MarkdownReader(document: View) -> View {
         Table => { fg: Color::White }
         TableHead => { fg: Color::LightCyan }
         CodeBlock => { fg: Color::LightBlue }
+        Link:focus => { fg: Color::Black, bg: Color::LightCyan }
 
         @media (max-width: 60) {
             .reader-shell => {
@@ -94,7 +97,8 @@ fn markdown_path(args: impl IntoIterator<Item = OsString>) -> io::Result<PathBuf
 /// # Errors
 ///
 /// Returns an error if command-line validation, terminal setup, rendering,
-/// input, or cleanup fails. Markdown loading failures render in the reader.
+/// input, external link activation, or cleanup fails. Markdown loading
+/// failures render in the reader and remain reachable through page history.
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn Error>> {
     let path = markdown_path(env::args_os())?;

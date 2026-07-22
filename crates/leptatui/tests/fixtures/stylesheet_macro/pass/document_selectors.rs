@@ -12,6 +12,7 @@ fn main() {
         H5 => { fg: Color::White }
         H6 => { fg: Color::White }
         Paragraph => { fg: Color::White }
+        Link => { fg: Color::White }
         CodeBlock => { fg: Color::White }
         OrderedList => { fg: Color::White }
         UnorderedList => { fg: Color::White }
@@ -31,6 +32,7 @@ fn main() {
         ViewType::H5,
         ViewType::H6,
         ViewType::Paragraph,
+        ViewType::Link,
         ViewType::CodeBlock,
         ViewType::OrderedList,
         ViewType::UnorderedList,

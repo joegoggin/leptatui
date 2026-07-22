@@ -226,6 +226,7 @@ impl Selector {
             "H5" => Ok(quote! { #leptatui::ViewType::H5 }),
             "H6" => Ok(quote! { #leptatui::ViewType::H6 }),
             "Paragraph" => Ok(quote! { #leptatui::ViewType::Paragraph }),
+            "Link" => Ok(quote! { #leptatui::ViewType::Link }),
             "CodeBlock" => Ok(quote! { #leptatui::ViewType::CodeBlock }),
             "OrderedList" => Ok(quote! { #leptatui::ViewType::OrderedList }),
             "UnorderedList" => Ok(quote! { #leptatui::ViewType::UnorderedList }),

@@ -47,8 +47,9 @@ cargo run --example standard_library_showcase
 ```
 
 The showcase combines controlled `Input` and `TextArea` fields, `Form`
-submit/cancel behavior, supported mini-Vim editing, image fallback text, and a
-progress bar in one app. Use Tab and Shift+Tab to move focus. Press `i`, `a`,
+submit/cancel behavior, a standalone `Link`, supported mini-Vim editing, image
+fallback text, and a progress bar in one app. Use Tab and Shift+Tab to move
+focus. Press Enter or Space to activate links and buttons. Press `i`, `a`,
 `I`, or `A` to enter insert mode; Esc or `jk` returns to normal mode; `v` and
 `V` select text; `x`, `d`, `y`, `p`, `u`, and Ctrl+R edit in normal or visual
 mode. Use Enter to submit inputs, Ctrl+Enter to submit text areas, activate
@@ -149,9 +150,9 @@ Pass a path to read any local UTF-8 Markdown file instead:
 cargo run --example markdown_reader -- README.md
 ```
 
-The bundled fixture demonstrates headings, inline formatting, nested lists,
-aligned tables, readable fallback blocks, and known- and unknown-language code
-fences:
+The bundled fixture demonstrates headings, inline formatting, navigable links,
+nested lists, aligned tables, readable fallback blocks, and known- and
+unknown-language code fences:
 
 ```sh
 cargo run --example markdown_reader -- crates/leptatui/examples/assets/markdown_showcase.md
@@ -160,7 +161,11 @@ cargo run --example markdown_reader -- crates/leptatui/examples/assets/markdown_
 The reader constructs its document from `<Markdown src={path} />` before
 terminal startup. Unreadable paths and invalid UTF-8 open the reader with a
 path-aware fallback paragraph. Scroll with the arrow keys or `j`/`k`, Page Up
-and Page Down, `gg`, or `G`. Press `q` to quit.
+and Page Down, `gg`, or `G`. Use Tab and Shift+Tab to focus links, then Enter
+or Space to open the focused target. Local Markdown files and heading fragments
+open inside the reader; press Shift+H and Shift+L to move backward and forward
+through page history. URLs and other local files use the system handler. Press
+`q` to quit.
 
 Use `markdown` and `markdown_with_options` when the source is already in
 memory:
@@ -194,8 +199,9 @@ let tagged_file = view! {
 ```
 
 Markdown support targets CommonMark plus tables. Optional GFM extensions such
-as task lists, strikethrough, and footnotes are deferred. Links remain readable
-but are not interactive. Images render as descriptive text, and neither local
+as task lists, strikethrough, and footnotes are deferred. Markdown links retain
+their labels and are keyboard navigable. Local targets resolve relative to the
+source file's directory. Images render as descriptive text, and neither local
 nor remote image targets are fetched.
 
 ## Theme Switcher

@@ -1,0 +1,5 @@
+error: Link expects exactly one href attribute
+ --> tests/fixtures/view_macro/fail/link_duplicate_href.rs:8:15
+  |
+8 |         <Link href="one.md" href="two.md">"Guide"</Link>
+  |               ^^^^

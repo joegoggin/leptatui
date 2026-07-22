@@ -5,15 +5,14 @@
 
 use std::{fmt, path::PathBuf, rc::Rc};
 
-use ratatui::text::Text;
-
 use super::{
     code_block::{SyntaxTheme, highlighted_source_lines},
     component_view::ComponentView,
     dynamic::DynamicView,
+    link::{LinkTarget, RichText},
     metadata::{EditableState, StyleMetadata, ViewType},
 };
-use crate::app::AppControl;
+use crate::{app::AppControl, markdown::MarkdownView};
 
 /// Horizontal alignment applied to wrapped table-cell content.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -117,50 +116,59 @@ pub enum View {
     /// First-level semantic heading content.
     H1 {
         /// Rich text content to render.
-        content: Text<'static>,
+        content: RichText,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Second-level semantic heading content.
     H2 {
         /// Rich text content to render.
-        content: Text<'static>,
+        content: RichText,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Third-level semantic heading content.
     H3 {
         /// Rich text content to render.
-        content: Text<'static>,
+        content: RichText,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Fourth-level semantic heading content.
     H4 {
         /// Rich text content to render.
-        content: Text<'static>,
+        content: RichText,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Fifth-level semantic heading content.
     H5 {
         /// Rich text content to render.
-        content: Text<'static>,
+        content: RichText,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Sixth-level semantic heading content.
     H6 {
         /// Rich text content to render.
-        content: Text<'static>,
+        content: RichText,
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
     /// Semantic paragraph content.
     Paragraph {
         /// Rich text content to render.
-        content: Text<'static>,
+        content: RichText,
         /// Selector metadata for matching this view.
+        metadata: StyleMetadata,
+    },
+    /// Focusable rich-text link opened by the operating system.
+    Link {
+        /// Rich text label displayed for the link.
+        label: RichText,
+        /// URL, filesystem path, in-app Markdown path, or inactive fragment.
+        target: LinkTarget,
+        /// Selector metadata for matching and focusing this view.
         metadata: StyleMetadata,
     },
     /// Bordered source code with retained syntax-highlighted logical lines.
@@ -232,7 +240,7 @@ pub enum View {
     /// Semantic rich-text table cell.
     TableCell {
         /// Rich text content rendered inside the cell.
-        content: Text<'static>,
+        content: RichText,
         /// Horizontal alignment for each wrapped content line.
         alignment: CellAlignment,
         /// Selector metadata for matching this view.
@@ -316,6 +324,11 @@ pub enum View {
         /// Selector metadata for matching this view.
         metadata: StyleMetadata,
     },
+    /// Stateful file-backed Markdown document boundary.
+    Markdown {
+        /// Current page and cached navigation history.
+        state: MarkdownView,
+    },
     /// Child view produced when the tree is traversed.
     Dynamic(DynamicView),
     /// Child component preserved as a tree boundary.
@@ -340,6 +353,7 @@ impl View {
             | Self::H5 { metadata, .. }
             | Self::H6 { metadata, .. }
             | Self::Paragraph { metadata, .. }
+            | Self::Link { metadata, .. }
             | Self::CodeBlock { metadata, .. }
             | Self::OrderedList { metadata, .. }
             | Self::UnorderedList { metadata, .. }
@@ -357,7 +371,7 @@ impl View {
             | Self::TextArea { metadata, .. }
             | Self::Image { metadata, .. }
             | Self::ProgressBar { metadata, .. } => Some(metadata),
-            Self::Dynamic(_) | Self::Component(_) => None,
+            Self::Markdown { .. } | Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
 
@@ -378,6 +392,7 @@ impl View {
             | Self::H5 { metadata, .. }
             | Self::H6 { metadata, .. }
             | Self::Paragraph { metadata, .. }
+            | Self::Link { metadata, .. }
             | Self::CodeBlock { metadata, .. }
             | Self::OrderedList { metadata, .. }
             | Self::UnorderedList { metadata, .. }
@@ -395,7 +410,7 @@ impl View {
             | Self::TextArea { metadata, .. }
             | Self::Image { metadata, .. }
             | Self::ProgressBar { metadata, .. } => Some(metadata),
-            Self::Dynamic(_) | Self::Component(_) => None,
+            Self::Markdown { .. } | Self::Dynamic(_) | Self::Component(_) => None,
         }
     }
 
@@ -780,6 +795,16 @@ impl fmt::Debug for View {
                 .field("content", content)
                 .field("metadata", metadata)
                 .finish(),
+            Self::Link {
+                label,
+                target,
+                metadata,
+            } => f
+                .debug_struct("Link")
+                .field("label", label)
+                .field("target", target)
+                .field("metadata", metadata)
+                .finish(),
             Self::CodeBlock {
                 source,
                 language,
@@ -926,6 +951,7 @@ impl fmt::Debug for View {
                 .field("label", label)
                 .field("metadata", metadata)
                 .finish(),
+            Self::Markdown { state } => f.debug_tuple("Markdown").field(state).finish(),
             Self::Dynamic(_) => f.write_str("Dynamic(..)"),
             Self::Component(component) => f.debug_tuple("Component").field(component).finish(),
         }
@@ -982,6 +1008,22 @@ impl PartialEq for View {
                     metadata: right_metadata,
                 },
             ) => left_content == right_content && left_metadata == right_metadata,
+            (
+                Self::Link {
+                    label: left_label,
+                    target: left_target,
+                    metadata: left_metadata,
+                },
+                Self::Link {
+                    label: right_label,
+                    target: right_target,
+                    metadata: right_metadata,
+                },
+            ) => {
+                left_label == right_label
+                    && left_target == right_target
+                    && left_metadata == right_metadata
+            }
             (
                 Self::CodeBlock {
                     source: left_source,
@@ -1300,6 +1342,7 @@ impl PartialEq for View {
                     && left_label == right_label
                     && left_metadata == right_metadata
             }
+            (Self::Markdown { state: left }, Self::Markdown { state: right }) => left == right,
             (Self::Dynamic(left), Self::Dynamic(right)) => left.ptr_eq(right),
             (Self::Component(left), Self::Component(right)) => left.ptr_eq(right),
             _ => false,

@@ -28,6 +28,8 @@ pub enum ViewType {
     H6,
     /// Semantic paragraph view.
     Paragraph,
+    /// Focusable rich-text link view.
+    Link,
     /// Syntax-highlighted code-block view.
     CodeBlock,
     /// Semantic ordered-list view.
@@ -79,6 +81,7 @@ impl ViewType {
             Self::H4 => TuiStyle::new().modifier(Modifier::ITALIC),
             Self::H5 => TuiStyle::new().modifier(Modifier::DIM | Modifier::ITALIC),
             Self::H6 => TuiStyle::new().modifier(Modifier::DIM),
+            Self::Link => TuiStyle::new().modifier(Modifier::UNDERLINED),
             Self::Paragraph
             | Self::CodeBlock
             | Self::OrderedList
@@ -98,6 +101,24 @@ impl ViewType {
             | Self::TextArea
             | Self::Image
             | Self::ProgressBar => TuiStyle::new(),
+        }
+    }
+
+    /// Returns low-precedence defaults for the current pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `focused` — Whether the view currently matches `:focus`.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] containing stateful defaults applied before authored
+    /// stylesheet rules.
+    pub(crate) fn default_state_style(self, focused: bool) -> TuiStyle {
+        if self == Self::Link && focused {
+            TuiStyle::new().modifier(Modifier::UNDERLINED | Modifier::REVERSED)
+        } else {
+            TuiStyle::new()
         }
     }
 }
@@ -433,6 +454,7 @@ pub struct StyleMetadata {
     inline_style: Option<TuiStyle>,
     focused: bool,
     scroll_into_view_requested: Cell<bool>,
+    scroll_to_anchor_requested: Cell<bool>,
     scroll_to_top_key_pending: Cell<bool>,
     scroll_offset: Cell<u16>,
     max_scroll_offset: Cell<u16>,
@@ -456,6 +478,7 @@ impl StyleMetadata {
             inline_style: None,
             focused: false,
             scroll_into_view_requested: Cell::new(false),
+            scroll_to_anchor_requested: Cell::new(false),
             scroll_to_top_key_pending: Cell::new(false),
             scroll_offset: Cell::new(0),
             max_scroll_offset: Cell::new(0),
@@ -510,6 +533,11 @@ impl StyleMetadata {
     /// Returns whether this view requested focus visibility scrolling.
     pub(crate) fn scroll_into_view_requested(&self) -> bool {
         self.scroll_into_view_requested.get()
+    }
+
+    /// Returns whether this view requested top-aligned anchor scrolling.
+    pub(crate) fn scroll_to_anchor_requested(&self) -> bool {
+        self.scroll_to_anchor_requested.get()
     }
 
     /// Returns the current vertical scroll offset.
@@ -573,6 +601,16 @@ impl StyleMetadata {
     /// Clears a pending focus visibility scroll request.
     pub(crate) fn clear_scroll_into_view_request(&self) {
         self.scroll_into_view_requested.set(false);
+    }
+
+    /// Requests that this view be aligned with the top overflow boundary.
+    pub(crate) fn request_scroll_to_anchor(&self) {
+        self.scroll_to_anchor_requested.set(true);
+    }
+
+    /// Clears a pending top-aligned anchor scroll request.
+    pub(crate) fn clear_scroll_to_anchor_request(&self) {
+        self.scroll_to_anchor_requested.set(false);
     }
 
     /// Stores whether a `g` key is waiting for a second `g`.
