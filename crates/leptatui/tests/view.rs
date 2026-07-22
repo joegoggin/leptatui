@@ -10,15 +10,17 @@ use std::{
     time::Duration,
 };
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use leptatui::{
     __private::FocusedControl,
     AppControl, AppRoot, Borders, CellAlignment, Color, Component, EditableState, ImageSource,
     KeyControl, LayoutDirection, MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations,
     StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme, TuiSize, TuiSpacing, TuiStyle, View,
     ViewType, VimMode, block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4,
-    h5, h6, image, input, link, list_item, ordered_list, paragraph, progress_bar, row, table,
-    table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
+    h5, h6, image, input, link, list_item, markdown, ordered_list, paragraph, progress_bar, row,
+    table, table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{
@@ -43,6 +45,16 @@ use support::{draw_view, rendered_text};
 /// An [`Event`] containing the key press.
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+}
+
+/// Creates a mouse event at a terminal cell.
+fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
+    Event::Mouse(MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    })
 }
 
 /// Returns flattened focus states for all buttons in a view tree.
@@ -5188,6 +5200,124 @@ fn enter_and_space_activate_focused_button() -> Result<()> {
     view.handle_event(key(KeyCode::Tab))?;
     view.handle_event(key(KeyCode::Char(' ')))?;
     assert_eq!(count.get(), 2);
+
+    Ok(())
+}
+
+/// Verifies moving the mouse over a button focuses it.
+///
+/// # Example Under Test
+///
+/// ```text
+/// row([button("One"), button("Two")])
+/// Mouse moved over the second button
+/// ```
+///
+/// # Assertions
+///
+/// - The view renders to establish hit areas.
+/// - Moving over the second button focuses only that button.
+#[test]
+fn mouse_move_focuses_button_under_pointer() -> Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(20, 3))?;
+    let mut view = row([button("One"), button("Two")]);
+
+    draw_view(&mut terminal, &view)?;
+    view.handle_event(mouse(MouseEventKind::Moved, 12, 1))?;
+
+    assert_eq!(button_focuses(&view), vec![false, true]);
+
+    Ok(())
+}
+
+/// Verifies left-clicking a button invokes its action.
+///
+/// # Example Under Test
+///
+/// ```text
+/// button("Run").on_press(...)
+/// Left mouse down inside the button
+/// ```
+///
+/// # Assertions
+///
+/// - The view renders to establish hit areas.
+/// - Clicking the button runs its callback once.
+#[test]
+fn mouse_click_activates_button_under_pointer() -> Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
+    let count = Rc::new(Cell::new(0));
+    let count_for_button = Rc::clone(&count);
+    let mut view = button("Run").on_press(move || {
+        count_for_button.set(count_for_button.get() + 1);
+        AppControl::Continue
+    });
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(
+        view.handle_event(mouse(MouseEventKind::Down(MouseButton::Left), 1, 1))?,
+        AppControl::Continue
+    );
+
+    assert_eq!(count.get(), 1);
+    assert_eq!(button_focuses(&view), vec![true]);
+
+    Ok(())
+}
+
+/// Verifies mouse wheel events scroll overflowing content under the pointer.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column([text("one"), text("two"), text("three")])
+/// ScrollDown, ScrollUp
+/// ```
+///
+/// # Assertions
+///
+/// - Wheel down increases the rendered column's scroll offset.
+/// - Wheel up decreases the rendered column's scroll offset.
+#[test]
+fn mouse_wheel_scrolls_overflowing_column_under_pointer() -> Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(12, 2))?;
+    let mut view = column([text("one"), text("two"), text("three")]);
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(scroll_offset(&view), 0);
+
+    view.handle_event(mouse(MouseEventKind::ScrollDown, 0, 0))?;
+    assert_eq!(scroll_offset(&view), 1);
+
+    draw_view(&mut terminal, &view)?;
+    view.handle_event(mouse(MouseEventKind::ScrollUp, 0, 0))?;
+    assert_eq!(scroll_offset(&view), 0);
+
+    Ok(())
+}
+
+/// Verifies moving over an inline Markdown link focuses it.
+///
+/// # Example Under Test
+///
+/// ```text
+/// [Docs](https://example.com)
+/// Mouse moved over "Docs"
+/// ```
+///
+/// # Assertions
+///
+/// - The Markdown view renders to establish inline-link hit areas.
+/// - Moving over the link reports a focused link control.
+#[test]
+fn mouse_move_focuses_inline_markdown_link_under_pointer() -> Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(20, 3))?;
+    let mut view = markdown("[Docs](https://example.com)");
+
+    draw_view(&mut terminal, &view)?;
+    view.handle_event(mouse(MouseEventKind::Moved, 0, 0))?;
+
+    assert_eq!(view.__focused_control(), Some(FocusedControl::Link));
 
     Ok(())
 }

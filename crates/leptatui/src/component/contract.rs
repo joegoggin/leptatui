@@ -3,7 +3,7 @@
 //! This module defines the render and event-handling interface implemented by
 //! root components, child components, and view trees.
 
-use crossterm::event::{Event, KeyEvent};
+use crossterm::event::{Event, KeyEvent, MouseEvent};
 
 use super::{key::KeyControl, model::RenderCtx};
 use crate::app::{AppControl, Result};
@@ -74,6 +74,9 @@ pub trait Component {
         if let Event::Key(key) = event {
             return Ok(self.handle_key_event(key)?.into());
         }
+        if let Event::Mouse(mouse) = event {
+            return self.__handle_mouse_event(mouse);
+        }
 
         Ok(AppControl::Continue)
     }
@@ -102,6 +105,12 @@ pub trait Component {
         self.handle_key_event(key)
     }
 
+    /// Handles built-in mouse behavior inside this component.
+    #[doc(hidden)]
+    fn __handle_mouse_event(&mut self, _mouse: MouseEvent) -> Result<AppControl> {
+        Ok(AppControl::Continue)
+    }
+
     /// Returns the number of focusable controls inside this component.
     #[doc(hidden)]
     fn __focusable_count(&self) -> usize {
@@ -117,6 +126,18 @@ pub trait Component {
     /// Sets focus by flattened control index while tracking traversal position.
     #[doc(hidden)]
     fn __set_focus_by_index_inner(&mut self, _target: usize, _index: &mut usize) {}
+
+    /// Returns the focusable control index under a terminal position.
+    #[doc(hidden)]
+    fn __focusable_index_at_position_inner(
+        &self,
+        _column: u16,
+        _row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        *index = index.saturating_add(self.__focusable_count());
+        None
+    }
 
     /// Returns the focused control's vertical span within this component area.
     #[doc(hidden)]
@@ -207,6 +228,18 @@ pub trait Component {
     /// Returns whether this component contains an overflowing scroll target.
     #[doc(hidden)]
     fn __has_overflowing_scroll_target(&self) -> bool {
+        false
+    }
+
+    /// Moves focus to the control under a terminal position.
+    #[doc(hidden)]
+    fn __focus_control_at_position(&mut self, _column: u16, _row: u16) -> bool {
+        false
+    }
+
+    /// Scrolls the innermost overflowing layout under a terminal position.
+    #[doc(hidden)]
+    fn __scroll_overflowing_at_position(&mut self, _column: u16, _row: u16, _delta: i16) -> bool {
         false
     }
 }

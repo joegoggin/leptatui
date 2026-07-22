@@ -10,7 +10,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     layout::{Constraint, Layout, Position, Rect, Size},
@@ -32,7 +34,7 @@ use super::{
     code_block::SyntaxTheme,
     link::{LinkTarget, LinkedSpan, RichText, open_link_target},
     metadata::{EditableState, PendingInsertKey, StyleMetadata, VimMode},
-    model::{FormAction, InputAction, View, clamped_progress_value},
+    model::{CellAlignment, FormAction, InputAction, View, clamped_progress_value},
 };
 
 use self::table::{focused_link_span_for_table_view, min_height_for_table_view, render_table_view};
@@ -283,6 +285,203 @@ impl RichText {
             link.metadata().clear_scroll_into_view_request();
         }
     }
+
+    /// Clears last-rendered hit areas for embedded links.
+    fn clear_link_hit_areas(&self) {
+        for link in self.links() {
+            link.metadata().clear_hit_areas();
+        }
+    }
+
+    /// Records last-rendered hit areas for embedded links.
+    fn record_link_hit_areas(
+        &self,
+        area: Rect,
+        width: u16,
+        alignment: CellAlignment,
+        ctx: &RenderCtx<'_, '_>,
+    ) {
+        self.clear_link_hit_areas();
+        if width == 0 || area.height == 0 || self.links().is_empty() {
+            return;
+        }
+
+        let link_spans = self
+            .links()
+            .iter()
+            .enumerate()
+            .flat_map(|(link, inline_link)| {
+                inline_link
+                    .spans()
+                    .iter()
+                    .copied()
+                    .map(move |span| (span, link))
+            })
+            .collect::<Vec<_>>();
+
+        let mut row_offset = 0u16;
+        for (line_index, line) in self.text().lines.iter().enumerate() {
+            let wrapped = linked_visual_segments_for_line(line, line_index, &link_spans, width);
+            for segment in wrapped {
+                let row = row_offset.saturating_add(segment.row);
+                if row >= area.height {
+                    continue;
+                }
+
+                let line_offset = aligned_line_offset(segment.line_width, width, alignment);
+                let x = area
+                    .x
+                    .saturating_add(line_offset)
+                    .saturating_add(segment.start);
+                let y = area.y.saturating_add(row);
+                let hit_area = Rect {
+                    x,
+                    y,
+                    width: segment.end.saturating_sub(segment.start),
+                    height: 1,
+                };
+                if let Some(hit_area) = ctx.map_hit_area(hit_area)
+                    && let Some(link) = self.links().get(segment.link)
+                {
+                    link.metadata().push_hit_area(hit_area);
+                }
+            }
+            row_offset = row_offset.saturating_add(line_visual_height(line, width));
+            if row_offset >= area.height {
+                break;
+            }
+        }
+    }
+
+    /// Returns the focused embedded link index under a terminal position.
+    fn focusable_index_at_position(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        for link in self.links() {
+            if !link.target().is_actionable() {
+                continue;
+            }
+            let current = *index;
+            *index += 1;
+            if link.metadata().contains_hit_position(column, row) {
+                return Some(current);
+            }
+        }
+
+        None
+    }
+}
+
+/// Returns the number of wrapped visual rows for one rich-text line.
+fn line_visual_height(line: &Line<'static>, width: u16) -> u16 {
+    u16::try_from(wrap_styled_line(line, width, Style::new()).len()).unwrap_or(u16::MAX)
+}
+
+/// One visual terminal segment occupied by an inline link.
+#[derive(Clone, Copy)]
+struct LinkedVisualSegment {
+    /// Embedded link index.
+    link: usize,
+    /// Zero-based wrapped row relative to the rich-text area.
+    row: u16,
+    /// Inclusive start column relative to the rich-text area.
+    start: u16,
+    /// Exclusive end column relative to the rich-text area.
+    end: u16,
+    /// Total width of the wrapped visual row.
+    line_width: u16,
+}
+
+/// Returns link-bearing visual segments for one logical rich-text line.
+fn linked_visual_segments_for_line(
+    line: &Line<'static>,
+    line_index: usize,
+    link_spans: &[(LinkedSpan, usize)],
+    width: u16,
+) -> Vec<LinkedVisualSegment> {
+    let mut segments = Vec::new();
+    let mut pending: Option<LinkedVisualSegment> = None;
+    let mut row_widths = Vec::new();
+    let mut row = 0u16;
+    let mut column = 0u16;
+
+    for (span_index, span) in line.spans.iter().enumerate() {
+        let link = link_spans
+            .iter()
+            .find(|(position, _)| position.line == line_index && position.span == span_index)
+            .map(|(_, link)| *link);
+
+        for grapheme in span.styled_graphemes(Style::new()) {
+            let grapheme_width =
+                u16::try_from(UnicodeWidthStr::width(grapheme.symbol)).unwrap_or(u16::MAX);
+            if grapheme_width == 0 || grapheme_width > width {
+                continue;
+            }
+
+            if column.saturating_add(grapheme_width) > width && column > 0 {
+                finish_linked_segment(&mut segments, &mut pending);
+                row_widths.push(column);
+                row = row.saturating_add(1);
+                column = 0;
+            }
+
+            match link {
+                Some(link) => {
+                    if let Some(segment) = pending.as_mut()
+                        && segment.link == link
+                        && segment.row == row
+                        && segment.end == column
+                    {
+                        segment.end = column.saturating_add(grapheme_width);
+                    } else {
+                        finish_linked_segment(&mut segments, &mut pending);
+                        pending = Some(LinkedVisualSegment {
+                            link,
+                            row,
+                            start: column,
+                            end: column.saturating_add(grapheme_width),
+                            line_width: 0,
+                        });
+                    }
+                }
+                None => finish_linked_segment(&mut segments, &mut pending),
+            }
+
+            column = column.saturating_add(grapheme_width);
+        }
+    }
+
+    finish_linked_segment(&mut segments, &mut pending);
+    row_widths.push(column);
+    for segment in &mut segments {
+        segment.line_width = row_widths
+            .get(usize::from(segment.row))
+            .copied()
+            .unwrap_or(segment.end);
+    }
+    segments
+}
+
+/// Completes the pending inline-link segment with the wrapped row width.
+fn finish_linked_segment(
+    segments: &mut Vec<LinkedVisualSegment>,
+    pending: &mut Option<LinkedVisualSegment>,
+) {
+    if let Some(segment) = pending.take() {
+        segments.push(segment);
+    }
+}
+
+/// Returns left padding for a line inside an aligned rich-text area.
+fn aligned_line_offset(line_width: u16, width: u16, alignment: CellAlignment) -> u16 {
+    match alignment {
+        CellAlignment::Left => 0,
+        CellAlignment::Center => width.saturating_sub(line_width) / 2,
+        CellAlignment::Right => width.saturating_sub(line_width),
+    }
 }
 
 /// Copies rich text through one parsed span position.
@@ -422,6 +621,7 @@ fn render_heading(
         ctx.with_area(content_area, |ctx| {
             ctx.render_widget(semantic_paragraph(&rendered, style));
         });
+        content.record_link_hit_areas(content_area, content_area.width, CellAlignment::Left, ctx);
     } else if area.height > 1 {
         let content_area = Rect {
             y: area.y.saturating_add(1),
@@ -431,6 +631,7 @@ fn render_heading(
         ctx.with_area(content_area, |ctx| {
             ctx.render_widget(semantic_paragraph(&rendered, style));
         });
+        content.record_link_hit_areas(content_area, content_area.width, CellAlignment::Left, ctx);
     }
     content.clear_link_scroll_requests();
     metadata.clear_scroll_to_anchor_request();
@@ -1046,6 +1247,58 @@ impl View {
         }
     }
 
+    /// Clears last-rendered hit areas throughout this view tree.
+    fn clear_hit_areas(&self) {
+        if let Some(metadata) = self.style_metadata() {
+            metadata.clear_hit_areas();
+        }
+
+        match self {
+            Self::H1 { content, .. }
+            | Self::H2 { content, .. }
+            | Self::H3 { content, .. }
+            | Self::H4 { content, .. }
+            | Self::H5 { content, .. }
+            | Self::H6 { content, .. }
+            | Self::Paragraph { content, .. }
+            | Self::TableCell { content, .. } => content.clear_link_hit_areas(),
+            Self::Block { child, .. } => child.clear_hit_areas(),
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. }
+            | Self::OrderedList {
+                items: children, ..
+            }
+            | Self::UnorderedList {
+                items: children, ..
+            }
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => {
+                for child in children {
+                    child.clear_hit_areas();
+                }
+            }
+            Self::Markdown { state } => state.document().clear_hit_areas(),
+            Self::Dynamic(child) => child.with_view(Self::clear_hit_areas),
+            Self::Text { .. }
+            | Self::Link { .. }
+            | Self::CodeBlock { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. }
+            | Self::Component(_) => {}
+        }
+    }
+
     /// Renders this view into a context.
     ///
     /// # Arguments
@@ -1061,6 +1314,11 @@ impl View {
     /// Returns [`crate::app::Error::Io`] if rendering performs terminal I/O
     /// that fails.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        self.clear_hit_areas();
+        if let Some(metadata) = self.style_metadata() {
+            ctx.record_metadata_hit_area(metadata);
+        }
+
         match self {
             Self::Block { child, metadata } => {
                 let style = resolve_style(metadata, ctx);
@@ -1092,6 +1350,12 @@ impl View {
                 let style = resolve_style(metadata, ctx);
                 let rendered = resolved_rich_text(content, metadata, style, ctx);
                 ctx.render_widget(semantic_paragraph(&rendered, style));
+                content.record_link_hit_areas(
+                    ctx.area(),
+                    ctx.area().width,
+                    CellAlignment::Left,
+                    ctx,
+                );
                 for link in content.links() {
                     link.metadata().clear_scroll_into_view_request();
                 }
@@ -1421,6 +1685,9 @@ impl View {
         if let Event::Key(key) = event {
             return Ok(self.handle_key_event(key)?.into());
         }
+        if let Event::Mouse(mouse) = event {
+            return self.handle_mouse_event_ref(&mouse);
+        }
 
         self.dispatch_event_ref(&event)
     }
@@ -1540,6 +1807,17 @@ impl View {
         self.set_focus_by_index_inner(target, index);
     }
 
+    /// Returns the focusable control index under a terminal position.
+    #[doc(hidden)]
+    pub fn __focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        self.focusable_index_at_position_inner(column, row, index)
+    }
+
     /// Returns the focused control's vertical span inside this view area.
     #[doc(hidden)]
     pub fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
@@ -1624,6 +1902,24 @@ impl View {
     #[doc(hidden)]
     pub fn __has_overflowing_scroll_target(&self) -> bool {
         self.has_overflowing_scroll_target()
+    }
+
+    /// Handles built-in mouse behavior for this view tree.
+    #[doc(hidden)]
+    pub fn __handle_mouse_event(&mut self, mouse: MouseEvent) -> Result<AppControl> {
+        self.handle_mouse_event_ref(&mouse)
+    }
+
+    /// Moves focus to the control under a terminal position.
+    #[doc(hidden)]
+    pub fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
+        self.focus_control_at_position(column, row)
+    }
+
+    /// Scrolls the innermost overflowing layout under a terminal position.
+    #[doc(hidden)]
+    pub fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+        self.scroll_overflowing_at_position(column, row, delta)
     }
 
     /// Dispatches a key event by reference through this view tree.
@@ -1898,6 +2194,126 @@ impl View {
             | Self::TableHead { .. }
             | Self::TableBody { .. }
             | Self::TableRow { .. }
+            | Self::TableCell { .. }
+            | Self::ProgressBar { .. } => false,
+        }
+    }
+
+    /// Handles built-in mouse behavior for focus, activation, and scrolling.
+    fn handle_mouse_event_ref(&mut self, mouse: &MouseEvent) -> Result<AppControl> {
+        match mouse.kind {
+            MouseEventKind::Moved => {
+                self.focus_control_at_position(mouse.column, mouse.row);
+                Ok(AppControl::Continue)
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                if self.focus_control_at_position(mouse.column, mouse.row) {
+                    if self.navigate_focused_markdown_link() {
+                        return Ok(AppControl::Continue);
+                    }
+                    return self
+                        .activate_focused_button()
+                        .map(|control| control.unwrap_or(AppControl::Continue));
+                }
+
+                Ok(AppControl::Continue)
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                self.focus_control_at_position(mouse.column, mouse.row);
+                Ok(AppControl::Continue)
+            }
+            MouseEventKind::ScrollDown => {
+                if !self.scroll_overflowing_at_position(mouse.column, mouse.row, 1) {
+                    self.scroll_first_overflowing(1);
+                }
+                Ok(AppControl::Continue)
+            }
+            MouseEventKind::ScrollUp => {
+                if !self.scroll_overflowing_at_position(mouse.column, mouse.row, -1) {
+                    self.scroll_first_overflowing(-1);
+                }
+                Ok(AppControl::Continue)
+            }
+            MouseEventKind::Down(_)
+            | MouseEventKind::Up(_)
+            | MouseEventKind::Drag(_)
+            | MouseEventKind::ScrollLeft
+            | MouseEventKind::ScrollRight => Ok(AppControl::Continue),
+        }
+    }
+
+    /// Moves focus to the control under a terminal position.
+    fn focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
+        let mut index = 0;
+        let Some(target) = self.focusable_index_at_position_inner(column, row, &mut index) else {
+            return false;
+        };
+
+        self.set_focus_by_index(target);
+        true
+    }
+
+    /// Scrolls the innermost overflowing layout under a terminal position.
+    fn scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+        match self {
+            Self::Block { child, .. } => child.scroll_overflowing_at_position(column, row, delta),
+            Self::Row { children, metadata }
+            | Self::Column { children, metadata }
+            | Self::Form {
+                children, metadata, ..
+            } => {
+                if children
+                    .iter_mut()
+                    .any(|child| child.scroll_overflowing_at_position(column, row, delta))
+                {
+                    return true;
+                }
+
+                if metadata.max_scroll_offset() > 0 && metadata.contains_hit_position(column, row) {
+                    metadata.scroll_by(delta);
+                    true
+                } else {
+                    false
+                }
+            }
+            Self::OrderedList { items, .. } | Self::UnorderedList { items, .. } => items
+                .iter_mut()
+                .any(|item| item.scroll_overflowing_at_position(column, row, delta)),
+            Self::ListItem { children, .. } => children
+                .iter_mut()
+                .any(|child| child.scroll_overflowing_at_position(column, row, delta)),
+            Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children
+                .iter_mut()
+                .any(|child| child.scroll_overflowing_at_position(column, row, delta)),
+            Self::Markdown { state } => state
+                .document_mut()
+                .scroll_overflowing_at_position(column, row, delta),
+            Self::Dynamic(child) => child
+                .with_view_mut(|child| child.scroll_overflowing_at_position(column, row, delta)),
+            Self::Component(component) => {
+                component.scroll_overflowing_at_position(column, row, delta)
+            }
+            Self::Text { .. }
+            | Self::H1 { .. }
+            | Self::H2 { .. }
+            | Self::H3 { .. }
+            | Self::H4 { .. }
+            | Self::H5 { .. }
+            | Self::H6 { .. }
+            | Self::Paragraph { .. }
+            | Self::Link { .. }
+            | Self::CodeBlock { .. }
+            | Self::Button { .. }
+            | Self::Input { .. }
+            | Self::TextArea { .. }
+            | Self::Image { .. }
             | Self::TableCell { .. }
             | Self::ProgressBar { .. } => false,
         }
@@ -2354,6 +2770,82 @@ impl View {
         }
     }
 
+    /// Returns the focusable control index under a terminal position.
+    fn focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        match self {
+            Self::Button { metadata, .. }
+            | Self::Input { metadata, .. }
+            | Self::TextArea { metadata, .. } => {
+                let current = *index;
+                *index += 1;
+                metadata
+                    .contains_hit_position(column, row)
+                    .then_some(current)
+            }
+            Self::Link {
+                target, metadata, ..
+            } if target.is_actionable() => {
+                let current = *index;
+                *index += 1;
+                metadata
+                    .contains_hit_position(column, row)
+                    .then_some(current)
+            }
+            Self::H1 { content, .. }
+            | Self::H2 { content, .. }
+            | Self::H3 { content, .. }
+            | Self::H4 { content, .. }
+            | Self::H5 { content, .. }
+            | Self::H6 { content, .. }
+            | Self::Paragraph { content, .. }
+            | Self::TableCell { content, .. } => {
+                content.focusable_index_at_position(column, row, index)
+            }
+            Self::Block { child, .. } => {
+                child.focusable_index_at_position_inner(column, row, index)
+            }
+            Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Form { children, .. }
+            | Self::OrderedList {
+                items: children, ..
+            }
+            | Self::UnorderedList {
+                items: children, ..
+            }
+            | Self::ListItem { children, .. }
+            | Self::Table {
+                sections: children, ..
+            }
+            | Self::TableHead { rows: children, .. }
+            | Self::TableBody { rows: children, .. }
+            | Self::TableRow {
+                cells: children, ..
+            } => children
+                .iter()
+                .find_map(|child| child.focusable_index_at_position_inner(column, row, index)),
+            Self::Markdown { state } => state
+                .document()
+                .focusable_index_at_position_inner(column, row, index),
+            Self::Dynamic(child) => {
+                child.with_view(|child| child.focusable_index_at_position_inner(column, row, index))
+            }
+            Self::Component(component) => {
+                component.focusable_index_at_position_inner(column, row, index)
+            }
+            Self::Text { .. }
+            | Self::Link { .. }
+            | Self::CodeBlock { .. }
+            | Self::Image { .. }
+            | Self::ProgressBar { .. } => None,
+        }
+    }
+
     /// Sets focus by flattened control index.
     ///
     /// # Arguments
@@ -2678,6 +3170,17 @@ impl Component for View {
         View::__set_focus_by_index_inner(self, target, index);
     }
 
+    /// Returns the focusable control index under a terminal position.
+    #[doc(hidden)]
+    fn __focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        View::__focusable_index_at_position_inner(self, column, row, index)
+    }
+
     /// Returns the focused control's vertical span inside this component area.
     #[doc(hidden)]
     fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
@@ -2768,6 +3271,24 @@ impl Component for View {
     #[doc(hidden)]
     fn __has_overflowing_scroll_target(&self) -> bool {
         View::__has_overflowing_scroll_target(self)
+    }
+
+    /// Handles built-in mouse behavior for this view tree.
+    #[doc(hidden)]
+    fn __handle_mouse_event(&mut self, mouse: MouseEvent) -> Result<AppControl> {
+        View::__handle_mouse_event(self, mouse)
+    }
+
+    /// Moves focus to the control under a terminal position.
+    #[doc(hidden)]
+    fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
+        View::__focus_control_at_position(self, column, row)
+    }
+
+    /// Scrolls the innermost overflowing layout under a terminal position.
+    #[doc(hidden)]
+    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+        View::__scroll_overflowing_at_position(self, column, row, delta)
     }
 }
 

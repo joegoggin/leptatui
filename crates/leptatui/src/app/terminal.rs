@@ -7,6 +7,7 @@ use std::io::{Stdout, stdout};
 
 use crossterm::{
     cursor::SetCursorStyle,
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -52,6 +53,12 @@ impl TerminalSession {
         }
         cleanup.alternate_screen = true;
         cleanup.cursor_style = true;
+
+        if let Err(error) = execute!(stdout(), EnableMouseCapture) {
+            let _ = cleanup.restore();
+            return Err(error.into());
+        }
+        cleanup.mouse_capture = true;
 
         let terminal_images = TerminalImageSupport::query_stdio();
 
@@ -99,6 +106,8 @@ struct TerminalCleanup {
     alternate_screen: bool,
     /// Whether the cursor style should be restored to the user's default.
     cursor_style: bool,
+    /// Whether terminal mouse capture is currently active.
+    mouse_capture: bool,
 }
 
 impl Drop for TerminalCleanup {
@@ -125,6 +134,15 @@ impl TerminalCleanup {
         if self.cursor_style {
             match execute!(stdout(), SetCursorStyle::DefaultUserShape) {
                 Ok(()) => self.cursor_style = false,
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+
+        if self.mouse_capture {
+            match execute!(stdout(), DisableMouseCapture) {
+                Ok(()) => self.mouse_capture = false,
                 Err(error) => {
                     first_error.get_or_insert(error);
                 }

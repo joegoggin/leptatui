@@ -140,6 +140,9 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                         .handle_key_event(__leptatui_key)
                         .map(::core::convert::Into::into);
                 }
+                if let #leptatui::__private::Event::Mouse(__leptatui_mouse) = event {
+                    return self.__handle_mouse_event(__leptatui_mouse);
+                }
 
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &mut self.__leptatui_view;
@@ -190,6 +193,19 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __handle_mouse_event(
+                &mut self,
+                mouse: #leptatui::__private::MouseEvent,
+            ) -> #leptatui::Result<#leptatui::AppControl> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__handle_mouse_event(mouse)
+                })
+            }
+
+            #[doc(hidden)]
             fn __focusable_count(&self) -> usize {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;
@@ -232,6 +248,21 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 __leptatui_owner.with(|| {
                     __leptatui_view.__set_focus_by_index_inner(target, index);
                 });
+            }
+
+            #[doc(hidden)]
+            fn __focusable_index_at_position_inner(
+                &self,
+                column: u16,
+                row: u16,
+                index: &mut usize,
+            ) -> ::core::option::Option<usize> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__focusable_index_at_position_inner(column, row, index)
+                })
             }
 
             #[doc(hidden)]
@@ -339,6 +370,31 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                 __leptatui_owner.with(|| {
                     __leptatui_view.__has_overflowing_scroll_target()
+                })
+            }
+
+            #[doc(hidden)]
+            fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__focus_control_at_position(column, row)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __scroll_overflowing_at_position(
+                &mut self,
+                column: u16,
+                row: u16,
+                delta: i16,
+            ) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__scroll_overflowing_at_position(column, row, delta)
                 })
             }
         }

@@ -42,6 +42,8 @@ pub struct RenderCtx<'frame, 'buffer> {
     selector_ancestors: Vec<StyleMetadata>,
     /// Terminal image support detected for this render pass.
     terminal_images: TerminalImageSupport,
+    /// Mapping from local render coordinates to terminal hit-test coordinates.
+    hit_mapper: HitMapper,
 }
 
 impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
@@ -64,6 +66,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             inherited_style: TuiStyle::new(),
             selector_ancestors: Vec::new(),
             terminal_images: context::use_context::<TerminalImageSupport>().unwrap_or_default(),
+            hit_mapper: HitMapper::identity(),
         }
     }
 
@@ -139,6 +142,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             inherited_style,
             selector_ancestors,
             terminal_images: self.terminal_images.clone(),
+            hit_mapper: self.hit_mapper,
         }
     }
 
@@ -171,6 +175,16 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         W: Widget,
     {
         self.target.render_widget(widget, self.area);
+    }
+
+    /// Records the current render area for later mouse hit testing.
+    pub(crate) fn record_metadata_hit_area(&self, metadata: &StyleMetadata) {
+        metadata.set_hit_area(self.map_hit_area(self.area));
+    }
+
+    /// Maps a local render rectangle into terminal hit-test coordinates.
+    pub(crate) fn map_hit_area(&self, area: Rect) -> Option<Rect> {
+        self.hit_mapper.map(area)
     }
 
     /// Sets the terminal cursor position for this render pass.
@@ -424,6 +438,15 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
                 inherited_style,
                 selector_ancestors,
                 terminal_images: TerminalImageSupport::default(),
+                hit_mapper: HitMapper::clipped(
+                    Rect {
+                        x: 0,
+                        y: source_y,
+                        width: target_area.width,
+                        height: target_area.height,
+                    },
+                    target_area,
+                ),
             };
             view.render(&mut buffer_ctx)?;
         }
@@ -530,6 +553,83 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ) -> R {
         self.with_area_and_inherited_style(area, self.inherited_style, render)
     }
+}
+
+/// Maps local render rectangles into terminal hit-test coordinates.
+#[derive(Clone, Copy)]
+struct HitMapper {
+    /// Optional local-coordinate clip applied before mapping.
+    clip: Option<Rect>,
+    /// Signed terminal x offset applied after clipping.
+    x_offset: i32,
+    /// Signed terminal y offset applied after clipping.
+    y_offset: i32,
+}
+
+impl HitMapper {
+    /// Creates an identity mapper for direct frame rendering.
+    const fn identity() -> Self {
+        Self {
+            clip: None,
+            x_offset: 0,
+            y_offset: 0,
+        }
+    }
+
+    /// Creates a mapper for clipped offscreen buffer rendering.
+    fn clipped(source: Rect, target: Rect) -> Self {
+        Self {
+            clip: Some(source),
+            x_offset: i32::from(target.x) - i32::from(source.x),
+            y_offset: i32::from(target.y) - i32::from(source.y),
+        }
+    }
+
+    /// Maps one local rectangle into terminal coordinates.
+    fn map(self, area: Rect) -> Option<Rect> {
+        let area = if let Some(clip) = self.clip {
+            rect_intersection(area, clip)?
+        } else {
+            area
+        };
+        if area.width == 0 || area.height == 0 {
+            return None;
+        }
+
+        let x = i32::from(area.x) + self.x_offset;
+        let y = i32::from(area.y) + self.y_offset;
+        if x < 0 || y < 0 {
+            return None;
+        }
+
+        Some(Rect {
+            x: u16::try_from(x).ok()?,
+            y: u16::try_from(y).ok()?,
+            width: area.width,
+            height: area.height,
+        })
+    }
+}
+
+/// Returns the intersection of two terminal rectangles.
+fn rect_intersection(a: Rect, b: Rect) -> Option<Rect> {
+    let left = a.x.max(b.x);
+    let top = a.y.max(b.y);
+    let right = a.x.saturating_add(a.width).min(b.x.saturating_add(b.width));
+    let bottom =
+        a.y.saturating_add(a.height)
+            .min(b.y.saturating_add(b.height));
+
+    if right <= left || bottom <= top {
+        return None;
+    }
+
+    Some(Rect {
+        x: left,
+        y: top,
+        width: right.saturating_sub(left),
+        height: bottom.saturating_sub(top),
+    })
 }
 
 /// Destination for render operations.

@@ -248,7 +248,7 @@ pub mod __private {
         FocusedControl, KeyHandlerRegistry, StylesheetRegistry,
     };
     pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
-    pub use crossterm::event::{Event, KeyEvent};
+    pub use crossterm::event::{Event, KeyEvent, MouseEvent};
 
     /// Creates a component view from a generated component factory.
     ///

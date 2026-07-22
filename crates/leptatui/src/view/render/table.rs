@@ -435,6 +435,7 @@ pub(super) fn render_table_view(
         width: table_width,
         ..area
     };
+    let source_rows = table_source_rows(sections);
     let border_style = table_style.to_ratatui_style();
     ctx.with_area(table_area, |ctx| {
         ctx.render_widget(Block::new().style(border_style));
@@ -506,6 +507,14 @@ pub(super) fn render_table_view(
                             .alignment(ratatui_cell_alignment(cell.alignment)),
                     );
                 });
+                if let Some(View::TableCell {
+                    content, alignment, ..
+                }) = source_rows
+                    .get(row_index)
+                    .and_then(|source_cells| source_cells.get(column))
+                {
+                    content.record_link_hit_areas(cell_area, width, *alignment, ctx);
+                }
             }
             x = x.saturating_add(width);
             ctx.with_area(
@@ -551,6 +560,22 @@ pub(super) fn render_table_view(
     clear_table_link_scroll_requests(sections);
 
     Ok(())
+}
+
+/// Returns source table rows in the same order used by resolved rendering.
+fn table_source_rows(sections: &[View]) -> Vec<&[View]> {
+    sections
+        .iter()
+        .filter_map(|section| match section {
+            View::TableHead { rows, .. } | View::TableBody { rows, .. } => Some(rows),
+            _ => None,
+        })
+        .flat_map(|rows| rows.iter())
+        .filter_map(|row| match row {
+            View::TableRow { cells, .. } => Some(cells.as_slice()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Clears completed inline-link scroll requests throughout a semantic table.

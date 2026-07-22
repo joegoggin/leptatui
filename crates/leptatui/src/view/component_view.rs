@@ -148,6 +148,19 @@ impl ComponentView {
         self.with_component_mut(|component| component.__set_focus_by_index_inner(target, index));
     }
 
+    /// Returns the focused control index under a terminal position.
+    #[doc(hidden)]
+    pub(crate) fn focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        self.with_component(|component| {
+            component.__focusable_index_at_position_inner(column, row, index)
+        })
+    }
+
     /// Returns the focused control's vertical span inside this component boundary.
     #[doc(hidden)]
     pub(crate) fn focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
@@ -238,6 +251,14 @@ impl ComponentView {
     #[doc(hidden)]
     pub(crate) fn has_overflowing_scroll_target(&self) -> bool {
         self.with_component(|component| component.__has_overflowing_scroll_target())
+    }
+
+    /// Scrolls the innermost overflowing layout under a terminal position.
+    #[doc(hidden)]
+    pub(crate) fn scroll_overflowing_at_position(&self, column: u16, row: u16, delta: i16) -> bool {
+        self.with_component_mut(|component| {
+            component.__scroll_overflowing_at_position(column, row, delta)
+        })
     }
 
     /// Compares two component boundaries by shared storage identity.
