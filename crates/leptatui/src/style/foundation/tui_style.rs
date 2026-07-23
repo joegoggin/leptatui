@@ -1,14 +1,39 @@
 //! Builder-style terminal UI style values.
 //!
-//! This module collects text colors, modifiers, borders, padding, and layout
-//! direction before converting supported visual values into Ratatui values.
+//! This module collects visual styling and authored layout properties before
+//! converting the Ratatui-supported subset into terminal rendering values.
 
 use ratatui::{style::Style, widgets::Block};
 
-use crate::style::{BorderType, Borders, Color, LayoutDirection, Modifier, TuiSize, TuiSpacing};
+use crate::style::{
+    AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
+    JustifySelf, LayoutDirection, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position,
+    TuiSize, TuiSpacing, ZIndex,
+};
+
+macro_rules! layout_style_builders {
+    ($(($field:ident, $type:ty, $description:literal)),+ $(,)?) => {
+        $(
+            #[doc = concat!("Sets ", $description, ".")]
+            ///
+            /// # Arguments
+            ///
+            /// * `value` — Layout property value to apply.
+            ///
+            /// # Returns
+            ///
+            /// A [`TuiStyle`] with the layout property applied.
+            pub const fn $field(mut self, value: $type) -> Self {
+                self.$field = Some(value);
+                self
+            }
+        )+
+    };
+}
 
 /// Reusable style values for terminal UI elements.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TuiStyle {
     /// Text foreground color.
     pub foreground: Option<Color>,
@@ -26,6 +51,56 @@ pub struct TuiStyle {
     pub direction: Option<LayoutDirection>,
     /// Optional terminal-cell image render size.
     pub image_size: Option<TuiSize>,
+    /// Layout strategy used to generate the view box.
+    pub display: Option<Display>,
+    /// Box whose dimensions are controlled by authored sizes.
+    pub box_sizing: Option<BoxSizing>,
+    /// Horizontal and vertical overflow behavior.
+    pub overflow: Option<Axes<Overflow>>,
+    /// Preferred width and height.
+    pub size: Option<LayoutSize<Dimension>>,
+    /// Minimum width and height.
+    pub min_size: Option<LayoutSize<Dimension>>,
+    /// Maximum width and height.
+    pub max_size: Option<LayoutSize<Dimension>>,
+    /// Outer spacing around the layout box.
+    pub margin: Option<Edges<LengthAuto>>,
+    /// Horizontal and vertical gaps between children.
+    pub gap: Option<Axes<Length>>,
+    /// Flexbox main-axis direction.
+    pub flex_direction: Option<FlexDirection>,
+    /// Flexbox line-wrapping behavior.
+    pub flex_wrap: Option<FlexWrap>,
+    /// Preferred flexbox item basis.
+    pub flex_basis: Option<Dimension>,
+    /// Positive free-space growth factor.
+    pub flex_grow: Option<f32>,
+    /// Negative free-space shrink factor.
+    pub flex_shrink: Option<f32>,
+    /// Cross-axis alignment applied to children.
+    pub align_items: Option<AlignItems>,
+    /// Cross-axis alignment selected by this item.
+    pub align_self: Option<AlignSelf>,
+    /// Cross-axis distribution of lines or tracks.
+    pub align_content: Option<AlignContent>,
+    /// Inline-axis alignment applied to grid children.
+    pub justify_items: Option<JustifyItems>,
+    /// Inline-axis alignment selected by this item.
+    pub justify_self: Option<JustifySelf>,
+    /// Main-axis or inline-axis content distribution.
+    pub justify_content: Option<JustifyContent>,
+    /// Automatic grid item placement behavior.
+    pub grid_auto_flow: Option<GridAutoFlow>,
+    /// Grid row start and end placement.
+    pub grid_row: Option<GridLine>,
+    /// Grid column start and end placement.
+    pub grid_column: Option<GridLine>,
+    /// Positioning scheme applied to the layout box.
+    pub position: Option<Position>,
+    /// Physical offsets for positioned boxes.
+    pub inset: Option<Edges<LengthAuto>>,
+    /// Positioned stacking level.
+    pub z_index: Option<ZIndex>,
 }
 
 impl Default for TuiStyle {
@@ -33,7 +108,7 @@ impl Default for TuiStyle {
     ///
     /// # Returns
     ///
-    /// A [`TuiStyle`] with no colors, modifiers, borders, or padding.
+    /// A [`TuiStyle`] with no visual or layout properties.
     fn default() -> Self {
         Self::new()
     }
@@ -44,7 +119,7 @@ impl TuiStyle {
     ///
     /// # Returns
     ///
-    /// A [`TuiStyle`] with no colors, modifiers, borders, or padding.
+    /// A [`TuiStyle`] with no visual or layout properties.
     pub const fn new() -> Self {
         Self {
             foreground: None,
@@ -55,6 +130,31 @@ impl TuiStyle {
             padding: None,
             direction: None,
             image_size: None,
+            display: None,
+            box_sizing: None,
+            overflow: None,
+            size: None,
+            min_size: None,
+            max_size: None,
+            margin: None,
+            gap: None,
+            flex_direction: None,
+            flex_wrap: None,
+            flex_basis: None,
+            flex_grow: None,
+            flex_shrink: None,
+            align_items: None,
+            align_self: None,
+            align_content: None,
+            justify_items: None,
+            justify_self: None,
+            justify_content: None,
+            grid_auto_flow: None,
+            grid_row: None,
+            grid_column: None,
+            position: None,
+            inset: None,
+            z_index: None,
         }
     }
 
@@ -170,6 +270,66 @@ impl TuiStyle {
         self
     }
 
+    layout_style_builders!(
+        (display, Display, "the layout display strategy"),
+        (box_sizing, BoxSizing, "the authored-size box model"),
+        (overflow, Axes<Overflow>, "horizontal and vertical overflow"),
+        (size, LayoutSize<Dimension>, "the preferred width and height"),
+        (
+            min_size,
+            LayoutSize<Dimension>,
+            "the minimum width and height"
+        ),
+        (
+            max_size,
+            LayoutSize<Dimension>,
+            "the maximum width and height"
+        ),
+        (margin, Edges<LengthAuto>, "outer spacing around the box"),
+        (gap, Axes<Length>, "horizontal and vertical child gaps"),
+        (
+            flex_direction,
+            FlexDirection,
+            "the flexbox main-axis direction"
+        ),
+        (flex_wrap, FlexWrap, "flexbox line wrapping"),
+        (flex_basis, Dimension, "the preferred flexbox item basis"),
+        (flex_grow, f32, "the positive free-space growth factor"),
+        (flex_shrink, f32, "the negative free-space shrink factor"),
+        (align_items, AlignItems, "cross-axis child alignment"),
+        (align_self, AlignSelf, "this item's cross-axis alignment"),
+        (
+            align_content,
+            AlignContent,
+            "cross-axis line or track distribution"
+        ),
+        (
+            justify_items,
+            JustifyItems,
+            "inline-axis grid-child alignment"
+        ),
+        (
+            justify_self,
+            JustifySelf,
+            "this grid item's inline-axis alignment"
+        ),
+        (
+            justify_content,
+            JustifyContent,
+            "main-axis or inline-axis content distribution"
+        ),
+        (
+            grid_auto_flow,
+            GridAutoFlow,
+            "automatic grid item placement"
+        ),
+        (grid_row, GridLine, "grid row start and end placement"),
+        (grid_column, GridLine, "grid column start and end placement"),
+        (position, Position, "the positioning scheme"),
+        (inset, Edges<LengthAuto>, "physical positioned-box offsets"),
+        (z_index, ZIndex, "the positioned stacking level"),
+    );
+
     /// Returns the style values inherited by descendant views.
     ///
     /// Foreground color and text modifiers inherit across view boundaries.
@@ -187,6 +347,31 @@ impl TuiStyle {
             padding: None,
             direction: None,
             image_size: None,
+            display: None,
+            box_sizing: None,
+            overflow: None,
+            size: None,
+            min_size: None,
+            max_size: None,
+            margin: None,
+            gap: None,
+            flex_direction: None,
+            flex_wrap: None,
+            flex_basis: None,
+            flex_grow: None,
+            flex_shrink: None,
+            align_items: None,
+            align_self: None,
+            align_content: None,
+            justify_items: None,
+            justify_self: None,
+            justify_content: None,
+            grid_auto_flow: None,
+            grid_row: None,
+            grid_column: None,
+            position: None,
+            inset: None,
+            z_index: None,
         }
     }
 

@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+ --> tests/fixtures/stylesheet_macro/fail/incompatible_layout_value.rs:8:28
+  |
+8 |         Text => { display: Overflow::Hidden }
+  |                   -------  ^^^^^^^^^^^^^^^^ expected `Display`, found `Overflow`
+  |                   |
+  |                   arguments to this method are incorrect
+  |
+note: method defined here
+ --> src/style/cascade/declarations/builders.rs
+  |
+  |         (display, display_important, set_display, Display, "layout display"),
+  |          ^^^^^^^

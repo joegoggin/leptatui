@@ -249,3 +249,159 @@ fn stylesheet_normal_declaration_does_not_override_important_mixin_value() {
 
     assert_eq!(resolved.foreground, Some(Color::Red));
 }
+
+/// Verifies important layout declarations override every normal inline layout value.
+///
+/// # Example Under Test
+///
+/// ```text
+/// inline: display Flex, position Relative, z_index Auto
+/// .layout: display Grid, position Absolute, z_index 7 !important
+/// ```
+///
+/// # Assertions
+///
+/// - View metadata is available for stylesheet resolution.
+/// - Every grouped box, flexbox, alignment, grid, and positioning property
+///   resolves from the important stylesheet rule.
+///
+/// # Why
+///
+/// Layout properties must participate independently in the same importance
+/// pipeline as existing visual declarations.
+#[test]
+fn stylesheet_important_layout_properties_override_inline_values() {
+    let line = GridLine::new(GridPlacement::line(2), GridPlacement::span(3));
+    let inline = TuiStyle::new()
+        .display(Display::Flex)
+        .box_sizing(BoxSizing::ContentBox)
+        .overflow(Axes::all(Overflow::Visible))
+        .size(LayoutSize::all(Dimension::Auto))
+        .min_size(LayoutSize::all(Dimension::Auto))
+        .max_size(LayoutSize::all(Dimension::Auto))
+        .margin(Edges::all(LengthAuto::Auto))
+        .gap(Axes::all(Length::cells(0.0)))
+        .flex_direction(FlexDirection::Row)
+        .flex_wrap(FlexWrap::NoWrap)
+        .flex_basis(Dimension::Auto)
+        .flex_grow(0.0)
+        .flex_shrink(1.0)
+        .align_items(AlignItems::Stretch)
+        .align_self(AlignSelf::Auto)
+        .align_content(AlignContent::Stretch)
+        .justify_items(JustifyItems::Stretch)
+        .justify_self(JustifySelf::Auto)
+        .justify_content(JustifyContent::Start)
+        .grid_auto_flow(GridAutoFlow::Row)
+        .grid_row(GridLine::default())
+        .grid_column(GridLine::default())
+        .position(Position::Relative)
+        .inset(Edges::all(LengthAuto::Auto))
+        .z_index(ZIndex::Auto);
+    let view = text("Layout")
+        .with_classes("layout")
+        .with_inline_style(inline);
+    let stylesheet = stylesheet! {
+        .layout => {
+            display: Display::Grid !important,
+            box_sizing: BoxSizing::BorderBox !important,
+            overflow: Axes::new(Overflow::Hidden, Overflow::Auto) !important,
+            size: LayoutSize::new(Dimension::MinContent, Dimension::MaxContent) !important,
+            min_size: LayoutSize::all(Dimension::from(Length::cells(2.0))) !important,
+            max_size: LayoutSize::all(Dimension::FitContent(Length::cells(40.0))) !important,
+            margin: Edges::all(LengthAuto::from(Length::cells(1.0))) !important,
+            gap: Axes::new(Length::cells(2.0), Length::cells(3.0)) !important,
+            flex_direction: FlexDirection::ColumnReverse !important,
+            flex_wrap: FlexWrap::WrapReverse !important,
+            flex_basis: Dimension::from(Length::percent(25.0)) !important,
+            flex_grow: 2.0 !important,
+            flex_shrink: 0.5 !important,
+            align_items: AlignItems::Center !important,
+            align_self: AlignSelf::FlexEnd !important,
+            align_content: AlignContent::SpaceAround !important,
+            justify_items: JustifyItems::End !important,
+            justify_self: JustifySelf::Center !important,
+            justify_content: JustifyContent::SpaceEvenly !important,
+            grid_auto_flow: GridAutoFlow::ColumnDense !important,
+            grid_row: line !important,
+            grid_column: line !important,
+            position: Position::Absolute !important,
+            inset: Edges::symmetric(LengthAuto::Auto, Length::cells(4.0).into()) !important,
+            z_index: ZIndex::Integer(7) !important
+        }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let expected = TuiStyle::new()
+        .display(Display::Grid)
+        .box_sizing(BoxSizing::BorderBox)
+        .overflow(Axes::new(Overflow::Hidden, Overflow::Auto))
+        .size(LayoutSize::new(
+            Dimension::MinContent,
+            Dimension::MaxContent,
+        ))
+        .min_size(LayoutSize::all(Dimension::from(Length::cells(2.0))))
+        .max_size(LayoutSize::all(Dimension::FitContent(Length::cells(40.0))))
+        .margin(Edges::all(Length::cells(1.0).into()))
+        .gap(Axes::new(Length::cells(2.0), Length::cells(3.0)))
+        .flex_direction(FlexDirection::ColumnReverse)
+        .flex_wrap(FlexWrap::WrapReverse)
+        .flex_basis(Dimension::from(Length::percent(25.0)))
+        .flex_grow(2.0)
+        .flex_shrink(0.5)
+        .align_items(AlignItems::Center)
+        .align_self(AlignSelf::FlexEnd)
+        .align_content(AlignContent::SpaceAround)
+        .justify_items(JustifyItems::End)
+        .justify_self(JustifySelf::Center)
+        .justify_content(JustifyContent::SpaceEvenly)
+        .grid_auto_flow(GridAutoFlow::ColumnDense)
+        .grid_row(line)
+        .grid_column(line)
+        .position(Position::Absolute)
+        .inset(Edges::symmetric(
+            LengthAuto::Auto,
+            Length::cells(4.0).into(),
+        ))
+        .z_index(ZIndex::Integer(7));
+
+    assert_eq!(resolved, expected);
+}
+
+/// Verifies layout declarations use selector specificity and source order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Text { display: Block }
+/// .panel { display: Flex }
+/// .panel { display: Grid }
+/// ```
+///
+/// # Assertions
+///
+/// - The class selector overrides the less-specific type selector.
+/// - The later equal-specificity class rule supplies the resolved display.
+#[test]
+fn stylesheet_layout_properties_use_specificity_and_source_order() {
+    let view = text("Panel").with_classes("panel");
+    let stylesheet = stylesheet! {
+        Text => { display: Display::Block }
+        .panel => { display: Display::Flex }
+        .panel => { display: Display::Grid }
+    };
+
+    let resolved = stylesheet.resolve(
+        view.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.display, Some(Display::Grid));
+}

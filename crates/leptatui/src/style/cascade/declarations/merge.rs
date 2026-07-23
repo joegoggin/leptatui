@@ -98,5 +98,41 @@ impl StyleDeclarations {
         {
             self.set_image_size(declaration.value, declaration.important);
         }
+
+        macro_rules! overlay_layout {
+            ($field:ident, $setter:ident) => {
+                if let Some(declaration) = &style.$field
+                    && matches(declaration.important)
+                {
+                    self.$setter(declaration.value, declaration.important);
+                }
+            };
+        }
+
+        overlay_layout!(display, set_display);
+        overlay_layout!(box_sizing, set_box_sizing);
+        overlay_layout!(overflow, set_overflow);
+        overlay_layout!(size, set_size);
+        overlay_layout!(min_size, set_min_size);
+        overlay_layout!(max_size, set_max_size);
+        overlay_layout!(margin, set_margin);
+        overlay_layout!(gap, set_gap);
+        overlay_layout!(flex_direction, set_flex_direction);
+        overlay_layout!(flex_wrap, set_flex_wrap);
+        overlay_layout!(flex_basis, set_flex_basis);
+        overlay_layout!(flex_grow, set_flex_grow);
+        overlay_layout!(flex_shrink, set_flex_shrink);
+        overlay_layout!(align_items, set_align_items);
+        overlay_layout!(align_self, set_align_self);
+        overlay_layout!(align_content, set_align_content);
+        overlay_layout!(justify_items, set_justify_items);
+        overlay_layout!(justify_self, set_justify_self);
+        overlay_layout!(justify_content, set_justify_content);
+        overlay_layout!(grid_auto_flow, set_grid_auto_flow);
+        overlay_layout!(grid_row, set_grid_row);
+        overlay_layout!(grid_column, set_grid_column);
+        overlay_layout!(position, set_position);
+        overlay_layout!(inset, set_inset);
+        overlay_layout!(z_index, set_z_index);
     }
 }

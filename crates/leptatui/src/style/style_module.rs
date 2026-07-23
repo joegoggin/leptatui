@@ -1,4 +1,4 @@
-//! Reusable stylesheet variables and mixins.
+//! Reusable visual and layout stylesheet variables and mixins.
 //!
 //! Style modules are returned by `stylesheet!` invocations that contain
 //! variables or mixins without style rules, and can be imported by another
@@ -7,12 +7,14 @@
 use std::collections::BTreeMap;
 
 use super::{
-    BorderType, Borders, Color, LayoutDirection, Modifier, StyleDeclarations, ThemeValue, TuiSize,
-    TuiSpacing,
+    AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
+    JustifySelf, LayoutDirection, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position,
+    StyleDeclarations, ThemeValue, TuiSize, TuiSpacing, ZIndex,
 };
 
 /// A typed value stored in a reusable stylesheet module.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum StyleValue {
     /// Foreground or background color, either literal or theme-backed.
     Color(ThemeValue<Color>),
@@ -28,6 +30,46 @@ pub enum StyleValue {
     LayoutDirection(LayoutDirection),
     /// Terminal-cell image render size.
     Size(TuiSize),
+    /// Layout display strategy.
+    Display(Display),
+    /// Authored-size box model.
+    BoxSizing(BoxSizing),
+    /// Horizontal and vertical overflow behavior.
+    Overflow(Axes<Overflow>),
+    /// Preferred, minimum, or maximum layout size.
+    LayoutSize(LayoutSize<Dimension>),
+    /// Margin or inset edge values.
+    LengthAutoEdges(Edges<LengthAuto>),
+    /// Horizontal and vertical child gaps.
+    Gap(Axes<Length>),
+    /// Flexbox main-axis direction.
+    FlexDirection(FlexDirection),
+    /// Flexbox wrapping behavior.
+    FlexWrap(FlexWrap),
+    /// Dimension used as a flex basis.
+    Dimension(Dimension),
+    /// Flex growth or shrink factor.
+    Number(f32),
+    /// Child cross-axis alignment.
+    AlignItems(AlignItems),
+    /// Item cross-axis alignment.
+    AlignSelf(AlignSelf),
+    /// Cross-axis content distribution.
+    AlignContent(AlignContent),
+    /// Child inline-axis alignment.
+    JustifyItems(JustifyItems),
+    /// Item inline-axis alignment.
+    JustifySelf(JustifySelf),
+    /// Main-axis or inline-axis content distribution.
+    JustifyContent(JustifyContent),
+    /// Grid automatic-flow behavior.
+    GridAutoFlow(GridAutoFlow),
+    /// Grid row or column placement.
+    GridLine(GridLine),
+    /// Positioning scheme.
+    Position(Position),
+    /// Positioned stacking level.
+    ZIndex(ZIndex),
 }
 
 impl StyleValue {
@@ -41,6 +83,26 @@ impl StyleValue {
             Self::Spacing(_) => "spacing",
             Self::LayoutDirection(_) => "layout_direction",
             Self::Size(_) => "size",
+            Self::Display(_) => "display",
+            Self::BoxSizing(_) => "box_sizing",
+            Self::Overflow(_) => "overflow",
+            Self::LayoutSize(_) => "layout_size",
+            Self::LengthAutoEdges(_) => "length_auto_edges",
+            Self::Gap(_) => "gap",
+            Self::FlexDirection(_) => "flex_direction",
+            Self::FlexWrap(_) => "flex_wrap",
+            Self::Dimension(_) => "dimension",
+            Self::Number(_) => "number",
+            Self::AlignItems(_) => "align_items",
+            Self::AlignSelf(_) => "align_self",
+            Self::AlignContent(_) => "align_content",
+            Self::JustifyItems(_) => "justify_items",
+            Self::JustifySelf(_) => "justify_self",
+            Self::JustifyContent(_) => "justify_content",
+            Self::GridAutoFlow(_) => "grid_auto_flow",
+            Self::GridLine(_) => "grid_line",
+            Self::Position(_) => "position",
+            Self::ZIndex(_) => "z_index",
         }
     }
 }
@@ -165,11 +227,79 @@ impl From<TuiSize> for StyleValue {
     }
 }
 
+macro_rules! impl_style_value_conversion {
+    ($type:ty, $variant:ident, $description:literal) => {
+        #[doc = concat!("Creates ", $description, " style value.")]
+        ///
+        /// # Arguments
+        ///
+        /// * `value` — Typed value to store.
+        ///
+        /// # Returns
+        ///
+        /// A [`StyleValue`] containing the value.
+        impl From<$type> for StyleValue {
+            fn from(value: $type) -> Self {
+                Self::$variant(value)
+            }
+        }
+    };
+}
+
+impl_style_value_conversion!(Display, Display, "a layout display");
+impl_style_value_conversion!(BoxSizing, BoxSizing, "a box-sizing");
+impl_style_value_conversion!(Axes<Overflow>, Overflow, "an overflow");
+impl_style_value_conversion!(LayoutSize<Dimension>, LayoutSize, "a layout-size");
+impl_style_value_conversion!(
+    Edges<LengthAuto>,
+    LengthAutoEdges,
+    "an automatic-length edge"
+);
+impl_style_value_conversion!(Axes<Length>, Gap, "a gap");
+impl_style_value_conversion!(FlexDirection, FlexDirection, "a flex-direction");
+impl_style_value_conversion!(FlexWrap, FlexWrap, "a flex-wrap");
+impl_style_value_conversion!(Dimension, Dimension, "a dimension");
+impl_style_value_conversion!(f32, Number, "a numeric");
+impl_style_value_conversion!(AlignItems, AlignItems, "an align-items");
+impl_style_value_conversion!(AlignSelf, AlignSelf, "an align-self");
+impl_style_value_conversion!(AlignContent, AlignContent, "an align-content");
+impl_style_value_conversion!(JustifyItems, JustifyItems, "a justify-items");
+impl_style_value_conversion!(JustifySelf, JustifySelf, "a justify-self");
+impl_style_value_conversion!(JustifyContent, JustifyContent, "a justify-content");
+impl_style_value_conversion!(GridAutoFlow, GridAutoFlow, "a grid-auto-flow");
+impl_style_value_conversion!(GridLine, GridLine, "a grid-line");
+impl_style_value_conversion!(Position, Position, "a position");
+impl_style_value_conversion!(ZIndex, ZIndex, "a z-index");
+
 /// Reusable stylesheet variables and declaration mixins.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct StyleModule {
     variables: BTreeMap<String, StyleValue>,
     mixins: BTreeMap<String, StyleDeclarations>,
+}
+
+macro_rules! style_value_getter {
+    ($method:ident, $variant:ident, $type:ty, $expected:literal) => {
+        #[doc = concat!("Returns a stored ", $expected, " variable or panics with a stylesheet-oriented message.")]
+        ///
+        /// # Arguments
+        ///
+        /// * `name` — Variable name without the `$` prefix.
+        ///
+        /// # Returns
+        ///
+        #[doc = concat!("A [`", stringify!($type), "`] value for the stored variable.")]
+        pub fn $method(&self, name: &str) -> $type {
+            match self.expect_value(name) {
+                StyleValue::$variant(value) => *value,
+                value => panic!(
+                    "stylesheet module variable `${name}` is {}, expected {}",
+                    value.kind(),
+                    $expected
+                ),
+            }
+        }
+    };
 }
 
 impl StyleModule {
@@ -386,6 +516,67 @@ impl StyleModule {
             ),
         }
     }
+
+    style_value_getter!(expect_display, Display, Display, "display");
+    style_value_getter!(expect_box_sizing, BoxSizing, BoxSizing, "box_sizing");
+    style_value_getter!(expect_overflow, Overflow, Axes<Overflow>, "overflow");
+    style_value_getter!(
+        expect_layout_size,
+        LayoutSize,
+        LayoutSize<Dimension>,
+        "layout_size"
+    );
+    style_value_getter!(
+        expect_length_auto_edges,
+        LengthAutoEdges,
+        Edges<LengthAuto>,
+        "length_auto_edges"
+    );
+    style_value_getter!(expect_gap, Gap, Axes<Length>, "gap");
+    style_value_getter!(
+        expect_flex_direction,
+        FlexDirection,
+        FlexDirection,
+        "flex_direction"
+    );
+    style_value_getter!(expect_flex_wrap, FlexWrap, FlexWrap, "flex_wrap");
+    style_value_getter!(expect_dimension, Dimension, Dimension, "dimension");
+    style_value_getter!(expect_number, Number, f32, "number");
+    style_value_getter!(expect_align_items, AlignItems, AlignItems, "align_items");
+    style_value_getter!(expect_align_self, AlignSelf, AlignSelf, "align_self");
+    style_value_getter!(
+        expect_align_content,
+        AlignContent,
+        AlignContent,
+        "align_content"
+    );
+    style_value_getter!(
+        expect_justify_items,
+        JustifyItems,
+        JustifyItems,
+        "justify_items"
+    );
+    style_value_getter!(
+        expect_justify_self,
+        JustifySelf,
+        JustifySelf,
+        "justify_self"
+    );
+    style_value_getter!(
+        expect_justify_content,
+        JustifyContent,
+        JustifyContent,
+        "justify_content"
+    );
+    style_value_getter!(
+        expect_grid_auto_flow,
+        GridAutoFlow,
+        GridAutoFlow,
+        "grid_auto_flow"
+    );
+    style_value_getter!(expect_grid_line, GridLine, GridLine, "grid_line");
+    style_value_getter!(expect_position, Position, Position, "position");
+    style_value_getter!(expect_z_index, ZIndex, ZIndex, "z_index");
 
     /// Returns a mixin or panics with a stylesheet-oriented message.
     ///

@@ -42,6 +42,46 @@ pub(super) enum StyleValueKind {
     LayoutDirection,
     /// Terminal-cell image render size.
     Size,
+    /// Layout display strategy.
+    Display,
+    /// Authored-size box model.
+    BoxSizing,
+    /// Horizontal and vertical overflow behavior.
+    Overflow,
+    /// Preferred, minimum, or maximum layout size.
+    LayoutSize,
+    /// Margin or inset edge values.
+    LengthAutoEdges,
+    /// Horizontal and vertical child gaps.
+    Gap,
+    /// Flexbox main-axis direction.
+    FlexDirection,
+    /// Flexbox wrapping behavior.
+    FlexWrap,
+    /// Preferred flexbox basis.
+    Dimension,
+    /// Flex growth or shrink factor.
+    Number,
+    /// Child cross-axis alignment.
+    AlignItems,
+    /// Item cross-axis alignment.
+    AlignSelf,
+    /// Cross-axis content distribution.
+    AlignContent,
+    /// Child inline-axis alignment.
+    JustifyItems,
+    /// Item inline-axis alignment.
+    JustifySelf,
+    /// Main-axis or inline-axis content distribution.
+    JustifyContent,
+    /// Grid automatic-flow behavior.
+    GridAutoFlow,
+    /// Grid row or column placement.
+    GridLine,
+    /// Positioning scheme.
+    Position,
+    /// Positioned stacking level.
+    ZIndex,
 }
 
 impl Parse for StyleValue {
@@ -118,5 +158,27 @@ fn expand_imported_variable(
         StyleValueKind::Spacing => quote! { #module.expect_spacing(#name) },
         StyleValueKind::LayoutDirection => quote! { #module.expect_layout_direction(#name) },
         StyleValueKind::Size => quote! { #module.expect_size(#name) },
+        StyleValueKind::Display => quote! { #module.expect_display(#name) },
+        StyleValueKind::BoxSizing => quote! { #module.expect_box_sizing(#name) },
+        StyleValueKind::Overflow => quote! { #module.expect_overflow(#name) },
+        StyleValueKind::LayoutSize => quote! { #module.expect_layout_size(#name) },
+        StyleValueKind::LengthAutoEdges => {
+            quote! { #module.expect_length_auto_edges(#name) }
+        }
+        StyleValueKind::Gap => quote! { #module.expect_gap(#name) },
+        StyleValueKind::FlexDirection => quote! { #module.expect_flex_direction(#name) },
+        StyleValueKind::FlexWrap => quote! { #module.expect_flex_wrap(#name) },
+        StyleValueKind::Dimension => quote! { #module.expect_dimension(#name) },
+        StyleValueKind::Number => quote! { #module.expect_number(#name) },
+        StyleValueKind::AlignItems => quote! { #module.expect_align_items(#name) },
+        StyleValueKind::AlignSelf => quote! { #module.expect_align_self(#name) },
+        StyleValueKind::AlignContent => quote! { #module.expect_align_content(#name) },
+        StyleValueKind::JustifyItems => quote! { #module.expect_justify_items(#name) },
+        StyleValueKind::JustifySelf => quote! { #module.expect_justify_self(#name) },
+        StyleValueKind::JustifyContent => quote! { #module.expect_justify_content(#name) },
+        StyleValueKind::GridAutoFlow => quote! { #module.expect_grid_auto_flow(#name) },
+        StyleValueKind::GridLine => quote! { #module.expect_grid_line(#name) },
+        StyleValueKind::Position => quote! { #module.expect_position(#name) },
+        StyleValueKind::ZIndex => quote! { #module.expect_z_index(#name) },
     })
 }

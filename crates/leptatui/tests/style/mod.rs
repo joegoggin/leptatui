@@ -4,10 +4,12 @@
 //! padding, and block values.
 
 use leptatui::{
-    BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
-    StyleMetadata, StyleModule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
-    TuiSize, TuiSpacing, TuiStyle, ViewType, ViewportSize, button, image, stylesheet, text,
-    theme_color,
+    AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, GridPlacement, JustifyContent,
+    JustifyItems, JustifySelf, LayoutDirection, LayoutSize, Length, LengthAuto, MediaQuery,
+    Modifier, Overflow, Position, StyleDeclarations, StyleMetadata, StyleModule, StyleSelector,
+    StyleValue, Stylesheet, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, ViewType,
+    ViewportSize, ZIndex, button, image, stylesheet, text, theme_color,
 };
 use ratatui::{style::Style, widgets::Padding};
 
