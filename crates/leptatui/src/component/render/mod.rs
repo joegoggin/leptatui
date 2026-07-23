@@ -171,7 +171,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             inherited_style,
             selector_ancestors,
             terminal_images: self.terminal_images.clone(),
-            hit_mapper: self.hit_mapper,
+            hit_mapper: self.hit_mapper.clone(),
         }
     }
 
@@ -314,7 +314,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
                 inherited_style,
                 selector_ancestors,
                 terminal_images: TerminalImageSupport::default(),
-                hit_mapper: HitMapper::clipped(
+                hit_mapper: self.hit_mapper.with_clipped_child(
                     Rect {
                         x: 0,
                         y: source_y,
@@ -431,13 +431,20 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     }
 }
 /// Maps local render rectangles into terminal hit-test coordinates.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct HitMapper {
-    /// Optional local-coordinate clip applied before mapping.
-    clip: Option<Rect>,
-    /// Signed terminal x offset applied after clipping.
+    /// Ordered clip and translation steps from local to terminal coordinates.
+    steps: Vec<HitMapStep>,
+}
+
+/// One clipping and translation step in a [`HitMapper`].
+#[derive(Clone, Copy)]
+struct HitMapStep {
+    /// Rectangle retained before applying this step's translation.
+    clip: Rect,
+    /// Signed x offset applied after clipping.
     x_offset: i32,
-    /// Signed terminal y offset applied after clipping.
+    /// Signed y offset applied after clipping.
     y_offset: i32,
 }
 
@@ -448,29 +455,32 @@ impl HitMapper {
     ///
     /// A [`HitMapper`] that preserves local coordinates without clipping.
     const fn identity() -> Self {
-        Self {
-            clip: None,
-            x_offset: 0,
-            y_offset: 0,
-        }
+        Self { steps: Vec::new() }
     }
 
-    /// Creates a mapper for clipped offscreen buffer rendering.
+    /// Returns a mapper extended for a clipped child buffer.
+    ///
+    /// The child mapping runs before retained parent steps so nested offscreen
+    /// buffers preserve every clip and translation back to terminal space.
     ///
     /// # Arguments
     ///
-    /// * `source` — Local source rectangle retained from the offscreen buffer.
-    /// * `target` — Terminal rectangle receiving the retained source region.
+    /// * `source` — Child-local rectangle retained from the offscreen buffer.
+    /// * `target` — Parent-local rectangle receiving the retained source region.
     ///
     /// # Returns
     ///
-    /// A [`HitMapper`] that clips to `source` and translates into `target`.
-    fn clipped(source: Rect, target: Rect) -> Self {
-        Self {
-            clip: Some(source),
+    /// A [`HitMapper`] that maps the child through this parent mapper.
+    fn with_clipped_child(&self, source: Rect, target: Rect) -> Self {
+        let child = HitMapStep {
+            clip: source,
             x_offset: i32::from(target.x) - i32::from(source.x),
             y_offset: i32::from(target.y) - i32::from(source.y),
-        }
+        };
+        let mut steps = Vec::with_capacity(self.steps.len().saturating_add(1));
+        steps.push(child);
+        steps.extend_from_slice(&self.steps);
+        Self { steps }
     }
 
     /// Maps one local rectangle into terminal coordinates.
@@ -484,28 +494,23 @@ impl HitMapper {
     /// An [`Option`] containing the clipped and translated terminal rectangle,
     /// or [`None`] when the result is empty, outside the clip, negative, or
     /// cannot be represented by [`Rect`].
-    fn map(self, area: Rect) -> Option<Rect> {
-        let area = if let Some(clip) = self.clip {
-            rect_intersection(area, clip)?
-        } else {
-            area
-        };
+    fn map(&self, mut area: Rect) -> Option<Rect> {
         if area.width == 0 || area.height == 0 {
             return None;
         }
 
-        let x = i32::from(area.x) + self.x_offset;
-        let y = i32::from(area.y) + self.y_offset;
-        if x < 0 || y < 0 {
-            return None;
+        for step in &self.steps {
+            area = rect_intersection(area, step.clip)?;
+            let x = i32::from(area.x) + step.x_offset;
+            let y = i32::from(area.y) + step.y_offset;
+            if x < 0 || y < 0 {
+                return None;
+            }
+            area.x = u16::try_from(x).ok()?;
+            area.y = u16::try_from(y).ok()?;
         }
 
-        Some(Rect {
-            x: u16::try_from(x).ok()?,
-            y: u16::try_from(y).ok()?,
-            width: area.width,
-            height: area.height,
-        })
+        Some(area)
     }
 }
 

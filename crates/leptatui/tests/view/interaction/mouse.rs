@@ -4,6 +4,64 @@ struct MouseEventProbe {
     seen: Rc<Cell<bool>>,
 }
 
+/// View that constrains a child to three rows while retaining normal traversal.
+struct ClippedFocusPanel {
+    /// Child view rendered inside the constrained panel.
+    view: AnyView,
+}
+
+impl View for ClippedFocusPanel {
+    /// Renders the child view in the panel's assigned area.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Rendering context supplied by the parent layout.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] on success.
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        ctx.render_view(&self.view)
+    }
+
+    /// Returns the panel's constrained three-row height.
+    ///
+    /// # Returns
+    ///
+    /// A [`u16`] height of three terminal rows.
+    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        3
+    }
+
+    /// Returns the child view for default traversal.
+    ///
+    /// # Returns
+    ///
+    /// A slice containing the panel's child view.
+    fn children(&self) -> &[AnyView] {
+        std::slice::from_ref(&self.view)
+    }
+
+    /// Returns the mutable child view for default traversal.
+    ///
+    /// # Returns
+    ///
+    /// A mutable slice containing the panel's child view.
+    fn children_mut(&mut self) -> &mut [AnyView] {
+        std::slice::from_mut(&mut self.view)
+    }
+
+    /// Returns the panel for concrete-type inspection.
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    /// Returns the mutable panel for concrete-type inspection.
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 impl View for MouseEventProbe {
     /// Renders the behavior-only probe without terminal output.
     fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
@@ -190,6 +248,47 @@ fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> Result<()> {
     draw_view(&mut terminal, &view)?;
 
     assert!(rendered_text(&terminal).contains("Visible"));
+
+    Ok(())
+}
+
+/// Verifies nested clipped views compose mouse hit-test coordinates.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Column("Header", ClippedPanel(scrolled Column(Button("Nested"), Button("Later"))))
+/// MouseMoved(1, 0), MouseMoved(1, 1)
+/// ```
+///
+/// # Assertions
+///
+/// - Moving over the outer header does not focus the nested clipped button.
+/// - Moving over the visible nested button focuses that button.
+///
+/// # Why
+///
+/// Each offscreen render must retain its parent's clipping translation so
+/// nested controls record terminal coordinates instead of buffer-local rows.
+#[test]
+fn nested_clipped_views_compose_mouse_hit_coordinates() -> Result<()> {
+    let mut inner_terminal = Terminal::new(TestBackend::new(12, 3))?;
+    let mut inner = column([button("Nested"), button("Later")]);
+    draw_view(&mut inner_terminal, &inner)?;
+    inner.handle_key_event(key_event(KeyCode::Down))?;
+
+    let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
+    let panel = ClippedFocusPanel {
+        view: inner.into_view(),
+    };
+    let mut view = column((text("Header"), panel));
+    draw_view(&mut terminal, &view)?;
+
+    view.handle_event(mouse(MouseEventKind::Moved, 1, 0))?;
+    assert_eq!(button_focuses(&view), vec![false, false]);
+
+    view.handle_event(mouse(MouseEventKind::Moved, 1, 1))?;
+    assert_eq!(button_focuses(&view), vec![true, false]);
 
     Ok(())
 }
