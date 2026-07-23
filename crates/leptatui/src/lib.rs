@@ -230,9 +230,12 @@ pub use markdown::{
 pub use resource::{Resource, ResourceState, create_resource};
 pub use route::{RouteState, provide_route, use_navigate, use_route};
 pub use style::{
-    BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
-    StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
-    TuiSize, TuiSpacing, TuiStyle, ViewportSize, theme_color,
+    AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
+    Display, Edges, FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridPlacement,
+    JustifyContent, JustifyItems, JustifySelf, LayoutDirection, LayoutSize, Length, LengthAuto,
+    MediaQuery, Modifier, Overflow, Position, StyleDeclarations, StyleModule, StyleRule,
+    StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables, TuiSize, TuiSpacing,
+    TuiStyle, ViewportSize, ZIndex, theme_color,
 };
 pub use view::{
     AnyView, BlockView, ButtonAction, ButtonView, CellAlignment, CodeBlockView, ContainerView,

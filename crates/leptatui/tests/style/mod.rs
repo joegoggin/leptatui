@@ -13,6 +13,7 @@ use ratatui::{style::Style, widgets::Padding};
 
 include!("cascade/mod.rs");
 include!("foundation.rs");
+include!("layout_values.rs");
 include!("macro_integration.rs");
 include!("modules.rs");
 include!("theme.rs");
