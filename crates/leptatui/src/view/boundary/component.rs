@@ -110,7 +110,11 @@ impl ComponentView {
         self.with_reset_component(|component| component.as_view().__min_height(ctx))
     }
 
-    /// Handles an event inside this component's existing context scope.
+    /// Dispatches an event inside this component's existing context scope.
+    ///
+    /// Mouse events use custom-only dispatch because built-in mouse behavior
+    /// runs once at the outer event boundary. Other events retain component
+    /// overrides of [`View::handle_event`].
     ///
     /// # Arguments
     ///
@@ -123,9 +127,13 @@ impl ComponentView {
     /// # Errors
     ///
     /// Returns [`crate::app::Error::Io`] if the component event path performs
-    /// terminal I/O that fails.
-    pub(crate) fn dispatch_event(&self, event: Event) -> Result<AppControl> {
-        self.with_component_mut(|component| component.handle_event(event))
+    /// terminal I/O that fails. Returns [`crate::app::Error::LinkOpen`] if an
+    /// activated link cannot be opened.
+    pub(crate) fn dispatch_event(&self, event: &Event) -> Result<AppControl> {
+        self.with_component_mut(|component| match event {
+            Event::Mouse(_) => component.__dispatch_event(event),
+            _ => component.handle_event(event.clone()),
+        })
     }
 
     /// Dispatches a key event through custom handlers only.
@@ -152,6 +160,35 @@ impl ComponentView {
         self.with_component_mut(|component| component.__set_focus_by_index_inner(target, index));
     }
 
+    /// Clears last-rendered mouse hit areas inside this component boundary.
+    #[doc(hidden)]
+    pub(crate) fn clear_hit_areas(&self) {
+        self.with_component(|component| component.__clear_hit_areas());
+    }
+
+    /// Returns the focused control index under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `index` — Running flattened focus index to inspect and advance.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the flattened index under the position.
+    #[doc(hidden)]
+    pub(crate) fn focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        self.with_component(|component| {
+            component.__focusable_index_at_position_inner(column, row, index)
+        })
+    }
+
     /// Returns the focused control's vertical span inside this component boundary.
     #[doc(hidden)]
     pub(crate) fn focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
@@ -159,8 +196,16 @@ impl ComponentView {
     }
 
     /// Activates the focused control inside the component boundary, if any.
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`] containing the focused control's activation result, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::app::Error::LinkOpen`] if a focused link cannot be opened.
     #[doc(hidden)]
-    pub(crate) fn activate_focused_button(&self) -> Option<AppControl> {
+    pub(crate) fn activate_focused_button(&self) -> Result<Option<AppControl>> {
         self.with_component(|component| component.__activate_focused_button())
     }
 
@@ -233,6 +278,53 @@ impl ComponentView {
     #[doc(hidden)]
     pub(crate) fn has_overflowing_scroll_target(&self) -> bool {
         self.with_component(|component| component.__has_overflowing_scroll_target())
+    }
+
+    /// Scrolls the innermost overflowing layout under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `delta` — Signed row count to apply to the scroll offset.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a positioned layout consumed the scroll.
+    #[doc(hidden)]
+    pub(crate) fn scroll_overflowing_at_position(&self, column: u16, row: u16, delta: i16) -> bool {
+        self.with_component_mut(|component| {
+            component.__scroll_overflowing_at_position(column, row, delta)
+        })
+    }
+
+    /// Moves focus to the control under a terminal position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a focusable control was found.
+    #[doc(hidden)]
+    pub(crate) fn focus_control_at_position(&self, column: u16, row: u16) -> bool {
+        self.with_component_mut(|component| component.__focus_control_at_position(column, row))
+    }
+
+    /// Moves the first eligible Markdown boundary through cached history.
+    ///
+    /// # Arguments
+    ///
+    /// * `back` — Whether to move backward instead of forward.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a Markdown boundary changed pages.
+    #[doc(hidden)]
+    pub(crate) fn navigate_markdown_history(&self, back: bool) -> bool {
+        self.with_component_mut(|component| component.__navigate_markdown_history(back))
     }
 
     /// Returns whether reconciliation may preserve these component boundaries.
@@ -345,7 +437,7 @@ impl View for ComponentView {
     }
 
     fn __dispatch_event(&mut self, event: &Event) -> Result<AppControl> {
-        self.dispatch_event(event.clone())
+        self.dispatch_event(event)
     }
 
     fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
@@ -368,11 +460,24 @@ impl View for ComponentView {
         self.set_focus_by_index_inner(target, index);
     }
 
+    fn __clear_hit_areas(&self) {
+        self.clear_hit_areas();
+    }
+
+    fn __focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        self.focusable_index_at_position_inner(column, row, index)
+    }
+
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         self.focused_control_span(ctx)
     }
 
-    fn __activate_focused_button(&self) -> Option<AppControl> {
+    fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
         self.activate_focused_button()
     }
 
@@ -404,12 +509,24 @@ impl View for ComponentView {
         self.has_overflowing_scroll_target()
     }
 
+    fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
+        self.focus_control_at_position(column, row)
+    }
+
+    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+        self.scroll_overflowing_at_position(column, row, delta)
+    }
+
     fn __set_scroll_to_top_key_pending(&self, pending: bool) -> bool {
         self.with_component(|component| component.__set_scroll_to_top_key_pending(pending))
     }
 
     fn __take_scroll_to_top_key_pending(&self) -> bool {
         self.with_component(AnyView::__take_scroll_to_top_key_pending)
+    }
+
+    fn __navigate_markdown_history(&mut self, back: bool) -> bool {
+        self.navigate_markdown_history(back)
     }
 }
 

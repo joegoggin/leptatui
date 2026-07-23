@@ -1,13 +1,16 @@
 //! Markdown-style semantic heading view.
 
-use ratatui::{layout::Rect, text::Text, widgets::Paragraph};
+use ratatui::{layout::Rect, widgets::Paragraph};
 
 use crate::view::core::{
     capabilities::{impl_styled_view, impl_textual_view},
     render::{line_count_height, resolve_style, semantic_paragraph},
 };
-use crate::view::{StyleMetadata, View, ViewType};
-use crate::{TuiStyle, app::Result, component::RenderCtx};
+use crate::view::{
+    CellAlignment, StyleMetadata, View, ViewType,
+    link::{RichTextWrapMode, impl_rich_text_view, resolved_rich_text},
+};
+use crate::{RichText, TuiStyle, app::Result, component::RenderCtx};
 
 /// One-based semantic heading level.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -64,7 +67,7 @@ impl HeadingLevel {
 #[derive(Debug, PartialEq)]
 pub struct HeadingView {
     /// Rich heading content.
-    pub(crate) content: Text<'static>,
+    pub(crate) content: RichText,
     /// Heading level controlling markers and selector identity.
     pub(crate) level: HeadingLevel,
     /// Selector and runtime metadata.
@@ -81,7 +84,7 @@ pub struct HeadingView {
 /// # Returns
 ///
 /// A [`HeadingView`] containing `content` at `level`.
-fn heading(content: impl Into<Text<'static>>, level: HeadingLevel) -> HeadingView {
+fn heading(content: impl Into<RichText>, level: HeadingLevel) -> HeadingView {
     HeadingView {
         content: content.into(),
         level,
@@ -98,7 +101,7 @@ fn heading(content: impl Into<Text<'static>>, level: HeadingLevel) -> HeadingVie
 /// # Returns
 ///
 /// A first-level [`HeadingView`].
-pub fn h1(content: impl Into<Text<'static>>) -> HeadingView {
+pub fn h1(content: impl Into<RichText>) -> HeadingView {
     heading(content, HeadingLevel::H1)
 }
 
@@ -111,7 +114,7 @@ pub fn h1(content: impl Into<Text<'static>>) -> HeadingView {
 /// # Returns
 ///
 /// A second-level [`HeadingView`].
-pub fn h2(content: impl Into<Text<'static>>) -> HeadingView {
+pub fn h2(content: impl Into<RichText>) -> HeadingView {
     heading(content, HeadingLevel::H2)
 }
 
@@ -124,7 +127,7 @@ pub fn h2(content: impl Into<Text<'static>>) -> HeadingView {
 /// # Returns
 ///
 /// A third-level [`HeadingView`].
-pub fn h3(content: impl Into<Text<'static>>) -> HeadingView {
+pub fn h3(content: impl Into<RichText>) -> HeadingView {
     heading(content, HeadingLevel::H3)
 }
 
@@ -137,7 +140,7 @@ pub fn h3(content: impl Into<Text<'static>>) -> HeadingView {
 /// # Returns
 ///
 /// A fourth-level [`HeadingView`].
-pub fn h4(content: impl Into<Text<'static>>) -> HeadingView {
+pub fn h4(content: impl Into<RichText>) -> HeadingView {
     heading(content, HeadingLevel::H4)
 }
 
@@ -150,7 +153,7 @@ pub fn h4(content: impl Into<Text<'static>>) -> HeadingView {
 /// # Returns
 ///
 /// A fifth-level [`HeadingView`].
-pub fn h5(content: impl Into<Text<'static>>) -> HeadingView {
+pub fn h5(content: impl Into<RichText>) -> HeadingView {
     heading(content, HeadingLevel::H5)
 }
 
@@ -163,7 +166,7 @@ pub fn h5(content: impl Into<Text<'static>>) -> HeadingView {
 /// # Returns
 ///
 /// A sixth-level [`HeadingView`].
-pub fn h6(content: impl Into<Text<'static>>) -> HeadingView {
+pub fn h6(content: impl Into<RichText>) -> HeadingView {
     heading(content, HeadingLevel::H6)
 }
 
@@ -191,12 +194,13 @@ fn heading_content_offset(level: u16) -> u16 {
 /// * `level` — One-based semantic heading level.
 /// * `ctx` — Rendering context containing the target area and stylesheets.
 fn render_heading(
-    content: &Text<'static>,
+    content: &RichText,
     metadata: &StyleMetadata,
     level: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) {
     let style = resolve_style(metadata, ctx);
+    let rendered = resolved_rich_text(content, metadata, style, ctx);
     let area = ctx.area();
     if area.width == 0 || area.height == 0 {
         return;
@@ -220,8 +224,15 @@ fn render_heading(
             ..area
         };
         ctx.with_area(content_area, |ctx| {
-            ctx.render_widget(semantic_paragraph(content, style));
+            ctx.render_widget(semantic_paragraph(&rendered, style));
         });
+        content.record_link_hit_areas(
+            content_area,
+            content_area.width,
+            CellAlignment::Left,
+            RichTextWrapMode::Word,
+            ctx,
+        );
     } else if area.height > 1 {
         let content_area = Rect {
             y: area.y.saturating_add(1),
@@ -229,9 +240,17 @@ fn render_heading(
             ..area
         };
         ctx.with_area(content_area, |ctx| {
-            ctx.render_widget(semantic_paragraph(content, style));
+            ctx.render_widget(semantic_paragraph(&rendered, style));
         });
+        content.record_link_hit_areas(
+            content_area,
+            content_area.width,
+            CellAlignment::Left,
+            RichTextWrapMode::Word,
+            ctx,
+        );
     }
+    content.clear_link_scroll_requests();
 }
 
 /// Returns the minimum height required by a Markdown-style semantic heading.
@@ -246,7 +265,7 @@ fn render_heading(
 /// # Returns
 ///
 /// A [`u16`] row count that includes wrapping after the heading marker.
-fn heading_min_height(content: &Text<'static>, style: TuiStyle, level: u16, width: u16) -> u16 {
+fn heading_min_height(content: &RichText, style: TuiStyle, level: u16, width: u16) -> u16 {
     let content_width = width.saturating_sub(heading_content_offset(level));
     if content_width == 0 {
         if width == 0 {
@@ -254,16 +273,17 @@ fn heading_min_height(content: &Text<'static>, style: TuiStyle, level: u16, widt
         }
 
         return 1u16.saturating_add(line_count_height(
-            semantic_paragraph(content, style).line_count(width),
+            semantic_paragraph(content.text(), style).line_count(width),
         ));
     }
 
-    line_count_height(semantic_paragraph(content, style).line_count(content_width)).max(1)
+    line_count_height(semantic_paragraph(content.text(), style).line_count(content_width)).max(1)
 }
 
 impl View for HeadingView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_heading(&self.content, &self.metadata, self.level.number(), ctx);
+        self.metadata.clear_scroll_to_anchor_request();
         Ok(())
     }
 
@@ -284,11 +304,35 @@ impl View for HeadingView {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
+    impl_rich_text_view!();
+
     fn can_reconcile_from(&self, previous: &dyn View) -> bool {
         previous
             .as_any()
             .downcast_ref::<Self>()
             .is_some_and(|previous| self.level == previous.level)
+    }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        let area = ctx.area();
+        if self.metadata.scroll_to_anchor_requested() {
+            return Some((0, u32::from(area.height)));
+        }
+        if !self.content.focused_link_requested_scroll() {
+            return None;
+        }
+
+        let offset = heading_content_offset(self.level.number()).min(area.width);
+        let content_width = area.width.saturating_sub(offset);
+        if content_width > 0 {
+            self.content
+                .focused_link_span(content_width)
+                .map(|span| span.into_tuple())
+        } else {
+            self.content
+                .focused_link_span(area.width)
+                .map(|span| span.offset_by(1).into_tuple())
+        }
     }
 }
 

@@ -10,4 +10,6 @@ mod grid;
 mod layout;
 mod view;
 
-pub(super) use view::{min_height_for_table_view, render_table_view};
+pub(super) use view::{
+    focused_link_span_for_table_view, min_height_for_table_view, render_table_view,
+};

@@ -14,7 +14,10 @@ use super::{
 use crate::{
     app::Result,
     component::RenderCtx,
-    view::{AnyView, StyleMetadata},
+    view::{
+        AnyView, StyleMetadata, TableCellView, TableRowView, TableSectionView,
+        core::render::VerticalSpan, link::RichTextWrapMode,
+    },
 };
 
 /// Renders a semantic table with responsive columns and variable-height rows.
@@ -60,6 +63,7 @@ pub(in crate::view::containers::tables) fn render_table_view(
         width: table_width,
         ..area
     };
+    let source_rows = table_source_rows(sections);
     let border_style = table_style.to_ratatui_style();
     ctx.with_area(table_area, |ctx| {
         ctx.render_widget(Block::new().style(border_style));
@@ -131,6 +135,19 @@ pub(in crate::view::containers::tables) fn render_table_view(
                             .alignment(ratatui_cell_alignment(cell.alignment)),
                     );
                 });
+                if let Some(source_cell) = source_rows
+                    .get(row_index)
+                    .and_then(|source_cells| source_cells.get(column))
+                    .and_then(|cell| cell.downcast_ref::<TableCellView>())
+                {
+                    source_cell.content.record_link_hit_areas(
+                        cell_area,
+                        width,
+                        source_cell.alignment,
+                        RichTextWrapMode::Grapheme,
+                        ctx,
+                    );
+                }
             }
             x = x.saturating_add(width);
             ctx.with_area(
@@ -173,7 +190,47 @@ pub(in crate::view::containers::tables) fn render_table_view(
         y = y.saturating_add(1);
     }
 
+    clear_table_link_scroll_requests(sections);
+
     Ok(())
+}
+
+/// Returns source table rows in the same order used by resolved rendering.
+///
+/// Non-section and non-row views are omitted to match layout resolution.
+///
+/// # Arguments
+///
+/// * `sections` — Semantic table sections containing source rows and cells.
+///
+/// # Returns
+///
+/// A [`Vec`] of borrowed source-cell slices in rendered row order.
+fn table_source_rows(sections: &[AnyView]) -> Vec<&[AnyView]> {
+    sections
+        .iter()
+        .filter_map(|section| section.downcast_ref::<TableSectionView>())
+        .flat_map(|section| section.children.iter())
+        .filter_map(|row| {
+            row.downcast_ref::<TableRowView>()
+                .map(|row| row.children.as_slice())
+        })
+        .collect()
+}
+
+/// Clears completed inline-link scroll requests throughout a semantic table.
+///
+/// # Arguments
+///
+/// * `sections` — Semantic table sections whose source cells should be reset.
+fn clear_table_link_scroll_requests(sections: &[AnyView]) {
+    for cells in table_source_rows(sections) {
+        for cell in cells {
+            if let Some(cell) = cell.downcast_ref::<TableCellView>() {
+                cell.content.clear_link_scroll_requests();
+            }
+        }
+    }
 }
 
 /// Returns the intrinsic height of a semantic table.
@@ -201,4 +258,44 @@ pub(in crate::view::containers::tables) fn min_height_for_table_view(
         u16::try_from(rows.len().saturating_add(1)).unwrap_or(u16::MAX),
         u16::saturating_add,
     )
+}
+
+/// Returns the focused linked table row's vertical span.
+///
+/// The returned coordinates include the table's top border and inter-row
+/// borders used by resolved rendering.
+///
+/// # Arguments
+///
+/// * `sections` — Semantic table sections to resolve and inspect.
+/// * `metadata` — Table metadata used during layout resolution.
+/// * `ctx` — Render context supplying the available area and stylesheets.
+///
+/// # Returns
+///
+/// An [`Option`] containing the rendered row span with a pending focused-link
+/// scroll request.
+pub(in crate::view::containers::tables) fn focused_link_span_for_table_view(
+    sections: &[AnyView],
+    metadata: &StyleMetadata,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    let ResolvedTableLayout { rows, widths, .. } = resolve_table_layout(sections, metadata, ctx);
+    if rows.is_empty() || widths.is_empty() {
+        return None;
+    }
+
+    let mut top = 1u32;
+    for row in &rows {
+        let height = u32::from(table_row_height(row, &widths));
+        if row.cells.iter().any(|cell| cell.link_scroll_requested) {
+            return Some(VerticalSpan {
+                top,
+                bottom: top.saturating_add(height),
+            });
+        }
+        top = top.saturating_add(height).saturating_add(1);
+    }
+
+    None
 }

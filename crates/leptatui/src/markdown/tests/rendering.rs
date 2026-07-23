@@ -4,14 +4,14 @@
 ///
 /// ```text
 /// ten Markdown paragraphs rendered into a 3-row terminal
-/// Down, Up, PageDown, PageUp, G, gg
+/// Down, Up, PageDown, PageUp, Ctrl-D, Ctrl-U, G, gg
 /// ```
 ///
 /// # Assertions
 ///
 /// - Rendering establishes an overflowing scroll range on the document column.
 /// - Arrow keys move one row down and up.
-/// - Page keys move five rows down and up.
+/// - Page keys and Vim control keys move five rows down and up.
 /// - `G` reaches the maximum offset and `gg` returns to zero.
 #[test]
 fn markdown_documents_use_existing_vertical_scroll_keys() -> Result<()> {
@@ -40,6 +40,17 @@ fn markdown_documents_use_existing_vertical_scroll_keys() -> Result<()> {
     view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?;
     assert_eq!(markdown_scroll_state(&view).0, 5);
     view.handle_key_event(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE))?;
+    assert_eq!(markdown_scroll_state(&view).0, 0);
+
+    view.handle_key_event(KeyEvent::new(
+        KeyCode::Char('d'),
+        KeyModifiers::CONTROL,
+    ))?;
+    assert_eq!(markdown_scroll_state(&view).0, 5);
+    view.handle_key_event(KeyEvent::new(
+        KeyCode::Char('u'),
+        KeyModifiers::CONTROL,
+    ))?;
     assert_eq!(markdown_scroll_state(&view).0, 0);
 
     view.handle_key_event(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))?;

@@ -53,7 +53,12 @@
 //! [`ImageSource`] values, renders through supported terminal graphics
 //! protocols, and falls back to deterministic text when graphics support is
 //! unavailable. `ProgressBar` renders a clamped `0.0..=1.0` gauge with an
-//! optional label.
+//! optional label. [`link`] creates a standalone URL or local-path control;
+//! the equivalent tag is `<Link href="https://example.com">"label"</Link>`.
+//! Links receive focus with Tab or Shift+Tab and activate with Enter or Space.
+//! Moving the pointer over an interactive control focuses it, left-clicking a
+//! button or link activates it, and the mouse wheel scrolls the overflowing
+//! layout under the pointer.
 //!
 //! # Semantic Documents and Markdown
 //!
@@ -171,11 +176,16 @@
 //! ```
 //!
 //! Markdown compatibility covers CommonMark plus tables. Optional GFM
-//! extensions are deferred. Links are readable but non-interactive; images
-//! become descriptive text without fetching local or remote targets; and raw
-//! HTML or unsupported blocks retain readable fallbacks. File readers are
-//! infallible and render a path-aware paragraph for unreadable or non-UTF-8
-//! input.
+//! extensions are deferred. Links retain their inline labels and participate
+//! in normal focus traversal. Inside a file-backed Markdown view, local
+//! `.md`/`.markdown` links open in the same reader and non-empty fragments
+//! scroll to GitHub-style heading anchors. Shift+H and Shift+L move through
+//! cached page history. Other local targets and all URLs use the system
+//! handler; in-memory Markdown and standalone [`LinkView`] values keep that
+//! external behavior. Images become descriptive text without fetching local
+//! or remote targets, and raw HTML or unsupported blocks retain readable
+//! fallbacks. File readers are infallible and render a path-aware page for
+//! unreadable or non-UTF-8 input.
 //!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
@@ -214,7 +224,8 @@ pub use app::{App, AppControl, AppRoot, Error, Result};
 pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, use_key_event};
 pub use leptatui_macros::{component, stylesheet, view};
 pub use markdown::{
-    MarkdownOptions, markdown, markdown_file, markdown_file_with_options, markdown_with_options,
+    MarkdownOptions, MarkdownView, markdown, markdown_file, markdown_file_with_options,
+    markdown_with_options,
 };
 pub use resource::{Resource, ResourceState, create_resource};
 pub use route::{RouteState, provide_route, use_navigate, use_route};
@@ -226,13 +237,13 @@ pub use style::{
 pub use view::{
     AnyView, BlockView, ButtonAction, ButtonView, CellAlignment, CodeBlockView, ContainerView,
     DynamicView, EditableAction, EditableState, EditableView, FormAction, FormView, HeadingLevel,
-    HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews, LayoutView, ListItemView,
-    ListKind, ListView, ParagraphView, ProgressBarView, StyleMetadata, StyledView, SyntaxTheme,
-    TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView, TextAreaView,
-    TextView, TextualView, View, ViewType, VimMode, block, button, code_block, column, component,
-    dynamic, form, h1, h2, h3, h4, h5, h6, image, input, list_item, ordered_list, paragraph,
-    progress_bar, row, table, table_body, table_cell, table_head, table_row, text, text_area,
-    unordered_list,
+    HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews, LayoutView, LinkTarget,
+    LinkView, ListItemView, ListKind, ListView, ParagraphView, ProgressBarView, RichText,
+    StyleMetadata, StyledView, SyntaxTheme, TableCellView, TableRowView, TableSectionKind,
+    TableSectionView, TableView, TextAreaView, TextView, TextualView, View, ViewType, VimMode,
+    block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4, h5, h6, image,
+    input, link, list_item, ordered_list, paragraph, progress_bar, row, table, table_body,
+    table_cell, table_head, table_row, text, text_area, unordered_list,
 };
 
 #[doc(hidden)]
@@ -245,7 +256,7 @@ pub mod __private {
         FocusedControl, KeyHandlerRegistry, StylesheetRegistry,
     };
     pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
-    pub use crossterm::event::{Event, KeyEvent};
+    pub use crossterm::event::{Event, KeyEvent, MouseEvent};
 
     /// Creates a component view from a generated component factory.
     ///

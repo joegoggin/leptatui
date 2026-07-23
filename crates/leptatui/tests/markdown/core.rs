@@ -10,13 +10,12 @@
 ///
 /// - H1 through H6 retain their levels and source order.
 /// - Unicode paragraph content and nested inline modifiers remain intact.
-/// - Link labels are underlined and display a readable destination.
+/// - Link labels retain visible text while their target becomes focusable metadata.
 /// - Mixed nested lists retain loose paragraphs, empty items, and non-one starts.
 /// - Empty separator paragraphs retain one terminal row between blocks.
 #[test]
 fn markdown_core_fixture_builds_semantic_views() {
     let italic = Style::new().add_modifier(Modifier::ITALIC);
-    let underline = Style::new().add_modifier(Modifier::UNDERLINED);
 
     let actual = markdown(CORE_FIXTURE);
     let expected = column(separated_blocks((
@@ -38,7 +37,7 @@ fn markdown_core_fixture_builds_semantic_views() {
             Span::raw(" with "),
             Span::styled("code", Style::new().add_modifier(Modifier::REVERSED)),
             Span::raw(" plus "),
-            Span::styled("the guide (https://example.com/guide)", underline),
+            Span::raw("the guide"),
             Span::raw("."),
         ]))),
         ordered_list([
@@ -57,5 +56,6 @@ fn markdown_core_fixture_builds_semantic_views() {
         ])
         .start(3),
     )));
+    assert_eq!(actual.__focusable_count(), 1);
     assert_views_render_equally(&actual, &expected);
 }

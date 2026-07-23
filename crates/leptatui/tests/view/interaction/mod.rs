@@ -11,3 +11,4 @@ include!("form_keys.rs");
 include!("focus_panel.rs");
 include!("boundaries.rs");
 include!("button_behavior.rs");
+include!("mouse.rs");

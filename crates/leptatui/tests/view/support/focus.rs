@@ -31,6 +31,9 @@ fn control_focuses(view: &dyn View) -> Vec<bool> {
     if let Some(button) = view.as_any().downcast_ref::<ButtonView>() {
         return vec![button.metadata().is_focused()];
     }
+    if let Some(link) = view.as_any().downcast_ref::<LinkView>() {
+        return vec![link.metadata().is_focused()];
+    }
     if let Some(editor) = view.as_any().downcast_ref::<InputView>() {
         return vec![editor.metadata().is_focused()];
     }

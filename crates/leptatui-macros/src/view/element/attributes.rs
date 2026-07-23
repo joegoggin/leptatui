@@ -36,6 +36,13 @@ impl Element {
                         "view! src attribute is only supported on Image or Markdown",
                     ));
                 }
+                "href" if element_name == "Link" => AttrKind::Href,
+                "href" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! href attribute is only supported on Link",
+                    ));
+                }
                 "alt" if element_name == "Image" => AttrKind::Alt,
                 "alt" => {
                     return Err(Error::new_spanned(
@@ -143,6 +150,7 @@ impl Element {
                         "Button" => {
                             "unsupported view! attribute; expected class, id, style, or on_press"
                         }
+                        "Link" => "unsupported view! attribute; expected class, id, style, or href",
                         "Form" => {
                             "unsupported view! attribute; expected class, id, style, on_submit, or on_cancel"
                         }
@@ -248,6 +256,7 @@ impl Element {
                 AttrKind::ImageSource => expanded,
                 AttrKind::ProgressValue => expanded,
                 AttrKind::MarkdownSrc => expanded,
+                AttrKind::Href => expanded,
                 AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
                 AttrKind::Alt => quote! { (#expanded).alt(#value) },
                 AttrKind::Label => quote! { (#expanded).label(#value) },
@@ -292,6 +301,7 @@ impl Element {
                     | AttrKind::ImageSource
                     | AttrKind::ProgressValue
                     | AttrKind::MarkdownSrc
+                    | AttrKind::Href
                     | AttrKind::Style
                     | AttrKind::Start
                     | AttrKind::Alignment

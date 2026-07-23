@@ -1,6 +1,8 @@
 //! Semantic table container view.
 
-use super::render::{min_height_for_table_view, render_table_view};
+use super::render::{
+    focused_link_span_for_table_view, min_height_for_table_view, render_table_view,
+};
 use crate::view::core::capabilities::{impl_container_view, impl_styled_view};
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
 use crate::{app::Result, component::RenderCtx};
@@ -56,6 +58,11 @@ impl View for TableView {
     }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        focused_link_span_for_table_view(&self.children, &self.metadata, ctx)
+            .map(|span| span.into_tuple())
     }
 }
 

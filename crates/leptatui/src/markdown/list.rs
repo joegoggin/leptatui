@@ -4,7 +4,7 @@ use pulldown_cmark::{Event, Tag, TagEnd};
 
 use crate::{AnyView, IntoView, list_item, ordered_list, unordered_list};
 
-use super::{MarkdownOptions, block::parse_blocks};
+use super::{MarkdownOptions, block::parse_blocks, navigation::MarkdownParseContext};
 
 /// Parses a CommonMark ordered or unordered list.
 ///
@@ -21,13 +21,19 @@ pub(super) fn parse_list<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     start: Option<u64>,
     options: MarkdownOptions,
+    context: &mut MarkdownParseContext<'_>,
 ) -> AnyView {
     let mut items = Vec::new();
 
     while let Some(event) = events.next() {
         match event {
             Event::Start(Tag::Item) => {
-                items.push(list_item(parse_blocks(events, Some(TagEnd::Item), options)));
+                items.push(list_item(parse_blocks(
+                    events,
+                    Some(TagEnd::Item),
+                    options,
+                    context,
+                )));
             }
             Event::End(TagEnd::List(_)) => break,
             _ => {}

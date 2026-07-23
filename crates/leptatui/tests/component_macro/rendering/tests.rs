@@ -115,3 +115,102 @@ fn generated_component_scroll_keys_cross_component_boundaries() -> Result<()> {
 
     Ok(())
 }
+
+/// Verifies off-screen generated components release their mouse hit areas.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroScrolledMouseRoot(Hidden, Visible)
+/// PageDown
+/// MouseMoved(1, 1)
+/// ```
+///
+/// # Assertions
+///
+/// - The initial render displays the hidden control.
+/// - Scrolling replaces it with the visible control.
+/// - Pointer movement focuses the visible control rather than the stale one.
+#[test]
+fn offscreen_generated_component_hit_areas_are_cleared() -> Result<()> {
+    let mut component = MacroScrolledMouseRoot::new();
+    let terminal = render_component(&mut component, 12, 3)?;
+    assert!(rendered_text(&terminal).contains("Hidden"));
+
+    View::handle_event(&mut component, key(KeyCode::PageDown))?;
+    let terminal = render_component(&mut component, 12, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(!text.contains("Hidden"), "rendered text: {text:?}");
+    assert!(text.contains("Visible"), "rendered text: {text:?}");
+
+    View::handle_event(
+        &mut component,
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        }),
+    )?;
+    let mut index = 0;
+    assert_eq!(
+        View::__focused_index_inner(&component, &mut index),
+        Some(1)
+    );
+
+    Ok(())
+}
+
+/// Verifies Markdown history keys cross generated and stored component boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroMarkdownHistoryBoundary(MacroMarkdownHistoryProbe)
+/// Shift+H
+/// Shift+L
+/// ```
+///
+/// # Assertions
+///
+/// - Shift+H reaches a probe inside a generated component root.
+/// - Shift+L reaches a probe through both generated and stored component boundaries.
+#[test]
+fn markdown_history_keys_cross_component_boundaries() -> Result<()> {
+    let direct_direction = Rc::new(Cell::new(None));
+    let mut direct = MacroMarkdownHistoryBoundary::with_props(
+        MacroMarkdownHistoryBoundaryProps::builder()
+            .probe(
+                MacroMarkdownHistoryProbe {
+                    direction: Rc::clone(&direct_direction),
+                }
+                .into_view(),
+            )
+            .build(),
+    );
+    View::handle_event(
+        &mut direct,
+        Event::Key(KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT)),
+    )?;
+    assert_eq!(direct_direction.get(), Some(true));
+
+    let nested_direction = Rc::new(Cell::new(None));
+    let nested = MacroMarkdownHistoryBoundary::with_props(
+        MacroMarkdownHistoryBoundaryProps::builder()
+            .probe(
+                MacroMarkdownHistoryProbe {
+                    direction: Rc::clone(&nested_direction),
+                }
+                .into_view(),
+            )
+            .build(),
+    );
+    let mut boundary = component(nested);
+    boundary.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('L'),
+        KeyModifiers::SHIFT,
+    )))?;
+    assert_eq!(nested_direction.get(), Some(false));
+
+    Ok(())
+}

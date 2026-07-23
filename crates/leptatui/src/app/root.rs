@@ -45,7 +45,8 @@ pub trait AppRoot {
     /// # Errors
     ///
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
+    /// I/O that fails. Returns [`crate::app::Error::LinkOpen`] if an activated
+    /// link cannot be opened.
     fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
         Ok(AppControl::Continue)
     }
@@ -98,7 +99,8 @@ impl AppRoot for AnyView {
     /// # Errors
     ///
     /// Returns [`crate::app::Error::Io`] if event handling performs terminal
-    /// I/O that fails.
+    /// I/O that fails. Returns [`crate::app::Error::LinkOpen`] if an activated
+    /// link cannot be opened.
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
         AnyView::handle_event(self, event)
     }
@@ -123,6 +125,10 @@ where
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
         context::hooks::__with_context_scope(|| {
             let mut ctx = RenderCtx::new(frame);
+            View::__clear_hit_areas(self);
+            if let Some(metadata) = View::style_metadata(self) {
+                ctx.record_metadata_hit_area(metadata);
+            }
             View::render(self, &mut ctx)
         })
     }

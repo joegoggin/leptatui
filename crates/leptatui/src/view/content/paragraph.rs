@@ -1,19 +1,20 @@
 //! Semantic rich-text paragraph view.
 
-use ratatui::text::Text;
-
 use crate::view::core::{
     capabilities::{impl_styled_view, impl_textual_view},
     render::{line_count_height, resolve_style, semantic_paragraph},
 };
-use crate::view::{StyleMetadata, View, ViewType};
-use crate::{app::Result, component::RenderCtx};
+use crate::view::{
+    CellAlignment, StyleMetadata, View, ViewType,
+    link::{RichTextWrapMode, impl_rich_text_view, resolved_rich_text},
+};
+use crate::{RichText, app::Result, component::RenderCtx};
 
 /// Semantic paragraph content.
 #[derive(Debug, PartialEq)]
 pub struct ParagraphView {
     /// Rich paragraph content.
-    pub(crate) content: Text<'static>,
+    pub(crate) content: RichText,
     /// Selector and runtime metadata.
     pub(crate) metadata: StyleMetadata,
 }
@@ -27,7 +28,7 @@ pub struct ParagraphView {
 /// # Returns
 ///
 /// A [`ParagraphView`] containing `content`.
-pub fn paragraph(content: impl Into<Text<'static>>) -> ParagraphView {
+pub fn paragraph(content: impl Into<RichText>) -> ParagraphView {
     ParagraphView {
         content: content.into(),
         metadata: StyleMetadata::new(ViewType::Paragraph),
@@ -37,13 +38,25 @@ pub fn paragraph(content: impl Into<Text<'static>>) -> ParagraphView {
 impl View for ParagraphView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
-        ctx.render_widget(semantic_paragraph(&self.content, style));
+        let rendered = resolved_rich_text(&self.content, &self.metadata, style, ctx);
+        let area = ctx.area();
+        ctx.render_widget(semantic_paragraph(&rendered, style));
+        self.content.record_link_hit_areas(
+            area,
+            area.width,
+            CellAlignment::Left,
+            RichTextWrapMode::Word,
+            ctx,
+        );
+        self.content.clear_link_scroll_requests();
         Ok(())
     }
 
     fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
         let style = resolve_style(&self.metadata, ctx);
-        line_count_height(semantic_paragraph(&self.content, style).line_count(ctx.area().width))
+        line_count_height(
+            semantic_paragraph(self.content.text(), style).line_count(ctx.area().width),
+        )
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {
@@ -57,6 +70,14 @@ impl View for ParagraphView {
     }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    impl_rich_text_view!();
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        self.content
+            .focused_link_span(ctx.area().width)
+            .map(|span| span.into_tuple())
     }
 }
 

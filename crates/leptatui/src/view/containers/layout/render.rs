@@ -18,6 +18,16 @@ fn focused_control_span_for_view(
     view: &AnyView,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Option<VerticalSpan> {
+    if view
+        .style_metadata()
+        .is_some_and(StyleMetadata::scroll_to_anchor_requested)
+    {
+        return Some(VerticalSpan {
+            top: 0,
+            bottom: u32::from(ctx.area().height),
+        });
+    }
+
     view.__focused_button_span(ctx)
         .map(|(top, bottom)| VerticalSpan { top, bottom })
 }
@@ -136,6 +146,7 @@ pub(crate) fn render_layout_view(
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     let style = resolve_style(metadata, ctx);
+    ctx.record_metadata_hit_area(metadata);
     ctx.render_widget(Block::new().style(style.to_ratatui_style()));
     render_children(
         children,
@@ -229,6 +240,8 @@ fn try_render_overflowing_column_children(
         u16::try_from(content_height.saturating_sub(u32::from(area_height))).unwrap_or(u16::MAX);
     parent_metadata.set_max_scroll_offset(max_scroll_offset);
 
+    let scroll_to_anchor = children.iter().any(AnyView::__has_scroll_to_anchor_request);
+
     if let Some(span) = ctx.with_area(content_area, |ctx| {
         focused_control_span_in_column_children(
             children,
@@ -238,7 +251,12 @@ fn try_render_overflowing_column_children(
             ctx,
         )
     }) {
-        scroll_span_into_view(parent_metadata, span, area_height, max_scroll_offset);
+        if scroll_to_anchor {
+            let top = span.top.min(u32::from(max_scroll_offset));
+            parent_metadata.set_scroll_offset(u16::try_from(top).unwrap_or(u16::MAX));
+        } else {
+            scroll_span_into_view(parent_metadata, span, area_height, max_scroll_offset);
+        }
     }
 
     let row_offset = parent_metadata.scroll_offset().min(max_scroll_offset);

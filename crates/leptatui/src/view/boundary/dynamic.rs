@@ -117,11 +117,20 @@ impl View for DynamicView {
         self.with_view_mut(|child| child.__set_focus_by_index_inner(target, index));
     }
 
+    fn __focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        self.with_view(|child| child.__focusable_index_at_position_inner(column, row, index))
+    }
+
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         self.with_view(|child| child.__focused_button_span(ctx))
     }
 
-    fn __activate_focused_button(&self) -> Option<AppControl> {
+    fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
         self.with_view(AnyView::__activate_focused_button)
     }
 
@@ -153,12 +162,36 @@ impl View for DynamicView {
         self.with_view(AnyView::__has_overflowing_scroll_target)
     }
 
+    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+        self.with_view_mut(|child| child.__scroll_overflowing_at_position(column, row, delta))
+    }
+
     fn __set_scroll_to_top_key_pending(&self, pending: bool) -> bool {
         self.with_view(|child| child.__set_scroll_to_top_key_pending(pending))
     }
 
     fn __take_scroll_to_top_key_pending(&self) -> bool {
         self.with_view(AnyView::__take_scroll_to_top_key_pending)
+    }
+
+    fn __focused_link_target(&self) -> Option<crate::LinkTarget> {
+        self.with_view(AnyView::__focused_link_target)
+    }
+
+    fn __request_scroll_to_id(&mut self, id: &str) -> bool {
+        self.with_view_mut(|child| child.__request_scroll_to_id(id))
+    }
+
+    fn __has_scroll_to_anchor_request(&self) -> bool {
+        self.with_view(AnyView::__has_scroll_to_anchor_request)
+    }
+
+    fn __navigate_markdown_history(&mut self, back: bool) -> bool {
+        self.with_view_mut(|child| child.__navigate_markdown_history(back))
+    }
+
+    fn __clear_hit_areas(&self) {
+        self.with_view(AnyView::__clear_hit_areas);
     }
 }
 

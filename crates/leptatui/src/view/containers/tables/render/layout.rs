@@ -4,6 +4,7 @@ use ratatui::text::{Line, Text};
 
 use crate::view::content::code_block::wrap_styled_line;
 use crate::view::core::render::{line_count_height, resolve_style};
+use crate::view::link::resolved_rich_text;
 use crate::{
     component::RenderCtx,
     style::{Color, TuiStyle},
@@ -19,6 +20,8 @@ pub(super) struct RenderedTableCell {
     pub(super) alignment: CellAlignment,
     /// Fully resolved style for the cell text.
     pub(super) style: TuiStyle,
+    /// Whether a focused inline link requested scrolling into view.
+    pub(super) link_scroll_requested: bool,
 }
 
 /// Render-ready table row containing source-order cells.
@@ -126,10 +129,12 @@ fn collect_table_row(
 /// A [`RenderedTableCell`] preserving the source column position.
 fn collect_table_cell(cell: &AnyView, ctx: &mut RenderCtx<'_, '_>) -> RenderedTableCell {
     if let Some(cell) = cell.downcast_ref::<TableCellView>() {
+        let style = resolve_style(&cell.metadata, ctx);
         return RenderedTableCell {
-            content: cell.content.clone(),
+            content: resolved_rich_text(&cell.content, &cell.metadata, style, ctx),
             alignment: cell.alignment,
-            style: resolve_style(&cell.metadata, ctx),
+            style,
+            link_scroll_requested: cell.content.focused_link_requested_scroll(),
         };
     }
 
@@ -137,6 +142,7 @@ fn collect_table_cell(cell: &AnyView, ctx: &mut RenderCtx<'_, '_>) -> RenderedTa
         content: Text::default(),
         alignment: CellAlignment::Left,
         style: ctx.inherited_style(),
+        link_scroll_requested: false,
     }
 }
 

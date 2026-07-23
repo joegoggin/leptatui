@@ -35,7 +35,7 @@ fn markdown_styles_nested_inline_syntax_and_escaped_text() {
     );
 }
 
-/// Verifies Markdown links remain readable without terminal link interaction.
+/// Verifies Markdown links retain readable labels and focusable metadata.
 ///
 /// # Example Under Test
 ///
@@ -47,36 +47,43 @@ fn markdown_styles_nested_inline_syntax_and_escaped_text() {
 ///
 /// # Assertions
 ///
-/// - Link labels are underlined and retain nested emphasis.
-/// - A descriptive label is followed by its parenthesized destination.
-/// - URL labels and URL autolinks do not duplicate their destinations.
-/// - Email autolinks do not expose or duplicate the `mailto:` scheme.
-/// - Links with empty destinations do not display empty parentheses.
+/// - Link labels retain nested emphasis without appended destinations.
+/// - URL and email autolinks retain their readable labels.
+/// - Actionable targets participate in focus traversal.
+/// - Links with empty destinations remain inactive.
 #[test]
-fn markdown_styles_links_and_appends_hidden_destinations() {
+fn markdown_links_retain_labels_and_focusable_metadata() {
     let source = concat!(
         "Read [the *guide*](https://example.com/guide), ",
         "[https://example.com](https://example.com), ",
         "<https://example.org>, and <reader@example.com>, plus [empty]().\n",
     );
-    let underline = Style::new().add_modifier(Modifier::UNDERLINED);
-
+    let actual = markdown(source);
+    assert_eq!(actual.__focusable_count(), 4);
+    let document = actual
+        .downcast_ref::<LayoutView>()
+        .expect("Markdown document should be a column layout");
+    let [paragraph] = document.children() else {
+        panic!("expected one linked paragraph");
+    };
+    let paragraph = paragraph
+        .downcast_ref::<ParagraphView>()
+        .expect("Markdown child should be a paragraph");
     assert_eq!(
-        markdown(source),
-        column([paragraph(Text::from(Line::from(vec![
+        paragraph.content(),
+        &Text::from(Line::from(vec![
             Span::raw("Read "),
-            Span::styled("the ", underline),
-            Span::styled("guide", underline.add_modifier(Modifier::ITALIC),),
-            Span::styled(" (https://example.com/guide)", underline),
+            Span::raw("the "),
+            Span::styled("guide", Style::new().add_modifier(Modifier::ITALIC)),
             Span::raw(", "),
-            Span::styled("https://example.com", underline),
+            Span::raw("https://example.com"),
             Span::raw(", "),
-            Span::styled("https://example.org", underline),
+            Span::raw("https://example.org"),
             Span::raw(", and "),
-            Span::styled("reader@example.com", underline),
+            Span::raw("reader@example.com"),
             Span::raw(", plus "),
-            Span::styled("empty", underline),
+            Span::raw("empty"),
             Span::raw("."),
-        ])))]),
+        ])),
     );
 }

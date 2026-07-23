@@ -101,6 +101,7 @@ impl View for ButtonView {
                 .style(style.to_ratatui_style())
                 .block(style.to_block_with_default_borders(Borders::ALL)),
         );
+        ctx.record_metadata_hit_area(&self.metadata);
         self.metadata.clear_scroll_into_view_request();
         Ok(())
     }
@@ -144,17 +145,30 @@ impl View for ButtonView {
         *index = index.saturating_add(1);
     }
 
+    fn __focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        let current = *index;
+        *index = index.saturating_add(1);
+        self.metadata
+            .contains_hit_position(column, row)
+            .then_some(current)
+    }
+
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         (self.metadata.is_focused() && self.metadata.scroll_into_view_requested())
             .then_some((0, u32::from(ctx.area().height)))
     }
 
-    fn __activate_focused_button(&self) -> Option<AppControl> {
-        self.metadata.is_focused().then(|| {
+    fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
+        Ok(self.metadata.is_focused().then(|| {
             self.on_press
                 .as_ref()
                 .map_or(AppControl::Continue, |action| action())
-        })
+        }))
     }
 
     fn __focused_control(&self) -> Option<FocusedControl> {

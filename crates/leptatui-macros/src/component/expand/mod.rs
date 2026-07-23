@@ -172,6 +172,19 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __handle_mouse_event(
+                &mut self,
+                mouse: #leptatui::__private::MouseEvent,
+            ) -> #leptatui::Result<#leptatui::AppControl> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__handle_mouse_event(mouse)
+                })
+            }
+
+            #[doc(hidden)]
             fn __focusable_count(&self) -> usize {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;
@@ -217,6 +230,31 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __clear_hit_areas(&self) {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__clear_hit_areas();
+                });
+            }
+
+            #[doc(hidden)]
+            fn __focusable_index_at_position_inner(
+                &self,
+                column: u16,
+                row: u16,
+                index: &mut usize,
+            ) -> ::core::option::Option<usize> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__focusable_index_at_position_inner(column, row, index)
+                })
+            }
+
+            #[doc(hidden)]
             fn __focused_control_span(
                 &self,
                 ctx: &mut #leptatui::RenderCtx<'_, '_>,
@@ -228,14 +266,16 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
                     __leptatui_owner.with(|| {
                         #leptatui::__private::__with_context_scope_if_missing(|| {
-                            __leptatui_view.__focused_button_span(ctx)
+                            __leptatui_view.__focused_control_span(ctx)
                         })
                     })
                 })
             }
 
             #[doc(hidden)]
-            fn __activate_focused_button(&self) -> ::core::option::Option<#leptatui::AppControl> {
+            fn __activate_focused_button(
+                &self,
+            ) -> #leptatui::Result<::core::option::Option<#leptatui::AppControl>> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;
 
@@ -335,6 +375,31 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__focus_control_at_position(column, row)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __scroll_overflowing_at_position(
+                &mut self,
+                column: u16,
+                row: u16,
+                delta: i16,
+            ) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__scroll_overflowing_at_position(column, row, delta)
+                })
+            }
+
+            #[doc(hidden)]
             fn __set_scroll_to_top_key_pending(&self, pending: bool) -> bool {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;
@@ -351,6 +416,16 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                 __leptatui_owner.with(|| {
                     __leptatui_view.__take_scroll_to_top_key_pending()
+                })
+            }
+
+            #[doc(hidden)]
+            fn __navigate_markdown_history(&mut self, back: bool) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__navigate_markdown_history(back)
                 })
             }
 

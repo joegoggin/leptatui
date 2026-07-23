@@ -41,6 +41,7 @@ pub(crate) fn render_editable_text_view(
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     let style = resolve_style(&view.metadata, ctx);
+    ctx.record_metadata_hit_area(&view.metadata);
     let block = style.to_block_with_default_borders(Borders::ALL);
     let inner = block.inner(ctx.area());
     let pending = pending_insert_render(&view.value, &view.editable_state);

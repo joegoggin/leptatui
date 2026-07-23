@@ -6,6 +6,8 @@
 pub enum FocusedControl {
     /// A button is focused.
     Button,
+    /// A link is focused.
+    Link,
     /// A single-line input is focused.
     Input {
         /// Whether the input is currently in insert mode.

@@ -7,6 +7,7 @@ use std::io::{Stdout, stdout};
 
 use crossterm::{
     cursor::SetCursorStyle,
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -30,7 +31,7 @@ pub(super) struct TerminalSession {
 }
 
 impl TerminalSession {
-    /// Enters raw mode and the alternate screen.
+    /// Enters raw mode, the alternate screen, and mouse capture.
     ///
     /// # Returns
     ///
@@ -39,7 +40,7 @@ impl TerminalSession {
     /// # Errors
     ///
     /// Returns [`crate::app::Error::Io`] if raw mode, alternate screen entry,
-    /// or terminal construction fails.
+    /// mouse capture, or terminal construction fails.
     pub(super) fn enter() -> Result<Self> {
         let mut cleanup = TerminalCleanup::default();
 
@@ -52,6 +53,12 @@ impl TerminalSession {
         }
         cleanup.alternate_screen = true;
         cleanup.cursor_style = true;
+
+        if let Err(error) = execute!(stdout(), EnableMouseCapture) {
+            let _ = cleanup.restore();
+            return Err(error.into());
+        }
+        cleanup.mouse_capture = true;
 
         let terminal_images = TerminalImageSupport::query_stdio();
 
@@ -76,8 +83,8 @@ impl TerminalSession {
     ///
     /// # Errors
     ///
-    /// Returns [`std::io::Error`] if raw mode or alternate screen cleanup
-    /// fails.
+    /// Returns [`std::io::Error`] if cursor restoration, mouse capture, raw
+    /// mode, or alternate screen cleanup fails.
     pub(super) fn restore(&mut self) -> std::io::Result<()> {
         self.cleanup.restore()
     }
@@ -99,6 +106,8 @@ struct TerminalCleanup {
     alternate_screen: bool,
     /// Whether the cursor style should be restored to the user's default.
     cursor_style: bool,
+    /// Whether terminal mouse capture is currently active.
+    mouse_capture: bool,
 }
 
 impl Drop for TerminalCleanup {
@@ -117,14 +126,23 @@ impl TerminalCleanup {
     ///
     /// # Errors
     ///
-    /// Returns [`std::io::Error`] if disabling raw mode or leaving the
-    /// alternate screen fails.
+    /// Returns [`std::io::Error`] if cursor restoration, mouse capture, raw
+    /// mode, or alternate screen cleanup fails.
     fn restore(&mut self) -> std::io::Result<()> {
         let mut first_error = None;
 
         if self.cursor_style {
             match execute!(stdout(), SetCursorStyle::DefaultUserShape) {
                 Ok(()) => self.cursor_style = false,
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+
+        if self.mouse_capture {
+            match execute!(stdout(), DisableMouseCapture) {
+                Ok(()) => self.mouse_capture = false,
                 Err(error) => {
                     first_error.get_or_insert(error);
                 }

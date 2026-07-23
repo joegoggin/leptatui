@@ -2,8 +2,8 @@
 //!
 //! This binary demonstrates the expanded standard component library in one
 //! coherent app. It uses controlled `Input` and `TextArea` fields, `Form`
-//! submit and cancel callbacks, stylesheet-sized image fallback rendering, and
-//! a progress bar backed by Leptos signals.
+//! submit and cancel callbacks, a standalone `Link`, stylesheet-sized image
+//! fallback rendering, and a progress bar backed by Leptos signals.
 
 use leptatui::prelude::*;
 
@@ -65,7 +65,7 @@ fn clamp_progress(value: f64) -> f64 {
 ///
 /// # Returns
 ///
-/// A [`View`] containing form controls, image fallback, and progress state.
+/// A [`View`] containing form controls, a link, image fallback, and progress state.
 #[component]
 fn StandardLibraryShowcase() -> impl IntoView {
     let name = RwSignal::new(String::from("Ada Lovelace"));
@@ -145,6 +145,12 @@ fn StandardLibraryShowcase() -> impl IntoView {
             bg: Color::Yellow,
             modifier: Modifier::BOLD,
             border_type: BorderType::Thick
+        }
+
+        Link:focus => {
+            fg: Color::Black,
+            bg: Color::Yellow,
+            modifier: Modifier::BOLD | Modifier::UNDERLINED
         }
 
         @media (max-width: 60) {
@@ -232,6 +238,10 @@ fn StandardLibraryShowcase() -> impl IntoView {
                         </Form>
                     }
                 }}
+                <Text class="label">"Standalone link"</Text>
+                <Link href="https://github.com/joegoggin/leptatui">
+                    "Open Leptatui on GitHub"
+                </Link>
                 <Text class="label">"Image small"</Text>
                 <Image
                     class="image-small"
@@ -260,7 +270,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
                         .with_classes("meter")
                 }}
                 <Text class="help">
-                    "Tab/Shift+Tab focus. i/a/I/A insert, Esc normal/cancel, jk leaves insert, v/V select, x/d/y/p/u/Ctrl+R edit, Ctrl+Enter submits notes. Activate Advance or Reset to update progress. q quits."
+                    "Tab/Shift+Tab or pointer movement focuses controls. Enter/Space or left click activates links and buttons; the mouse wheel scrolls. i/a/I/A insert, Esc normal/cancel, jk leaves insert, v/V select, x/d/y/p/u/Ctrl+R edit, Ctrl+Enter submits notes. q quits."
                 </Text>
             </Column>
         </Block>

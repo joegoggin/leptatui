@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// core.md at 24x80
+/// core.md at 40x80
 /// fallbacks.md at 48x80
 /// ```
 ///
@@ -12,12 +12,12 @@
 /// - Markdown H1 through H6 use the same repeated `#` heading hierarchy.
 /// - Long Unicode prose wraps across multiple terminal rows.
 /// - Ordered and unordered list markers remain visible.
-/// - Links expose their destinations in terminal text.
+/// - Link labels remain visible without appended destinations.
 /// - Quote prefixes, rules, image fallbacks, literal HTML, and tables render visibly.
 #[test]
 fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
     let core_document = markdown(CORE_FIXTURE);
-    let core = render_view(core_document.as_view(), 24, 80)?;
+    let core = render_view(core_document.as_view(), 40, 80)?;
     let core_lines = rendered_lines(&core);
     for expected_heading in [
         "# One",
@@ -34,10 +34,11 @@ fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
         );
     }
     assert!(core_lines.iter().any(|line| line.contains("Unicode 界")));
+    assert!(core_lines.iter().any(|line| line.contains("the guide")));
     assert!(
-        core_lines
+        !core_lines
             .iter()
-            .any(|line| line.contains("https://example.com"))
+            .any(|line| line.contains("https://example.com/guide"))
     );
     assert!(
         core_lines

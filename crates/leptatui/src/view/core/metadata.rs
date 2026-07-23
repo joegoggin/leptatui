@@ -3,7 +3,9 @@
 //! This module stores the type, id, class, inline-style, focus, and scroll
 //! metadata used during style resolution and rendering.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+
+use ratatui::layout::Rect;
 
 use crate::style::{Modifier, TuiStyle};
 
@@ -93,6 +95,9 @@ impl ViewType {
     /// Progress indicator rendered as a gauge.
     #[allow(non_upper_case_globals)]
     pub const ProgressBar: Self = Self::new("ProgressBar");
+    /// Focusable standalone or embedded link.
+    #[allow(non_upper_case_globals)]
+    pub const Link: Self = Self::new("Link");
 
     /// Creates a semantic view identity.
     ///
@@ -149,13 +154,31 @@ impl ViewType {
             | Self::TextArea
             | Self::Image
             | Self::ProgressBar => TuiStyle::new(),
+            Self::Link => TuiStyle::new().modifier(Modifier::UNDERLINED),
             _ => TuiStyle::new(),
+        }
+    }
+
+    /// Returns low-precedence defaults for the current pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `focused` — Whether the view currently matches the focus pseudo-class.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] containing defaults contributed by the current state.
+    pub(crate) fn default_state_style(self, focused: bool) -> TuiStyle {
+        if self == Self::Link && focused {
+            TuiStyle::new().modifier(Modifier::UNDERLINED | Modifier::REVERSED)
+        } else {
+            TuiStyle::new()
         }
     }
 }
 
 /// Selector metadata stored with styleable render-tree views.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct StyleMetadata {
     view_type: ViewType,
     id: Option<String>,
@@ -163,9 +186,13 @@ pub struct StyleMetadata {
     inline_style: Option<TuiStyle>,
     focused: bool,
     scroll_into_view_requested: Cell<bool>,
+    /// Pending request to align this view with an overflowing parent's top.
+    scroll_to_anchor_requested: Cell<bool>,
     scroll_to_top_key_pending: Cell<bool>,
     scroll_offset: Cell<u16>,
     max_scroll_offset: Cell<u16>,
+    /// Terminal-coordinate hit areas recorded during the latest render.
+    hit_areas: RefCell<Vec<Rect>>,
 }
 
 impl StyleMetadata {
@@ -186,9 +213,11 @@ impl StyleMetadata {
             inline_style: None,
             focused: false,
             scroll_into_view_requested: Cell::new(false),
+            scroll_to_anchor_requested: Cell::new(false),
             scroll_to_top_key_pending: Cell::new(false),
             scroll_offset: Cell::new(0),
             max_scroll_offset: Cell::new(0),
+            hit_areas: RefCell::new(Vec::new()),
         }
     }
 
@@ -307,6 +336,8 @@ impl StyleMetadata {
         self.focused = previous.focused;
         self.scroll_into_view_requested
             .set(previous.scroll_into_view_requested.get());
+        self.scroll_to_anchor_requested
+            .set(previous.scroll_to_anchor_requested.get());
         self.scroll_to_top_key_pending
             .set(previous.scroll_to_top_key_pending.get());
         self.scroll_offset.set(previous.scroll_offset.get());
@@ -321,6 +352,77 @@ impl StyleMetadata {
     /// Clears a pending focus visibility scroll request.
     pub(crate) fn clear_scroll_into_view_request(&self) {
         self.scroll_into_view_requested.set(false);
+    }
+
+    /// Requests that this view be aligned to the top of an overflowing parent.
+    pub(crate) fn request_scroll_to_anchor(&self) {
+        self.scroll_to_anchor_requested.set(true);
+    }
+
+    /// Returns whether top-aligned anchor scrolling is pending.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether an overflowing parent should align this
+    /// view with its top edge.
+    pub(crate) fn scroll_to_anchor_requested(&self) -> bool {
+        self.scroll_to_anchor_requested.get()
+    }
+
+    /// Clears a pending top-aligned anchor request.
+    pub(crate) fn clear_scroll_to_anchor_request(&self) {
+        self.scroll_to_anchor_requested.set(false);
+    }
+
+    /// Returns whether any last-rendered hit area contains a position.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to test.
+    /// * `row` — Zero-based terminal row to test.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether any retained hit area contains the cell.
+    pub(crate) fn contains_hit_position(&self, column: u16, row: u16) -> bool {
+        self.hit_areas
+            .borrow()
+            .iter()
+            .any(|area| rect_contains(*area, column, row))
+    }
+
+    /// Clears all last-rendered hit areas.
+    pub(crate) fn clear_hit_areas(&self) {
+        self.hit_areas.borrow_mut().clear();
+    }
+
+    /// Replaces last-rendered hit areas with one optional area.
+    ///
+    /// Empty rectangles are discarded after all prior areas are cleared.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Optional terminal-coordinate rectangle to retain.
+    pub(crate) fn set_hit_area(&self, area: Option<Rect>) {
+        let mut hit_areas = self.hit_areas.borrow_mut();
+        hit_areas.clear();
+        if let Some(area) = area
+            && area.width > 0
+            && area.height > 0
+        {
+            hit_areas.push(area);
+        }
+    }
+
+    /// Appends one last-rendered hit area.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Non-empty terminal-coordinate rectangle to append.
+    pub(crate) fn push_hit_area(&self, area: Rect) {
+        if area.width > 0 && area.height > 0 {
+            self.hit_areas.borrow_mut().push(area);
+        }
     }
 
     /// Stores whether a `g` key is waiting for a second `g`.
@@ -368,4 +470,42 @@ impl StyleMetadata {
             self.scroll_offset.set(max_scroll_offset);
         }
     }
+}
+
+impl PartialEq for StyleMetadata {
+    /// Compares retained state while ignoring transient render hit areas.
+    fn eq(&self, other: &Self) -> bool {
+        self.view_type == other.view_type
+            && self.id == other.id
+            && self.classes == other.classes
+            && self.inline_style == other.inline_style
+            && self.focused == other.focused
+            && self.scroll_into_view_requested.get() == other.scroll_into_view_requested.get()
+            && self.scroll_to_anchor_requested.get() == other.scroll_to_anchor_requested.get()
+            && self.scroll_to_top_key_pending.get() == other.scroll_to_top_key_pending.get()
+            && self.scroll_offset.get() == other.scroll_offset.get()
+            && self.max_scroll_offset.get() == other.max_scroll_offset.get()
+    }
+}
+
+impl Eq for StyleMetadata {}
+
+/// Returns whether a terminal rectangle contains a cell position.
+///
+/// Rectangle right and bottom edges are treated as exclusive.
+///
+/// # Arguments
+///
+/// * `area` — Terminal-coordinate rectangle to inspect.
+/// * `column` — Zero-based terminal column to test.
+/// * `row` — Zero-based terminal row to test.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether the cell falls within the half-open bounds.
+pub(crate) fn rect_contains(area: Rect, column: u16, row: u16) -> bool {
+    column >= area.x
+        && column < area.x.saturating_add(area.width)
+        && row >= area.y
+        && row < area.y.saturating_add(area.height)
 }

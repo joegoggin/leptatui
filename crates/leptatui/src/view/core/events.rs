@@ -1,6 +1,8 @@
 //! Default event traversal shared by terminal view trees.
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 use crate::{
     app::{AppControl, Result},
@@ -16,8 +18,74 @@ where
     if let Event::Key(key) = event {
         return Ok(handle_view_key_event(view, key)?.into());
     }
+    if let Event::Mouse(mouse) = event {
+        let control = view.__dispatch_event(&event)?;
+        if control == AppControl::Exit {
+            return Ok(control);
+        }
+        return view.__handle_mouse_event(mouse);
+    }
 
     view.__dispatch_event(&event)
+}
+
+/// Handles built-in mouse focus, activation, and positioned scrolling.
+///
+/// # Arguments
+///
+/// * `view` — View tree receiving built-in mouse behavior.
+/// * `mouse` — Crossterm mouse event to handle.
+///
+/// # Returns
+///
+/// A [`Result`] containing the [`AppControl`] produced by mouse handling.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::LinkOpen`] if clicking a focused link cannot open
+/// its target.
+pub(crate) fn handle_default_view_mouse_event<V>(
+    view: &mut V,
+    mouse: MouseEvent,
+) -> Result<AppControl>
+where
+    V: View + ?Sized,
+{
+    match mouse.kind {
+        MouseEventKind::Moved => {
+            view.__focus_control_at_position(mouse.column, mouse.row);
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::Down(MouseButton::Left) => {
+            if view.__focus_control_at_position(mouse.column, mouse.row) {
+                return view
+                    .__activate_focused_button()
+                    .map(|control| control.unwrap_or(AppControl::Continue));
+            }
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::Up(MouseButton::Left) => {
+            view.__focus_control_at_position(mouse.column, mouse.row);
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::ScrollDown => {
+            if !view.__scroll_overflowing_at_position(mouse.column, mouse.row, 1) {
+                view.__scroll_first_overflowing(1);
+            }
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::ScrollUp => {
+            if !view.__scroll_overflowing_at_position(mouse.column, mouse.row, -1) {
+                view.__scroll_first_overflowing(-1);
+            }
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::Down(_)
+        | MouseEventKind::Up(_)
+        | MouseEventKind::Drag(_)
+        | MouseEventKind::ScrollLeft
+        | MouseEventKind::ScrollRight => Ok(AppControl::Continue),
+    }
 }
 
 /// Dispatches custom and built-in key behavior through a view tree.
@@ -52,11 +120,27 @@ where
         return Ok(control);
     }
 
+    let history_direction = match key.code {
+        KeyCode::Char('H') => Some(true),
+        KeyCode::Char('L') => Some(false),
+        KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::SHIFT) => Some(true),
+        KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::SHIFT) => Some(false),
+        _ => None,
+    };
+    if let Some(back) = history_direction
+        && view.__navigate_markdown_history(back)
+    {
+        clear_scroll_to_top_key_pending(view);
+        return Ok(KeyControl::Handled);
+    }
+
     let control = match key.code {
         KeyCode::Down | KeyCode::Char('j') => handle_scroll_key(view, 1),
         KeyCode::Up | KeyCode::Char('k') => handle_scroll_key(view, -1),
         KeyCode::PageDown => handle_scroll_key(view, 5),
         KeyCode::PageUp => handle_scroll_key(view, -5),
+        KeyCode::Char('d') if key.modifiers == KeyModifiers::CONTROL => handle_scroll_key(view, 5),
+        KeyCode::Char('u') if key.modifiers == KeyModifiers::CONTROL => handle_scroll_key(view, -5),
         KeyCode::Char('g') => handle_scroll_to_top_key(view),
         KeyCode::Char('G') => {
             clear_scroll_to_top_key_pending(view);
@@ -79,7 +163,7 @@ where
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             clear_scroll_to_top_key_pending(view);
-            view.__activate_focused_button()
+            view.__activate_focused_button()?
                 .map_or(KeyControl::Pass, KeyControl::from)
         }
         _ => {

@@ -1,7 +1,7 @@
 //! Tests for Markdown parsing and semantic view conversion.
 
 use std::{
-    io,
+    fs, io,
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -143,3 +143,4 @@ include!("inline.rs");
 include!("structures.rs");
 include!("fallbacks.rs");
 include!("ordering.rs");
+include!("navigation.rs");

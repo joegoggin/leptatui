@@ -164,6 +164,10 @@ impl Element {
             return self.expand_markdown();
         }
 
+        if self.name == "Link" {
+            return self.expand_link();
+        }
+
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 let leptatui = crate::crate_path::leptatui();

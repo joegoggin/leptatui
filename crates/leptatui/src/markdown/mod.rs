@@ -5,10 +5,11 @@
 //! styled inline spans exposed by [`mod@crate::view`]. Readable styled-block or
 //! text fallbacks retain CommonMark content without dedicated semantic views.
 //! In-memory and explicit file readers are infallible; file failures become
-//! path-aware semantic fallback content. The compatibility promise is core
-//! CommonMark plus tables. Optional GFM extensions are deferred, links remain
-//! readable but non-interactive, and images become descriptive text without
-//! fetching local or remote targets.
+//! path-aware semantic fallback content. File-backed views navigate local
+//! Markdown targets and heading fragments in-app with cached page history.
+//! The compatibility promise is core CommonMark plus tables. Optional GFM
+//! extensions are deferred. Links retain focusable target metadata, while
+//! images become descriptive text without fetching local or remote targets.
 //!
 //! # Modules
 //!
@@ -17,6 +18,7 @@
 //! - [`inline`] — Inline text and style span collection.
 //! - [`inline_events`] — Inline event rendering and fallback handling.
 //! - [`list`] — Ordered and unordered list parsing.
+//! - [`navigation`] — File-backed navigation, targets, and page history.
 //! - [`table`] — Table section, row, cell, and alignment parsing.
 
 mod block;
@@ -24,15 +26,18 @@ mod code;
 mod inline;
 mod inline_events;
 mod list;
+mod navigation;
 mod table;
 
-use std::{fs, path::Path};
+use std::path::{Path, PathBuf};
 
 use pulldown_cmark::{Options, Parser};
 
-use crate::{AnyView, IntoView, SyntaxTheme, column, paragraph};
+use crate::{AnyView, IntoView, SyntaxTheme, column};
 
 use self::block::parse_blocks;
+use self::navigation::MarkdownParseContext;
+pub use self::navigation::MarkdownView;
 
 /// Default presentation options applied while converting Markdown documents.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -127,14 +132,39 @@ pub fn markdown(source: impl AsRef<str>) -> AnyView {
 /// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
 /// semantic document blocks separated by empty terminal rows in source order.
 pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) -> AnyView {
-    let mut parser = Parser::new_ext(source.as_ref(), Options::ENABLE_TABLES);
-    column(parse_blocks(&mut parser, None, options)).into_view()
+    let link_base = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    markdown_with_options_and_source(source.as_ref(), options, &link_base, None)
 }
 
-/// Loads a UTF-8 Markdown file into a scrollable semantic document view.
+/// Converts CommonMark with an explicit link base and optional source path.
 ///
-/// Uses [`MarkdownOptions::default`] and performs all filesystem access before
-/// returning the view.
+/// # Arguments
+///
+/// * `source` — CommonMark source text to parse.
+/// * `options` — Code-block presentation defaults for the document.
+/// * `link_base` — Directory used to resolve relative local links.
+/// * `source_path` — Current Markdown file path used for in-app navigation.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing semantic document blocks with resolved links and
+/// file-navigation anchors when a source path is present.
+fn markdown_with_options_and_source(
+    source: &str,
+    options: MarkdownOptions,
+    link_base: &Path,
+    source_path: Option<&Path>,
+) -> AnyView {
+    let mut parser = Parser::new_ext(source, Options::ENABLE_TABLES);
+    let mut context = MarkdownParseContext::new(link_base, source_path);
+    column(parse_blocks(&mut parser, None, options, &mut context)).into_view()
+}
+
+/// Loads a UTF-8 Markdown file into a navigable semantic document view.
+///
+/// Uses [`MarkdownOptions::default`] and reads the initial file before
+/// returning. Activating an in-app Markdown link reads its target during event
+/// handling.
 ///
 /// # Examples
 ///
@@ -151,17 +181,16 @@ pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) 
 ///
 /// # Returns
 ///
-/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
-/// the parsed document or a path-aware fallback paragraph when the file cannot
-/// be read as UTF-8.
+/// An [`AnyView`] containing a [`MarkdownView`] with the parsed document or a
+/// path-aware fallback page when the file cannot be read as UTF-8.
 pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
     markdown_file_with_options(path, MarkdownOptions::default())
 }
 
 /// Loads a UTF-8 Markdown file with explicit presentation options.
 ///
-/// All filesystem access completes before the returned view enters render
-/// traversal.
+/// The initial file is read before this function returns. Activating an in-app
+/// Markdown link reads its target during event handling.
 ///
 /// # Examples
 ///
@@ -184,19 +213,10 @@ pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
 ///
 /// # Returns
 ///
-/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
-/// the parsed document or a path-aware fallback paragraph when the file cannot
-/// be read as UTF-8.
+/// An [`AnyView`] containing a [`MarkdownView`] with the parsed document or a
+/// path-aware fallback page when the file cannot be read as UTF-8.
 pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptions) -> AnyView {
-    let path = path.as_ref();
-    match fs::read_to_string(path) {
-        Ok(source) => markdown_with_options(source, options),
-        Err(error) => column([paragraph(format!(
-            "failed to read Markdown file `{}`: {error}",
-            path.display()
-        ))])
-        .into_view(),
-    }
+    MarkdownView::new(path.as_ref(), options).into_view()
 }
 
 #[cfg(test)]

@@ -1,10 +1,8 @@
 //! Rich-text semantic table-cell view.
 
-use ratatui::text::Text;
-
 use crate::view::core::capabilities::{impl_styled_view, impl_textual_view};
-use crate::view::{StyleMetadata, View, ViewType};
-use crate::{app::Result, component::RenderCtx};
+use crate::view::{StyleMetadata, View, ViewType, link::impl_rich_text_view};
+use crate::{RichText, app::Result, component::RenderCtx};
 
 /// Horizontal alignment applied to wrapped table-cell content.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -22,7 +20,7 @@ pub enum CellAlignment {
 #[derive(Debug, PartialEq)]
 pub struct TableCellView {
     /// Rich cell content.
-    pub(crate) content: Text<'static>,
+    pub(crate) content: RichText,
     /// Horizontal content alignment.
     pub(crate) alignment: CellAlignment,
     /// Selector and runtime metadata.
@@ -54,7 +52,7 @@ impl TableCellView {
 /// # Returns
 ///
 /// A left-aligned [`TableCellView`].
-pub fn table_cell(content: impl Into<Text<'static>>) -> TableCellView {
+pub fn table_cell(content: impl Into<RichText>) -> TableCellView {
     TableCellView {
         content: content.into(),
         alignment: CellAlignment::Left,
@@ -87,6 +85,14 @@ impl View for TableCellView {
     }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    impl_rich_text_view!();
+
+    fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        self.content
+            .focused_link_span(ctx.area().width)
+            .map(|span| span.into_tuple())
     }
 }
 

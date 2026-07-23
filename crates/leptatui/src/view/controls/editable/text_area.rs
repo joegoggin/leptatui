@@ -128,6 +128,20 @@ impl View for TextAreaView {
         *index = index.saturating_add(1);
     }
 
+    fn __focusable_index_at_position_inner(
+        &self,
+        column: u16,
+        row: u16,
+        index: &mut usize,
+    ) -> Option<usize> {
+        let current = *index;
+        *index = index.saturating_add(1);
+        self.model
+            .metadata
+            .contains_hit_position(column, row)
+            .then_some(current)
+    }
+
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         focused_control_span_for_editor(&self.model, ctx).map(|span| span.into_tuple())
     }

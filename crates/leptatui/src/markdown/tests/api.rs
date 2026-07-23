@@ -57,15 +57,29 @@ fn markdown_file_reader_apis_load_utf8_source() {
     fs::write(&fixture_path, source).expect("Markdown fixture should be written");
 
     let default = markdown_file(&fixture_path);
-    assert_eq!(default, markdown(source));
+    let default_document = markdown(source);
+    assert_eq!(
+        rendered_view_lines(&default, 80, 20).expect("file document should render"),
+        rendered_view_lines(&default_document, 80, 20)
+            .expect("in-memory document should render")
+    );
+    assert_eq!(
+        default
+            .downcast_ref::<MarkdownView>()
+            .expect("file reader should return a Markdown boundary")
+            .current_path(),
+        fixture_path
+    );
 
     let options = MarkdownOptions::default()
         .syntax_theme(SyntaxTheme::Light)
         .line_numbers(true);
     let configured = markdown_file_with_options(&fixture_path, options);
+    let expected_configured = markdown_with_options(source, options);
     assert_eq!(
-        parsed_code_block_options(&configured),
-        (true, SyntaxTheme::Light)
+        rendered_view_lines(&configured, 80, 20).expect("configured file should render"),
+        rendered_view_lines(&expected_configured, 80, 20)
+            .expect("configured in-memory document should render")
     );
 
     fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
@@ -109,7 +123,12 @@ fn markdown_file_failures_render_path_aware_fallbacks() {
         fs::read_to_string(&missing_path).expect_err("missing fixture should fail to read");
     assert_eq!(missing_error.kind(), io::ErrorKind::NotFound);
     let missing = markdown_file(&missing_path);
-    assert_eq!(missing, expected_fallback(&missing_path, &missing_error));
+    let expected_missing = expected_fallback(&missing_path, &missing_error).into_view();
+    assert_eq!(
+        rendered_view_lines(&missing, 120, 2).expect("missing fallback should render"),
+        rendered_view_lines(&expected_missing, 120, 2)
+            .expect("expected missing fallback should render")
+    );
     let rendered = rendered_view_lines(&missing, 120, 2)
         .expect("missing-file fallback should render without failure")
         .concat();
@@ -119,17 +138,26 @@ fn markdown_file_failures_render_path_aware_fallbacks() {
     let directory_error =
         fs::read_to_string(&directory_path).expect_err("directory fixture should fail to read");
     assert_ne!(directory_error.kind(), io::ErrorKind::NotFound);
+    let directory = markdown_file(&directory_path);
+    let expected_directory = expected_fallback(&directory_path, &directory_error).into_view();
     assert_eq!(
-        markdown_file(&directory_path),
-        expected_fallback(&directory_path, &directory_error)
+        rendered_view_lines(&directory, 120, 2).expect("directory fallback should render"),
+        rendered_view_lines(&expected_directory, 120, 2)
+            .expect("expected directory fallback should render")
     );
 
     let invalid_utf8_error = fs::read_to_string(&invalid_utf8_path)
         .expect_err("invalid UTF-8 fixture should fail to read");
     assert_eq!(invalid_utf8_error.kind(), io::ErrorKind::InvalidData);
+    let invalid_utf8 =
+        markdown_file_with_options(&invalid_utf8_path, MarkdownOptions::default());
+    let expected_invalid_utf8 =
+        expected_fallback(&invalid_utf8_path, &invalid_utf8_error).into_view();
     assert_eq!(
-        markdown_file_with_options(&invalid_utf8_path, MarkdownOptions::default()),
-        expected_fallback(&invalid_utf8_path, &invalid_utf8_error)
+        rendered_view_lines(&invalid_utf8, 120, 2)
+            .expect("invalid UTF-8 fallback should render"),
+        rendered_view_lines(&expected_invalid_utf8, 120, 2)
+            .expect("expected invalid UTF-8 fallback should render")
     );
 
     fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");

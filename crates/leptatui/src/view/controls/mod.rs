@@ -5,6 +5,7 @@
 //! - [`button`] — Focusable action buttons.
 //! - [`editable`] — Controlled input and text-area editing.
 //! - [`form`] — Submit and cancel boundaries for editable controls.
+//! - [`link`] — Focusable URL and filesystem links.
 //! - [`progress_bar`] — Clamped terminal gauge views.
 
 use std::rc::Rc;
@@ -12,6 +13,7 @@ use std::rc::Rc;
 pub(crate) mod button;
 pub(crate) mod editable;
 pub(crate) mod form;
+pub(crate) mod link;
 pub(crate) mod progress_bar;
 
 /// Returns whether optional callbacks are both absent or share allocation identity.

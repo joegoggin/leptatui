@@ -114,9 +114,15 @@ fn markdown_preserves_text_from_unsupported_parser_events() {
         | Options::ENABLE_MATH
         | Options::ENABLE_FOOTNOTES;
     let mut parser = Parser::new_ext(source, options);
+    let mut context = MarkdownParseContext::new(Path::new("."), None);
 
     assert_eq!(
-        column(parse_blocks(&mut parser, None, MarkdownOptions::default(),)),
+        column(parse_blocks(
+            &mut parser,
+            None,
+            MarkdownOptions::default(),
+            &mut context,
+        )),
         column(separate_blocks(views![
             unordered_list([list_item([paragraph("[x] done and x + y[^note]")])]),
             paragraph("z"),

@@ -14,6 +14,7 @@ use super::{
         push_task_list_marker,
     },
     list::parse_list,
+    navigation::MarkdownParseContext,
     table::parse_table,
 };
 
@@ -27,6 +28,7 @@ use super::{
 /// * `events` — CommonMark event stream positioned inside a block.
 /// * `end` — Optional closing tag that terminates the current block sequence.
 /// * `options` — Code-block presentation defaults for the document.
+/// * `context` — Shared link-resolution and heading-slug state for the document.
 ///
 /// # Returns
 ///
@@ -36,6 +38,7 @@ pub(super) fn parse_blocks<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     end: Option<TagEnd>,
     options: MarkdownOptions,
+    context: &mut MarkdownParseContext<'_>,
 ) -> Vec<AnyView> {
     let mut views = Vec::new();
     let mut inline = InlineText::new();
@@ -44,20 +47,27 @@ pub(super) fn parse_blocks<'a>(
         match event {
             Event::Start(Tag::Paragraph) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(paragraph(parse_inline(events, TagEnd::Paragraph)).into_view());
+                views.push(paragraph(parse_inline(events, TagEnd::Paragraph, context)).into_view());
             }
             Event::Start(Tag::Heading { level, .. }) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                let content = parse_inline(events, TagEnd::Heading(level));
-                views.push(heading(level, content));
+                let content = parse_inline(events, TagEnd::Heading(level), context);
+                let slug = context
+                    .has_source_path()
+                    .then(|| context.heading_slug(&content));
+                let mut view = heading(level, content);
+                if let Some(slug) = slug {
+                    view = view.with_id(slug);
+                }
+                views.push(view);
             }
             Event::Start(Tag::List(start)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(parse_list(events, start, options));
+                views.push(parse_list(events, start, options, context));
             }
             Event::Start(Tag::Table(alignments)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
-                views.push(parse_table(events, &alignments));
+                views.push(parse_table(events, &alignments, context));
             }
             Event::Start(Tag::BlockQuote(kind)) => {
                 flush_inline_paragraph(&mut inline, &mut views);
@@ -65,6 +75,7 @@ pub(super) fn parse_blocks<'a>(
                     events,
                     Some(TagEnd::BlockQuote(kind)),
                     options,
+                    context,
                 )));
             }
             Event::Start(Tag::CodeBlock(kind)) => {
@@ -83,7 +94,7 @@ pub(super) fn parse_blocks<'a>(
                 flush_inline_paragraph(&mut inline, &mut views);
                 break;
             }
-            event => parse_inline_event(events, event, Style::new(), &mut inline),
+            event => parse_inline_event(events, event, Style::new(), None, context, &mut inline),
         }
     }
 
@@ -177,15 +188,15 @@ fn parse_html_block<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> AnyView
             | Event::Html(text)
             | Event::InlineHtml(text) => content.push_text(&text, Style::new()),
             Event::FootnoteReference(label) => {
-                push_footnote_reference(&mut content, &label, Style::new());
+                push_footnote_reference(&mut content, &label, Style::new(), None);
             }
             Event::SoftBreak | Event::HardBreak => content.push_break(),
             Event::TaskListMarker(checked) => {
-                push_task_list_marker(&mut content, checked, Style::new());
+                push_task_list_marker(&mut content, checked, Style::new(), None);
             }
             Event::Start(_) | Event::End(_) | Event::Rule => {}
         }
     }
 
-    paragraph(content.into_text()).into_view()
+    paragraph(content.into_rich_text()).into_view()
 }

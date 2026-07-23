@@ -6,7 +6,7 @@ use crate::{
     AnyView, CellAlignment, IntoView, table, table_body, table_cell, table_head, table_row,
 };
 
-use super::inline_events::parse_inline;
+use super::{inline_events::parse_inline, navigation::MarkdownParseContext};
 
 /// Parses a CommonMark table into semantic header and body sections.
 ///
@@ -24,6 +24,7 @@ use super::inline_events::parse_inline;
 pub(super) fn parse_table<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     alignments: &[Alignment],
+    context: &MarkdownParseContext<'_>,
 ) -> AnyView {
     let mut header_rows = Vec::new();
     let mut body_rows = Vec::new();
@@ -31,10 +32,20 @@ pub(super) fn parse_table<'a>(
     while let Some(event) = events.next() {
         match event {
             Event::Start(Tag::TableHead) => {
-                header_rows.push(parse_table_cells(events, alignments, TagEnd::TableHead));
+                header_rows.push(parse_table_cells(
+                    events,
+                    alignments,
+                    TagEnd::TableHead,
+                    context,
+                ));
             }
             Event::Start(Tag::TableRow) => {
-                body_rows.push(parse_table_cells(events, alignments, TagEnd::TableRow));
+                body_rows.push(parse_table_cells(
+                    events,
+                    alignments,
+                    TagEnd::TableRow,
+                    context,
+                ));
             }
             Event::End(TagEnd::Table) => break,
             _ => {}
@@ -59,6 +70,7 @@ fn parse_table_cells<'a>(
     events: &mut impl Iterator<Item = Event<'a>>,
     alignments: &[Alignment],
     end: TagEnd,
+    context: &MarkdownParseContext<'_>,
 ) -> AnyView {
     let mut cells = Vec::new();
 
@@ -66,8 +78,10 @@ fn parse_table_cells<'a>(
         match event {
             Event::Start(Tag::TableCell) => {
                 let alignment = alignment_at(alignments, cells.len());
-                cells
-                    .push(table_cell(parse_inline(events, TagEnd::TableCell)).alignment(alignment));
+                cells.push(
+                    table_cell(parse_inline(events, TagEnd::TableCell, context))
+                        .alignment(alignment),
+                );
             }
             Event::End(tag) if tag == end => break,
             _ => {}

@@ -5,17 +5,24 @@ use ratatui::{
     text::{Line, Span, Text},
 };
 
-/// Accumulates owned rich-text lines while parsing inline Markdown events.
-///
-/// Adjacent content with identical styles is coalesced so parser event
-/// boundaries do not leak into the semantic view tree. An explicit content
-/// flag distinguishes untouched tight-list content from a deliberately empty
-/// line created by a Markdown break.
+use crate::view::{InlineLink, LinkTarget, LinkedSpan, RichText};
+
+/// Accumulates owned rich-text lines and their optional link ranges.
 pub(super) struct InlineText {
-    /// Styled spans grouped by logical output line.
-    lines: Vec<Vec<Span<'static>>>,
-    /// Whether the parser emitted text or a line break into this accumulator.
+    /// Parsed spans grouped by logical output line.
+    lines: Vec<Vec<ParsedInlineSpan>>,
+    /// Link targets retained in Markdown source order.
+    links: Vec<LinkTarget>,
+    /// Whether the parser emitted text or a line break.
     has_content: bool,
+}
+
+/// One parsed inline span and its optional owning link index.
+struct ParsedInlineSpan {
+    /// Styled Ratatui span containing the visible text.
+    span: Span<'static>,
+    /// Source-order index of the link containing this span, if any.
+    link: Option<usize>,
 }
 
 impl InlineText {
@@ -27,6 +34,7 @@ impl InlineText {
     pub(super) fn new() -> Self {
         Self {
             lines: vec![Vec::new()],
+            links: Vec::new(),
             has_content: false,
         }
     }
@@ -40,15 +48,24 @@ impl InlineText {
         self.has_content
     }
 
-    /// Appends styled text while preserving embedded logical line boundaries.
-    ///
-    /// Adjacent spans using the same style are merged on each line.
+    /// Appends unlinked styled text.
     ///
     /// # Arguments
     ///
     /// * `content` — Text emitted by the Markdown parser.
     /// * `style` — Ratatui style applied to the appended text.
     pub(super) fn push_text(&mut self, content: &str, style: Style) {
+        self.push_text_for_link(content, style, None);
+    }
+
+    /// Appends styled text associated with an optional link.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` — Text emitted by the Markdown parser.
+    /// * `style` — Ratatui style applied to the appended text.
+    /// * `link` — Source-order link index associated with the text, if any.
+    pub(super) fn push_text_for_link(&mut self, content: &str, style: Style, link: Option<usize>) {
         if content.is_empty() {
             return;
         }
@@ -57,7 +74,7 @@ impl InlineText {
         let mut parts = content.split('\n').peekable();
         while let Some(part) = parts.next() {
             if !part.is_empty() {
-                self.push_span(part, style);
+                self.push_span(part, style, link);
             }
             if parts.peek().is_some() {
                 self.lines.push(Vec::new());
@@ -71,25 +88,35 @@ impl InlineText {
         self.lines.push(Vec::new());
     }
 
-    /// Appends another rich-text accumulator without losing its first line.
+    /// Registers a link target and returns its source-order index.
     ///
     /// # Arguments
     ///
-    /// * `other` — Parsed inline content to append at the current position.
-    pub(super) fn append(&mut self, other: Self) {
-        if !other.has_content {
-            return;
-        }
+    /// * `target` — Destination associated with the parsed Markdown link.
+    ///
+    /// # Returns
+    ///
+    /// A zero-based source-order index for associating spans with the link.
+    pub(super) fn push_link(&mut self, target: LinkTarget) -> usize {
+        let index = self.links.len();
+        self.links.push(target);
+        index
+    }
 
-        self.has_content = true;
-        for (index, line) in other.lines.into_iter().enumerate() {
-            if index > 0 {
-                self.lines.push(Vec::new());
-            }
-            for span in line {
-                self.push_span(&span.content, span.style);
-            }
-        }
+    /// Returns whether visible text has been assigned to a link index.
+    ///
+    /// # Arguments
+    ///
+    /// * `link` — Source-order link index to inspect.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether any parsed span belongs to the link.
+    pub(super) fn link_has_text(&self, link: usize) -> bool {
+        self.lines
+            .iter()
+            .flatten()
+            .any(|span| span.link == Some(link))
     }
 
     /// Returns the visible unstyled content represented by the accumulator.
@@ -102,47 +129,84 @@ impl InlineText {
             .iter()
             .map(|line| {
                 line.iter()
-                    .map(|span| span.content.as_ref())
+                    .map(|span| span.span.content.as_ref())
                     .collect::<String>()
             })
             .collect::<Vec<_>>()
             .join("\n")
     }
 
-    /// Converts accumulated lines into owned Ratatui rich text.
+    /// Converts accumulated lines into rich text with focusable links.
     ///
     /// # Returns
     ///
-    /// A [`Text`] containing every logical line and styled span.
-    pub(super) fn into_text(self) -> Text<'static> {
-        Text::from(self.lines.into_iter().map(Line::from).collect::<Vec<_>>())
+    /// A [`RichText`] value containing the styled lines and linked span ranges.
+    pub(super) fn into_rich_text(self) -> RichText {
+        let mut linked_spans = vec![Vec::new(); self.links.len()];
+        let lines = self
+            .lines
+            .into_iter()
+            .enumerate()
+            .map(|(line_index, line)| {
+                Line::from(
+                    line.into_iter()
+                        .enumerate()
+                        .map(|(span_index, parsed)| {
+                            if let Some(link_index) = parsed.link
+                                && let Some(positions) = linked_spans.get_mut(link_index)
+                            {
+                                positions.push(LinkedSpan {
+                                    line: line_index,
+                                    span: span_index,
+                                });
+                            }
+                            parsed.span
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let links = self
+            .links
+            .into_iter()
+            .zip(linked_spans)
+            .map(|(target, spans)| InlineLink::new(target, spans))
+            .collect();
+        RichText::from_parts(Text::from(lines), links)
     }
 
-    /// Appends one span or merges it with the matching previous span.
+    /// Appends one span or merges it with a matching previous span.
     ///
     /// # Arguments
     ///
-    /// * `content` — Non-empty text for the span.
+    /// * `content` — Non-empty visible text for the span.
     /// * `style` — Ratatui style applied to the span.
-    fn push_span(&mut self, content: &str, style: Style) {
+    /// * `link` — Source-order link index associated with the span, if any.
+    fn push_span(&mut self, content: &str, style: Style, link: Option<usize>) {
         let line = self
             .lines
             .last_mut()
             .expect("inline text always retains one logical line");
-        if let Some(span) = line.last_mut().filter(|span| span.style == style) {
-            span.content.to_mut().push_str(content);
+        if let Some(span) = line
+            .last_mut()
+            .filter(|span| span.span.style == style && span.link == link)
+        {
+            span.span.content.to_mut().push_str(content);
         } else {
-            line.push(Span::styled(content.to_owned(), style));
+            line.push(ParsedInlineSpan {
+                span: Span::styled(content.to_owned(), style),
+                link,
+            });
         }
     }
 }
 
 impl Default for InlineText {
-    /// Creates the default empty rich-text accumulator.
+    /// Creates the default empty inline-text accumulator.
     ///
     /// # Returns
     ///
-    /// An empty [`InlineText`] with one logical line.
+    /// An empty [`InlineText`] ready to receive styled content.
     fn default() -> Self {
         Self::new()
     }

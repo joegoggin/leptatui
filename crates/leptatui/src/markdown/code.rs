@@ -1,9 +1,7 @@
 //! Markdown code-block and heading conversion.
 
+use crate::{AnyView, IntoView, RichText, code_block, h1, h2, h3, h4, h5, h6};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, TagEnd};
-use ratatui::text::Text;
-
-use crate::{AnyView, IntoView, code_block, h1, h2, h3, h4, h5, h6};
 
 use super::MarkdownOptions;
 
@@ -62,7 +60,7 @@ pub(super) fn parse_code_block<'a>(
 /// # Returns
 ///
 /// A semantic H1 through H6 [`crate::HeadingView`].
-pub(super) fn heading(level: HeadingLevel, content: Text<'static>) -> AnyView {
+pub(super) fn heading(level: HeadingLevel, content: RichText) -> AnyView {
     match level {
         HeadingLevel::H1 => h1(content),
         HeadingLevel::H2 => h2(content),

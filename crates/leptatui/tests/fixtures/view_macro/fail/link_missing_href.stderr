@@ -1,0 +1,5 @@
+error: Link requires an href attribute
+ --> tests/fixtures/view_macro/fail/link_missing_href.rs:8:10
+  |
+8 |         <Link>"Guide"</Link>
+  |          ^^^^

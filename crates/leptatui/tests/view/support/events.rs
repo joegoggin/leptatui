@@ -10,3 +10,13 @@
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
+
+/// Creates a mouse event at a terminal cell.
+fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
+    Event::Mouse(MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    })
+}

@@ -141,6 +141,21 @@ impl View for LayoutView {
                 .any(AnyView::__has_overflowing_scroll_target)
     }
 
+    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+        if self
+            .children
+            .iter_mut()
+            .any(|child| child.__scroll_overflowing_at_position(column, row, delta))
+        {
+            return true;
+        }
+        if self.metadata.max_scroll_offset() > 0 && self.metadata.contains_hit_position(column, row)
+        {
+            return self.metadata.scroll_by(delta);
+        }
+        false
+    }
+
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         focused_control_span_for_layout_view(
             &self.children,

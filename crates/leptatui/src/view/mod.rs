@@ -18,6 +18,7 @@ pub(crate) mod containers;
 pub(crate) mod content;
 pub(crate) mod controls;
 pub(crate) mod core;
+mod link;
 pub(crate) mod media;
 mod reconciliation;
 
@@ -55,6 +56,7 @@ pub use controls::{
         text_area::{TextAreaView, text_area},
     },
     form::{FormAction, FormView, form},
+    link::{LinkView, link},
     progress_bar::{ProgressBarView, progress_bar},
 };
 pub use core::{
@@ -64,6 +66,8 @@ pub use core::{
     conversion::{IntoView, IntoViews},
     metadata::{StyleMetadata, ViewType},
 };
+pub(crate) use link::{InlineLink, LinkedSpan};
+pub use link::{LinkTarget, RichText};
 pub use media::image::{ImageSource, ImageView, image};
 pub use ratatui::text::{Line, Span, Text};
 pub(crate) use reconciliation::reconcile_views;

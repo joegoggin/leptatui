@@ -4,22 +4,26 @@
 //! resulting terminal buffer.
 
 use std::{
+    borrow::Cow,
     cell::{Cell, RefCell},
     rc::Rc,
     thread,
     time::Duration,
 };
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use leptatui::{
     __private::FocusedControl,
     AnyView, AppControl, Borders, ButtonView, CellAlignment, Color, EditableState, FormView,
-    ImageSource, InputView, IntoView, KeyControl, LayoutDirection, ListItemView, MediaQuery,
-    Modifier, RenderCtx, Result, StyleDeclarations, StyleMetadata, StyleSelector, Stylesheet,
-    SyntaxTheme, TableCellView, TableRowView, TableSectionView, TextAreaView, TuiSize, TuiSpacing,
-    TuiStyle, View, ViewType, VimMode, block, button, code_block, column, component, dynamic, form,
-    h1, h2, h3, h4, h5, h6, image, input, list_item, ordered_list, paragraph, progress_bar, row,
-    table, table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
+    ImageSource, InputView, IntoView, KeyControl, LayoutDirection, LinkTarget, LinkView,
+    ListItemView, MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations, StyleMetadata,
+    StyleSelector, Stylesheet, SyntaxTheme, TableCellView, TableRowView, TableSectionView,
+    TextAreaView, TuiSize, TuiSpacing, TuiStyle, View, ViewType, VimMode, block, button,
+    code_block, column, component, dynamic, form, h1, h2, h3, h4, h5, h6, image, input, link,
+    list_item, markdown, ordered_list, paragraph, progress_bar, row, table, table_body, table_cell,
+    table_head, table_row, text, text_area, unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{
@@ -46,4 +50,5 @@ include!("media.rs");
 include!("metadata.rs");
 include!("progress.rs");
 include!("semantic_builders.rs");
+include!("links.rs");
 include!("tables.rs");

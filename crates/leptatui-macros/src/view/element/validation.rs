@@ -75,6 +75,7 @@ pub(super) fn is_builtin_element(name: &Ident) -> bool {
             | "H5"
             | "H6"
             | "Paragraph"
+            | "Link"
             | "Markdown"
             | "CodeBlock"
             | "OrderedList"
@@ -122,6 +123,8 @@ mod attr_validation {
         ProgressValue,
         /// Required Markdown file path.
         MarkdownSrc,
+        /// Required standalone link destination.
+        Href,
         /// Input placeholder text.
         Placeholder,
         /// Image fallback text.

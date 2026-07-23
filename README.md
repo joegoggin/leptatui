@@ -44,9 +44,10 @@ Leptatui's `View` trait instead of Leptos DOM nodes.
 Generated `#[component]` bodies run once when `new()` creates the component,
 under a stored Leptos owner. Create signals directly in the component body, and
 read them from dynamic views or event handlers when values need to update.
-Buttons support Tab/Shift+Tab focus movement and Enter/Space activation by
-default. Register handlers with `use_key_event()` inside a component body for
-custom key maps and overrides.
+Buttons support Tab/Shift+Tab focus movement, Enter/Space activation, pointer
+focus, and left-click activation by default. The mouse wheel scrolls the
+overflowing layout under the pointer. Register handlers with `use_key_event()`
+inside a component body for custom key maps and overrides.
 
 ```rust
 use leptatui::prelude::*;
@@ -119,6 +120,14 @@ optionally implement `StyledView` or `ContainerView`, and use
 `RenderCtx::resolve_style` to participate in the normal stylesheet cascade.
 Custom selector names are created with `ViewType::new("Name")`, and the same
 name can be used as a `stylesheet!` type selector.
+
+`Link` opens URLs and local paths with the operating system's configured
+handler. Use `link("Project site", "https://example.com")` or
+`<Link href="https://example.com">"Project site"</Link>` anywhere in a view.
+Links are underlined by default; use Tab and Shift+Tab to move focus and Enter
+or Space to activate the focused link. Moving the pointer over a link focuses
+it, and left-clicking activates it. Empty and `#fragment` targets remain visible
+but are intentionally not focusable.
 
 `Input` and `TextArea` are controlled components: pass the displayed `value`
 from caller-owned state and update that state from `on_input` when editing
@@ -279,12 +288,22 @@ let tagged_file = view! {
 ```
 
 The compatibility promise is CommonMark plus tables. Optional GFM task lists,
-strikethrough, footnotes, and other extensions are deferred. Links are styled
-and include otherwise-hidden destinations, but they are not interactive.
+strikethrough, footnotes, and other extensions are deferred. Markdown links
+retain their inline labels and are navigable with the same focus and activation
+controls as standalone `Link` views, including pointer focus and left-click
+activation. The mouse wheel scrolls overflowing document content under the
+pointer. In a file-backed reader, relative and absolute `.md` or `.markdown`
+targets open inside the same app boundary. Non-empty fragments scroll to
+GitHub-style heading anchors; duplicate headings receive `-1`, `-2`, and later
+suffixes. Use Shift+H and Shift+L to move backward and forward through cached
+pages, restoring each page's focus and scroll state.
+URLs and other local files use the system handler. Standalone links and
+in-memory Markdown keep that external behavior. Empty destinations and a bare
+`#` remain inactive.
 Images become deterministic descriptive text; local and remote image targets
 are never fetched. Raw HTML and unsupported blocks remain readable fallbacks.
-Unreadable paths and invalid UTF-8 also render a path-aware fallback paragraph
-instead of returning an error.
+Unreadable paths and invalid UTF-8 also render a path-aware in-app page instead
+of returning an error, so back navigation remains available.
 
 ```rust
 use leptatui::prelude::*;

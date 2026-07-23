@@ -110,6 +110,44 @@ impl Element {
         )
     }
 
+    /// Expands a rich-text link with one required `href` attribute.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] constructing a standalone link view.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if text content or `href` is missing, attributes
+    /// are duplicated, or an unsupported attribute is supplied.
+    pub(super) fn expand_link(&self) -> Result<TokenStream> {
+        let attrs = self.validate_attrs()?;
+        let hrefs = attrs
+            .iter()
+            .filter(|validated| validated.kind == AttrKind::Href)
+            .collect::<Vec<_>>();
+        let href = match hrefs.as_slice() {
+            [href] => href.attr.value.to_tokens(),
+            [] => {
+                return Err(Error::new_spanned(
+                    &self.name,
+                    "Link requires an href attribute",
+                ));
+            }
+            [first, ..] => {
+                return Err(Error::new_spanned(
+                    &first.attr.name,
+                    "Link expects exactly one href attribute",
+                ));
+            }
+        };
+        let leptatui = crate::crate_path::leptatui();
+        let view = self.expand_text_like("Link", |content| {
+            quote! { #leptatui::link(#content, #href) }
+        })?;
+        self.expand_attrs(view, &attrs)
+    }
+
     /// Expands a self-contained element with one required attribute.
     ///
     /// # Arguments
