@@ -32,6 +32,49 @@ fn overflowing_column_scrolls_to_bottom_with_vim_g() -> Result<()> {
     Ok(())
 }
 
+/// Verifies Vim control keys page through an overflowing column.
+///
+/// # Example Under Test
+///
+/// ```text
+/// column(Line 0..Line 9)
+/// Ctrl-D, Ctrl-D, Ctrl-U, Ctrl-U
+/// ```
+///
+/// # Assertions
+///
+/// - `Ctrl-D` scrolls down five rows and is handled.
+/// - A second `Ctrl-D` at the bottom leaves the offset clamped and passes.
+/// - `Ctrl-U` scrolls up five rows and is handled.
+/// - A second `Ctrl-U` at the top leaves the offset clamped and passes.
+#[test]
+fn overflowing_column_pages_with_vim_control_keys() -> Result<()> {
+    let backend = TestBackend::new(8, 5);
+    let mut terminal = Terminal::new(backend)?;
+    let children = (0..10).map(|index| text(format!("Line {index}")));
+    let mut view = column(children.collect::<Vec<_>>());
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        view.handle_key_event(ctrl_key_event('d'))?,
+        KeyControl::Handled
+    );
+    assert_eq!(scroll_offset(&view), 5);
+    assert_eq!(view.handle_key_event(ctrl_key_event('d'))?, KeyControl::Pass);
+    assert_eq!(scroll_offset(&view), 5);
+
+    assert_eq!(
+        view.handle_key_event(ctrl_key_event('u'))?,
+        KeyControl::Handled
+    );
+    assert_eq!(scroll_offset(&view), 0);
+    assert_eq!(view.handle_key_event(ctrl_key_event('u'))?, KeyControl::Pass);
+    assert_eq!(scroll_offset(&view), 0);
+
+    Ok(())
+}
+
 /// Verifies Vim `gg` scrolls an overflowing column to the top.
 ///
 /// # Example Under Test

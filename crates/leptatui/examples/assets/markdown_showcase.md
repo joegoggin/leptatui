@@ -87,4 +87,4 @@ render document --full-screen
 
 ## End of Fixture
 
-Use the arrow keys or `j` and `k` to scroll one row, Page Up and Page Down to move five rows, `gg` to return to the top, `G` to jump to the bottom, or the mouse wheel to scroll under the pointer. Tab, Shift+Tab, or pointer movement focuses links; Enter, Space, or left click opens the focused target. Local Markdown links and heading fragments stay in the reader. Shift+H and Shift+L move backward and forward through page history. Press `q` to quit.
+Use the arrow keys or `j` and `k` to scroll one row, Page Up and Page Down or Ctrl+U and Ctrl+D to move five rows, `gg` to return to the top, `G` to jump to the bottom, or the mouse wheel to scroll under the pointer. Tab, Shift+Tab, or pointer movement focuses links; Enter, Space, or left click opens the focused target. Local Markdown links and heading fragments stay in the reader. Shift+H and Shift+L move backward and forward through page history. Press `q` to quit.

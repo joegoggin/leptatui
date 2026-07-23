@@ -139,6 +139,8 @@ where
         KeyCode::Up | KeyCode::Char('k') => handle_scroll_key(view, -1),
         KeyCode::PageDown => handle_scroll_key(view, 5),
         KeyCode::PageUp => handle_scroll_key(view, -5),
+        KeyCode::Char('d') if key.modifiers == KeyModifiers::CONTROL => handle_scroll_key(view, 5),
+        KeyCode::Char('u') if key.modifiers == KeyModifiers::CONTROL => handle_scroll_key(view, -5),
         KeyCode::Char('g') => handle_scroll_to_top_key(view),
         KeyCode::Char('G') => {
             clear_scroll_to_top_key_pending(view);
