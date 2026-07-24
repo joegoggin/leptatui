@@ -446,6 +446,14 @@ impl View for ComponentView {
         self
     }
 
+    fn __visit_layout_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        self.with_reset_component(|component| visitor(component, ctx));
+    }
+
     fn reconcile(&mut self, previous: &dyn View) {
         if let Some(previous) = previous.as_any().downcast_ref::<Self>()
             && self.can_reconcile_from(previous)

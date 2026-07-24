@@ -65,7 +65,7 @@ pub use core::{
     contract::View,
     conversion::{IntoView, IntoViews},
     measurement::AvailableSpace,
-    metadata::{StyleMetadata, ViewType},
+    metadata::{LayoutGeometry, StyleMetadata, ViewType},
 };
 pub(crate) use link::{InlineLink, LinkedSpan};
 pub use link::{LinkTarget, RichText};

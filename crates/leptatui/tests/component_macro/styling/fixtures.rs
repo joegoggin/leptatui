@@ -8,6 +8,16 @@ fn MacroStyledText() -> impl leptatui::IntoView {
     text("Scoped").with_classes("scoped")
 }
 
+/// View whose local stylesheet removes its own child from layout.
+#[component]
+fn MacroHiddenLayoutChild() -> impl leptatui::IntoView {
+    stylesheet! {
+        .hidden => { display: Display::None }
+    }
+
+    text("Hidden").with_classes("hidden")
+}
+
 /// View whose stylesheet targets a shared class name.
 #[component]
 fn MacroStyledSibling() -> impl leptatui::IntoView {

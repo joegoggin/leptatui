@@ -31,6 +31,20 @@ use crate::{
 
 use self::target::RenderTarget;
 
+/// Current stage of the transient root layout pass.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum LayoutPhase {
+    /// No layout snapshot is currently being built.
+    #[default]
+    Inactive,
+    /// Structural traversal is mirroring visible views into Taffy.
+    Build,
+    /// Taffy is requesting intrinsic leaf measurements.
+    Measure,
+    /// Painting is consuming a completed snapshot.
+    Paint,
+}
+
 /// Rendering context for a single frame and target area.
 pub struct RenderCtx<'frame, 'buffer> {
     /// Destination receiving rendered widgets.
@@ -49,6 +63,8 @@ pub struct RenderCtx<'frame, 'buffer> {
     terminal_images: TerminalImageSupport,
     /// Mapping from local render coordinates to terminal hit-test coordinates.
     hit_mapper: HitMapper,
+    /// Current root layout stage.
+    layout_phase: LayoutPhase,
 }
 
 impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
@@ -72,6 +88,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             selector_ancestors: Vec::new(),
             terminal_images: context::use_context::<TerminalImageSupport>().unwrap_or_default(),
             hit_mapper: HitMapper::identity(),
+            layout_phase: LayoutPhase::Inactive,
         }
     }
 
@@ -172,7 +189,27 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             selector_ancestors,
             terminal_images: self.terminal_images.clone(),
             hit_mapper: self.hit_mapper.clone(),
+            layout_phase: self.layout_phase,
         }
+    }
+
+    /// Returns the current transient layout stage.
+    ///
+    /// # Returns
+    ///
+    /// A [`LayoutPhase`] describing whether layout is inactive, building,
+    /// measuring, or painting.
+    pub(crate) const fn layout_phase(&self) -> LayoutPhase {
+        self.layout_phase
+    }
+
+    /// Replaces the current transient layout stage.
+    ///
+    /// # Arguments
+    ///
+    /// * `phase` — Layout stage to store for descendant contexts.
+    pub(crate) fn set_layout_phase(&mut self, phase: LayoutPhase) {
+        self.layout_phase = phase;
     }
 
     /// Returns the style declarations inherited by the current view.
@@ -323,6 +360,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
                     },
                     target_area,
                 ),
+                layout_phase: self.layout_phase,
             };
             view.render(&mut buffer_ctx)?;
         }

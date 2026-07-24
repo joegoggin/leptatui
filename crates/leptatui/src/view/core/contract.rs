@@ -148,6 +148,27 @@ pub trait View: Any {
         &mut []
     }
 
+    /// Visits children used to construct the transient layout tree.
+    ///
+    /// The default exposes ordinary retained children. Structural boundaries
+    /// override this hook to expose their materialized child without creating
+    /// an additional layout box.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Render context carrying stylesheet and component scopes.
+    /// * `visitor` — Callback invoked for each logical layout child.
+    #[doc(hidden)]
+    fn __visit_layout_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        for child in self.children() {
+            visitor(child, ctx);
+        }
+    }
+
     /// Returns this node as [`Any`] for concrete-type inspection.
     ///
     /// # Returns

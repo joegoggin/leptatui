@@ -19,6 +19,8 @@ use super::{
     render::resolve_style,
 };
 use crate::MarkdownView;
+use crate::component::LayoutPhase;
+use crate::view::core::layout::prepare_layout;
 use crate::view::media::image::{ImageSource, image_render_area};
 use crate::view::reconciliation::reconcile_views;
 use crate::view::{
@@ -35,6 +37,17 @@ pub struct AnyView {
 }
 
 impl AnyView {
+    /// Returns whether the latest layout pass excluded this subtree.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether this view is in a `display: none` subtree.
+    fn is_layout_hidden(&self) -> bool {
+        self.inner
+            .style_metadata()
+            .is_some_and(StyleMetadata::is_layout_hidden)
+    }
+
     /// Erases a concrete view node.
     ///
     /// # Arguments
@@ -207,36 +220,54 @@ impl AnyView {
     /// Dispatches a non-default event through the stored subtree.
     #[doc(hidden)]
     pub fn __dispatch_event(&mut self, event: &Event) -> Result<AppControl> {
+        if self.is_layout_hidden() {
+            return Ok(AppControl::Continue);
+        }
         self.inner.__dispatch_event(event)
     }
 
     /// Dispatches a custom key event through the stored subtree.
     #[doc(hidden)]
     pub fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        if self.is_layout_hidden() {
+            return Ok(KeyControl::Pass);
+        }
         self.inner.__dispatch_key_event(key)
     }
 
     /// Emits expired pending input from the stored subtree.
     #[doc(hidden)]
     pub fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        if self.is_layout_hidden() {
+            return None;
+        }
         self.inner.__flush_pending_input()
     }
 
     /// Returns the number of focusable controls in the stored subtree.
     #[doc(hidden)]
     pub fn __focusable_count(&self) -> usize {
+        if self.is_layout_hidden() {
+            return 0;
+        }
         self.inner.__focusable_count()
     }
 
     /// Returns the focused control index while tracking traversal position.
     #[doc(hidden)]
     pub fn __focused_index_inner(&self, index: &mut usize) -> Option<usize> {
+        if self.is_layout_hidden() {
+            return None;
+        }
         self.inner.__focused_index_inner(index)
     }
 
     /// Sets focus by flattened control index while tracking traversal position.
     #[doc(hidden)]
     pub fn __set_focus_by_index_inner(&mut self, target: usize, index: &mut usize) {
+        if self.is_layout_hidden() {
+            return;
+        }
         self.inner.__set_focus_by_index_inner(target, index);
     }
 
@@ -258,6 +289,9 @@ impl AnyView {
         row: u16,
         index: &mut usize,
     ) -> Option<usize> {
+        if self.is_layout_hidden() {
+            return None;
+        }
         self.inner
             .__focusable_index_at_position_inner(column, row, index)
     }
@@ -265,6 +299,9 @@ impl AnyView {
     /// Returns the focused control span in the stored subtree.
     #[doc(hidden)]
     pub fn __focused_button_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
+        if self.is_layout_hidden() {
+            return None;
+        }
         self.inner.__focused_control_span(ctx)
     }
 
@@ -279,48 +316,72 @@ impl AnyView {
     /// Returns [`crate::Error::LinkOpen`] if a focused link cannot be opened.
     #[doc(hidden)]
     pub fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
+        if self.is_layout_hidden() {
+            return Ok(None);
+        }
         self.inner.__activate_focused_button()
     }
 
     /// Handles a key on the focused editor in the stored subtree.
     #[doc(hidden)]
     pub fn __handle_focused_input_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        if self.is_layout_hidden() {
+            return None;
+        }
         self.inner.__handle_focused_input_key(key)
     }
 
     /// Returns the focused control in the stored subtree.
     #[doc(hidden)]
     pub fn __focused_control(&self) -> Option<FocusedControl> {
+        if self.is_layout_hidden() {
+            return None;
+        }
         self.inner.__focused_control()
     }
 
     /// Handles a form-owned key in the stored subtree.
     #[doc(hidden)]
     pub fn __handle_form_key(&mut self, key: KeyEvent) -> Option<KeyControl> {
+        if self.is_layout_hidden() {
+            return None;
+        }
         self.inner.__handle_form_key(key)
     }
 
     /// Scrolls the first overflowing container in the stored subtree.
     #[doc(hidden)]
     pub fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__scroll_first_overflowing(delta)
     }
 
     /// Scrolls the first overflowing container to the top.
     #[doc(hidden)]
     pub fn __scroll_first_overflowing_to_top(&mut self) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__scroll_first_overflowing_to_top()
     }
 
     /// Scrolls the first overflowing container to the bottom.
     #[doc(hidden)]
     pub fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__scroll_first_overflowing_to_bottom()
     }
 
     /// Returns whether the stored subtree contains an overflowing container.
     #[doc(hidden)]
     pub fn __has_overflowing_scroll_target(&self) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__has_overflowing_scroll_target()
     }
 
@@ -340,6 +401,9 @@ impl AnyView {
     /// open its target.
     #[doc(hidden)]
     pub fn __handle_mouse_event(&mut self, mouse: MouseEvent) -> Result<AppControl> {
+        if self.is_layout_hidden() {
+            return Ok(AppControl::Continue);
+        }
         self.inner.__handle_mouse_event(mouse)
     }
 
@@ -355,6 +419,9 @@ impl AnyView {
     /// A [`bool`] indicating whether a focusable control was found.
     #[doc(hidden)]
     pub fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__focus_control_at_position(column, row)
     }
 
@@ -371,6 +438,9 @@ impl AnyView {
     /// A [`bool`] indicating whether a positioned layout consumed the scroll.
     #[doc(hidden)]
     pub fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner
             .__scroll_overflowing_at_position(column, row, delta)
     }
@@ -378,12 +448,18 @@ impl AnyView {
     /// Stores the pending first key of the `gg` sequence in the stored subtree.
     #[doc(hidden)]
     pub fn __set_scroll_to_top_key_pending(&self, pending: bool) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__set_scroll_to_top_key_pending(pending)
     }
 
     /// Clears and returns the pending first key of the `gg` sequence.
     #[doc(hidden)]
     pub fn __take_scroll_to_top_key_pending(&self) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__take_scroll_to_top_key_pending()
     }
 
@@ -394,6 +470,9 @@ impl AnyView {
     /// An [`Option`] containing a clone of the focused actionable target.
     #[doc(hidden)]
     pub fn __focused_link_target(&self) -> Option<crate::LinkTarget> {
+        if self.is_layout_hidden() {
+            return None;
+        }
         self.inner.__focused_link_target()
     }
 
@@ -408,6 +487,9 @@ impl AnyView {
     /// A [`bool`] indicating whether a matching view accepted the request.
     #[doc(hidden)]
     pub fn __request_scroll_to_id(&mut self, id: &str) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__request_scroll_to_id(id)
     }
 
@@ -418,6 +500,9 @@ impl AnyView {
     /// A [`bool`] indicating whether anchor scrolling remains pending.
     #[doc(hidden)]
     pub fn __has_scroll_to_anchor_request(&self) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__has_scroll_to_anchor_request()
     }
 
@@ -432,6 +517,9 @@ impl AnyView {
     /// A [`bool`] indicating whether a Markdown boundary changed pages.
     #[doc(hidden)]
     pub fn __navigate_markdown_history(&mut self, back: bool) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
         self.inner.__navigate_markdown_history(back)
     }
 
@@ -541,8 +629,14 @@ impl AnyView {
     /// Returns [`crate::Error::Io`] if concrete rendering performs terminal
     /// I/O that fails.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        if ctx.layout_phase() == LayoutPhase::Inactive {
+            prepare_layout(self.as_view(), ctx);
+        }
         self.inner.__clear_hit_areas();
         if let Some(metadata) = self.inner.style_metadata() {
+            if metadata.is_layout_hidden() {
+                return Ok(());
+            }
             ctx.record_metadata_hit_area(metadata);
         }
         self.as_view().render(ctx)
@@ -565,6 +659,9 @@ impl AnyView {
         available_space: LayoutSize<AvailableSpace>,
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
+        if self.is_layout_hidden() {
+            return LayoutSize::all(0.0);
+        }
         self.as_view()
             .measure(known_dimensions, available_space, ctx)
     }
@@ -572,22 +669,34 @@ impl AnyView {
     /// Returns the minimum useful height of the stored subtree.
     #[doc(hidden)]
     pub fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+        if self.is_layout_hidden() {
+            return 0;
+        }
         self.as_view().__min_height(ctx)
     }
 
     /// Dispatches an event through the stored subtree.
     pub fn handle_event(&mut self, event: Event) -> Result<AppControl> {
+        if self.is_layout_hidden() {
+            return Ok(AppControl::Continue);
+        }
         self.as_view_mut().handle_event(event)
     }
 
     /// Dispatches custom and built-in behavior for a key event.
     pub fn handle_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        if self.is_layout_hidden() {
+            return Ok(KeyControl::Pass);
+        }
         self.as_view_mut().handle_key_event(key)
     }
 
     /// Handles built-in scrolling, focus, editing, and activation keys.
     #[doc(hidden)]
     pub fn __handle_default_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
+        if self.is_layout_hidden() {
+            return Ok(KeyControl::Pass);
+        }
         events::handle_default_view_key_event(self.as_view_mut(), key)
     }
 

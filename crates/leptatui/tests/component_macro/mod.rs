@@ -18,9 +18,9 @@ use crossterm::event::{
 };
 use leptatui::context::provide_context;
 use leptatui::{
-    AnyView, AppControl, Children, Color, IntoView, KeyControl, LayoutDirection, RenderCtx, Result,
-    ThemeVariables, View, button, column, component, dynamic, row, stylesheet, text, theme_color,
-    use_key_event, view,
+    AnyView, AppControl, Children, Color, Display, IntoView, KeyControl, LayoutDirection,
+    RenderCtx, Result, ThemeVariables, View, button, column, component, dynamic, row, stylesheet,
+    text, theme_color, use_key_event, view,
 };
 use leptos::prelude::{GetUntracked, ReadSignal, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};

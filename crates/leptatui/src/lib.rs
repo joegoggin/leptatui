@@ -240,13 +240,14 @@ pub use style::{
 pub use view::{
     AnyView, AvailableSpace, BlockView, ButtonAction, ButtonView, CellAlignment, CodeBlockView,
     ContainerView, DynamicView, EditableAction, EditableState, EditableView, FormAction, FormView,
-    HeadingLevel, HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews, LayoutView,
-    LinkTarget, LinkView, ListItemView, ListKind, ListView, ParagraphView, ProgressBarView,
-    RichText, StyleMetadata, StyledView, SyntaxTheme, TableCellView, TableRowView,
-    TableSectionKind, TableSectionView, TableView, TextAreaView, TextView, TextualView, View,
-    ViewType, VimMode, block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4,
-    h5, h6, image, input, link, list_item, ordered_list, paragraph, progress_bar, row, table,
-    table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
+    HeadingLevel, HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews,
+    LayoutGeometry, LayoutView, LinkTarget, LinkView, ListItemView, ListKind, ListView,
+    ParagraphView, ProgressBarView, RichText, StyleMetadata, StyledView, SyntaxTheme,
+    TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView, TextAreaView,
+    TextView, TextualView, View, ViewType, VimMode, block, button, code_block, column, component,
+    dynamic, form, h1, h2, h3, h4, h5, h6, image, input, link, list_item, ordered_list, paragraph,
+    progress_bar, row, table, table_body, table_cell, table_head, table_row, text, text_area,
+    unordered_list,
 };
 
 #[doc(hidden)]
