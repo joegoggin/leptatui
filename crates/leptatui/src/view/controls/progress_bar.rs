@@ -2,9 +2,14 @@
 
 use ratatui::{text::Span, widgets::Gauge};
 
-use crate::view::core::{capabilities::impl_styled_view, render::resolve_style};
+use crate::view::core::{
+    capabilities::impl_styled_view,
+    measurement::{AvailableSpace, measure_fixed},
+    render::resolve_style,
+};
 use crate::view::{StyleMetadata, View, ViewType};
-use crate::{app::Result, component::RenderCtx};
+use crate::{LayoutSize, app::Result, component::RenderCtx};
+use unicode_width::UnicodeWidthStr;
 
 /// Returns a clamped progress value safe for Ratatui gauge rendering.
 pub(crate) fn clamped_progress_value(value: f64) -> f64 {
@@ -84,6 +89,20 @@ impl View for ProgressBarView {
         }
         ctx.render_widget(gauge);
         Ok(())
+    }
+
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        _available_space: LayoutSize<AvailableSpace>,
+        _ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        let width = self.label.as_deref().map_or(1, |label| {
+            u16::try_from(UnicodeWidthStr::width(label))
+                .unwrap_or(u16::MAX)
+                .max(1)
+        });
+        measure_fixed(LayoutSize::new(f32::from(width), 1.0), known_dimensions)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

@@ -11,10 +11,13 @@ use ratatui::layout::{Rect, Size};
 use crate::{
     app::{AppControl, Result},
     component::{FocusedControl, KeyControl, RenderCtx},
-    style::TuiStyle,
+    style::{LayoutSize, TuiStyle},
 };
 
-use super::{contract::View, events, metadata::StyleMetadata, render::resolve_style};
+use super::{
+    contract::View, events, measurement::AvailableSpace, metadata::StyleMetadata,
+    render::resolve_style,
+};
 use crate::MarkdownView;
 use crate::view::media::image::{ImageSource, image_render_area};
 use crate::view::reconciliation::reconcile_views;
@@ -545,10 +548,31 @@ impl AnyView {
         self.as_view().render(ctx)
     }
 
+    /// Returns the intrinsic size of the stored node.
+    ///
+    /// # Arguments
+    ///
+    /// * `known_dimensions` — Exact dimensions supplied by parent layout.
+    /// * `available_space` — Soft constraints for unknown dimensions.
+    /// * `ctx` — Rendering context containing styles and inherited state.
+    ///
+    /// # Returns
+    ///
+    /// A [`LayoutSize`] containing measured terminal-cell width and height.
+    pub fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        self.as_view()
+            .measure(known_dimensions, available_space, ctx)
+    }
+
     /// Returns the minimum useful height of the stored subtree.
     #[doc(hidden)]
     pub fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        self.as_view().min_height(ctx)
+        self.as_view().__min_height(ctx)
     }
 
     /// Dispatches an event through the stored subtree.

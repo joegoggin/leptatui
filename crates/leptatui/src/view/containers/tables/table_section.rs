@@ -1,8 +1,9 @@
 //! Header or body section of a semantic table.
 
 use crate::view::core::capabilities::{impl_container_view, impl_styled_view};
+use crate::view::core::measurement::{AvailableSpace, measure_fixed};
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
-use crate::{app::Result, component::RenderCtx};
+use crate::{LayoutSize, app::Result, component::RenderCtx};
 
 /// Semantic role of a table section.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -69,8 +70,13 @@ impl View for TableSectionView {
     fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         Ok(())
     }
-    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        0
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        _available_space: LayoutSize<AvailableSpace>,
+        _ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        measure_fixed(LayoutSize::all(0.0), known_dimensions)
     }
     fn style_metadata(&self) -> Option<&StyleMetadata> {
         Some(&self.metadata)

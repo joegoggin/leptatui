@@ -5,8 +5,10 @@ use std::{cell::RefCell, fmt, rc::Rc};
 use crossterm::event::{Event, KeyEvent};
 
 use crate::{
+    LayoutSize,
     app::{AppControl, Result},
     component::{FocusedControl, KeyControl, RenderCtx},
+    view::core::measurement::AvailableSpace,
 };
 
 use crate::view::{AnyView, IntoView, View};
@@ -68,8 +70,13 @@ impl View for DynamicView {
         self.with_view(|child| child.render(ctx))
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        self.with_view(|child| child.__min_height(ctx))
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        self.with_view(|child| child.measure(known_dimensions, available_space, ctx))
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

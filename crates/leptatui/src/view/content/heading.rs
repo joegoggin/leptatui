@@ -4,13 +4,17 @@ use ratatui::{layout::Rect, widgets::Paragraph};
 
 use crate::view::core::{
     capabilities::{impl_styled_view, impl_textual_view},
+    measurement::{
+        AvailableSpace, cells_to_u16, resolve_intrinsic_axis, rich_text_intrinsic_widths,
+        sanitize_cells,
+    },
     render::{line_count_height, resolve_style, semantic_paragraph},
 };
 use crate::view::{
     CellAlignment, StyleMetadata, View, ViewType,
     link::{RichTextWrapMode, impl_rich_text_view, resolved_rich_text},
 };
-use crate::{RichText, TuiStyle, app::Result, component::RenderCtx};
+use crate::{LayoutSize, RichText, TuiStyle, app::Result, component::RenderCtx};
 
 /// One-based semantic heading level.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -287,9 +291,33 @@ impl View for HeadingView {
         Ok(())
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
-        heading_min_height(&self.content, style, self.level.number(), ctx.area().width)
+        let marker_width = heading_content_offset(self.level.number());
+        let (min_content, max_content) = rich_text_intrinsic_widths(self.content.text());
+        let width = resolve_intrinsic_axis(
+            known_dimensions.width,
+            available_space.width,
+            f32::from(min_content.saturating_add(marker_width)),
+            f32::from(max_content.saturating_add(marker_width)),
+        );
+        let height = known_dimensions.height.map_or_else(
+            || {
+                f32::from(heading_min_height(
+                    &self.content,
+                    style,
+                    self.level.number(),
+                    cells_to_u16(width),
+                ))
+            },
+            sanitize_cells,
+        );
+        LayoutSize::new(width, height)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

@@ -11,4 +11,4 @@ mod geometry;
 mod view;
 
 pub(crate) use geometry::focused_control_span_for_editor;
-pub(crate) use view::{min_height_for_editable_text_view, render_editable_text_view};
+pub(crate) use view::{measure_editable_text_view, render_editable_text_view};

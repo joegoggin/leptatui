@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    AnyView, IntoView, LinkTarget, View,
+    AnyView, AvailableSpace, IntoView, LayoutSize, LinkTarget, View,
     app::{AppControl, Result},
     component::{KeyControl, RenderCtx},
     paragraph,
@@ -196,8 +196,17 @@ impl View for MarkdownView {
         self.state.borrow().current.document.render(ctx)
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        self.state.borrow().current.document.__min_height(ctx)
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        self.state
+            .borrow()
+            .current
+            .document
+            .measure(known_dimensions, available_space, ctx)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

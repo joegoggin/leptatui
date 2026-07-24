@@ -5,10 +5,11 @@ use crate::view::containers::layout::render::{
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
+    measurement::{AvailableSpace, measure_legacy_height},
     render::VerticalSpan,
 };
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
-use crate::{app::Result, component::RenderCtx, style::LayoutDirection};
+use crate::{LayoutSize, app::Result, component::RenderCtx, style::LayoutDirection};
 
 /// Vertically stacked blocks belonging to one list marker.
 #[derive(Debug, PartialEq)]
@@ -40,8 +41,22 @@ impl View for ListItemView {
         render_layout_view(&self.children, &self.metadata, LayoutDirection::Column, ctx)
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        min_height_for_layout_view(&self.children, &self.metadata, LayoutDirection::Column, ctx)
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        measure_legacy_height(
+            min_height_for_layout_view(
+                &self.children,
+                &self.metadata,
+                LayoutDirection::Column,
+                ctx,
+            ),
+            known_dimensions,
+            available_space,
+        )
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

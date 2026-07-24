@@ -4,10 +4,11 @@ use ratatui::text::Text;
 
 use crate::view::core::{
     capabilities::{impl_styled_view, impl_textual_view},
-    render::{line_count_height, resolve_style, semantic_paragraph},
+    measurement::{AvailableSpace, measure_rich_text},
+    render::{resolve_style, semantic_paragraph},
 };
 use crate::view::{StyleMetadata, View, ViewType};
-use crate::{app::Result, component::RenderCtx};
+use crate::{LayoutSize, app::Result, component::RenderCtx};
 
 /// Plain rich-text content.
 #[derive(Debug, PartialEq)]
@@ -41,9 +42,14 @@ impl View for TextView {
         Ok(())
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
-        line_count_height(semantic_paragraph(&self.content, style).line_count(ctx.area().width))
+        measure_rich_text(&self.content, style, known_dimensions, available_space)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

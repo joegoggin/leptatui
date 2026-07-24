@@ -1,7 +1,7 @@
 //! Focusable rich-text URL and filesystem link.
 
 use crate::{
-    RichText,
+    LayoutSize, RichText,
     app::{AppControl, Result},
     component::{FocusedControl, RenderCtx},
     view::{LinkTarget, StyleMetadata, View, ViewType},
@@ -10,7 +10,8 @@ use crate::{
 use crate::view::{
     core::{
         capabilities::impl_styled_view,
-        render::{line_count_height, resolve_style, semantic_paragraph},
+        measurement::{AvailableSpace, measure_rich_text},
+        render::{resolve_style, semantic_paragraph},
     },
     link::open_link_target,
 };
@@ -77,9 +78,14 @@ impl View for LinkView {
         Ok(())
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
-        line_count_height(semantic_paragraph(self.label.text(), style).line_count(ctx.area().width))
+        measure_rich_text(self.label.text(), style, known_dimensions, available_space)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

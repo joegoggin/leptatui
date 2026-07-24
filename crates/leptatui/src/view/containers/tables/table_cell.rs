@@ -1,8 +1,12 @@
 //! Rich-text semantic table-cell view.
 
-use crate::view::core::capabilities::{impl_styled_view, impl_textual_view};
+use crate::view::core::{
+    capabilities::{impl_styled_view, impl_textual_view},
+    measurement::{AvailableSpace, measure_rich_text},
+    render::resolve_style,
+};
 use crate::view::{StyleMetadata, View, ViewType, link::impl_rich_text_view};
-use crate::{RichText, app::Result, component::RenderCtx};
+use crate::{LayoutSize, RichText, app::Result, component::RenderCtx};
 
 /// Horizontal alignment applied to wrapped table-cell content.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -71,8 +75,18 @@ impl View for TableCellView {
     fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         Ok(())
     }
-    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        0
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        measure_rich_text(
+            self.content.text(),
+            resolve_style(&self.metadata, ctx),
+            known_dimensions,
+            available_space,
+        )
     }
     fn style_metadata(&self) -> Option<&StyleMetadata> {
         Some(&self.metadata)

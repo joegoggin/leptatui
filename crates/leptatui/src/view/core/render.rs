@@ -32,9 +32,36 @@ pub(crate) fn vertical_border_rows(borders: crate::Borders) -> u16 {
         + u16::from(borders.contains(crate::Borders::BOTTOM))
 }
 
+/// Returns how many columns the configured borders consume.
+///
+/// # Arguments
+///
+/// * `borders` — Border edges applied to a view.
+///
+/// # Returns
+///
+/// A `u16` count containing the horizontal border columns.
+pub(crate) fn horizontal_border_columns(borders: crate::Borders) -> u16 {
+    u16::from(borders.contains(crate::Borders::LEFT))
+        + u16::from(borders.contains(crate::Borders::RIGHT))
+}
+
 /// Returns how many rows the configured padding consumes.
 pub(crate) fn vertical_padding_rows(padding: Option<TuiSpacing>) -> u16 {
     padding.map_or(0, |padding| padding.top.saturating_add(padding.bottom))
+}
+
+/// Returns how many columns the configured padding consumes.
+///
+/// # Arguments
+///
+/// * `padding` — Optional physical padding values.
+///
+/// # Returns
+///
+/// A `u16` count containing the horizontal padding columns.
+pub(crate) fn horizontal_padding_columns(padding: Option<TuiSpacing>) -> u16 {
+    padding.map_or(0, |padding| padding.left.saturating_add(padding.right))
 }
 
 /// Vertical content span with an exclusive bottom row.

@@ -24,13 +24,30 @@ impl View for ClippedFocusPanel {
         ctx.render_view(&self.view)
     }
 
-    /// Returns the panel's constrained three-row height.
+    /// Returns the panel's constrained intrinsic geometry.
+    ///
+    /// # Arguments
+    ///
+    /// * `known_dimensions` — Exact dimensions supplied by parent layout.
+    /// * `available_space` — Soft constraints for unknown dimensions.
+    /// * `_ctx` — Rendering context containing styles and inherited state.
     ///
     /// # Returns
     ///
-    /// A [`u16`] height of three terminal rows.
-    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        3
+    /// A [`LayoutSize`] with a three-row intrinsic height.
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        _ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        LayoutSize::new(
+            known_dimensions.width.unwrap_or(match available_space.width {
+                AvailableSpace::Definite(width) => width,
+                AvailableSpace::MinContent | AvailableSpace::MaxContent => 1.0,
+            }),
+            known_dimensions.height.unwrap_or(3.0),
+        )
     }
 
     /// Returns the child view for default traversal.

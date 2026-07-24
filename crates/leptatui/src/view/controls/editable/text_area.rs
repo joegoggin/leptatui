@@ -4,8 +4,9 @@ use std::{fmt, time::Instant};
 
 use crossterm::event::KeyEvent;
 
-use crate::view::{StyleMetadata, View, ViewType};
+use crate::view::{AvailableSpace, StyleMetadata, View, ViewType};
 use crate::{
+    LayoutSize,
     app::{AppControl, Result},
     component::{FocusedControl, KeyControl, RenderCtx},
 };
@@ -14,8 +15,7 @@ use super::{
     insert::{flush_expired_insert_key, handle_text_area_key, has_active_insert_key_pending},
     model::{EditableControlKind, EditableModel, impl_editable_view_api},
     render::{
-        focused_control_span_for_editor, min_height_for_editable_text_view,
-        render_editable_text_view,
+        focused_control_span_for_editor, measure_editable_text_view, render_editable_text_view,
     },
     state::{EditableState, VimMode},
 };
@@ -71,8 +71,13 @@ impl View for TextAreaView {
         render_editable_text_view(&self.model, ctx)
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        min_height_for_editable_text_view(&self.model, ctx)
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        measure_editable_text_view(&self.model, known_dimensions, available_space, ctx)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

@@ -5,10 +5,12 @@ use super::render::{
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
+    measurement::{AvailableSpace, cells_to_u16, resolve_intrinsic_axis, sanitize_cells},
     render::VerticalSpan,
 };
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
-use crate::{app::Result, component::RenderCtx};
+use crate::{LayoutSize, app::Result, component::RenderCtx};
+use ratatui::layout::Rect;
 
 /// Marker style used by a semantic list.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -104,9 +106,44 @@ impl View for ListView {
         render_list_view(&self.children, start, &self.metadata, ctx)
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
         let start = (self.kind == ListKind::Ordered).then_some(self.start);
-        min_height_for_list_view(&self.children, start, &self.metadata, ctx)
+        let marker_width = list_marker_width(self.children.len(), start);
+        let min_width = list_intrinsic_width(
+            &self.children,
+            marker_width,
+            AvailableSpace::MinContent,
+            ctx,
+        );
+        let max_width = list_intrinsic_width(
+            &self.children,
+            marker_width,
+            AvailableSpace::MaxContent,
+            ctx,
+        );
+        let width = resolve_intrinsic_axis(
+            known_dimensions.width,
+            available_space.width,
+            min_width,
+            max_width,
+        )
+        .max(0.0);
+        let area = Rect {
+            width: cells_to_u16(width),
+            ..ctx.area()
+        };
+        let natural_height = ctx.with_area(area, |ctx| {
+            min_height_for_list_view(&self.children, start, &self.metadata, ctx)
+        });
+        let height = known_dimensions
+            .height
+            .map_or(f32::from(natural_height), sanitize_cells);
+        LayoutSize::new(width, height)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {
@@ -139,6 +176,99 @@ impl View for ListView {
         let start = (self.kind == ListKind::Ordered).then_some(self.start);
         focused_control_span_for_list_view(&self.children, start, &self.metadata, ctx)
             .map(VerticalSpan::into_tuple)
+    }
+}
+
+/// Returns the shared marker-column width for a semantic list.
+///
+/// # Arguments
+///
+/// * `item_count` — Number of list items.
+/// * `ordered_start` — First decimal marker, or [`None`] for hyphen markers.
+///
+/// # Returns
+///
+/// A `u16` width containing the widest marker.
+fn list_marker_width(item_count: usize, ordered_start: Option<usize>) -> u16 {
+    (0..item_count)
+        .map(|index| {
+            ordered_start.map_or(1, |start| {
+                start
+                    .saturating_add(index)
+                    .to_string()
+                    .len()
+                    .saturating_add(1)
+            })
+        })
+        .max()
+        .and_then(|width| u16::try_from(width).ok())
+        .unwrap_or(0)
+}
+
+/// Returns one intrinsic width for semantic-list items.
+///
+/// # Arguments
+///
+/// * `items` — Marked list items to inspect.
+/// * `marker_width` — Shared marker-column width.
+/// * `constraint` — Min-content or max-content constraint to apply.
+/// * `ctx` — Rendering context containing styles and inherited state.
+///
+/// # Returns
+///
+/// A measured `f32` terminal-cell width.
+fn list_intrinsic_width(
+    items: &[AnyView],
+    marker_width: u16,
+    constraint: AvailableSpace,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> f32 {
+    items
+        .iter()
+        .map(|item| {
+            let children = item
+                .downcast_ref::<crate::ListItemView>()
+                .map_or_else(|| std::slice::from_ref(item), |item| item.children());
+            children
+                .iter()
+                .map(|child| {
+                    let indent = if child.is::<ListView>() {
+                        2
+                    } else {
+                        marker_width.saturating_add(1)
+                    };
+                    intrinsic_child_width(child, constraint, ctx) + f32::from(indent)
+                })
+                .fold(f32::from(marker_width), f32::max)
+        })
+        .fold(0.0, f32::max)
+}
+
+/// Returns an intrinsic child width, traversing compatibility containers.
+///
+/// # Arguments
+///
+/// * `child` — Child view to measure.
+/// * `constraint` — Min-content or max-content constraint to apply.
+/// * `ctx` — Rendering context containing styles and inherited state.
+///
+/// # Returns
+///
+/// A measured `f32` terminal-cell width.
+fn intrinsic_child_width(
+    child: &AnyView,
+    constraint: AvailableSpace,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> f32 {
+    let measured = child.measure(LayoutSize::all(None), LayoutSize::all(constraint), ctx);
+    if measured.width > 0.0 || child.children().is_empty() {
+        measured.width
+    } else {
+        child
+            .children()
+            .iter()
+            .map(|child| intrinsic_child_width(child, constraint, ctx))
+            .fold(0.0, f32::max)
     }
 }
 

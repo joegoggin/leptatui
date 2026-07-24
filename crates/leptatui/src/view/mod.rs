@@ -64,6 +64,7 @@ pub use core::{
     capabilities::{ContainerView, EditableView, StyledView, TextualView},
     contract::View,
     conversion::{IntoView, IntoViews},
+    measurement::AvailableSpace,
     metadata::{StyleMetadata, ViewType},
 };
 pub(crate) use link::{InlineLink, LinkedSpan};
