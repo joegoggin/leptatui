@@ -188,11 +188,6 @@ fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'s
             "border_type_important",
         )),
         "padding" => Ok((StyleValueKind::Spacing, "padding", "padding_important")),
-        "direction" => Ok((
-            StyleValueKind::LayoutDirection,
-            "direction",
-            "direction_important",
-        )),
         "image_size" => Ok((StyleValueKind::Size, "image_size", "image_size_important")),
         "display" => Ok((StyleValueKind::Display, "display", "display_important")),
         "box_sizing" => Ok((
@@ -273,7 +268,7 @@ fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'s
         "z_index" => Ok((StyleValueKind::ZIndex, "z_index", "z_index_important")),
         _ => Err(Error::new_spanned(
             name,
-            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, direction, image_size, display, box_sizing, overflow, size, min_size, max_size, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_row, grid_column, position, inset, or z_index",
+            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_row, grid_column, position, inset, or z_index",
         )),
     }
 }

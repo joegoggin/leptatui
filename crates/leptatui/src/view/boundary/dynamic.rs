@@ -140,6 +140,10 @@ impl View for DynamicView {
         self.with_current_view(|child| visitor(child, ctx));
     }
 
+    fn __is_layout_transparent(&self) -> bool {
+        true
+    }
+
     fn reconcile(&mut self, previous: &dyn View) {
         if let Some(previous) = previous.as_any().downcast_ref::<Self>() {
             self.inner = previous.inner.clone();

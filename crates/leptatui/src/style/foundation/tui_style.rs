@@ -8,8 +8,8 @@ use ratatui::{style::Style, widgets::Block};
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
     Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
-    JustifySelf, LayoutDirection, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position,
-    TuiSize, TuiSpacing, ZIndex,
+    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, TuiSize, TuiSpacing,
+    ZIndex,
 };
 
 macro_rules! layout_style_builders {
@@ -47,8 +47,6 @@ pub struct TuiStyle {
     pub border_type: Option<BorderType>,
     /// Internal widget padding.
     pub padding: Option<TuiSpacing>,
-    /// Optional child layout direction override.
-    pub direction: Option<LayoutDirection>,
     /// Optional terminal-cell image render size.
     pub image_size: Option<TuiSize>,
     /// Layout strategy used to generate the view box.
@@ -128,7 +126,6 @@ impl TuiStyle {
             borders: None,
             border_type: None,
             padding: None,
-            direction: None,
             image_size: None,
             display: None,
             box_sizing: None,
@@ -242,20 +239,6 @@ impl TuiStyle {
         self
     }
 
-    /// Sets the child layout direction.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` — Direction used to split child view areas.
-    ///
-    /// # Returns
-    ///
-    /// A [`TuiStyle`] with the provided layout direction.
-    pub const fn direction(mut self, direction: LayoutDirection) -> Self {
-        self.direction = Some(direction);
-        self
-    }
-
     /// Sets the terminal-cell image render size.
     ///
     /// # Arguments
@@ -345,7 +328,6 @@ impl TuiStyle {
             borders: None,
             border_type: None,
             padding: None,
-            direction: None,
             image_size: None,
             display: None,
             box_sizing: None,
@@ -452,15 +434,13 @@ mod tests {
     ///
     /// # Example Under Test
     ///
-    /// A [`TuiStyle`] with foreground, background, modifiers, borders,
-    /// border type, padding, and layout direction is reduced to inherited
-    /// values.
+    /// A [`TuiStyle`] with foreground, background, modifiers, borders, border
+    /// type, and padding is reduced to inherited values.
     ///
     /// # Assertions
     ///
     /// - The inherited style keeps foreground color and modifiers.
-    /// - The inherited style drops background, borders, border type, padding,
-    ///   and layout direction.
+    /// - The inherited style drops background, borders, border type, and padding.
     #[test]
     fn inherited_values_keep_text_style_and_drop_surface_style() {
         let inherited = TuiStyle::new()
@@ -470,7 +450,6 @@ mod tests {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .padding(TuiSpacing::uniform(1))
-            .direction(LayoutDirection::Column)
             .inherited_values();
 
         assert_eq!(inherited.foreground, Some(Color::Green));
@@ -479,6 +458,5 @@ mod tests {
         assert_eq!(inherited.borders, None);
         assert_eq!(inherited.border_type, None);
         assert_eq!(inherited.padding, None);
-        assert_eq!(inherited.direction, None);
     }
 }

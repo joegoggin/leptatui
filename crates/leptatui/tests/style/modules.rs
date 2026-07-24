@@ -32,7 +32,6 @@ fn style_module_stores_typed_variables_and_mixins() {
         .variable("borders", Borders::ALL)
         .variable("border_type", BorderType::Rounded)
         .variable("padding", TuiSpacing::uniform(1))
-        .variable("direction", LayoutDirection::Column)
         .variable("thumbnail", TuiSize::new(24, 8))
         .variable("display", Display::Grid)
         .variable("box_sizing", BoxSizing::BorderBox)
@@ -77,10 +76,6 @@ fn style_module_stores_typed_variables_and_mixins() {
         BorderType::Rounded
     );
     assert_eq!(module.expect_spacing("padding"), TuiSpacing::uniform(1));
-    assert_eq!(
-        module.expect_layout_direction("direction"),
-        LayoutDirection::Column
-    );
     assert_eq!(module.expect_size("thumbnail"), TuiSize::new(24, 8));
     assert_eq!(module.expect_display("display"), Display::Grid);
     assert_eq!(

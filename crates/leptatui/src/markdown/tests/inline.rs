@@ -19,7 +19,7 @@ fn markdown_styles_nested_inline_syntax_and_escaped_text() {
 
     assert_eq!(
         markdown(source),
-        column([paragraph(Text::from(Line::from(vec![
+        div([paragraph(Text::from(Line::from(vec![
             Span::styled("outer ", Style::new().add_modifier(Modifier::ITALIC),),
             Span::styled(
                 "bold 界",
@@ -61,8 +61,8 @@ fn markdown_links_retain_labels_and_focusable_metadata() {
     let actual = markdown(source);
     assert_eq!(actual.__focusable_count(), 4);
     let document = actual
-        .downcast_ref::<LayoutView>()
-        .expect("Markdown document should be a column layout");
+        .downcast_ref::<DivView>()
+        .expect("Markdown document should have a Div root");
     let [paragraph] = document.children() else {
         panic!("expected one linked paragraph");
     };

@@ -80,7 +80,7 @@ impl View for Badge {
 /// # Example Under Test
 ///
 /// ```text
-/// column((Badge::new("Custom"), text("Built in")))
+/// div((Badge::new("Custom"), text("Built in")))
 /// Badge => { fg: Color::LightMagenta }
 /// Enter
 /// ```
@@ -96,7 +96,7 @@ impl View for Badge {
 fn custom_views_participate_in_the_full_view_protocol() -> Result<()> {
     let key_presses = Rc::new(Cell::new(0));
     let badge = Badge::new("Custom", Rc::clone(&key_presses)).with_classes("status");
-    let mut view = column((badge, text("Built in")));
+    let mut view = div((badge, text("Built in")));
 
     assert!(view.children()[0].is::<Badge>());
     assert_eq!(

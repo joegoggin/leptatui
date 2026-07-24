@@ -94,12 +94,9 @@ impl ViewType {
     /// Semantic table-cell view.
     #[allow(non_upper_case_globals)]
     pub const TableCell: Self = Self::new("TableCell");
-    /// Horizontal layout view.
+    /// Generic block container view.
     #[allow(non_upper_case_globals)]
-    pub const Row: Self = Self::new("Row");
-    /// Vertical layout view.
-    #[allow(non_upper_case_globals)]
-    pub const Column: Self = Self::new("Column");
+    pub const Div: Self = Self::new("Div");
     /// Grouping container for form controls.
     #[allow(non_upper_case_globals)]
     pub const Form: Self = Self::new("Form");
@@ -169,8 +166,7 @@ impl ViewType {
             | Self::TableCell
             | Self::Block
             | Self::Text
-            | Self::Row
-            | Self::Column
+            | Self::Div
             | Self::Form
             | Self::Button
             | Self::Input

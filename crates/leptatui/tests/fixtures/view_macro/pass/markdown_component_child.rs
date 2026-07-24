@@ -13,7 +13,7 @@ use leptatui::prelude::*;
 /// A [`View`] containing the supplied children.
 #[component]
 fn Panel(children: Children) -> impl IntoView {
-    column(children())
+    div(children())
 }
 
 /// Exercises path-backed Markdown fallback through component children.

@@ -61,8 +61,12 @@ impl View for TableView {
             f32::from(max_width),
         )
         .max(0.0);
+        let layout_width = known_dimensions
+            .width
+            .or_else(|| available_space.width.definite())
+            .map_or(width, sanitize_cells);
         let area = Rect {
-            width: cells_to_u16(width),
+            width: cells_to_u16(layout_width),
             ..ctx.area()
         };
         let natural_height = ctx.with_area(area, |ctx| {

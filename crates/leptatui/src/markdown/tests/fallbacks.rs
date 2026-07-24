@@ -27,7 +27,7 @@ fn markdown_maps_images_to_descriptive_text() {
 
     assert_eq!(
         markdown(source),
-        column(separate_blocks(views![
+        div(separate_blocks(views![
             paragraph("Image: diagram (https://example.com/diagram.png)"),
             paragraph("Image: local.png"),
             paragraph("Image: caption"),
@@ -69,7 +69,7 @@ fn markdown_preserves_literal_html_and_entities() {
 
     assert_eq!(
         markdown(source),
-        column(separate_blocks(views![
+        div(separate_blocks(views![
             paragraph("Before <kbd>&</kbd> after."),
             paragraph(Text::from(vec![
                 Line::raw("<section>"),
@@ -117,13 +117,13 @@ fn markdown_preserves_text_from_unsupported_parser_events() {
     let mut context = MarkdownParseContext::new(Path::new("."), None);
 
     assert_eq!(
-        column(parse_blocks(
+        div(parse_blocks(
             &mut parser,
             None,
             MarkdownOptions::default(),
             &mut context,
         )),
-        column(separate_blocks(views![
+        div(separate_blocks(views![
             unordered_list([list_item([paragraph("[x] done and x + y[^note]")])]),
             paragraph("z"),
             paragraph("Detail"),

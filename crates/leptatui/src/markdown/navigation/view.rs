@@ -217,6 +217,18 @@ impl View for MarkdownView {
         self
     }
 
+    fn __visit_layout_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        visitor(&self.state.borrow().current.document, ctx);
+    }
+
+    fn __is_layout_transparent(&self) -> bool {
+        true
+    }
+
     fn reconcile(&mut self, previous: &dyn View) {
         if let Some(previous) = previous.as_any().downcast_ref::<Self>()
             && self.can_reconcile_from(previous)
@@ -440,7 +452,7 @@ fn load_markdown_page(
             let link_base = path.parent().unwrap_or_else(|| Path::new("."));
             markdown_with_options_and_source(&source, options, link_base, Some(&path))
         }
-        Err(error) => crate::column([paragraph(format!(
+        Err(error) => crate::div([paragraph(format!(
             "failed to read Markdown file `{}`: {error}",
             path.display()
         ))])

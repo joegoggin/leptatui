@@ -23,7 +23,7 @@ fn markdown_preserves_fallback_source_order() {
 
     assert_eq!(
         markdown(source),
-        column(separate_blocks(views![
+        div(separate_blocks(views![
             h1("Start"),
             thematic_break(),
             paragraph("Image: middle (middle.png)"),
@@ -57,7 +57,7 @@ fn markdown_preserves_source_order() {
 
     assert_eq!(
         markdown(source),
-        column(separate_blocks(views![
+        div(separate_blocks(views![
             h1("開始"),
             paragraph("Before."),
             unordered_list([list_item([paragraph("中")])]),
@@ -80,5 +80,5 @@ fn markdown_preserves_source_order() {
 /// - The result is an empty semantic column.
 #[test]
 fn markdown_empty_source_returns_empty_column() {
-    assert_eq!(markdown(""), column(()));
+    assert_eq!(markdown(""), div(()));
 }

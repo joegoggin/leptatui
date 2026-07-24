@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// column([button("One"), text("Gap"), button("Two")])
+/// div([button("One"), text("Gap"), button("Two")])
 /// Tab, Tab, BackTab
 /// ```
 ///
@@ -18,7 +18,7 @@
 /// Non-focusable text views should be skipped during keyboard focus movement.
 #[test]
 fn tab_focus_moves_between_static_buttons() -> Result<()> {
-    let mut view = column((button("One"), text("Gap"), button("Two")));
+    let mut view = div((button("One"), text("Gap"), button("Two")));
 
     view.handle_event(key(KeyCode::Tab))?;
     assert_eq!(button_focuses(&view), vec![true, false]);
@@ -37,7 +37,7 @@ fn tab_focus_moves_between_static_buttons() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([button("Save"), text("Gap"), Input, TextArea, button("Submit")])
+/// div([button("Save"), text("Gap"), Input, TextArea, button("Submit")])
 /// Tab x4, BackTab
 /// ```
 ///
@@ -49,7 +49,7 @@ fn tab_focus_moves_between_static_buttons() -> Result<()> {
 /// - Non-editable text is skipped.
 #[test]
 fn tab_focus_moves_across_buttons_and_editable_controls() -> Result<()> {
-    let mut view = column((
+    let mut view = div((
         button("Save"),
         text("Gap"),
         editable_input("Ada"),
@@ -82,7 +82,7 @@ fn tab_focus_moves_across_buttons_and_editable_controls() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([button("A1"), button("B2"), button("C3")])
+/// div([button("A1"), button("B2"), button("C3")])
 /// height = 4
 /// Tab, Tab, render
 /// ```
@@ -102,7 +102,7 @@ fn tab_focus_scrolls_overflowing_column_to_focused_button() -> Result<()> {
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column([button("A1"), button("B2"), button("C3")]);
+    let mut view = div([button("A1"), button("B2"), button("C3")]);
 
     view.handle_event(key(KeyCode::Tab))?;
     view.handle_event(key(KeyCode::Tab))?;
@@ -121,7 +121,7 @@ fn tab_focus_scrolls_overflowing_column_to_focused_button() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([button("A1"), button("B2"), button("C3")])
+/// div([button("A1"), button("B2"), button("C3")])
 /// height = 4
 /// Tab x3, render, BackTab, render, BackTab, render
 /// ```
@@ -141,7 +141,7 @@ fn backtab_focus_scrolls_overflowing_column_up_to_focused_button() -> Result<()>
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column([button("A1"), button("B2"), button("C3")]);
+    let mut view = div([button("A1"), button("B2"), button("C3")]);
 
     view.handle_event(key(KeyCode::Tab))?;
     view.handle_event(key(KeyCode::Tab))?;
@@ -173,7 +173,7 @@ fn backtab_focus_scrolls_overflowing_column_up_to_focused_button() -> Result<()>
 /// # Example Under Test
 ///
 /// ```text
-/// column([button("A1"), button("B2"), button("C3")])
+/// div([button("A1"), button("B2"), button("C3")])
 /// Tab, Tab, render, PageDown, render
 /// ```
 ///
@@ -191,7 +191,7 @@ fn focus_scroll_request_does_not_override_later_manual_scroll() -> Result<()> {
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column([button("A1"), button("B2"), button("C3")]);
+    let mut view = div([button("A1"), button("B2"), button("C3")]);
 
     view.handle_event(key(KeyCode::Tab))?;
     view.handle_event(key(KeyCode::Tab))?;

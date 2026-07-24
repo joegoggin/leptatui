@@ -23,7 +23,7 @@ fn DefaultedLabel(
 /// Builds a column from nested children.
 #[component]
 fn ChildPanel(#[prop(into)] title: String, children: Children) -> impl IntoView {
-    column((text(title), column(children())))
+    div((text(title), div(children())))
 }
 
 /// Exercises generated prop builders and constructors.

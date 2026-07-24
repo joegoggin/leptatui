@@ -454,6 +454,10 @@ impl View for ComponentView {
         self.with_reset_component(|component| visitor(component, ctx));
     }
 
+    fn __is_layout_transparent(&self) -> bool {
+        true
+    }
+
     fn reconcile(&mut self, previous: &dyn View) {
         if let Some(previous) = previous.as_any().downcast_ref::<Self>()
             && self.can_reconcile_from(previous)

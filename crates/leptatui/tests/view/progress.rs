@@ -181,7 +181,7 @@ fn progress_bar_type_styles_apply_to_gauge() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([progress_bar(0.5), button("Save")])
+/// div([progress_bar(0.5), button("Save")])
 /// Tab
 /// ```
 ///
@@ -191,7 +191,7 @@ fn progress_bar_type_styles_apply_to_gauge() -> Result<()> {
 /// - Tab focuses the button and skips the progress bar.
 #[test]
 fn progress_bar_is_not_focusable() -> Result<()> {
-    let mut view = column((progress_bar(0.5), button("Save")));
+    let mut view = div((progress_bar(0.5), button("Save")));
 
     assert_eq!(view.__focusable_count(), 1);
     assert_eq!(control_focuses(&view), vec![false]);

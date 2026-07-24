@@ -51,7 +51,7 @@ fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
     let view = component(LabelProvider {
         value: ScopeLabel("outer"),
-        child: column([
+        child: div([
             component(LabelConsumer::new(Rc::clone(&observed))),
             component(LabelProvider {
                 value: ScopeLabel("inner"),

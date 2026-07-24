@@ -2,10 +2,10 @@
 #[component]
 fn MacroResponsiveCaseRow() -> impl leptatui::IntoView {
     view! {
-        <Row class="case-row">
+        <Div class="case-row">
             <Text>"type < class"</Text>
             <Text>"Sample"</Text>
-        </Row>
+        </Div>
     }
 }
 
@@ -13,23 +13,25 @@ fn MacroResponsiveCaseRow() -> impl leptatui::IntoView {
 #[component]
 fn MacroResponsiveCaseRoot() -> impl leptatui::IntoView {
     stylesheet! {
+        .case-row => { display: Display::Flex }
+
         @media (max-width: 60) {
-            .case-row => { direction: LayoutDirection::Column }
+            .case-row => { flex_direction: FlexDirection::Column }
         }
     }
 
     view! {
-        <Column>
+        <Div>
             <Text>"Intro"</Text>
             <MacroResponsiveCaseRow />
-        </Column>
+        </Div>
     }
 }
 
 /// View with an overflowing internal layout.
 #[component]
 fn MacroScrollableList() -> impl leptatui::IntoView {
-    column([
+    div([
         text("One"),
         text("Two"),
         text("Three"),
@@ -42,7 +44,8 @@ fn MacroScrollableList() -> impl leptatui::IntoView {
 /// Parent component whose default scroll keys must reach a child component.
 #[component]
 fn MacroScrollableBoundaryRoot() -> impl leptatui::IntoView {
-    row([component(MacroScrollableList::new())])
+    div([component(MacroScrollableList::new())])
+        .with_inline_style(TuiStyle::new().display(Display::Flex))
 }
 
 /// View containing the button scrolled out of a parent viewport.
@@ -54,7 +57,7 @@ fn MacroMouseBoundaryButton() -> impl leptatui::IntoView {
 /// Parent view that replaces an off-screen component button visually.
 #[component]
 fn MacroScrolledMouseRoot() -> impl leptatui::IntoView {
-    column((
+    div((
         component(MacroMouseBoundaryButton::new()),
         button("Visible"),
     ))

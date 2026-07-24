@@ -132,6 +132,14 @@ where
                 if metadata.is_layout_hidden() {
                     return Ok(());
                 }
+                if let Some(geometry) = metadata.layout_geometry()
+                    && geometry.border_box != ctx.area()
+                {
+                    return ctx.with_area(geometry.border_box, |ctx| {
+                        ctx.record_metadata_hit_area(metadata);
+                        View::render(self, ctx)
+                    });
+                }
                 ctx.record_metadata_hit_area(metadata);
             }
             View::render(self, &mut ctx)

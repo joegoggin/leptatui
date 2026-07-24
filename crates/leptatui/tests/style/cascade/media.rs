@@ -145,24 +145,24 @@ fn matching_media_rules_keep_selector_specificity() {
     assert_eq!(resolved.foreground, Some(Color::Green));
 }
 
-/// Verifies stylesheet direction declarations resolve into view styles.
+/// Verifies stylesheet flex-direction declarations resolve into view styles.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// .controls { direction: Column }
+/// .controls { flex_direction: Column }
 /// ```
 ///
 /// # Assertions
 ///
 /// - View metadata is available for stylesheet resolution.
-/// - The resolved layout direction is column.
+/// - The resolved flex direction is column.
 #[test]
-fn stylesheet_direction_declaration_resolves() {
+fn stylesheet_flex_direction_declaration_resolves() {
     let view = text("Controls").with_classes("controls");
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::class("controls"),
-        TuiStyle::new().direction(LayoutDirection::Column),
+        TuiStyle::new().flex_direction(FlexDirection::Column),
     );
 
     let resolved = stylesheet.resolve(
@@ -172,7 +172,7 @@ fn stylesheet_direction_declaration_resolves() {
         &ThemeVariables::new(),
     );
 
-    assert_eq!(resolved.direction, Some(LayoutDirection::Column));
+    assert_eq!(resolved.flex_direction, Some(FlexDirection::Column));
 }
 
 /// Verifies stylesheet image size declarations resolve into view styles.
@@ -205,31 +205,31 @@ fn stylesheet_image_size_declaration_resolves() {
     assert_eq!(resolved.image_size, Some(TuiSize::new(24, 8)));
 }
 
-/// Verifies media rules can override layout direction by viewport.
+/// Verifies media rules can override flex direction by viewport.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// .controls { direction: Row }
-/// @media (max-width: 60) { .controls { direction: Column } }
+/// .controls { flex_direction: Row }
+/// @media (max-width: 60) { .controls { flex_direction: Column } }
 /// ```
 ///
 /// # Assertions
 ///
-/// - The compact viewport resolves column direction.
-/// - The wide viewport resolves row direction.
+/// - The compact viewport resolves column flex direction.
+/// - The wide viewport resolves row flex direction.
 #[test]
-fn stylesheet_media_query_can_override_layout_direction() {
+fn stylesheet_media_query_can_override_flex_direction() {
     let view = text("Controls").with_classes("controls");
     let stylesheet = Stylesheet::new()
         .rule(
             StyleSelector::class("controls"),
-            TuiStyle::new().direction(LayoutDirection::Row),
+            TuiStyle::new().flex_direction(FlexDirection::Row),
         )
         .media_rule(
             MediaQuery::max_width(60),
             StyleSelector::class("controls"),
-            TuiStyle::new().direction(LayoutDirection::Column),
+            TuiStyle::new().flex_direction(FlexDirection::Column),
         );
 
     let compact = stylesheet.resolve_for_viewport(
@@ -247,6 +247,6 @@ fn stylesheet_media_query_can_override_layout_direction() {
         &ThemeVariables::new(),
     );
 
-    assert_eq!(compact.direction, Some(LayoutDirection::Column));
-    assert_eq!(wide.direction, Some(LayoutDirection::Row));
+    assert_eq!(compact.flex_direction, Some(FlexDirection::Column));
+    assert_eq!(wide.flex_direction, Some(FlexDirection::Row));
 }

@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// column([Input, button("Submit")])
+/// div([Input, button("Submit")])
 /// Tab, Enter, Space, Tab, Enter
 /// ```
 ///
@@ -18,7 +18,7 @@
 fn enter_and_space_do_not_activate_focused_editable_controls() -> Result<()> {
     let count = Rc::new(Cell::new(0));
     let submit_count = Rc::clone(&count);
-    let mut view = column((
+    let mut view = div((
         editable_input("Ada"),
         button("Submit").on_press(move || {
             submit_count.set(submit_count.get() + 1);
@@ -79,7 +79,7 @@ fn focused_button_action_can_exit_app_loop() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// row([button("One"), button("Two")])
+/// div([button("One"), button("Two")])
 /// Stylesheet::new().rule(StyleSelector::focus(), black on yellow)
 /// with_focus(true)
 /// ```
@@ -99,7 +99,8 @@ fn focused_button_action_can_exit_app_loop() -> Result<()> {
 fn renders_focused_button_with_focus_stylesheet_rule() -> Result<()> {
     let backend = TestBackend::new(24, 5);
     let mut terminal = Terminal::new(backend)?;
-    let view = row([button("One").with_focus(true), button("Two")]);
+    let view = div([button("One").with_focus(true), button("Two")])
+        .with_inline_style(TuiStyle::new().display(Display::Flex));
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::focus(),
         TuiStyle::new()

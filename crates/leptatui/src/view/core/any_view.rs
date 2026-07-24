@@ -24,8 +24,8 @@ use crate::view::core::layout::prepare_layout;
 use crate::view::media::image::{ImageSource, image_render_area};
 use crate::view::reconciliation::reconcile_views;
 use crate::view::{
-    BlockView, ButtonView, CodeBlockView, ComponentView, DynamicView, FormView, HeadingView,
-    ImageView, InputView, LayoutView, LinkView, ListItemView, ListView, ParagraphView,
+    BlockView, ButtonView, CodeBlockView, ComponentView, DivView, DynamicView, FormView,
+    HeadingView, ImageView, InputView, LinkView, ListItemView, ListView, ParagraphView,
     ProgressBarView, TableCellView, TableRowView, TableSectionView, TableView, TextAreaView,
     TextView,
 };
@@ -584,7 +584,7 @@ impl PartialEq for AnyView {
         compare_type!(TableSectionView);
         compare_type!(TableRowView);
         compare_type!(TableCellView);
-        compare_type!(LayoutView);
+        compare_type!(DivView);
         compare_type!(FormView);
         compare_type!(ButtonView);
         compare_type!(LinkView);
@@ -636,6 +636,15 @@ impl AnyView {
         if let Some(metadata) = self.inner.style_metadata() {
             if metadata.is_layout_hidden() {
                 return Ok(());
+            }
+            if ctx.honors_layout_geometry()
+                && let Some(geometry) = metadata.layout_geometry()
+                && geometry.border_box != ctx.area()
+            {
+                return ctx.with_area(geometry.border_box, |ctx| {
+                    ctx.record_metadata_hit_area(metadata);
+                    self.as_view().render(ctx)
+                });
             }
             ctx.record_metadata_hit_area(metadata);
         }

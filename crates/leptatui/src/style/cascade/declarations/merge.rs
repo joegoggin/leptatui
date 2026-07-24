@@ -87,12 +87,6 @@ impl StyleDeclarations {
             self.set_padding(declaration.value, declaration.important);
         }
 
-        if let Some(declaration) = &style.direction
-            && matches(declaration.important)
-        {
-            self.set_direction(declaration.value, declaration.important);
-        }
-
         if let Some(declaration) = &style.image_size
             && matches(declaration.important)
         {

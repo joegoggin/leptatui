@@ -21,10 +21,10 @@ fn ActionLabel(on_press: fn() -> AppControl) -> impl IntoView {
 #[component]
 fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
-        <Column>
+        <Div>
             <Text>{title}</Text>
-            {column(children())}
-        </Column>
+            {div(children())}
+        </Div>
     }
 }
 

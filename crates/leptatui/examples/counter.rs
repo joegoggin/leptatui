@@ -34,6 +34,7 @@ fn Counter() -> impl IntoView {
         }
         .counter-value => { fg: Color::LightCyan, modifier: Modifier::BOLD }
         .counter-help => { fg: Color::Gray }
+        .counter-controls => { display: Display::Flex }
         Button => {
             fg: Color::White,
             borders: Borders::ALL,
@@ -44,7 +45,7 @@ fn Counter() -> impl IntoView {
 
         @media (max-width: 60) {
             .counter-panel => { padding: TuiSpacing::ZERO }
-            .counter-controls => { direction: LayoutDirection::Column }
+            .counter-controls => { flex_direction: FlexDirection::Column }
             .counter-button => {
                 padding: TuiSpacing::ZERO
             }
@@ -52,7 +53,7 @@ fn Counter() -> impl IntoView {
     }
 
     view! {
-        <Column>
+        <Div>
             <Block class="counter-panel">
                 {move || {
                     view! {
@@ -62,14 +63,14 @@ fn Counter() -> impl IntoView {
                     }
                 }}
             </Block>
-            <Row class="counter-controls">
+            <Div class="counter-controls">
                 <Button class="counter-button">"+ Increment"</Button>
                 <Button class="counter-button">"- Decrement"</Button>
                 <Button class="counter-button">"r Reset"</Button>
                 <Button class="counter-button danger">"q Quit"</Button>
-            </Row>
+            </Div>
             <Text class="counter-help">"+/- adjust. r resets. q quits."</Text>
-        </Column>
+        </Div>
     }
 }
 

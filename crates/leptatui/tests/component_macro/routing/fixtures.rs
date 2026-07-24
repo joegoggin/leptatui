@@ -18,14 +18,14 @@ fn MacroRouteSwitchRoot() -> impl leptatui::IntoView {
     });
 
     view! {
-        <Column>
+        <Div>
             <MacroRouteKeyNav />
             {move || match route.get_untracked() {
                 MacroRoutePage::Home => view! { <MacroRouteHomePage /> },
                 MacroRoutePage::Counter => view! { <MacroRouteCounterPage /> },
                 MacroRoutePage::Settings => view! { <MacroRouteSettingsPage /> },
             }}
-        </Column>
+        </Div>
     }
 }
 
@@ -55,9 +55,9 @@ fn MacroRouteHomePage() -> impl leptatui::IntoView {
     let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
 
     view! {
-        <Column>
+        <Div>
             {move || text(format!("Home {}", shared.get_untracked()))}
-        </Column>
+        </Div>
     }
 }
 
@@ -68,9 +68,9 @@ fn MacroRouteCounterPage() -> impl leptatui::IntoView {
     let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
 
     view! {
-        <Column>
+        <Div>
             {move || text(format!("Counter {}", shared.get_untracked()))}
-        </Column>
+        </Div>
     }
 }
 
@@ -81,9 +81,9 @@ fn MacroRouteSettingsPage() -> impl leptatui::IntoView {
     let shared = leptatui::context::expect_context::<MacroSharedCount>().0;
 
     view! {
-        <Column>
+        <Div>
             {move || text(format!("Settings {}", shared.get_untracked()))}
-        </Column>
+        </Div>
     }
 }
 
@@ -106,13 +106,13 @@ fn MacroRoutePropSwitchRoot() -> impl leptatui::IntoView {
     });
 
     view! {
-        <Column>
+        <Div>
             {move || match route.get_untracked() {
                 MacroRoutePage::Home => view! { <MacroRouteNamedPage label="Home" /> },
                 MacroRoutePage::Counter => view! { <MacroRouteNamedPage label="Counter" /> },
                 MacroRoutePage::Settings => view! { <MacroRouteNamedPage label="Settings" /> },
             }}
-        </Column>
+        </Div>
     }
 }
 

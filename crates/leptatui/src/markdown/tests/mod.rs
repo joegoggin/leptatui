@@ -55,8 +55,8 @@ fn markdown_fixture_dir(name: &str) -> PathBuf {
 /// A tuple containing line-number visibility and the syntax theme.
 fn parsed_code_block_options(view: &AnyView) -> (bool, SyntaxTheme) {
     let document = view
-        .downcast_ref::<LayoutView>()
-        .expect("Markdown document should be a column layout");
+        .downcast_ref::<DivView>()
+        .expect("Markdown document should have a Div root");
     let [child] = document.children() else {
         panic!("expected one Markdown code block");
     };
@@ -71,15 +71,15 @@ fn parsed_code_block_options(view: &AnyView) -> (bool, SyntaxTheme) {
 ///
 /// # Arguments
 ///
-/// * `view` — Parsed Markdown column whose scroll metadata is inspected.
+/// * `view` — Parsed Markdown Div whose scroll metadata is inspected.
 ///
 /// # Returns
 ///
 /// A tuple containing the current and maximum vertical scroll offsets.
 fn markdown_scroll_state(view: &AnyView) -> (u16, u16) {
     let document = view
-        .downcast_ref::<LayoutView>()
-        .expect("Markdown document should be a column layout");
+        .downcast_ref::<DivView>()
+        .expect("Markdown document should have a Div root");
     let metadata = document.metadata();
 
     (metadata.scroll_offset(), metadata.max_scroll_offset())

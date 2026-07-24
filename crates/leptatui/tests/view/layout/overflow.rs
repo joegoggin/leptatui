@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("12345678")])
+/// div([text("12345678")])
 /// terminal size = 8x1
 /// ```
 ///
@@ -16,7 +16,7 @@
 fn fitting_column_does_not_render_scrollbar() -> Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
-    let view = column([text("12345678")]);
+    let view = div([text("12345678")]);
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -35,7 +35,7 @@ fn fitting_column_does_not_render_scrollbar() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("One"), text("Two"), text("Three")])
+/// div([text("One"), text("Two"), text("Three")])
 /// terminal size = 8x2
 /// ```
 ///
@@ -49,7 +49,7 @@ fn fitting_column_does_not_render_scrollbar() -> Result<()> {
 fn overflowing_column_renders_right_scrollbar() -> Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
-    let view = column(vec![text("One"), text("Two"), text("Three")]);
+    let view = div(vec![text("One"), text("Two"), text("Three")]);
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -72,7 +72,7 @@ fn overflowing_column_renders_right_scrollbar() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// dynamic(|| column([text("One"), text("Two"), text("Three")]))
+/// dynamic(|| div([text("One"), text("Two"), text("Three")]))
 /// terminal size = 8x2
 /// ```
 ///
@@ -85,7 +85,7 @@ fn overflowing_column_renders_right_scrollbar() -> Result<()> {
 fn dynamic_overflowing_column_scrolls_after_render() -> Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = dynamic(|| column(vec![text("One"), text("Two"), text("Three")]));
+    let mut view = dynamic(|| div(vec![text("One"), text("Two"), text("Three")]));
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 0, 0, 8), "O");
@@ -107,7 +107,7 @@ fn dynamic_overflowing_column_scrolls_after_render() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("123456"), text("more"), text("tail")])
+/// div([text("123456"), text("more"), text("tail")])
 /// terminal size = 6x2
 /// ```
 ///
@@ -121,7 +121,7 @@ fn dynamic_overflowing_column_scrolls_after_render() -> Result<()> {
 fn overflowing_column_reserves_width_for_scrollbar() -> Result<()> {
     let backend = TestBackend::new(6, 2);
     let mut terminal = Terminal::new(backend)?;
-    let view = column(vec![text("123456"), text("more"), text("tail")]);
+    let view = div(vec![text("123456"), text("more"), text("tail")]);
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -142,7 +142,7 @@ fn overflowing_column_reserves_width_for_scrollbar() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("One"), text("Two"), text("Three")])
+/// div([text("One"), text("Two"), text("Three")])
 /// PageDown
 /// ```
 ///
@@ -156,7 +156,7 @@ fn overflowing_column_reserves_width_for_scrollbar() -> Result<()> {
 fn overflowing_column_updates_scrollbar_position() -> Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column(vec![text("One"), text("Two"), text("Three")]);
+    let mut view = div(vec![text("One"), text("Two"), text("Three")]);
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -191,7 +191,7 @@ fn overflowing_column_updates_scrollbar_position() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column(Line 0..Line 9)
+/// div(Line 0..Line 9)
 /// PageDown
 /// ```
 ///
@@ -206,7 +206,7 @@ fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
-    let mut view = column(children.collect::<Vec<_>>());
+    let mut view = div(children.collect::<Vec<_>>());
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {

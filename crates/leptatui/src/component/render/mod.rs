@@ -12,6 +12,8 @@
 mod image;
 mod target;
 
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     Frame,
@@ -21,7 +23,7 @@ use ratatui::{
 };
 
 use crate::{
-    StyleMetadata, ThemeVariables,
+    LayoutGeometry, StyleMetadata, ThemeVariables, View,
     app::Result,
     context,
     style::{Stylesheet, TuiStyle, ViewportSize},
@@ -65,6 +67,10 @@ pub struct RenderCtx<'frame, 'buffer> {
     hit_mapper: HitMapper,
     /// Current root layout stage.
     layout_phase: LayoutPhase,
+    /// Whether an erased view should adopt its retained absolute geometry.
+    honor_layout_geometry: bool,
+    /// Retained geometry for views that do not expose selector metadata.
+    unstyled_layout_geometry: Rc<RefCell<HashMap<usize, LayoutGeometry>>>,
 }
 
 impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
@@ -89,6 +95,8 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             terminal_images: context::use_context::<TerminalImageSupport>().unwrap_or_default(),
             hit_mapper: HitMapper::identity(),
             layout_phase: LayoutPhase::Inactive,
+            honor_layout_geometry: true,
+            unstyled_layout_geometry: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
@@ -190,6 +198,8 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             terminal_images: self.terminal_images.clone(),
             hit_mapper: self.hit_mapper.clone(),
             layout_phase: self.layout_phase,
+            honor_layout_geometry: self.honor_layout_geometry,
+            unstyled_layout_geometry: Rc::clone(&self.unstyled_layout_geometry),
         }
     }
 
@@ -201,6 +211,43 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// measuring, or painting.
     pub(crate) const fn layout_phase(&self) -> LayoutPhase {
         self.layout_phase
+    }
+
+    /// Returns whether erased views should adopt retained absolute geometry.
+    ///
+    /// # Returns
+    ///
+    /// `true` when retained layout geometry should replace the assigned area.
+    pub(crate) const fn honors_layout_geometry(&self) -> bool {
+        self.honor_layout_geometry
+    }
+
+    /// Returns retained geometry for a view without selector metadata.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` — View whose transient geometry is queried.
+    ///
+    /// # Returns
+    ///
+    /// The retained [`LayoutGeometry`] when the current layout pass assigned one.
+    pub(crate) fn unstyled_layout_geometry(&self, view: &dyn View) -> Option<LayoutGeometry> {
+        self.unstyled_layout_geometry
+            .borrow()
+            .get(&view_identity(view))
+            .copied()
+    }
+
+    /// Retains geometry for a view without selector metadata.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` — View receiving transient geometry.
+    /// * `geometry` — Rounded boxes assigned by the layout engine.
+    pub(crate) fn set_unstyled_layout_geometry(&self, view: &dyn View, geometry: LayoutGeometry) {
+        self.unstyled_layout_geometry
+            .borrow_mut()
+            .insert(view_identity(view), geometry);
     }
 
     /// Replaces the current transient layout stage.
@@ -361,8 +408,10 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
                     target_area,
                 ),
                 layout_phase: self.layout_phase,
+                honor_layout_geometry: false,
+                unstyled_layout_geometry: Rc::clone(&self.unstyled_layout_geometry),
             };
-            view.render(&mut buffer_ctx)?;
+            view.as_view().render(&mut buffer_ctx)?;
         }
 
         let target = self.target.buffer_mut();
@@ -447,6 +496,33 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
 
         let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
 
+        render(&mut child)
+    }
+
+    /// Renders into a parent-assigned child area without reapplying absolute geometry.
+    ///
+    /// # Arguments
+    ///
+    /// * `area` — Computed or scrolled child area.
+    /// * `inherited_style` — Inherited style declarations for the child.
+    /// * `selector_ancestor` — Parent metadata appended to selector ancestry.
+    /// * `render` — Closure that renders into the assigned child context.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
+    pub(crate) fn with_assigned_area_inherited_style_and_selector_ancestor<R>(
+        &mut self,
+        area: Rect,
+        inherited_style: TuiStyle,
+        selector_ancestor: StyleMetadata,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let mut selector_ancestors = self.selector_ancestors.clone();
+        selector_ancestors.push(selector_ancestor);
+        let stylesheets = self.stylesheets.clone();
+        let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
+        child.honor_layout_geometry = false;
         render(&mut child)
     }
 
@@ -550,6 +626,19 @@ impl HitMapper {
 
         Some(area)
     }
+}
+
+/// Returns a stable data-pointer identity for one retained view.
+///
+/// # Arguments
+///
+/// * `view` — View whose allocation identity is requested.
+///
+/// # Returns
+///
+/// A process-local key suitable for the current render pass.
+fn view_identity(view: &dyn View) -> usize {
+    std::ptr::from_ref(view).cast::<()>() as usize
 }
 
 /// Returns the intersection of two terminal rectangles.

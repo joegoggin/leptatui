@@ -64,7 +64,7 @@ fn link_renders_default_and_focused_styles() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// Column(Link("Fragment", "#part"), Link("Missing", missing_path))
+/// div((link("Fragment", "#part"), link("Missing", missing_path)))
 /// Tab, Enter
 /// ```
 ///
@@ -79,7 +79,7 @@ fn link_focus_skips_fragments_and_propagates_open_errors() -> Result<()> {
         "leptatui-missing-link-target-{}",
         std::process::id()
     ));
-    let mut view = column((link("Fragment", "#part"), link("Missing", missing)));
+    let mut view = div((link("Fragment", "#part"), link("Missing", missing)));
     assert_eq!(view.__focusable_count(), 1);
     assert_eq!(
         view.handle_key_event(key_event(KeyCode::Tab))?,

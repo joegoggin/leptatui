@@ -29,7 +29,7 @@ pub use boundary::{
 };
 pub use containers::{
     block::{BlockView, block},
-    layout::{LayoutView, column, row},
+    layout::{DivView, div},
     lists::{
         list::{ListKind, ListView, ordered_list, unordered_list},
         list_item::{ListItemView, list_item},

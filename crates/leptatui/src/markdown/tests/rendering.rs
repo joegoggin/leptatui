@@ -94,7 +94,7 @@ fn markdown_maps_all_heading_levels() {
 
     assert_eq!(
         markdown(source),
-        column(separate_blocks(views![
+        div(separate_blocks(views![
             h1("One"),
             h2("Two"),
             h3("Three"),
@@ -126,7 +126,7 @@ fn markdown_preserves_paragraph_breaks_and_unicode() {
 
     assert_eq!(
         markdown(source),
-        column([paragraph(Text::from(vec![
+        div([paragraph(Text::from(vec![
             Line::raw("Soft"),
             Line::raw("break"),
             Line::from(vec![
@@ -157,7 +157,7 @@ fn markdown_separates_blocks_with_blank_terminal_rows() -> Result<()> {
 
     assert_eq!(
         markdown(source),
-        column([paragraph("One"), paragraph(""), paragraph("Two")]),
+        div([paragraph("One"), paragraph(""), paragraph("Two")]),
     );
     assert_eq!(
         rendered_markdown_lines(source, 8, 3)?,

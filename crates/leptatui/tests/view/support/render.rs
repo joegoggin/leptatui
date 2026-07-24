@@ -2,7 +2,7 @@
 ///
 /// # Arguments
 ///
-/// * `view` — Row, column, or form view to inspect.
+/// * `view` — Div or form view to inspect.
 ///
 /// # Returns
 ///

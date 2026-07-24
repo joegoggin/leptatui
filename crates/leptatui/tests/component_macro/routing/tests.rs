@@ -4,10 +4,10 @@
 ///
 /// ```text
 /// provide_route(Home)
-/// <Column>
+/// <Div>
 ///   <RouteKeyNav />
 ///   {move || match route.get_untracked() { Home => <HomePage />, ... }}
-/// </Column>
+/// </Div>
 /// ```
 ///
 /// # Assertions

@@ -56,7 +56,7 @@ fn DocumentShowcase() -> impl IntoView {
 
     view! {
         <Block class="document-shell">
-            <Column>
+            <Div>
                 <H1>"Leptatui document views"</H1>
                 <Paragraph>
                     "Semantic components provide readable terminal documents that wrap and resize with the viewport."
@@ -122,7 +122,7 @@ fn DocumentShowcase() -> impl IntoView {
                 <Paragraph class="help">
                     "Scroll with j/k, Page Up/Page Down, gg, or G. Press q to quit."
                 </Paragraph>
-            </Column>
+            </Div>
         </Block>
     }
 }

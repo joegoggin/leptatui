@@ -182,11 +182,15 @@ pub(crate) fn measure_rich_text(
         f32::from(min_width),
         f32::from(max_width),
     );
-    let cell_width = cells_to_u16(width);
+    let wrapping_width = known_dimensions
+        .width
+        .or_else(|| available_space.width.definite())
+        .map_or(width, sanitize_cells);
+    let cell_width = cells_to_u16(wrapping_width);
     let natural_height = if content.lines.is_empty() || cell_width == 0 {
         0
     } else {
-        line_count_height(semantic_paragraph(content, style).line_count(cell_width))
+        line_count_height(semantic_paragraph(content, style).line_count(cell_width)).max(1)
     };
     let height = known_dimensions
         .height

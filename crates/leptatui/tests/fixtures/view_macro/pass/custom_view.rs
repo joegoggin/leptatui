@@ -27,10 +27,10 @@ impl View for Badge {
 /// Embeds a custom view beside a built-in view without manual erasure.
 fn main() {
     let view = view! {
-        <Column>
+        <Div>
             {Badge}
             <Text>"Built in"</Text>
-        </Column>
+        </Div>
     };
 
     assert!(view.children()[0].is::<Badge>());

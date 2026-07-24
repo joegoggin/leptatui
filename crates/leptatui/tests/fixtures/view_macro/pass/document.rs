@@ -12,7 +12,7 @@ fn main() {
     let markdown_style = TuiStyle::new().foreground(Color::Green);
 
     let view = view! {
-        <Column>
+        <Div>
             <H1 class="title primary" id="guide" style={heading_style}>"Guide"</H1>
             <H2>"Overview"</H2>
             <H3>"Details"</H3>
@@ -55,10 +55,10 @@ fn main() {
                 line_numbers=true
                 syntax_theme={SyntaxTheme::Light}
             >{source.clone()}</CodeBlock>
-        </Column>
+        </Div>
     };
 
-    let expected = column((
+    let expected = div((
         h1("Guide")
             .with_classes("title primary")
             .with_id("guide")

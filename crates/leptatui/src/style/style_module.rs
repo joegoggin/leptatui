@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use super::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
     Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
-    JustifySelf, LayoutDirection, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position,
-    StyleDeclarations, ThemeValue, TuiSize, TuiSpacing, ZIndex,
+    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, StyleDeclarations,
+    ThemeValue, TuiSize, TuiSpacing, ZIndex,
 };
 
 /// A typed value stored in a reusable stylesheet module.
@@ -26,8 +26,6 @@ pub enum StyleValue {
     BorderType(BorderType),
     /// Internal widget padding.
     Spacing(TuiSpacing),
-    /// Child layout direction.
-    LayoutDirection(LayoutDirection),
     /// Terminal-cell image render size.
     Size(TuiSize),
     /// Layout display strategy.
@@ -81,7 +79,6 @@ impl StyleValue {
             Self::Borders(_) => "borders",
             Self::BorderType(_) => "border_type",
             Self::Spacing(_) => "spacing",
-            Self::LayoutDirection(_) => "layout_direction",
             Self::Size(_) => "size",
             Self::Display(_) => "display",
             Self::BoxSizing(_) => "box_sizing",
@@ -194,21 +191,6 @@ impl From<TuiSpacing> for StyleValue {
     /// A [`StyleValue`] containing the spacing.
     fn from(value: TuiSpacing) -> Self {
         Self::Spacing(value)
-    }
-}
-
-impl From<LayoutDirection> for StyleValue {
-    /// Creates a layout direction style value.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` — Layout direction to store.
-    ///
-    /// # Returns
-    ///
-    /// A [`StyleValue`] containing the layout direction.
-    fn from(value: LayoutDirection) -> Self {
-        Self::LayoutDirection(value)
     }
 }
 
@@ -474,25 +456,6 @@ impl StyleModule {
             StyleValue::Spacing(value) => *value,
             value => panic!(
                 "stylesheet module variable `${name}` is {}, expected spacing",
-                value.kind()
-            ),
-        }
-    }
-
-    /// Returns a layout direction variable or panics with a stylesheet-oriented message.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` — Variable name without the `$` prefix.
-    ///
-    /// # Returns
-    ///
-    /// A [`LayoutDirection`] value for the stored variable.
-    pub fn expect_layout_direction(&self, name: &str) -> LayoutDirection {
-        match self.expect_value(name) {
-            StyleValue::LayoutDirection(value) => *value,
-            value => panic!(
-                "stylesheet module variable `${name}` is {}, expected layout_direction",
                 value.kind()
             ),
         }

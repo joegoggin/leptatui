@@ -111,13 +111,13 @@ fn layout_tree_retains_rounded_box_geometry() -> Result<()> {
             ))
             .padding(TuiSpacing::uniform(1)),
     );
-    let root = column((styled_block, text("after"))).into_view();
+    let root = div((styled_block, text("after"))).into_view();
 
     let _terminal = render_layout_root(&root, 20, 10)?;
 
     let layout = root
-        .downcast_ref::<leptatui::LayoutView>()
-        .expect("column root")
+        .downcast_ref::<leptatui::DivView>()
+        .expect("Div root")
         .child_views()[0]
         .style_metadata()
         .expect("block metadata")
@@ -181,7 +181,7 @@ fn layout_tree_rebuilds_viewport_geometry_on_resize() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// Column(Hidden focused button, Visible button)
+/// div((hidden focused button, visible button))
 /// Hidden { display: none }
 /// ```
 ///
@@ -202,13 +202,13 @@ fn display_none_excludes_painting_focus_and_activation() -> Result<()> {
         })
         .with_focus(true)
         .with_inline_style(TuiStyle::new().display(Display::None));
-    let root = column((hidden, button("Visible"))).into_view();
+    let root = div((hidden, button("Visible"))).into_view();
 
     let terminal = render_layout_root(&root, 20, 4)?;
 
     let children = root
-        .downcast_ref::<leptatui::LayoutView>()
-        .expect("column root")
+        .downcast_ref::<leptatui::DivView>()
+        .expect("Div root")
         .child_views();
     assert!(
         children[0]
@@ -255,7 +255,7 @@ fn display_none_skips_measurement_paint_and_custom_events() -> Result<()> {
         renders: Rc::clone(&renders),
         events: Rc::clone(&events),
     };
-    let root = column((probe, text("Visible"))).into_view();
+    let root = div((probe, text("Visible"))).into_view();
 
     let _terminal = render_layout_root(&root, 20, 4)?;
     let mut root = root;

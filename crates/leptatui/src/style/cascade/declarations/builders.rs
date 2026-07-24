@@ -4,8 +4,8 @@ use super::{Declaration, StyleDeclarations};
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
     Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
-    JustifySelf, LayoutDirection, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position,
-    ThemeValue, TuiSize, TuiSpacing, ZIndex,
+    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, ThemeValue, TuiSize,
+    TuiSpacing, ZIndex,
 };
 
 macro_rules! layout_declaration_builders {
@@ -261,44 +261,6 @@ impl StyleDeclarations {
     #[doc(hidden)]
     pub const fn padding_important(mut self, padding: TuiSpacing) -> Self {
         self.padding = Some(Declaration::important(padding));
-        self
-    }
-
-    /// Sets the normal layout direction declaration.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` — Child layout direction for container views.
-    ///
-    /// # Returns
-    ///
-    /// A [`StyleDeclarations`] value with the layout direction declaration applied.
-    pub const fn direction(mut self, direction: LayoutDirection) -> Self {
-        if !matches!(
-            self.direction,
-            Some(Declaration {
-                important: true,
-                ..
-            })
-        ) {
-            self.direction = Some(Declaration::normal(direction));
-        }
-
-        self
-    }
-
-    /// Sets the important layout direction declaration.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` — Child layout direction for container views.
-    ///
-    /// # Returns
-    ///
-    /// A [`StyleDeclarations`] value with the important layout direction declaration applied.
-    #[doc(hidden)]
-    pub const fn direction_important(mut self, direction: LayoutDirection) -> Self {
-        self.direction = Some(Declaration::important(direction));
         self
     }
 
@@ -564,16 +526,6 @@ impl StyleDeclarations {
     /// * `important` — Whether the declaration has important priority.
     pub(super) fn set_padding(&mut self, padding: TuiSpacing, important: bool) {
         set_declaration(&mut self.padding, padding, important);
-    }
-
-    /// Sets the layout direction declaration.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` — Child layout direction for container views.
-    /// * `important` — Whether the declaration has important priority.
-    pub(super) fn set_direction(&mut self, direction: LayoutDirection, important: bool) {
-        set_declaration(&mut self.direction, direction, important);
     }
 
     /// Sets the image render size declaration.

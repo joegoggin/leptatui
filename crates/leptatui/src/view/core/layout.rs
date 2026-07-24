@@ -25,8 +25,8 @@ use taffy::{
 use crate::{
     AlignContent, AlignItems, AlignSelf, AnyView, AvailableSpace, Borders, BoxSizing, Dimension,
     Display, FlexDirection, FlexWrap, GridAutoFlow, GridLine, GridPlacement, JustifyContent,
-    JustifyItems, JustifySelf, LayoutDirection, LayoutGeometry, LayoutSize, LayoutView, Length,
-    LengthAuto, Overflow, Position, RenderCtx, TuiStyle, View, ViewportSize,
+    JustifyItems, JustifySelf, LayoutGeometry, LayoutSize, Length, LengthAuto, Overflow, Position,
+    RenderCtx, TuiStyle, View, ViewportSize,
     component::LayoutPhase,
     view::{
         BlockView, ButtonView, CodeBlockView, InputView, TextAreaView,
@@ -69,7 +69,8 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
     }
 
     let viewport = ctx.viewport_size();
-    let root_node = if roots.len() == 1 {
+    let clamp_root_to_viewport = roots.len() == 1;
+    let root_node = if clamp_root_to_viewport {
         roots[0]
     } else {
         tree.new_with_children(synthetic_root_style(viewport), &roots)
@@ -105,6 +106,56 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
     )
     .expect("transient layout computation should use valid node identifiers");
 
+    let root_path = nodes
+        .iter()
+        .find(|layout_node| layout_node.node == root_node)
+        .map(|layout_node| layout_node.path.clone());
+    let root_overflows_viewport = tree
+        .layout(root_node)
+        .is_ok_and(|layout| layout.size.height > f32::from(viewport.height));
+    if root_overflows_viewport
+        && root_path
+            .as_ref()
+            .is_some_and(|path| uses_computed_child_layout_at_path(root, &path.0, ctx))
+    {
+        let mut style = tree
+            .style(root_node)
+            .expect("computed root style should remain available")
+            .clone();
+        style.size.height = TaffyDimension::length(f32::from(viewport.height));
+        style.overflow.y = TaffyOverflow::Scroll;
+        style.scrollbar_width = 1.0;
+        tree.set_style(root_node, style)
+            .expect("computed root style should remain mutable");
+        tree.compute_layout_with_measure(
+            root_node,
+            TaffySize {
+                width: TaffyAvailableSpace::Definite(f32::from(viewport.width)),
+                height: TaffyAvailableSpace::Definite(f32::from(viewport.height)),
+            },
+            |known, available, _node, path, _style| {
+                let Some(path) = path else {
+                    return TaffySize::ZERO;
+                };
+                let measured = measure_at_path(
+                    root,
+                    &path.0,
+                    LayoutSize::new(known.width, known.height),
+                    LayoutSize::new(
+                        from_taffy_available(available.width),
+                        from_taffy_available(available.height),
+                    ),
+                    ctx,
+                );
+                TaffySize {
+                    width: sanitize_cells(measured.width),
+                    height: sanitize_cells(measured.height),
+                }
+            },
+        )
+        .expect("scrolling root layout should use valid node identifiers");
+    }
+
     let paths = nodes
         .into_iter()
         .map(|node| (node.node, node.path))
@@ -117,6 +168,7 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
         &paths,
         root,
         ctx,
+        clamp_root_to_viewport,
     );
 
     ctx.set_layout_phase(LayoutPhase::Paint);
@@ -143,7 +195,21 @@ fn build_view(
     nodes: &mut Vec<LayoutNode>,
 ) -> Vec<NodeId> {
     let Some(metadata) = view.style_metadata() else {
-        return build_children(view, path, ctx, tree, nodes);
+        if view.__is_layout_transparent() {
+            return build_children(view, path, ctx, tree, nodes);
+        }
+
+        let node = tree
+            .new_leaf_with_context(
+                to_taffy_style(view, TuiStyle::new(), ctx.viewport_size()),
+                path.clone(),
+            )
+            .expect("transient custom-view leaf should be valid");
+        nodes.push(LayoutNode {
+            node,
+            path: path.clone(),
+        });
+        return vec![node];
     };
 
     metadata.clear_layout_geometry();
@@ -153,7 +219,11 @@ fn build_view(
         return Vec::new();
     }
 
-    let children = build_children_with_style(view, path, resolved, ctx, tree, nodes);
+    let children = if view.__uses_computed_child_layout() {
+        build_children_with_style(view, path, resolved, ctx, tree, nodes)
+    } else {
+        Vec::new()
+    };
     let style = to_taffy_style(view, resolved, ctx.viewport_size());
     let node = if children.is_empty() {
         tree.new_leaf_with_context(style, path.clone())
@@ -302,6 +372,39 @@ fn measure_at_path(
     measured.unwrap_or_else(|| LayoutSize::all(0.0))
 }
 
+/// Returns whether the view at one logical path computes child layout.
+///
+/// # Arguments
+///
+/// * `view` — Current traversal root.
+/// * `path` — Remaining child indexes leading to the target view.
+/// * `ctx` — Render context used to reproduce structural scopes.
+///
+/// # Returns
+///
+/// `true` when the addressed view lays out retained children.
+fn uses_computed_child_layout_at_path(
+    view: &dyn View,
+    path: &[usize],
+    ctx: &mut RenderCtx<'_, '_>,
+) -> bool {
+    if path.is_empty() {
+        return view.__uses_computed_child_layout();
+    }
+
+    let target = path[0];
+    let mut index = 0usize;
+    let mut uses_computed_layout = false;
+    visit_children_with_style(view, ctx, &mut |child, child_ctx| {
+        if index == target {
+            uses_computed_layout =
+                uses_computed_child_layout_at_path(child.as_view(), &path[1..], child_ctx);
+        }
+        index = index.saturating_add(1);
+    });
+    uses_computed_layout
+}
+
 /// Visits logical children with the same inherited style used during building.
 ///
 /// # Arguments
@@ -338,6 +441,7 @@ fn visit_children_with_style(
 /// * `paths` — Mapping from Taffy nodes to logical view paths.
 /// * `root` — Rendered root used to resolve each path.
 /// * `ctx` — Render context used to reproduce traversal scopes.
+/// * `clamp_to_viewport` — Whether this node is the sole visible root box.
 fn retain_geometry(
     tree: &TaffyTree<LayoutPath>,
     node: NodeId,
@@ -345,6 +449,7 @@ fn retain_geometry(
     paths: &HashMap<NodeId, LayoutPath>,
     root: &dyn View,
     ctx: &mut RenderCtx<'_, '_>,
+    clamp_to_viewport: bool,
 ) {
     let layout = tree
         .layout(node)
@@ -355,7 +460,10 @@ fn retain_geometry(
     );
 
     if let Some(path) = paths.get(&node) {
-        let border_box = terminal_rect(origin, layout.size.width, layout.size.height);
+        let mut border_box = terminal_rect(origin, layout.size.width, layout.size.height);
+        if clamp_to_viewport {
+            border_box = border_box.intersection(ctx.area());
+        }
         let padding_box = inset_rect(
             border_box,
             edges_to_u16(
@@ -390,7 +498,7 @@ fn retain_geometry(
         .children(node)
         .expect("computed layout children should remain valid")
     {
-        retain_geometry(tree, child, origin, paths, root, ctx);
+        retain_geometry(tree, child, origin, paths, root, ctx, false);
     }
 }
 
@@ -409,8 +517,31 @@ fn set_geometry_at_path(
     ctx: &mut RenderCtx<'_, '_>,
 ) {
     if path.is_empty() {
+        if view.style_metadata().is_none() {
+            ctx.set_unstyled_layout_geometry(view, geometry);
+        }
         if let Some(metadata) = view.style_metadata() {
-            metadata.set_layout_geometry(geometry);
+            let style = ctx.resolve_style(metadata);
+            let borders = style.borders.unwrap_or_else(|| default_borders(view));
+            let padding_box = inset_rect(
+                geometry.border_box,
+                (
+                    u16::from(borders.contains(Borders::LEFT)),
+                    u16::from(borders.contains(Borders::RIGHT)),
+                    u16::from(borders.contains(Borders::TOP)),
+                    u16::from(borders.contains(Borders::BOTTOM)),
+                ),
+            );
+            let padding = style.padding.unwrap_or_default();
+            let content_box = inset_rect(
+                padding_box,
+                (padding.left, padding.right, padding.top, padding.bottom),
+            );
+            metadata.set_layout_geometry(LayoutGeometry {
+                border_box: geometry.border_box,
+                padding_box,
+                content_box,
+            });
         }
         return;
     }
@@ -449,7 +580,7 @@ fn synthetic_root_style(viewport: ViewportSize) -> TaffyStyle {
 ///
 /// # Arguments
 ///
-/// * `view` — View supplying legacy defaults and widget border behavior.
+/// * `view` — View supplying widget-specific border defaults.
 /// * `style` — Fully resolved Leptatui style.
 /// * `viewport` — Terminal viewport used to resolve viewport-relative lengths.
 ///
@@ -457,26 +588,25 @@ fn synthetic_root_style(viewport: ViewportSize) -> TaffyStyle {
 ///
 /// A [`TaffyStyle`] containing equivalent engine-owned layout values.
 fn to_taffy_style(view: &dyn View, style: TuiStyle, viewport: ViewportSize) -> TaffyStyle {
-    let display = style.display.unwrap_or_else(|| {
-        if view.as_any().is::<LayoutView>() {
-            Display::Flex
-        } else {
-            Display::Block
-        }
-    });
-    let default_direction = view
-        .as_any()
-        .downcast_ref::<LayoutView>()
-        .map(LayoutView::default_direction);
-    let flex_direction =
-        style
-            .flex_direction
-            .unwrap_or_else(|| match style.direction.or(default_direction) {
-                Some(LayoutDirection::Column) => FlexDirection::Column,
-                Some(LayoutDirection::Row) | None => FlexDirection::Row,
-            });
+    let display = style.display.unwrap_or(Display::Block);
+    let flex_direction = style.flex_direction.unwrap_or_default();
     let borders = style.borders.unwrap_or_else(|| default_borders(view));
     let padding = style.padding.unwrap_or_default();
+    let measures_own_box = view.as_any().is::<BlockView>()
+        || view.as_any().is::<ButtonView>()
+        || view.as_any().is::<CodeBlockView>()
+        || view.as_any().is::<InputView>()
+        || view.as_any().is::<TextAreaView>();
+    let layout_borders = if measures_own_box {
+        Borders::NONE
+    } else {
+        borders
+    };
+    let layout_padding = if measures_own_box {
+        crate::TuiSpacing::ZERO
+    } else {
+        padding
+    };
     let gap = style
         .gap
         .unwrap_or_else(|| crate::Axes::all(Length::Cells(0.0)));
@@ -493,14 +623,19 @@ fn to_taffy_style(view: &dyn View, style: TuiStyle, viewport: ViewportSize) -> T
         size: map_dimensions(style.size.unwrap_or_default(), viewport),
         min_size: map_dimensions(style.min_size.unwrap_or_default(), viewport),
         max_size: map_dimensions(style.max_size.unwrap_or_default(), viewport),
-        margin: map_auto_edges(style.margin.unwrap_or_default(), viewport),
+        margin: map_auto_edges(
+            style
+                .margin
+                .unwrap_or_else(|| crate::Edges::all(LengthAuto::Length(Length::Cells(0.0)))),
+            viewport,
+        ),
         padding: TaffyRect {
-            left: LengthPercentage::length(f32::from(padding.left)),
-            right: LengthPercentage::length(f32::from(padding.right)),
-            top: LengthPercentage::length(f32::from(padding.top)),
-            bottom: LengthPercentage::length(f32::from(padding.bottom)),
+            left: LengthPercentage::length(f32::from(layout_padding.left)),
+            right: LengthPercentage::length(f32::from(layout_padding.right)),
+            top: LengthPercentage::length(f32::from(layout_padding.top)),
+            bottom: LengthPercentage::length(f32::from(layout_padding.bottom)),
         },
-        border: border_edges(borders),
+        border: border_edges(layout_borders),
         gap: TaffySize {
             width: map_length(gap.x, viewport),
             height: map_length(gap.y, viewport),

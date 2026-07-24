@@ -8,13 +8,13 @@ fn main() {
         $primary: Color::LightCyan;
         $surface: Color::Black;
         $pad: TuiSpacing::horizontal(2);
-        $mobile_direction: LayoutDirection::Column;
+        $mobile_flex_direction: FlexDirection::Column;
         $thumbnail: TuiSize::new(24, 8);
 
         Text => { fg: $primary, bg: $surface }
         .panel => {
             padding: $pad,
-            direction: $mobile_direction
+            flex_direction: $mobile_flex_direction
         }
         .thumbnail => { image_size: $thumbnail }
     };

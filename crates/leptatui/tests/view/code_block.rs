@@ -187,7 +187,7 @@ fn code_block_background_fills_interior_and_honors_authored_override() -> Result
 /// # Example Under Test
 ///
 /// ```text
-/// column([code_block("let value = true;").language("rust"), text("End")])
+/// div([code_block("let value = true;").language("rust"), text("End")])
 /// terminal width = 10
 /// ```
 ///
@@ -207,7 +207,7 @@ fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_height() -> Result<
     })?;
     assert_eq!(code_height, 5);
 
-    let document = column((code, text("End")));
+    let document = div((code, text("End")));
     let mut terminal = Terminal::new(TestBackend::new(10, 6))?;
     draw_view(&mut terminal, &document)?;
 

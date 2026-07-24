@@ -60,12 +60,16 @@ impl View for ParagraphView {
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
-        measure_rich_text(
+        let mut measured = measure_rich_text(
             self.content.text(),
             style,
             known_dimensions,
             available_space,
-        )
+        );
+        if known_dimensions.height.is_none() {
+            measured.height = measured.height.max(1.0);
+        }
+        measured
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

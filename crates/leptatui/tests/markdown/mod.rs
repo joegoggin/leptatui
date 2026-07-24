@@ -5,10 +5,10 @@
 //! terminal-buffer output.
 
 use leptatui::{
-    AnyView, Borders, CellAlignment, CodeBlockView, IntoView, IntoViews, LayoutView,
-    MarkdownOptions, Modifier, RenderCtx, Result, SyntaxTheme, TuiSpacing, TuiStyle, View, block,
-    code_block, column, h1, h2, h3, h4, h5, h6, list_item, markdown, markdown_with_options,
-    ordered_list, paragraph, table, table_body, table_cell, table_head, table_row, unordered_list,
+    AnyView, Borders, CellAlignment, CodeBlockView, DivView, IntoView, IntoViews, MarkdownOptions,
+    Modifier, RenderCtx, Result, SyntaxTheme, TuiSpacing, TuiStyle, View, block, code_block, div,
+    h1, h2, h3, h4, h5, h6, list_item, markdown, markdown_with_options, ordered_list, paragraph,
+    table, table_body, table_cell, table_head, table_row, unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{Terminal, backend::TestBackend, style::Style};
@@ -57,7 +57,7 @@ fn separated_blocks(blocks: impl IntoViews) -> Vec<AnyView> {
 ///
 /// A left-bordered [`View`] matching the public Markdown presentation.
 fn block_quote(children: impl IntoViews) -> impl View {
-    block(column(children)).with_inline_style(
+    block(div(children)).with_inline_style(
         TuiStyle::new()
             .borders(Borders::LEFT)
             .padding(TuiSpacing::new(1, 0, 0, 0)),
@@ -70,7 +70,7 @@ fn block_quote(children: impl IntoViews) -> impl View {
 ///
 /// A top-bordered [`View`] matching the public Markdown presentation.
 fn thematic_break() -> impl View {
-    block(column(())).with_inline_style(TuiStyle::new().borders(Borders::TOP))
+    block(div(())).with_inline_style(TuiStyle::new().borders(Borders::TOP))
 }
 
 /// Asserts two view trees produce the same terminal output.

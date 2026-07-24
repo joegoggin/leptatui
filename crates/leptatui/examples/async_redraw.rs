@@ -71,7 +71,7 @@ fn AsyncRedraw() -> impl IntoView {
 
     view! {
         <Block class="panel">
-            <Column>
+            <Div>
                 <Text class="title">"Async redraw"</Text>
                 {move || {
                     let (label, class) = match resource.get_untracked() {
@@ -97,7 +97,7 @@ fn AsyncRedraw() -> impl IntoView {
                     view! { <Text class={class}>{label}</Text> }
                 }}
                 <Text class="help">"r reloads resource. a dispatches action. q quits."</Text>
-            </Column>
+            </Div>
         </Block>
     }
 }

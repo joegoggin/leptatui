@@ -169,6 +169,26 @@ pub trait View: Any {
         }
     }
 
+    /// Returns whether this view contributes children without generating a box.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the view is a layout-transparent structural boundary.
+    #[doc(hidden)]
+    fn __is_layout_transparent(&self) -> bool {
+        false
+    }
+
+    /// Returns whether retained children participate in computed layout.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the view's retained children generate layout boxes.
+    #[doc(hidden)]
+    fn __uses_computed_child_layout(&self) -> bool {
+        false
+    }
+
     /// Returns this node as [`Any`] for concrete-type inspection.
     ///
     /// # Returns

@@ -38,8 +38,6 @@ pub(super) enum StyleValueKind {
     BorderType,
     /// Internal widget padding.
     Spacing,
-    /// Child layout direction.
-    LayoutDirection,
     /// Terminal-cell image render size.
     Size,
     /// Layout display strategy.
@@ -156,7 +154,6 @@ fn expand_imported_variable(
         StyleValueKind::Borders => quote! { #module.expect_borders(#name) },
         StyleValueKind::BorderType => quote! { #module.expect_border_type(#name) },
         StyleValueKind::Spacing => quote! { #module.expect_spacing(#name) },
-        StyleValueKind::LayoutDirection => quote! { #module.expect_layout_direction(#name) },
         StyleValueKind::Size => quote! { #module.expect_size(#name) },
         StyleValueKind::Display => quote! { #module.expect_display(#name) },
         StyleValueKind::BoxSizing => quote! { #module.expect_box_sizing(#name) },

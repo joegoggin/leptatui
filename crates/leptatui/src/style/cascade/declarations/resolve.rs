@@ -40,10 +40,6 @@ impl StyleDeclarations {
             style = style.padding(padding.value);
         }
 
-        if let Some(direction) = &self.direction {
-            style = style.direction(direction.value);
-        }
-
         if let Some(size) = &self.image_size {
             style = style.image_size(size.value);
         }
@@ -121,10 +117,6 @@ impl From<TuiStyle> for StyleDeclarations {
 
         if let Some(padding) = style.padding {
             declarations = declarations.padding(padding);
-        }
-
-        if let Some(direction) = style.direction {
-            declarations = declarations.direction(direction);
         }
 
         if let Some(size) = style.image_size {

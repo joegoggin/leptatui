@@ -10,13 +10,13 @@ fn main() {
     let count = 7;
 
     let view = view! {
-        <Column>
+        <Div>
             {move || text(count.to_string())}
             <Text>"Static"</Text>
-        </Column>
+        </Div>
     };
 
-    assert_eq!(view.metadata().view_type(), ViewType::Column);
+    assert_eq!(view.metadata().view_type(), ViewType::Div);
     assert!(view.children()[0].is::<DynamicView>());
     assert_eq!(view.children()[1], text("Static"));
 }

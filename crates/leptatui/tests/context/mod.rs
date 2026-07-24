@@ -2,7 +2,7 @@
 
 use leptatui::{
     AnyView, AppControl, AppRoot, Color, IntoView, RenderCtx, Result, StyleDeclarations,
-    StyleSelector, Stylesheet, ThemeVariables, View, column, component,
+    StyleSelector, Stylesheet, ThemeVariables, View, component, div,
     context::{expect_context, provide_context, use_context},
     text, theme_color,
 };

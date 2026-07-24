@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("Top"), focused text_area("one\ntwo\nthree\nfour"), text("Bottom")])
+/// div([text("Top"), focused text_area("one\ntwo\nthree\nfour"), text("Bottom")])
 /// Enter, reconcile, render
 /// ```
 ///
@@ -36,7 +36,7 @@ fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> Result<()> {
         editable_state_mut(&mut notes_view).set_mode(VimMode::Insert);
         editable_state_mut(&mut notes_view).set_cursor(cursor);
 
-        column((text("Top"), notes_view, text("Bottom")))
+        div((text("Top"), notes_view, text("Bottom")))
     };
     let mut view = build_view(&notes);
 
@@ -184,7 +184,7 @@ fn normal_mode_text_area_boundary_keys_scroll_overflowing_form() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([button("A1"), component(FocusPanel(button("B2"))), button("C3")])
+/// div([button("A1"), component(FocusPanel(button("B2"))), button("C3")])
 /// height = 4
 /// Tab, Tab, render
 /// ```
@@ -203,7 +203,7 @@ fn tab_focus_scrolls_to_focused_button_inside_component_boundary() -> Result<()>
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column((
+    let mut view = div((
         button("A1"),
         component(FocusPanel {
             view: button("B2").into_view(),

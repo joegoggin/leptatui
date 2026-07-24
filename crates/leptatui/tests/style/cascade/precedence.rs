@@ -1,27 +1,27 @@
-/// Verifies important stylesheet direction overrides inline direction.
+/// Verifies important stylesheet flex direction overrides inline flex direction.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// inline direction: Row
-/// .controls { direction: Column !important }
+/// inline flex_direction: Row
+/// .controls { flex_direction: Column !important }
 /// ```
 ///
 /// # Assertions
 ///
 /// - View metadata is available for stylesheet resolution.
-/// - The resolved layout direction is column.
+/// - The resolved flex direction is column.
 ///
 /// # Why
 ///
 /// Important stylesheet declarations outrank normal inline declarations.
 #[test]
-fn stylesheet_important_direction_overrides_inline_direction() {
+fn stylesheet_important_flex_direction_overrides_inline_flex_direction() {
     let view = text("Controls")
         .with_classes("controls")
-        .with_inline_style(TuiStyle::new().direction(LayoutDirection::Row));
+        .with_inline_style(TuiStyle::new().flex_direction(FlexDirection::Row));
     let stylesheet = stylesheet! {
-        .controls => { direction: LayoutDirection::Column !important }
+        .controls => { flex_direction: FlexDirection::Column !important }
     };
 
     let resolved = stylesheet.resolve(
@@ -31,7 +31,7 @@ fn stylesheet_important_direction_overrides_inline_direction() {
         &ThemeVariables::new(),
     );
 
-    assert_eq!(resolved.direction, Some(LayoutDirection::Column));
+    assert_eq!(resolved.flex_direction, Some(FlexDirection::Column));
 }
 
 /// Verifies inline styles override normal stylesheet rules.

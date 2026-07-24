@@ -119,9 +119,11 @@ fn StylesheetImportsDemo() -> impl IntoView {
             }
         }
 
+        .actions => { display: Display::Flex }
+
         @media (max-width: 60) {
             .screen => { padding: TuiSpacing::ZERO }
-            .actions => { direction: LayoutDirection::Column }
+            .actions => { flex_direction: FlexDirection::Column }
 
             .screen => {
                 .primary-action => {
@@ -141,7 +143,7 @@ fn StylesheetImportsDemo() -> impl IntoView {
 
     view! {
         <Block class="screen">
-            <Column>
+            <Div>
                 <Text class="title">"Stylesheet imports"</Text>
                 <Text class="body">
                     "`@use` pulls palette variables into mixins, then imports those mixins here."
@@ -153,7 +155,7 @@ fn StylesheetImportsDemo() -> impl IntoView {
                         </Text>
                     }
                 }}
-                <Row class="actions">
+                <Div class="actions">
                     <Button
                         class="primary-action"
                         on_press=move || {
@@ -169,9 +171,9 @@ fn StylesheetImportsDemo() -> impl IntoView {
                     <Button class="danger-action" on_press=|| AppControl::Exit>
                         "Quit"
                     </Button>
-                </Row>
+                </Div>
                 <Text class="body">"Tab moves focus. Enter or Space activates. q exits."</Text>
-            </Column>
+            </Div>
         </Block>
     }
 }

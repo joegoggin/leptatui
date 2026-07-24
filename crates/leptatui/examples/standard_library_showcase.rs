@@ -153,9 +153,11 @@ fn StandardLibraryShowcase() -> impl IntoView {
             modifier: Modifier::BOLD | Modifier::UNDERLINED
         }
 
+        .actions => { display: Display::Flex }
+
         @media (max-width: 60) {
             .showcase-shell => { padding: TuiSpacing::ZERO }
-            .actions => { direction: LayoutDirection::Column }
+            .actions => { flex_direction: FlexDirection::Column }
 
             Input => { padding: TuiSpacing::ZERO }
             TextArea => { padding: TuiSpacing::ZERO }
@@ -169,7 +171,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
 
     view! {
         <Block class="showcase-shell">
-            <Column>
+            <Div>
                 <Text class="title">"Standard library showcase"</Text>
                 {move || {
                     let current_name = name.get_untracked();
@@ -217,7 +219,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
                                     AppControl::Continue
                                 }
                             />
-                            <Row class="actions">
+                            <Div class="actions">
                                 <Button on_press=move || {
                                     status.set(ShowcaseStatus::Submitted);
                                     AppControl::Continue
@@ -234,7 +236,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
                                     status.set(ShowcaseStatus::Editing);
                                     AppControl::Continue
                                 }>"Reset"</Button>
-                            </Row>
+                            </Div>
                         </Form>
                     }
                 }}
@@ -272,7 +274,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
                 <Text class="help">
                     "Tab/Shift+Tab or pointer movement focuses controls. Enter/Space or left click activates links and buttons; the mouse wheel scrolls. i/a/I/A insert, Esc normal/cancel, jk leaves insert, v/V select, x/d/y/p/u/Ctrl+R edit, Ctrl+Enter submits notes. q quits."
                 </Text>
-            </Column>
+            </Div>
         </Block>
     }
 }

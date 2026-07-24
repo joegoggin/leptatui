@@ -23,9 +23,7 @@ mod style_module;
 pub use cascade::{
     MediaQuery, StyleDeclarations, StyleRule, StyleSelector, Stylesheet, ViewportSize,
 };
-pub use foundation::{
-    LayoutDirection, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, theme_color,
-};
+pub use foundation::{ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, theme_color};
 pub use layout::{
     AlignContent, AlignItems, AlignSelf, Axes, BoxSizing, Dimension, Display, Edges, FlexDirection,
     FlexWrap, Fraction, GridAutoFlow, GridLine, GridPlacement, JustifyContent, JustifyItems,

@@ -16,13 +16,13 @@ fn Label() -> impl IntoView {
 /// Exercises component child expansion within a column.
 fn main() {
     let view = view! {
-        <Column>
+        <Div>
             {Label::new()}
             <Text>"Help"</Text>
-        </Column>
+        </Div>
     };
 
-    assert_eq!(view.metadata().view_type(), ViewType::Column);
+    assert_eq!(view.metadata().view_type(), ViewType::Div);
     assert_eq!(view.children().len(), 2);
     assert!(view.children()[0].style_metadata().is_none());
     assert_eq!(view.children()[1], text("Help"));

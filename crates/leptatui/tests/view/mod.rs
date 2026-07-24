@@ -17,14 +17,14 @@ use crossterm::event::{
 use leptatui::{
     __private::FocusedControl,
     AnyView, AppControl, AvailableSpace, Borders, BoxSizing, ButtonView, CellAlignment, Color,
-    ContainerView, Dimension, Display, EditableState, FormView, ImageSource, InputView, IntoView,
-    KeyControl, LayoutDirection, LayoutSize, Length, LinkTarget, LinkView, ListItemView,
+    ContainerView, Dimension, Display, EditableState, FlexDirection, FormView, ImageSource,
+    InputView, IntoView, KeyControl, LayoutSize, Length, LinkTarget, LinkView, ListItemView,
     MediaQuery, Modifier, RenderCtx, Result, StyleDeclarations, StyleMetadata, StyleSelector,
     Stylesheet, SyntaxTheme, TableCellView, TableRowView, TableSectionView, TextAreaView, TuiSize,
-    TuiSpacing, TuiStyle, View, ViewType, VimMode, block, button, code_block, column, component,
+    TuiSpacing, TuiStyle, View, ViewType, VimMode, block, button, code_block, component, div,
     dynamic, form, h1, h2, h3, h4, h5, h6, image, input, link, list_item, markdown, ordered_list,
-    paragraph, progress_bar, row, table, table_body, table_cell, table_head, table_row, text,
-    text_area, unordered_list,
+    paragraph, progress_bar, table, table_body, table_cell, table_head, table_row, text, text_area,
+    unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{

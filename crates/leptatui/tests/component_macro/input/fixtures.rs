@@ -38,10 +38,10 @@ fn MacroWrappedButton(
 #[component]
 fn MacroWrappedButtonSiblings() -> impl leptatui::IntoView {
     view! {
-        <Row>
+        <Div style={TuiStyle::new().display(Display::Flex)}>
             <MacroWrappedButton label="First" on_press=macro_first_wrapped_button_press />
             <MacroWrappedButton label="Second" on_press=macro_second_wrapped_button_press />
-        </Row>
+        </Div>
     }
 }
 
@@ -49,10 +49,10 @@ fn MacroWrappedButtonSiblings() -> impl leptatui::IntoView {
 #[component]
 fn MacroMixedButtonSiblings() -> impl leptatui::IntoView {
     view! {
-        <Row>
+        <Div style={TuiStyle::new().display(Display::Flex)}>
             <Button on_press={macro_mixed_builtin_button_press}>"Built in"</Button>
             <MacroWrappedButton label="Wrapped" on_press=macro_mixed_wrapped_button_press />
-        </Row>
+        </Div>
     }
 }
 

@@ -10,10 +10,10 @@ use leptatui::prelude::*;
 #[component]
 fn CaseRow(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
-        <Row class="case-row">
+        <Div class="case-row">
             <Text class="case-label">{title}</Text>
-            <Column class="case-sample">{column(children())}</Column>
-        </Row>
+            <Div class="case-sample">{div(children())}</Div>
+        </Div>
     }
 }
 
@@ -124,11 +124,14 @@ fn StyleCascadeShowcase() -> impl IntoView {
             }
         }
 
+        .case-row => { display: Display::Flex }
+        .focus-actions => { display: Display::Flex }
+
         @media (max-width: 60) {
             .screen => { padding: TuiSpacing::ZERO }
-            .case-row => { direction: LayoutDirection::Column }
+            .case-row => { flex_direction: FlexDirection::Column }
             .inheritance-parent => { padding: TuiSpacing::ZERO }
-            .focus-actions => { direction: LayoutDirection::Column }
+            .focus-actions => { flex_direction: FlexDirection::Column }
             Button => {
                 padding: TuiSpacing::ZERO
             }
@@ -137,7 +140,7 @@ fn StyleCascadeShowcase() -> impl IntoView {
 
     view! {
         <Block class="screen">
-            <Column>
+            <Div>
                 <Text class="title">"Style cascade showcase"</Text>
                 <Text class="intro">
                     "Each row names the cascade rule that decides the sample style."
@@ -198,14 +201,14 @@ fn StyleCascadeShowcase() -> impl IntoView {
                 </CaseRow>
 
                 <CaseRow title="Button:focus">
-                    <Row class="focus-actions">
+                    <Div class="focus-actions">
                         <ActionButton label="Continue" on_press=|| AppControl::Continue />
                         <ActionButton label="Quit" on_press=|| AppControl::Exit />
-                    </Row>
+                    </Div>
                 </CaseRow>
 
                 <Text class="intro">"Tab moves focus. Enter or Space activates. q exits."</Text>
-            </Column>
+            </Div>
         </Block>
     }
 }

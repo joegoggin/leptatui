@@ -18,7 +18,7 @@ fn markdown_core_fixture_builds_semantic_views() {
     let italic = Style::new().add_modifier(Modifier::ITALIC);
 
     let actual = markdown(CORE_FIXTURE);
-    let expected = column(separated_blocks((
+    let expected = div(separated_blocks((
         h1("One"),
         h2("Two"),
         h3("Three"),

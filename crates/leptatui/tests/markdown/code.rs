@@ -16,7 +16,7 @@
 #[test]
 fn markdown_code_fixture_builds_semantic_views() {
     let actual = markdown(CODE_FIXTURE);
-    let expected = column(separated_blocks([
+    let expected = div(separated_blocks([
         code_block("fn main() {\n    println!(\"界\");\n}\n").language("rust"),
         code_block("let value = true;\n").language("rs"),
         code_block("plain\n").language("unknown-language"),

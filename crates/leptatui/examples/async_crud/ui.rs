@@ -73,7 +73,10 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
         .muted => { fg: Color::Gray }
         .ticket-open => { fg: Color::White }
         .ticket-done => { fg: Color::DarkGray }
-        .crud-actions => { direction: LayoutDirection::Row }
+        .crud-actions => {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Row
+        }
 
         Button => {
             fg: Color::White,
@@ -92,14 +95,14 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
 
         @media (max-width: 60) {
             .crud-screen => { padding: TuiSpacing::ZERO }
-            .crud-actions => { direction: LayoutDirection::Column }
+            .crud-actions => { flex_direction: FlexDirection::Column }
             Button => { padding: TuiSpacing::ZERO }
         }
     }
 
     view! {
         <Block class="crud-screen">
-            <Column>
+            <Div>
                 <Text class="crud-title">"Async CRUD mock API"</Text>
                 <TicketList />
                 <MutationStatus />
@@ -107,7 +110,7 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
                 <Text class="muted">
                     "n create | u update first | r reload | l fail load | e fail action | q quit"
                 </Text>
-            </Column>
+            </Div>
         </Block>
     }
 }
@@ -160,7 +163,7 @@ fn CrudControls() -> impl IntoView {
     let fail_action = context.clone();
 
     view! {
-        <Row class="crud-actions">
+        <Div class="crud-actions">
             <Button on_press=move || {
                 run_crud_command(&create, CrudCommand::Create)
             }>
@@ -191,7 +194,7 @@ fn CrudControls() -> impl IntoView {
             }>
                 "Quit"
             </Button>
-        </Row>
+        </Div>
     }
 }
 
@@ -222,7 +225,7 @@ fn render_ticket_list(tickets: Vec<Ticket>) -> AnyView {
         rows.extend(tickets.into_iter().map(render_ticket));
     }
 
-    column(rows).with_classes("ticket-list").into_view()
+    div(rows).with_classes("ticket-list").into_view()
 }
 
 /// Renders one ticket row.

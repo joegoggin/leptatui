@@ -13,8 +13,8 @@ mod resolve;
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
     Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
-    JustifySelf, LayoutDirection, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position,
-    ThemeValue, TuiSize, TuiSpacing, ZIndex,
+    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, ThemeValue, TuiSize,
+    TuiSpacing, ZIndex,
 };
 
 /// One style declaration value plus its cascade importance.
@@ -75,8 +75,6 @@ pub struct StyleDeclarations {
     border_type: Option<Declaration<BorderType>>,
     /// Padding declaration.
     padding: Option<Declaration<TuiSpacing>>,
-    /// Layout direction declaration.
-    direction: Option<Declaration<LayoutDirection>>,
     /// Image render size declaration.
     image_size: Option<Declaration<TuiSize>>,
     /// Layout display declaration.
@@ -145,7 +143,6 @@ impl StyleDeclarations {
             borders: None,
             border_type: None,
             padding: None,
-            direction: None,
             image_size: None,
             display: None,
             box_sizing: None,

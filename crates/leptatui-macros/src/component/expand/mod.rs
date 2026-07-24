@@ -241,6 +241,11 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn __is_layout_transparent(&self) -> bool {
+                true
+            }
+
+            #[doc(hidden)]
             fn __focused_index_inner(&self, index: &mut usize) -> ::core::option::Option<usize> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;

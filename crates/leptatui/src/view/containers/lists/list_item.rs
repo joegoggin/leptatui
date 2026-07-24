@@ -1,7 +1,7 @@
 //! Semantic list-item container view.
 
 use crate::view::containers::layout::render::{
-    focused_control_span_for_layout_view, min_height_for_layout_view, render_layout_view,
+    focused_control_span_for_container, min_height_for_container, render_container,
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
@@ -9,7 +9,12 @@ use crate::view::core::{
     render::VerticalSpan,
 };
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
-use crate::{LayoutSize, app::Result, component::RenderCtx, style::LayoutDirection};
+use crate::{
+    LayoutSize,
+    app::Result,
+    component::{LayoutPhase, RenderCtx},
+    view::core::layout::prepare_layout,
+};
 
 /// Vertically stacked blocks belonging to one list marker.
 #[derive(Debug, PartialEq)]
@@ -38,7 +43,11 @@ pub fn list_item(children: impl IntoViews) -> ListItemView {
 
 impl View for ListItemView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        render_layout_view(&self.children, &self.metadata, LayoutDirection::Column, ctx)
+        if ctx.layout_phase() == LayoutPhase::Inactive || self.metadata.layout_geometry().is_none()
+        {
+            prepare_layout(self, ctx);
+        }
+        render_container(&self.children, &self.metadata, ctx)
     }
 
     fn measure(
@@ -48,12 +57,7 @@ impl View for ListItemView {
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
         measure_legacy_height(
-            min_height_for_layout_view(
-                &self.children,
-                &self.metadata,
-                LayoutDirection::Column,
-                ctx,
-            ),
+            min_height_for_container(&self.children, &self.metadata, ctx),
             known_dimensions,
             available_space,
         )
@@ -79,13 +83,12 @@ impl View for ListItemView {
     }
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
-        focused_control_span_for_layout_view(
-            &self.children,
-            &self.metadata,
-            LayoutDirection::Column,
-            ctx,
-        )
-        .map(VerticalSpan::into_tuple)
+        focused_control_span_for_container(&self.children, &self.metadata, ctx)
+            .map(VerticalSpan::into_tuple)
+    }
+
+    fn __uses_computed_child_layout(&self) -> bool {
+        true
     }
 }
 
