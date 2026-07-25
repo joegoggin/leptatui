@@ -16,11 +16,11 @@ use crossterm::event::{
 };
 use leptatui::{
     __private::FocusedControl,
-    AnyView, AppControl, AvailableSpace, Axes, Borders, BoxSizing, ButtonView, CellAlignment,
-    Color, ContainerView, Dimension, Display, Edges, EditableState, FlexDirection, FormView,
-    ImageSource, InputView, IntoView, JustifyContent, KeyControl, LayoutSize, Length, LengthAuto,
-    LinkTarget, LinkView, ListItemView, MediaQuery, Modifier, Overflow, Position, RenderCtx,
-    Result, StyleDeclarations, StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme,
+    AnyView, AppControl, AvailableSpace, Axes, BorderType, Borders, BoxSizing, ButtonView,
+    CellAlignment, Color, ContainerView, Dimension, Display, Edges, EditableState, FlexDirection,
+    FormView, ImageSource, InputView, IntoView, JustifyContent, KeyControl, LayoutSize, Length,
+    LengthAuto, LinkTarget, LinkView, ListItemView, MediaQuery, Modifier, Overflow, Position,
+    RenderCtx, Result, StyleDeclarations, StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme,
     TableCellView, TableRowView, TableSectionView, TextAreaView, TuiSize, TuiSpacing, TuiStyle,
     View, ViewType, VimMode, ZIndex, block, button, code_block, component, div, dynamic, form, h1,
     h2, h3, h4, h5, h6, image, input, link, list_item, markdown, ordered_list, paragraph,
