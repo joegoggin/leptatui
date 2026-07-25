@@ -311,6 +311,69 @@ fn nested_clipped_views_compose_mouse_hit_coordinates() -> Result<()> {
     Ok(())
 }
 
+/// Verifies horizontal clipping maps partially visible child hit coordinates.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 8x3 flex div([8x3 button("First"), 8x3 button("Second")])
+/// overflow: hidden clip
+/// ScrollRight x4
+/// MouseMoved(1, 1), MouseMoved(7, 1)
+/// ```
+///
+/// # Assertions
+///
+/// - Moving over the retained right half of the first button focuses it.
+/// - Moving over the retained left half of the second button focuses it.
+///
+/// # Why
+///
+/// Offscreen buffers must include the horizontal source offset when mapping
+/// clipped child hit areas back to terminal coordinates.
+#[test]
+fn horizontal_clipping_maps_partial_child_hit_coordinates() -> Result<()> {
+    let child_style = TuiStyle::new()
+        .size(LayoutSize::new(
+            Dimension::from(Length::cells(8.0)),
+            Dimension::from(Length::cells(3.0)),
+        ))
+        .flex_shrink(0.0);
+    let mut view = div([
+        button("First").with_inline_style(child_style),
+        button("Second").with_inline_style(child_style),
+    ])
+    .with_inline_style(
+        TuiStyle::new()
+            .display(Display::Flex)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(8.0)),
+                Dimension::from(Length::cells(3.0)),
+            ))
+            .overflow(Axes::new(Overflow::Hidden, Overflow::Clip)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
+
+    draw_view(&mut terminal, &view)?;
+    for _ in 0..4 {
+        view.handle_event(mouse(MouseEventKind::ScrollRight, 1, 1))?;
+    }
+    view.__clear_hit_areas();
+    draw_view(&mut terminal, &view)?;
+
+    view.handle_event(mouse(MouseEventKind::Moved, 1, 1))?;
+    assert_eq!(button_focuses(&view), vec![true, false]);
+
+    view.handle_event(mouse(MouseEventKind::Moved, 7, 1))?;
+    assert_eq!(
+        button_focuses(&view),
+        vec![false, true],
+        "rendered text: {:?}",
+        rendered_text(&terminal)
+    );
+    Ok(())
+}
+
 /// Verifies concrete app roots clear hit areas for controls scrolled offscreen.
 ///
 /// # Example Under Test

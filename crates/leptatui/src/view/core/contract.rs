@@ -396,8 +396,16 @@ pub trait View: Any {
     }
 
     /// Scrolls the first overflowing container in this subtree.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether an offset changed.
     #[doc(hidden)]
-    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+    fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
         self.children_mut()
             .iter_mut()
             .any(|child| child.__scroll_first_overflowing(delta))
@@ -473,13 +481,18 @@ pub trait View: Any {
     ///
     /// * `column` — Zero-based terminal column to hit test.
     /// * `row` — Zero-based terminal row to hit test.
-    /// * `delta` — Signed row count to apply to the scroll offset.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
     ///
     /// # Returns
     ///
     /// A [`bool`] indicating whether a positioned layout consumed the scroll.
     #[doc(hidden)]
-    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
         self.children_mut()
             .iter_mut()
             .any(|child| child.__scroll_overflowing_at_position(column, row, delta))

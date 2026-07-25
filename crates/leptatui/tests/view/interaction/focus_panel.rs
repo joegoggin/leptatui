@@ -139,7 +139,12 @@ impl View for ConstrainedScrollPanel {
         self.view.__clear_hit_areas();
     }
 
-    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: Axes<i16>,
+    ) -> bool {
         self.view
             .__scroll_overflowing_at_position(column, row, delta)
     }

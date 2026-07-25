@@ -34,12 +34,26 @@ impl RenderCtx<'_, '_> {
     }
 
     /// Renders a cropped segment of a path-backed terminal image.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Image path decoded for terminal rendering.
+    /// * `alt` — Optional fallback text.
+    /// * `fallback_style` — Style applied to fallback cells.
+    /// * `full_size` — Full image size before clipping.
+    /// * `source_x` — First source column retained in the visible segment.
+    /// * `source_y` — First source row retained in the visible segment.
+    ///
+    /// # Returns
+    ///
+    /// A [`TerminalImageRenderOutcome`] describing protocol or fallback output.
     pub(crate) fn render_terminal_image_path_clipped(
         &mut self,
         path: &Path,
         alt: Option<&str>,
         fallback_style: Style,
         full_size: Size,
+        source_x: u16,
         source_y: u16,
     ) -> TerminalImageRenderOutcome {
         if !self.target.supports_terminal_images() {
@@ -49,6 +63,7 @@ impl RenderCtx<'_, '_> {
                 alt,
                 fallback_style,
                 full_size,
+                source_x,
                 source_y,
             );
             return TerminalImageRenderOutcome::Fallback(reason);
@@ -59,6 +74,7 @@ impl RenderCtx<'_, '_> {
         let outcome = terminal_images.render_path_to_buffer_clipped(
             path,
             full_size,
+            source_x,
             source_y,
             area,
             self.target.buffer_mut(),
@@ -69,6 +85,7 @@ impl RenderCtx<'_, '_> {
                 alt,
                 fallback_style,
                 full_size,
+                source_x,
                 source_y,
             );
         }
@@ -114,15 +131,29 @@ impl RenderCtx<'_, '_> {
     }
 
     /// Writes fallback text into the visible slice of a clipped image area.
+    ///
+    /// # Arguments
+    ///
+    /// * `reason` — Protocol failure that selected fallback rendering.
+    /// * `alt` — Optional fallback text.
+    /// * `fallback_style` — Style applied to fallback cells.
+    /// * `full_size` — Full image size before clipping.
+    /// * `source_x` — First source column retained in the visible segment.
+    /// * `source_y` — First source row retained in the visible segment.
     fn render_terminal_image_fallback_clipped(
         &mut self,
         reason: TerminalImageFallback,
         alt: Option<&str>,
         fallback_style: Style,
         full_size: Size,
+        source_x: u16,
         source_y: u16,
     ) {
-        if full_size.width == 0 || full_size.height == 0 || source_y >= full_size.height {
+        if full_size.width == 0
+            || full_size.height == 0
+            || source_x >= full_size.width
+            || source_y >= full_size.height
+        {
             return;
         }
 
@@ -131,13 +162,14 @@ impl RenderCtx<'_, '_> {
         render_terminal_image_fallback(reason, alt, fallback_style, full_area, &mut buffer);
 
         let area = self.area;
-        let width = area.width.min(full_size.width);
+        let width = area.width.min(full_size.width.saturating_sub(source_x));
         let height = area.height.min(full_size.height.saturating_sub(source_y));
         let target = self.target.buffer_mut();
 
         for y in 0..height {
             for x in 0..width {
-                let source = buffer[(x, source_y.saturating_add(y))].clone();
+                let source =
+                    buffer[(source_x.saturating_add(x), source_y.saturating_add(y))].clone();
                 let destination = (area.x.saturating_add(x), area.y.saturating_add(y));
                 if let Some(cell) = target.cell_mut(destination) {
                     *cell = source;

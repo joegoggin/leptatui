@@ -350,8 +350,16 @@ impl AnyView {
     }
 
     /// Scrolls the first overflowing container in the stored subtree.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether an offset changed.
     #[doc(hidden)]
-    pub fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+    pub fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
         if self.is_layout_hidden() {
             return false;
         }
@@ -431,13 +439,18 @@ impl AnyView {
     ///
     /// * `column` — Zero-based terminal column to hit test.
     /// * `row` — Zero-based terminal row to hit test.
-    /// * `delta` — Signed row count to apply to the scroll offset.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
     ///
     /// # Returns
     ///
     /// A [`bool`] indicating whether a positioned layout consumed the scroll.
     #[doc(hidden)]
-    pub fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+    pub fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
         if self.is_layout_hidden() {
             return false;
         }
@@ -710,8 +723,25 @@ impl AnyView {
     }
 
     /// Renders a clipped segment when the stored node is an image.
+    ///
+    /// # Arguments
+    ///
+    /// * `source_x` — First source column retained from the full image.
+    /// * `source_y` — First source row retained from the full image.
+    /// * `target_area` — Visible destination rectangle.
+    /// * `ctx` — Render context targeting the full image area.
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`] containing whether the stored node handled image rendering.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Io`] if fallback rendering performs terminal
+    /// I/O that fails.
     pub(crate) fn render_terminal_image_clipped(
         &self,
+        source_x: u16,
         source_y: u16,
         target_area: Rect,
         ctx: &mut RenderCtx<'_, '_>,
@@ -722,11 +752,14 @@ impl AnyView {
 
         let style = resolve_style(&image.metadata, ctx);
         let full_image_area = image_render_area(ctx.area(), style.image_size);
-        if source_y >= full_image_area.height {
+        if source_x >= full_image_area.width || source_y >= full_image_area.height {
             return Ok(true);
         }
 
-        let width = full_image_area.width.min(target_area.width);
+        let width = full_image_area
+            .width
+            .saturating_sub(source_x)
+            .min(target_area.width);
         let height = full_image_area
             .height
             .saturating_sub(source_y)
@@ -751,6 +784,7 @@ impl AnyView {
                 image.alt.as_deref(),
                 style.to_ratatui_style(),
                 full_size,
+                source_x,
                 source_y,
             );
         });

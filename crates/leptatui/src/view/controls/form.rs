@@ -233,8 +233,8 @@ impl View for FormView {
         handle_form_focused_key(focused, &key, &self.on_submit, &self.on_cancel)
     }
 
-    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
-        if self.metadata.max_scroll_offset() > 0 && self.metadata.scroll_by(delta) {
+    fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
+        if self.metadata.scroll_by(delta) {
             return true;
         }
         self.children
@@ -271,7 +271,12 @@ impl View for FormView {
                 .any(AnyView::__has_overflowing_scroll_target)
     }
 
-    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
         if self
             .children
             .iter_mut()
@@ -279,8 +284,7 @@ impl View for FormView {
         {
             return true;
         }
-        if self.metadata.max_scroll_offset() > 0 && self.metadata.contains_hit_position(column, row)
-        {
+        if self.metadata.contains_hit_position(column, row) {
             return self.metadata.scroll_by(delta);
         }
         false

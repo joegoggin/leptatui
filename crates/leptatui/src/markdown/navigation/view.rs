@@ -340,7 +340,7 @@ impl View for MarkdownView {
             .__handle_form_key(key)
     }
 
-    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+    fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
         self.state
             .borrow_mut()
             .current
@@ -372,7 +372,12 @@ impl View for MarkdownView {
             .__has_overflowing_scroll_target()
     }
 
-    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
         self.state
             .borrow_mut()
             .current

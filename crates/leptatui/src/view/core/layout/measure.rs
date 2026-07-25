@@ -3,7 +3,7 @@
 use taffy::style::AvailableSpace as TaffyAvailableSpace;
 
 use crate::{
-    AnyView, AvailableSpace, Borders, LayoutSize, Overflow, RenderCtx, TuiStyle, View,
+    AnyView, AvailableSpace, Axes, Borders, LayoutSize, Overflow, RenderCtx, TuiStyle, View,
     view::{
         BlockView, ButtonView, CodeBlockView, InputView, TextAreaView,
         core::measurement::sanitize_cells,
@@ -204,7 +204,7 @@ pub(super) fn uses_computed_child_layout_at_path(
     uses_computed_layout
 }
 
-/// Returns the resolved vertical overflow for one logical path.
+/// Returns the resolved overflow axes for one logical path.
 ///
 /// # Arguments
 ///
@@ -214,17 +214,18 @@ pub(super) fn uses_computed_child_layout_at_path(
 ///
 /// # Returns
 ///
-/// An optional [`Overflow`] authored for the addressed view's vertical axis.
-pub(super) fn vertical_overflow_at_path(
+/// An optional [`Axes`] value authored for the addressed view.
+pub(super) fn overflow_at_path(
     view: &dyn View,
     path: &[usize],
     ctx: &mut RenderCtx<'_, '_>,
-) -> Option<Overflow> {
+) -> Option<Axes<Overflow>> {
     if path.is_empty() {
-        return view
-            .style_metadata()
-            .and_then(|metadata| ctx.resolve_style(metadata).overflow)
-            .map(|overflow| overflow.y);
+        return view.style_metadata().map(|metadata| {
+            ctx.resolve_style(metadata)
+                .overflow
+                .unwrap_or_else(|| Axes::new(Overflow::Visible, Overflow::Auto))
+        });
     }
 
     let target = path[0];
@@ -232,7 +233,7 @@ pub(super) fn vertical_overflow_at_path(
     let mut overflow = None;
     visit_children_with_style(view, ctx, &mut |child, child_ctx| {
         if index == target {
-            overflow = vertical_overflow_at_path(child.as_view(), &path[1..], child_ctx);
+            overflow = overflow_at_path(child.as_view(), &path[1..], child_ctx);
         }
         index = index.saturating_add(1);
     });

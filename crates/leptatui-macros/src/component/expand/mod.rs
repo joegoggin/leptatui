@@ -371,7 +371,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
-            fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+            fn __scroll_first_overflowing(&mut self, delta: #leptatui::Axes<i16>) -> bool {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &mut self.__leptatui_view;
 
@@ -425,7 +425,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 &mut self,
                 column: u16,
                 row: u16,
-                delta: i16,
+                delta: #leptatui::Axes<i16>,
             ) -> bool {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &mut self.__leptatui_view;

@@ -60,7 +60,9 @@ pub(super) fn to_taffy_style(
     let flex_direction = style.flex_direction.unwrap_or_default();
     let borders = style.borders.unwrap_or_else(|| default_borders(view));
     let padding = style.padding.unwrap_or_default();
-    let overflow = style.overflow.unwrap_or_default();
+    let overflow = style
+        .overflow
+        .unwrap_or_else(|| crate::Axes::new(Overflow::Visible, Overflow::Auto));
     let gap = style
         .gap
         .unwrap_or_else(|| crate::Axes::all(Length::Cells(0.0)));
@@ -72,7 +74,7 @@ pub(super) fn to_taffy_style(
             x: map_overflow(overflow.x),
             y: map_overflow(overflow.y),
         },
-        scrollbar_width: if overflow.y == Overflow::Scroll {
+        scrollbar_width: if overflow.x == Overflow::Scroll || overflow.y == Overflow::Scroll {
             1.0
         } else {
             0.0

@@ -134,6 +134,7 @@ fn clipped_fallback_starts_at_source_row() {
                     Some("top\nbottom"),
                     Style::default(),
                     Size::new(16, 2),
+                    0,
                     1,
                 );
             });
@@ -150,6 +151,54 @@ fn clipped_fallback_starts_at_source_row() {
 
     assert!(rendered.contains("bottom"));
     assert!(!rendered.contains("top"));
+}
+
+/// Verifies clipped fallback text starts at the requested source column.
+///
+/// # Example Under Test
+///
+/// ```text
+/// alt = "left-right"
+/// full_size = 10x1
+/// source_x = 5
+/// target = 5x1
+/// ```
+///
+/// # Assertions
+///
+/// - The visible fallback slice contains `right`.
+/// - The skipped fallback prefix is not rendered.
+#[test]
+fn clipped_fallback_starts_at_source_column() {
+    let backend = TestBackend::new(5, 1);
+    let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
+
+    terminal
+        .draw(|frame| {
+            context::hooks::__with_context_scope(|| {
+                let mut ctx = RenderCtx::new(frame);
+                ctx.render_terminal_image_path_clipped(
+                    Path::new("missing.png"),
+                    Some("left-right"),
+                    Style::default(),
+                    Size::new(10, 1),
+                    5,
+                    0,
+                );
+            });
+        })
+        .expect("rendering should succeed");
+
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+
+    assert!(rendered.contains("right"));
+    assert!(!rendered.contains("left"));
 }
 
 /// Verifies image decoding and fit sizing are deterministic.

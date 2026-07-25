@@ -5,6 +5,7 @@ use crossterm::event::{
 };
 
 use crate::{
+    Axes,
     app::{AppControl, Result},
     component::KeyControl,
 };
@@ -69,22 +70,44 @@ where
             Ok(AppControl::Continue)
         }
         MouseEventKind::ScrollDown => {
-            if !view.__scroll_overflowing_at_position(mouse.column, mouse.row, 1) {
-                view.__scroll_first_overflowing(1);
-            }
+            scroll_at_position(view, mouse.column, mouse.row, Axes::new(0, 1));
             Ok(AppControl::Continue)
         }
         MouseEventKind::ScrollUp => {
-            if !view.__scroll_overflowing_at_position(mouse.column, mouse.row, -1) {
-                view.__scroll_first_overflowing(-1);
-            }
+            scroll_at_position(view, mouse.column, mouse.row, Axes::new(0, -1));
             Ok(AppControl::Continue)
         }
-        MouseEventKind::Down(_)
-        | MouseEventKind::Up(_)
-        | MouseEventKind::Drag(_)
-        | MouseEventKind::ScrollLeft
-        | MouseEventKind::ScrollRight => Ok(AppControl::Continue),
+        MouseEventKind::ScrollLeft => {
+            scroll_at_position(view, mouse.column, mouse.row, Axes::new(-1, 0));
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::ScrollRight => {
+            scroll_at_position(view, mouse.column, mouse.row, Axes::new(1, 0));
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::Down(_) | MouseEventKind::Up(_) | MouseEventKind::Drag(_) => {
+            Ok(AppControl::Continue)
+        }
+    }
+}
+
+/// Scrolls the innermost overflow container at a pointer position.
+///
+/// Falls back to the first matching container when no rendered hit area
+/// consumes the event.
+///
+/// # Arguments
+///
+/// * `view` — View tree receiving the scroll event.
+/// * `column` — Zero-based terminal column under the pointer.
+/// * `row` — Zero-based terminal row under the pointer.
+/// * `delta` — Signed horizontal and vertical cell deltas.
+fn scroll_at_position<V>(view: &mut V, column: u16, row: u16, delta: Axes<i16>)
+where
+    V: View + ?Sized,
+{
+    if !view.__scroll_overflowing_at_position(column, row, delta) {
+        view.__scroll_first_overflowing(delta);
     }
 }
 
@@ -199,7 +222,7 @@ where
     V: View + ?Sized,
 {
     clear_scroll_to_top_key_pending(view);
-    key_control_from_bool(view.__scroll_first_overflowing(delta))
+    key_control_from_bool(view.__scroll_first_overflowing(Axes::new(0, delta)))
 }
 
 /// Handles the two-key `gg` scroll-to-top sequence.
