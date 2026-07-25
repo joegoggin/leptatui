@@ -340,6 +340,13 @@ impl StyleDeclarations {
             "maximum size"
         ),
         (
+            aspect_ratio,
+            aspect_ratio_important,
+            set_aspect_ratio,
+            f32,
+            "preferred width-to-height ratio"
+        ),
+        (
             margin,
             margin_important,
             set_margin,

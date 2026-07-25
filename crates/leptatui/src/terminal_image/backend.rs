@@ -12,7 +12,7 @@ use std::{
 
 use ratatui::{
     buffer::Buffer,
-    layout::{Rect, Size},
+    layout::{Position, Rect, Size},
     widgets::Widget,
 };
 use ratatui_image::sliced::{SignedPosition, SlicedImage};
@@ -138,7 +138,14 @@ impl TerminalImageSupport {
             );
         }
 
-        self.render_path_to_buffer_sized(path, Size::new(area.width, area.height), 0, area, buffer)
+        self.render_path_to_buffer_sized(
+            path,
+            Size::new(area.width, area.height),
+            0,
+            0,
+            area,
+            buffer,
+        )
     }
 
     /// Renders a cropped segment of a path-backed image into a Ratatui buffer.
@@ -147,6 +154,7 @@ impl TerminalImageSupport {
     ///
     /// * `path` — Image file path to decode and render.
     /// * `full_size` — Full terminal-cell size used before clipping.
+    /// * `source_x` — Left column offset into the full image.
     /// * `source_y` — Top row offset into the full image.
     /// * `area` — Terminal cell area assigned to the visible image segment.
     /// * `buffer` — Ratatui buffer receiving protocol output.
@@ -159,6 +167,7 @@ impl TerminalImageSupport {
         &self,
         path: &Path,
         full_size: Size,
+        source_x: u16,
         source_y: u16,
         area: Rect,
         buffer: &mut Buffer,
@@ -169,14 +178,28 @@ impl TerminalImageSupport {
             );
         }
 
-        self.render_path_to_buffer_sized(path, full_size, source_y, area, buffer)
+        self.render_path_to_buffer_sized(path, full_size, source_x, source_y, area, buffer)
     }
 
     /// Renders a path-backed image segment after size validation.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Image file path to decode and render.
+    /// * `full_size` — Full terminal-cell size used before clipping.
+    /// * `source_x` — Left column offset into the full image.
+    /// * `source_y` — Top row offset into the full image.
+    /// * `area` — Terminal cell area assigned to the visible image segment.
+    /// * `buffer` — Ratatui buffer receiving protocol output.
+    ///
+    /// # Returns
+    ///
+    /// A [`TerminalImageRenderOutcome`] describing protocol or fallback output.
     fn render_path_to_buffer_sized(
         &self,
         path: &Path,
         full_size: Size,
+        source_x: u16,
         source_y: u16,
         area: Rect,
         buffer: &mut Buffer,
@@ -190,7 +213,7 @@ impl TerminalImageSupport {
                 &self.cache,
                 path,
                 full_size,
-                source_y,
+                Position::new(source_x, source_y),
                 area,
                 buffer,
             ),
@@ -220,12 +243,27 @@ fn query_stdio() -> TerminalImageSupport {
 }
 
 /// Renders a cached sliced protocol with a detected protocol picker.
+///
+/// # Arguments
+///
+/// * `picker` — Detected protocol picker used to create cached image state.
+/// * `cache` — Shared path-backed terminal-image cache.
+/// * `path` — Image file path to decode and render.
+/// * `full_size` — Full terminal-cell size used before clipping.
+/// * `source` — Left column and top row offsets into the full image.
+/// * `area` — Terminal cell area assigned to the visible image segment.
+/// * `buffer` — Ratatui buffer receiving protocol output.
+///
+/// # Returns
+///
+/// A [`TerminalImageRenderOutcome`] describing protocol rendering success or
+/// fallback behavior.
 fn render_cached_sliced_protocol(
     picker: &ratatui_image::picker::Picker,
     cache: &Arc<Mutex<TerminalImageCache>>,
     path: &Path,
     full_size: Size,
-    source_y: u16,
+    source: Position,
     area: Rect,
     buffer: &mut Buffer,
 ) -> TerminalImageRenderOutcome {
@@ -236,8 +274,9 @@ fn render_cached_sliced_protocol(
         Ok(protocol) => protocol,
         Err(reason) => return TerminalImageRenderOutcome::Fallback(reason),
     };
-    let y = -i16::try_from(source_y).unwrap_or(i16::MAX);
+    let x = -i16::try_from(source.x).unwrap_or(i16::MAX);
+    let y = -i16::try_from(source.y).unwrap_or(i16::MAX);
 
-    SlicedImage::new(protocol, SignedPosition::from((0, y))).render(area, buffer);
+    SlicedImage::new(protocol, SignedPosition::from((x, y))).render(area, buffer);
     TerminalImageRenderOutcome::Rendered
 }

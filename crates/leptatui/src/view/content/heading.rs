@@ -205,7 +205,14 @@ fn render_heading(
 ) {
     let style = resolve_style(metadata, ctx);
     let rendered = resolved_rich_text(content, metadata, style, ctx);
-    let area = ctx.area();
+    let area = if let Some(geometry) = ctx.active_layout_geometry(metadata) {
+        ctx.with_area(geometry.border_box, |ctx| {
+            ctx.render_widget(style.to_block());
+        });
+        geometry.content_box
+    } else {
+        ctx.area()
+    };
     if area.width == 0 || area.height == 0 {
         return;
     }

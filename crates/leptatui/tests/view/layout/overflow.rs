@@ -168,12 +168,12 @@ fn nested_auto_overflow_conditionally_reserves_a_scrollbar() -> Result<()> {
     let fitting = div([text("12345678")]).with_inline_style(
         TuiStyle::new()
             .size(fixed_size)
-            .overflow(Axes::all(Overflow::Auto)),
+            .overflow(Axes::new(Overflow::Visible, Overflow::Auto)),
     );
     let overflowing = div(vec![text("12345678"), text("Two")]).with_inline_style(
         TuiStyle::new()
             .size(fixed_size)
-            .overflow(Axes::all(Overflow::Auto)),
+            .overflow(Axes::new(Overflow::Visible, Overflow::Auto)),
     );
     let view = div((fitting, overflowing));
     let mut terminal = Terminal::new(TestBackend::new(8, 2))?;
@@ -207,7 +207,9 @@ fn scroll_overflow_always_reserves_and_renders_scrollbar() -> Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div([text("1234567")])
-        .with_inline_style(TuiStyle::new().overflow(Axes::all(Overflow::Scroll)));
+        .with_inline_style(
+            TuiStyle::new().overflow(Axes::new(Overflow::Visible, Overflow::Scroll)),
+        );
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -424,5 +426,381 @@ fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> Result<()> {
 
     assert_eq!(cell_symbol(&terminal, 7, 4, 8), symbol_block::FULL);
 
+    Ok(())
+}
+
+/// Verifies horizontal overflow scrolls and renders a bottom gutter.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 5x2 div(8x1 text("ABCDEFGH"))
+/// overflow: scroll clip
+/// ScrollRight
+/// ```
+///
+/// # Assertions
+///
+/// - Horizontal overflow retains a three-column scroll range.
+/// - The first wheel step advances only the horizontal offset.
+/// - Redrawing reveals the next source column.
+/// - The bottom row contains the horizontal scrollbar.
+#[test]
+fn horizontal_overflow_scrolls_with_horizontal_wheel_events() -> Result<()> {
+    let child = text("ABCDEFGH").with_inline_style(TuiStyle::new().size(LayoutSize::new(
+        Dimension::from(Length::cells(8.0)),
+        Dimension::from(Length::cells(1.0)),
+    )));
+    let mut view = div([child]).with_inline_style(
+        TuiStyle::new()
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(5.0)),
+                Dimension::from(Length::cells(2.0)),
+            ))
+            .overflow(Axes::new(Overflow::Scroll, Overflow::Clip)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(5, 2))?;
+
+    draw_view(&mut terminal, &view)?;
+    let metadata = view.style_metadata().expect("expected div metadata");
+    assert_eq!(metadata.max_scroll_offsets(), Axes::new(3, 0));
+    assert_eq!(cell_symbol(&terminal, 0, 0, 5), "A");
+    assert_ne!(cell_symbol(&terminal, 0, 1, 5), " ");
+
+    view.handle_event(mouse(MouseEventKind::ScrollRight, 0, 0))?;
+    assert_eq!(
+        view.style_metadata()
+            .expect("expected div metadata")
+            .scroll_offsets(),
+        Axes::new(1, 0)
+    );
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(cell_symbol(&terminal, 0, 0, 5), "B");
+    Ok(())
+}
+
+/// Verifies overflow modes establish independent per-axis scroll ranges.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 5x3 div(8x4 child)
+/// overflow combinations:
+///   hidden clip
+///   clip hidden
+///   scroll scroll
+/// ```
+///
+/// # Assertions
+///
+/// - Horizontal hidden overflow scrolls without enabling vertical scrolling.
+/// - Vertical hidden overflow scrolls without enabling horizontal scrolling.
+/// - Two scroll gutters reduce the viewport to `4x2`.
+/// - The bottom-right gutter corner remains unpainted by either scrollbar.
+#[test]
+fn overflow_modes_resolve_independently_on_both_axes() -> Result<()> {
+    let fixed_child = || {
+        text("content").with_inline_style(TuiStyle::new().size(LayoutSize::new(
+            Dimension::from(Length::cells(8.0)),
+            Dimension::from(Length::cells(4.0)),
+        )))
+    };
+    let fixed_parent = |overflow| {
+        div([fixed_child()]).with_inline_style(
+            TuiStyle::new()
+                .size(LayoutSize::new(
+                    Dimension::from(Length::cells(5.0)),
+                    Dimension::from(Length::cells(3.0)),
+                ))
+                .overflow(overflow),
+        )
+    };
+
+    let horizontal = fixed_parent(Axes::new(Overflow::Hidden, Overflow::Clip));
+    let vertical = fixed_parent(Axes::new(Overflow::Clip, Overflow::Hidden));
+    let both = fixed_parent(Axes::all(Overflow::Scroll));
+    let mut horizontal_terminal = Terminal::new(TestBackend::new(5, 3))?;
+    let mut vertical_terminal = Terminal::new(TestBackend::new(5, 3))?;
+    let mut both_terminal = Terminal::new(TestBackend::new(5, 3))?;
+
+    draw_view(&mut horizontal_terminal, &horizontal)?;
+    draw_view(&mut vertical_terminal, &vertical)?;
+    draw_view(&mut both_terminal, &both)?;
+
+    assert_eq!(
+        horizontal
+            .style_metadata()
+            .expect("expected horizontal metadata")
+            .max_scroll_offsets(),
+        Axes::new(3, 0)
+    );
+    assert_eq!(
+        vertical
+            .style_metadata()
+            .expect("expected vertical metadata")
+            .max_scroll_offsets(),
+        Axes::new(0, 1)
+    );
+    assert_eq!(
+        both.style_metadata()
+            .expect("expected two-axis metadata")
+            .max_scroll_offsets(),
+        Axes::new(4, 2)
+    );
+    assert_eq!(cell_symbol(&both_terminal, 4, 2, 5), " ");
+    Ok(())
+}
+
+/// Verifies scrollbar and descendant clips come from the rounded snapshot.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 5x3 scroll container
+/// 8x4 child
+/// horizontal and vertical scrollbars
+/// ```
+///
+/// # Assertions
+///
+/// - The retained content box covers the full authored `5x3` area.
+/// - Two gutters reduce the retained viewport to `4x2`.
+/// - The child inherits that viewport as its effective clip.
+/// - Maximum scroll offsets use the same rounded viewport.
+#[test]
+fn retained_viewport_and_clip_define_two_axis_scrolling() -> Result<()> {
+    let child = text("content").with_inline_style(TuiStyle::new().size(LayoutSize::new(
+        Dimension::from(Length::cells(8.0)),
+        Dimension::from(Length::cells(4.0)),
+    )));
+    let root = div([child])
+        .with_inline_style(
+            TuiStyle::new()
+                .box_sizing(BoxSizing::BorderBox)
+                .size(LayoutSize::new(
+                    Dimension::from(Length::cells(5.0)),
+                    Dimension::from(Length::cells(3.0)),
+                ))
+                .overflow(Axes::all(Overflow::Scroll)),
+        )
+        .into_view();
+
+    let _terminal = render_layout_root(&root, 5, 3)?;
+    let root_geometry = root
+        .style_metadata()
+        .and_then(StyleMetadata::layout_geometry)
+        .expect("root geometry");
+    let child_geometry = root
+        .downcast_ref::<leptatui::DivView>()
+        .expect("Div root")
+        .child_views()[0]
+        .style_metadata()
+        .and_then(StyleMetadata::layout_geometry)
+        .expect("child geometry");
+
+    assert_eq!(
+        root_geometry.content_box,
+        ratatui::layout::Rect::new(0, 0, 5, 3)
+    );
+    assert_eq!(
+        root_geometry.viewport,
+        ratatui::layout::Rect::new(0, 0, 4, 2)
+    );
+    assert_eq!(child_geometry.clip, root_geometry.viewport);
+    assert_eq!(
+        root.style_metadata()
+            .expect("root metadata")
+            .max_scroll_offsets(),
+        Axes::new(4, 2)
+    );
+    Ok(())
+}
+
+/// Verifies reconciliation retains two-axis overflow state and content extent.
+///
+/// # Example Under Test
+///
+/// ```text
+/// render 5x3 scroll container with 8x4 child
+/// ScrollRight, ScrollDown
+/// reconcile compatible div
+/// ```
+///
+/// # Assertions
+///
+/// - Both scroll offsets survive reconciliation.
+/// - Both maximum offsets survive reconciliation.
+/// - The measured content width and height survive reconciliation.
+/// - A later smaller content extent clamps both retained offsets.
+#[test]
+fn reconciliation_retains_two_axis_overflow_metadata() -> Result<()> {
+    let create_view = || {
+        div([text("content").with_inline_style(TuiStyle::new().size(LayoutSize::new(
+            Dimension::from(Length::cells(8.0)),
+            Dimension::from(Length::cells(4.0)),
+        )))])
+        .with_inline_style(
+            TuiStyle::new()
+                .size(LayoutSize::new(
+                    Dimension::from(Length::cells(5.0)),
+                    Dimension::from(Length::cells(3.0)),
+                ))
+                .overflow(Axes::all(Overflow::Scroll)),
+        )
+    };
+    let mut previous = create_view();
+    let mut terminal = Terminal::new(TestBackend::new(5, 3))?;
+    draw_view(&mut terminal, &previous)?;
+    previous.handle_event(mouse(MouseEventKind::ScrollRight, 0, 0))?;
+    previous.handle_event(mouse(MouseEventKind::ScrollDown, 0, 0))?;
+
+    let previous_metadata = previous
+        .style_metadata()
+        .expect("expected previous metadata");
+    let expected_offsets = previous_metadata.scroll_offsets();
+    let expected_maximum = previous_metadata.max_scroll_offsets();
+    let expected_extent = previous_metadata.content_extent();
+    let mut next = create_view();
+    leptatui::__private::__reconcile_view(&mut next, &previous);
+
+    let next_metadata = next.style_metadata().expect("expected reconciled metadata");
+    assert_eq!(next_metadata.scroll_offsets(), expected_offsets);
+    assert_eq!(next_metadata.max_scroll_offsets(), expected_maximum);
+    assert_eq!(next_metadata.content_extent(), expected_extent);
+
+    let mut smaller = div([text("fit").with_inline_style(TuiStyle::new().size(
+        LayoutSize::new(
+            Dimension::from(Length::cells(4.0)),
+            Dimension::from(Length::cells(2.0)),
+        ),
+    ))])
+    .with_inline_style(
+        TuiStyle::new()
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(5.0)),
+                Dimension::from(Length::cells(3.0)),
+            ))
+            .overflow(Axes::all(Overflow::Scroll)),
+    );
+    leptatui::__private::__reconcile_view(&mut smaller, &previous);
+    draw_view(&mut terminal, &smaller)?;
+    assert_eq!(
+        smaller
+            .style_metadata()
+            .expect("expected smaller metadata")
+            .scroll_offsets(),
+        Axes::all(0)
+    );
+    Ok(())
+}
+
+/// Verifies focus visibility scrolls horizontally to an offscreen button.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 8x3 flex div([6x2 button("One"), 6x2 button("Two")])
+/// overflow: auto clip
+/// Tab, Tab, render
+/// ```
+///
+/// # Assertions
+///
+/// - The second button receives focus.
+/// - Rendering advances the horizontal scroll offset.
+/// - The focused button label is visible.
+#[test]
+fn focus_visibility_scrolls_horizontally() -> Result<()> {
+    let button_style = TuiStyle::new()
+        .size(LayoutSize::new(
+            Dimension::from(Length::cells(6.0)),
+            Dimension::from(Length::cells(2.0)),
+        ))
+        .flex_shrink(0.0);
+    let mut view = div([
+        button("One").with_inline_style(button_style),
+        button("Two").with_inline_style(button_style),
+    ])
+    .with_inline_style(
+        TuiStyle::new()
+            .display(Display::Flex)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(8.0)),
+                Dimension::from(Length::cells(3.0)),
+            ))
+            .overflow(Axes::new(Overflow::Auto, Overflow::Clip)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
+
+    view.handle_event(key(KeyCode::Tab))?;
+    view.handle_event(key(KeyCode::Tab))?;
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(button_focuses(&view), vec![false, true]);
+    assert!(
+        view.style_metadata()
+            .expect("expected div metadata")
+            .scroll_offsets()
+            .x
+            > 0
+    );
+    assert!(rendered_text(&terminal).contains("Two"));
+    Ok(())
+}
+
+/// Verifies a bordered block owns and paints its vertical overflow state.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 8x4 block(div(["One", "Two", "Three"]))
+/// overflow: visible auto
+/// PageDown, render
+/// ```
+///
+/// # Assertions
+///
+/// - The block retains a one-row vertical scroll range.
+/// - PageDown advances the block's own scroll offset.
+/// - Redrawing moves the second child row to the top of the content viewport.
+///
+/// # Why
+///
+/// Block children must use the computed container path so clipping, scroll
+/// offsets, and default borders agree with retained geometry.
+#[test]
+fn block_scrolls_child_through_computed_overflow_geometry() -> Result<()> {
+    let mut view = block(div((text("One"), text("Two"), text("Three")))).with_inline_style(
+        TuiStyle::new()
+            .box_sizing(BoxSizing::BorderBox)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(8.0)),
+                Dimension::from(Length::cells(4.0)),
+            ))
+            .overflow(Axes::new(Overflow::Visible, Overflow::Auto)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(8, 4))?;
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(
+        view.style_metadata()
+            .expect("expected block metadata")
+            .max_scroll_offset(),
+        1
+    );
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        view.style_metadata()
+            .expect("expected block metadata")
+            .scroll_offset(),
+        1
+    );
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "T");
     Ok(())
 }

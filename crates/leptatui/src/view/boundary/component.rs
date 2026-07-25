@@ -277,8 +277,16 @@ impl ComponentView {
     }
 
     /// Scrolls the first overflowing layout inside this component boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether an offset changed.
     #[doc(hidden)]
-    pub(crate) fn scroll_first_overflowing(&self, delta: i16) -> bool {
+    pub(crate) fn scroll_first_overflowing(&self, delta: crate::Axes<i16>) -> bool {
         self.with_component_mut(|component| component.__scroll_first_overflowing(delta))
     }
 
@@ -306,13 +314,18 @@ impl ComponentView {
     ///
     /// * `column` — Zero-based terminal column to hit test.
     /// * `row` — Zero-based terminal row to hit test.
-    /// * `delta` — Signed row count to apply to the scroll offset.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
     ///
     /// # Returns
     ///
     /// A [`bool`] indicating whether a positioned layout consumed the scroll.
     #[doc(hidden)]
-    pub(crate) fn scroll_overflowing_at_position(&self, column: u16, row: u16, delta: i16) -> bool {
+    pub(crate) fn scroll_overflowing_at_position(
+        &self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
         self.with_component_mut(|component| {
             component.__scroll_overflowing_at_position(column, row, delta)
         })
@@ -530,7 +543,7 @@ impl View for ComponentView {
         self.handle_form_key(key)
     }
 
-    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+    fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
         self.scroll_first_overflowing(delta)
     }
 
@@ -550,7 +563,12 @@ impl View for ComponentView {
         self.focus_control_at_position(column, row)
     }
 
-    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
         self.scroll_overflowing_at_position(column, row, delta)
     }
 

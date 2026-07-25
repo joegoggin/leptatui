@@ -26,7 +26,7 @@ use ratatui::{
 };
 
 use crate::{
-    StyleMetadata, ThemeVariables,
+    LayoutGeometry, StyleMetadata, ThemeVariables,
     app::Result,
     context,
     style::{Stylesheet, TuiStyle, ViewportSize},
@@ -44,6 +44,10 @@ pub struct RenderCtx<'frame, 'buffer> {
     target: RenderTarget<'frame, 'buffer>,
     /// Area inside the frame currently targeted by rendering calls.
     area: Rect,
+    /// Active rounded layout snapshot for the rendered view.
+    geometry: LayoutGeometry,
+    /// Metadata identity that owns the active retained geometry.
+    geometry_owner: Option<*const StyleMetadata>,
     /// Root terminal viewport size for responsive style resolution.
     viewport_size: ViewportSize,
     /// Scoped stylesheets used to resolve view styles during rendering.
@@ -75,6 +79,8 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         Self {
             target: RenderTarget::Frame(frame),
             area,
+            geometry: geometry_for_area(area),
+            geometry_owner: None,
             viewport_size: area.into(),
             stylesheets: Vec::new(),
             inherited_style: TuiStyle::new(),
@@ -92,6 +98,37 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// A [`Rect`] describing the current rendering area.
     pub const fn area(&self) -> Rect {
         self.area
+    }
+
+    /// Returns the active rounded geometry for the rendered view.
+    ///
+    /// # Returns
+    ///
+    /// A [`LayoutGeometry`] containing border, padding, content, viewport, and
+    /// accumulated clip rectangles in current target coordinates.
+    pub const fn layout_geometry(&self) -> LayoutGeometry {
+        self.geometry
+    }
+
+    /// Returns active geometry when the view participated in retained layout.
+    ///
+    /// Composite widgets can assign internal child areas that intentionally
+    /// derive local chrome from [`area`](Self::area).
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` — Metadata for the view querying its active geometry.
+    ///
+    /// # Returns
+    ///
+    /// An optional [`LayoutGeometry`] in current target coordinates.
+    pub(crate) fn active_layout_geometry(
+        &self,
+        metadata: &StyleMetadata,
+    ) -> Option<LayoutGeometry> {
+        self.geometry_owner
+            .is_some_and(|owner| std::ptr::eq(owner, std::ptr::from_ref(metadata)))
+            .then_some(self.geometry)
     }
 
     /// Returns the root terminal viewport size for this render pass.
@@ -176,6 +213,8 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         RenderCtx {
             target: self.target.reborrow(),
             area,
+            geometry: self.geometry,
+            geometry_owner: self.geometry_owner,
             viewport_size: self.viewport_size,
             stylesheets,
             inherited_style,
@@ -213,7 +252,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// * `metadata` — View metadata that receives the mapped hit area.
     pub(crate) fn record_metadata_hit_area(&self, metadata: &StyleMetadata) {
-        metadata.set_hit_area(self.map_hit_area(self.area));
+        metadata.set_hit_area(self.map_hit_area(self.geometry.border_box));
     }
 
     /// Maps a local render rectangle into terminal hit-test coordinates.
@@ -227,12 +266,14 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// An [`Option`] containing a clipped terminal rectangle, or [`None`] when
     /// the area is empty, outside the clip, or cannot be represented.
     pub(crate) fn map_hit_area(&self, area: Rect) -> Option<Rect> {
-        self.hit_mapper.map(area)
+        self.hit_mapper.map(area.intersection(self.geometry.clip))
     }
 
     /// Sets the terminal cursor position for this render pass.
     pub(crate) fn set_cursor_position(&mut self, position: Position) {
-        self.target.set_cursor_position(position);
+        if self.geometry.clip.contains(position) {
+            self.target.set_cursor_position(position);
+        }
     }
 
     /// Renders a Ratatui stateful widget into the current target area.
@@ -243,7 +284,10 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.target.render_stateful_widget(widget, self.area, state);
     }
 
-    /// Renders a Leptatui view into the current target area.
+    /// Renders a Leptatui view as composite content in the current target area.
+    ///
+    /// The child uses the explicitly assigned area instead of adopting retained
+    /// outer layout geometry.
     ///
     /// # Arguments
     ///
@@ -258,7 +302,15 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// Returns [`crate::app::Error::Io`] if view rendering performs terminal
     /// I/O that fails.
     pub fn render_view(&mut self, view: &AnyView) -> Result<()> {
-        view.render(self)
+        let area = self.area;
+        let stylesheets = self.stylesheets.clone();
+        let selector_ancestors = self.selector_ancestors.clone();
+        let mut child =
+            self.child_context(area, self.inherited_style, stylesheets, selector_ancestors);
+        child.geometry = geometry_for_area(area);
+        child.geometry_owner = None;
+        child.layout_state.disable_retained_geometry();
+        view.render(&mut child)
     }
 
     /// Renders into a temporary child area with explicit inherited style.
@@ -312,15 +364,19 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         let stylesheets = self.stylesheets.clone();
 
         let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
+        child.geometry = geometry_for_area(area);
+        child.geometry_owner = None;
+        child.layout_state.disable_retained_geometry();
 
         render(&mut child)
     }
 
-    /// Renders into a parent-assigned child area without reapplying absolute geometry.
+    /// Renders a view with translated retained geometry in a parent-assigned area.
     ///
     /// # Arguments
     ///
-    /// * `area` — Computed or scrolled child area.
+    /// * `geometry` — Active geometry translated into current target coordinates.
+    /// * `metadata` — Optional metadata that owns `geometry`.
     /// * `inherited_style` — Inherited style declarations for the child.
     /// * `selector_ancestor` — Parent metadata appended to selector ancestry.
     /// * `render` — Closure that renders into the assigned child context.
@@ -328,9 +384,10 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// # Returns
     ///
     /// An `R` value returned by `render`.
-    pub(crate) fn with_assigned_area_inherited_style_and_selector_ancestor<R>(
+    pub(crate) fn with_assigned_layout_geometry_and_selector_ancestor<R>(
         &mut self,
-        area: Rect,
+        geometry: LayoutGeometry,
+        metadata: Option<&StyleMetadata>,
         inherited_style: TuiStyle,
         selector_ancestor: StyleMetadata,
         render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
@@ -338,8 +395,45 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         let mut selector_ancestors = self.selector_ancestors.clone();
         selector_ancestors.push(selector_ancestor);
         let stylesheets = self.stylesheets.clone();
-        let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
+        let mut child = self.child_context(
+            geometry.border_box,
+            inherited_style,
+            stylesheets,
+            selector_ancestors,
+        );
+        child.geometry = geometry;
+        child.geometry_owner = metadata.map(std::ptr::from_ref);
         child.layout_state.disable_retained_geometry();
+        render(&mut child)
+    }
+
+    /// Renders a view using its retained layout snapshot.
+    ///
+    /// # Arguments
+    ///
+    /// * `geometry` — Rounded geometry assigned to the view.
+    /// * `metadata` — Metadata that owns `geometry`.
+    /// * `render` — Closure that renders into the geometry-aware context.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
+    pub(crate) fn with_layout_geometry<R>(
+        &mut self,
+        geometry: LayoutGeometry,
+        metadata: &StyleMetadata,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let stylesheets = self.stylesheets.clone();
+        let selector_ancestors = self.selector_ancestors.clone();
+        let mut child = self.child_context(
+            geometry.border_box,
+            self.inherited_style,
+            stylesheets,
+            selector_ancestors,
+        );
+        child.geometry = geometry;
+        child.geometry_owner = Some(std::ptr::from_ref(metadata));
         render(&mut child)
     }
 
@@ -359,5 +453,24 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
     ) -> R {
         self.with_area_and_inherited_style(area, self.inherited_style, render)
+    }
+}
+
+/// Creates identity geometry for a render area without retained box chrome.
+///
+/// # Arguments
+///
+/// * `area` — Target area used for every geometry rectangle.
+///
+/// # Returns
+///
+/// A [`LayoutGeometry`] whose five rectangles all equal `area`.
+const fn geometry_for_area(area: Rect) -> LayoutGeometry {
+    LayoutGeometry {
+        border_box: area,
+        padding_box: area,
+        content_box: area,
+        viewport: area,
+        clip: area,
     }
 }

@@ -7,7 +7,7 @@ use std::cell::{Cell, RefCell};
 
 use ratatui::layout::Rect;
 
-use crate::style::{Modifier, TuiStyle};
+use crate::style::{Axes, LayoutSize, Modifier, TuiStyle};
 
 /// Rounded terminal rectangles computed for one visible layout box.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -18,6 +18,10 @@ pub struct LayoutGeometry {
     pub padding_box: Rect,
     /// Rectangle available to the view's content.
     pub content_box: Rect,
+    /// Visible content rectangle after reserving scrollbar gutters.
+    pub viewport: Rect,
+    /// Accumulated ancestor clip applied while painting and hit testing.
+    pub clip: Rect,
 }
 
 /// Transient layout state from the most recent root render.
@@ -208,10 +212,16 @@ pub struct StyleMetadata {
     /// Pending request to align this view with an overflowing parent's top.
     scroll_to_anchor_requested: Cell<bool>,
     scroll_to_top_key_pending: Cell<bool>,
-    scroll_offset: Cell<u16>,
-    max_scroll_offset: Cell<u16>,
+    /// Current horizontal and vertical scroll offsets.
+    scroll_offsets: Cell<Axes<u16>>,
+    /// Maximum valid horizontal and vertical scroll offsets.
+    max_scroll_offsets: Cell<Axes<u16>>,
+    /// Latest measured scrollable content width and height.
+    content_extent: Cell<LayoutSize<u16>>,
     /// Terminal-coordinate hit areas recorded during the latest render.
     hit_areas: RefCell<Vec<Rect>>,
+    /// Direct child indexes in latest-rendered back-to-front paint order.
+    child_paint_order: RefCell<Vec<usize>>,
     /// Rounded geometry from the latest root layout pass.
     layout_state: Cell<LayoutState>,
 }
@@ -236,9 +246,11 @@ impl StyleMetadata {
             scroll_into_view_requested: Cell::new(false),
             scroll_to_anchor_requested: Cell::new(false),
             scroll_to_top_key_pending: Cell::new(false),
-            scroll_offset: Cell::new(0),
-            max_scroll_offset: Cell::new(0),
+            scroll_offsets: Cell::new(Axes::all(0)),
+            max_scroll_offsets: Cell::new(Axes::all(0)),
+            content_extent: Cell::new(LayoutSize::all(0)),
             hit_areas: RefCell::new(Vec::new()),
+            child_paint_order: RefCell::new(Vec::new()),
             layout_state: Cell::new(LayoutState::Uncomputed),
         }
     }
@@ -295,8 +307,8 @@ impl StyleMetadata {
     ///
     /// # Returns
     ///
-    /// An optional [`LayoutGeometry`] containing border, padding, and content
-    /// rectangles in terminal coordinates.
+    /// An optional [`LayoutGeometry`] containing border, padding, content,
+    /// viewport, and clip rectangles in terminal coordinates.
     pub fn layout_geometry(&self) -> Option<LayoutGeometry> {
         match self.layout_state.get() {
             LayoutState::Visible(geometry) => Some(geometry),
@@ -322,7 +334,7 @@ impl StyleMetadata {
     ///
     /// # Arguments
     ///
-    /// * `geometry` — Rounded border, padding, and content rectangles to retain.
+    /// * `geometry` — Rounded box, viewport, and clip rectangles to retain.
     pub(crate) fn set_layout_geometry(&self, geometry: LayoutGeometry) {
         self.layout_state.set(LayoutState::Visible(geometry));
     }
@@ -341,13 +353,49 @@ impl StyleMetadata {
     ///
     /// The offset is maintained by render traversal for overflowing vertical
     /// layouts and consumed by default scroll key handling.
+    ///
+    /// # Returns
+    ///
+    /// A `u16` containing the vertical terminal-cell offset.
     pub fn scroll_offset(&self) -> u16 {
-        self.scroll_offset.get()
+        self.scroll_offsets.get().y
     }
 
     /// Returns the maximum currently valid vertical scroll offset.
+    ///
+    /// # Returns
+    ///
+    /// A `u16` containing the maximum vertical terminal-cell offset.
     pub fn max_scroll_offset(&self) -> u16 {
-        self.max_scroll_offset.get()
+        self.max_scroll_offsets.get().y
+    }
+
+    /// Returns the current horizontal and vertical scroll offsets.
+    ///
+    /// # Returns
+    ///
+    /// An [`Axes`] value containing terminal-cell offsets for both axes.
+    pub fn scroll_offsets(&self) -> Axes<u16> {
+        self.scroll_offsets.get()
+    }
+
+    /// Returns the maximum currently valid scroll offsets on both axes.
+    ///
+    /// # Returns
+    ///
+    /// An [`Axes`] value containing the maximum terminal-cell offsets.
+    pub fn max_scroll_offsets(&self) -> Axes<u16> {
+        self.max_scroll_offsets.get()
+    }
+
+    /// Returns the latest measured scrollable content extent.
+    ///
+    /// # Returns
+    ///
+    /// A [`LayoutSize`] containing the content width and height in terminal
+    /// cells.
+    pub fn content_extent(&self) -> LayoutSize<u16> {
+        self.content_extent.get()
     }
 
     /// Replaces the id selector value.
@@ -406,8 +454,10 @@ impl StyleMetadata {
             .set(previous.scroll_to_anchor_requested.get());
         self.scroll_to_top_key_pending
             .set(previous.scroll_to_top_key_pending.get());
-        self.scroll_offset.set(previous.scroll_offset.get());
-        self.max_scroll_offset.set(previous.max_scroll_offset.get());
+        self.scroll_offsets.set(previous.scroll_offsets.get());
+        self.max_scroll_offsets
+            .set(previous.max_scroll_offsets.get());
+        self.content_extent.set(previous.content_extent.get());
     }
 
     /// Requests that this view be scrolled into visible overflow bounds.
@@ -460,6 +510,7 @@ impl StyleMetadata {
     /// Clears all last-rendered hit areas.
     pub(crate) fn clear_hit_areas(&self) {
         self.hit_areas.borrow_mut().clear();
+        self.child_paint_order.borrow_mut().clear();
     }
 
     /// Replaces last-rendered hit areas with one optional area.
@@ -491,6 +542,26 @@ impl StyleMetadata {
         }
     }
 
+    /// Stores direct child indexes in back-to-front paint order.
+    ///
+    /// # Arguments
+    ///
+    /// * `order` — Source indexes ordered from the first painted child to the last.
+    pub(crate) fn set_child_paint_order(&self, order: impl IntoIterator<Item = usize>) {
+        let mut child_paint_order = self.child_paint_order.borrow_mut();
+        child_paint_order.clear();
+        child_paint_order.extend(order);
+    }
+
+    /// Returns direct child indexes in latest-rendered back-to-front paint order.
+    ///
+    /// # Returns
+    ///
+    /// A [`Vec`] containing source indexes from the first painted child to the last.
+    pub(crate) fn child_paint_order(&self) -> Vec<usize> {
+        self.child_paint_order.borrow().clone()
+    }
+
     /// Stores whether a `g` key is waiting for a second `g`.
     pub(crate) fn set_scroll_to_top_key_pending(&self, pending: bool) {
         self.scroll_to_top_key_pending.set(pending);
@@ -501,40 +572,75 @@ impl StyleMetadata {
         self.scroll_to_top_key_pending.replace(false)
     }
 
-    /// Updates the maximum scroll offset and clamps the current offset.
-    pub(crate) fn set_max_scroll_offset(&self, max_scroll_offset: u16) {
-        self.max_scroll_offset.set(max_scroll_offset);
-        self.clamp_scroll_offset();
+    /// Updates both maximum scroll offsets and clamps the current offsets.
+    ///
+    /// # Arguments
+    ///
+    /// * `maximum` — Maximum terminal-cell offsets for both axes.
+    pub(crate) fn set_max_scroll_offsets(&self, maximum: Axes<u16>) {
+        self.max_scroll_offsets.set(maximum);
+        self.clamp_scroll_offsets();
     }
 
-    /// Adjusts the current scroll offset within the known scroll range.
-    pub(crate) fn scroll_by(&self, delta: i16) -> bool {
-        let current = i32::from(self.scroll_offset.get());
-        let max = i32::from(self.max_scroll_offset.get());
-        let next = (current + i32::from(delta)).clamp(0, max) as u16;
+    /// Replaces the retained scrollable content extent.
+    ///
+    /// # Arguments
+    ///
+    /// * `extent` — Latest content width and height in terminal cells.
+    pub(crate) fn set_content_extent(&self, extent: LayoutSize<u16>) {
+        self.content_extent.set(extent);
+    }
 
-        if next == self.scroll_offset.get() {
+    /// Adjusts both current scroll offsets within their known ranges.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether either offset changed.
+    pub(crate) fn scroll_by(&self, delta: Axes<i16>) -> bool {
+        let current = self.scroll_offsets.get();
+        let maximum = self.max_scroll_offsets.get();
+        let next = Axes::new(
+            offset_by(current.x, maximum.x, delta.x),
+            offset_by(current.y, maximum.y, delta.y),
+        );
+
+        if next == current {
             return false;
         }
 
-        self.scroll_offset.set(next);
+        self.scroll_offsets.set(next);
         true
     }
 
     /// Replaces the current scroll offset within the known scroll range.
     pub(crate) fn set_scroll_offset(&self, scroll_offset: u16) {
-        self.scroll_offset.set(scroll_offset);
-        self.clamp_scroll_offset();
+        let mut offsets = self.scroll_offsets.get();
+        offsets.y = scroll_offset;
+        self.set_scroll_offsets(offsets);
     }
 
-    /// Clamps the current scroll offset to the known maximum.
-    fn clamp_scroll_offset(&self) {
-        let scroll_offset = self.scroll_offset.get();
-        let max_scroll_offset = self.max_scroll_offset.get();
+    /// Replaces both current scroll offsets within their known ranges.
+    ///
+    /// # Arguments
+    ///
+    /// * `offsets` — Horizontal and vertical terminal-cell offsets.
+    pub(crate) fn set_scroll_offsets(&self, offsets: Axes<u16>) {
+        self.scroll_offsets.set(offsets);
+        self.clamp_scroll_offsets();
+    }
 
-        if scroll_offset > max_scroll_offset {
-            self.scroll_offset.set(max_scroll_offset);
-        }
+    /// Clamps both current scroll offsets to their known maxima.
+    fn clamp_scroll_offsets(&self) {
+        let offsets = self.scroll_offsets.get();
+        let maximum = self.max_scroll_offsets.get();
+        self.scroll_offsets.set(Axes::new(
+            offsets.x.min(maximum.x),
+            offsets.y.min(maximum.y),
+        ));
     }
 }
 
@@ -549,9 +655,26 @@ impl PartialEq for StyleMetadata {
             && self.scroll_into_view_requested.get() == other.scroll_into_view_requested.get()
             && self.scroll_to_anchor_requested.get() == other.scroll_to_anchor_requested.get()
             && self.scroll_to_top_key_pending.get() == other.scroll_to_top_key_pending.get()
-            && self.scroll_offset.get() == other.scroll_offset.get()
-            && self.max_scroll_offset.get() == other.max_scroll_offset.get()
+            && self.scroll_offsets.get() == other.scroll_offsets.get()
+            && self.max_scroll_offsets.get() == other.max_scroll_offsets.get()
+            && self.content_extent.get() == other.content_extent.get()
     }
+}
+
+/// Applies one signed cell delta within a saturated scroll range.
+///
+/// # Arguments
+///
+/// * `current` — Current terminal-cell offset.
+/// * `maximum` — Maximum permitted terminal-cell offset.
+/// * `delta` — Signed cell delta to apply.
+///
+/// # Returns
+///
+/// A `u16` containing the clamped next offset.
+fn offset_by(current: u16, maximum: u16, delta: i16) -> u16 {
+    let next = i32::from(current) + i32::from(delta);
+    next.clamp(0, i32::from(maximum)) as u16
 }
 
 impl Eq for StyleMetadata {}

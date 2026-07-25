@@ -58,6 +58,7 @@ impl StyleDeclarations {
         resolve_layout!(size);
         resolve_layout!(min_size);
         resolve_layout!(max_size);
+        resolve_layout!(aspect_ratio);
         resolve_layout!(margin);
         resolve_layout!(gap);
         resolve_layout!(flex_direction);
@@ -137,6 +138,7 @@ impl From<TuiStyle> for StyleDeclarations {
         convert_layout!(size);
         convert_layout!(min_size);
         convert_layout!(max_size);
+        convert_layout!(aspect_ratio);
         convert_layout!(margin);
         convert_layout!(gap);
         convert_layout!(flex_direction);

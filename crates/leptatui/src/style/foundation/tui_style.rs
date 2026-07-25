@@ -61,6 +61,8 @@ pub struct TuiStyle {
     pub min_size: Option<LayoutSize<Dimension>>,
     /// Maximum width and height.
     pub max_size: Option<LayoutSize<Dimension>>,
+    /// Preferred width-to-height ratio.
+    pub aspect_ratio: Option<f32>,
     /// Outer spacing around the layout box.
     pub margin: Option<Edges<LengthAuto>>,
     /// Horizontal and vertical gaps between children.
@@ -133,6 +135,7 @@ impl TuiStyle {
             size: None,
             min_size: None,
             max_size: None,
+            aspect_ratio: None,
             margin: None,
             gap: None,
             flex_direction: None,
@@ -268,6 +271,7 @@ impl TuiStyle {
             LayoutSize<Dimension>,
             "the maximum width and height"
         ),
+        (aspect_ratio, f32, "the preferred width-to-height ratio"),
         (margin, Edges<LengthAuto>, "outer spacing around the box"),
         (gap, Axes<Length>, "horizontal and vertical child gaps"),
         (
@@ -335,6 +339,7 @@ impl TuiStyle {
             size: None,
             min_size: None,
             max_size: None,
+            aspect_ratio: None,
             margin: None,
             gap: None,
             flex_direction: None,

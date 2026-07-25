@@ -1,7 +1,9 @@
 //! Semantic table container view.
 
 use super::{
-    render::{focused_link_span_for_table_view, min_height_for_table_view, render_table_view},
+    render::{
+        focused_link_span_for_table_view, intrinsic_height_for_table_view, render_table_view,
+    },
     table_cell::TableCellView,
     table_row::TableRowView,
     table_section::TableSectionView,
@@ -70,7 +72,7 @@ impl View for TableView {
             ..ctx.area()
         };
         let natural_height = ctx.with_area(area, |ctx| {
-            min_height_for_table_view(&self.children, &self.metadata, ctx)
+            intrinsic_height_for_table_view(&self.children, &self.metadata, ctx)
         });
         let height = known_dimensions
             .height
@@ -89,6 +91,13 @@ impl View for TableView {
     }
     fn children_mut(&mut self) -> &mut [AnyView] {
         &mut self.children
+    }
+
+    fn __visit_layout_children(
+        &self,
+        _ctx: &mut RenderCtx<'_, '_>,
+        _visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self

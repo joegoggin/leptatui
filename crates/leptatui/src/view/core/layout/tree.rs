@@ -12,16 +12,15 @@ use taffy::{
 };
 
 use crate::{
-    Display, LayoutSize, Overflow, RenderCtx, TuiStyle, View, ViewportSize, component::LayoutPhase,
-    view::core::measurement::sanitize_cells,
+    Axes, Display, LayoutSize, Overflow, RenderCtx, TuiStyle, View, ViewportSize,
+    component::LayoutPhase, view::core::measurement::sanitize_cells,
 };
 
 use super::{
     LayoutPath,
-    geometry::retain_geometry,
+    geometry::{RetentionBounds, retain_geometry},
     measure::{
-        from_taffy_available, measure_at_path, uses_computed_child_layout_at_path,
-        vertical_overflow_at_path,
+        from_taffy_available, has_layout_children_at_path, measure_at_path, overflow_at_path,
     },
     style::{synthetic_root_style, to_taffy_style},
 };
@@ -33,8 +32,8 @@ struct LayoutNode {
     node: NodeId,
     /// Logical path back to the corresponding Leptatui view.
     path: LayoutPath,
-    /// Authored vertical overflow used for conditional scrollbar promotion.
-    vertical_overflow: Option<Overflow>,
+    /// Authored overflow axes used for conditional scrollbar promotion.
+    overflow: Axes<Overflow>,
 }
 
 /// Builds, computes, rounds, and stores one root layout snapshot.
@@ -74,49 +73,61 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
         .iter()
         .find(|layout_node| layout_node.node == root_node)
         .map(|layout_node| layout_node.path.clone());
-    let root_vertical_overflow = root_path
+    let root_overflow = root_path
         .as_ref()
-        .and_then(|path| vertical_overflow_at_path(root, &path.0, ctx));
-    let root_overflows_available_area = tree
-        .layout(root_node)
-        .is_ok_and(|layout| layout.size.height > f32::from(available.height));
-    let root_does_not_scroll = matches!(
-        root_vertical_overflow,
-        Some(Overflow::Clip | Overflow::Visible)
-    );
-    if root_overflows_available_area
-        && !root_does_not_scroll
-        && root_path
-            .as_ref()
-            .is_some_and(|path| uses_computed_child_layout_at_path(root, &path.0, ctx))
-    {
+        .and_then(|path| overflow_at_path(root, &path.0, ctx))
+        .unwrap_or_else(|| Axes::new(Overflow::Visible, Overflow::Auto));
+    let root_has_layout_children = root_path
+        .as_ref()
+        .is_some_and(|path| has_layout_children_at_path(root, &path.0, ctx));
+    let root_layout = tree.layout(root_node).copied().unwrap_or_default();
+    let constrain_x = root_layout.size.width > f32::from(available.width)
+        && !matches!(root_overflow.x, Overflow::Clip | Overflow::Visible);
+    let constrain_y = root_layout.size.height > f32::from(available.height)
+        && !matches!(root_overflow.y, Overflow::Clip | Overflow::Visible);
+    if root_has_layout_children && (constrain_x || constrain_y) {
         let mut style = tree
             .style(root_node)
             .expect("computed root style should remain available")
             .clone();
-        style.size.height = TaffyDimension::length(f32::from(available.height));
-        if root_vertical_overflow != Some(Overflow::Hidden) {
+        if constrain_x {
+            style.size.width = TaffyDimension::length(f32::from(available.width));
+        }
+        if constrain_y {
+            style.size.height = TaffyDimension::length(f32::from(available.height));
+        }
+        if constrain_x && root_overflow.x != Overflow::Hidden {
+            style.overflow.x = TaffyOverflow::Scroll;
+            style.scrollbar_width = 1.0;
+        }
+        if constrain_y && root_overflow.y != Overflow::Hidden {
             style.overflow.y = TaffyOverflow::Scroll;
             style.scrollbar_width = 1.0;
         }
         tree.set_style(root_node, style)
             .expect("computed root style should remain mutable");
         compute_layout(&mut tree, root_node, available, root, ctx);
+        while promote_overflowing_auto_nodes(&mut tree, &nodes) {
+            compute_layout(&mut tree, root_node, available, root, ctx);
+        }
     }
 
-    let paths = nodes
+    let retained_nodes = nodes
         .into_iter()
-        .map(|node| (node.node, node.path))
+        .map(|node| (node.node, (node.path, node.overflow)))
         .collect::<HashMap<_, _>>();
     let area = ctx.area();
     retain_geometry(
         &tree,
         root_node,
         (f32::from(area.x), f32::from(area.y)),
-        &paths,
+        &retained_nodes,
         root,
         ctx,
-        clamp_root_to_area,
+        RetentionBounds {
+            clamp_to_area: clamp_root_to_area,
+            inherited_clip: area,
+        },
     );
 
     ctx.set_layout_phase(LayoutPhase::Paint);
@@ -179,29 +190,32 @@ fn compute_layout(
 /// A [`bool`] indicating whether another layout pass is required.
 fn promote_overflowing_auto_nodes(tree: &mut TaffyTree<LayoutPath>, nodes: &[LayoutNode]) -> bool {
     let mut changed = false;
-    for node in nodes
-        .iter()
-        .filter(|node| node.vertical_overflow == Some(Overflow::Auto))
-    {
-        let overflows = tree
-            .layout(node.node)
-            .is_ok_and(|layout| layout.scroll_height() > 0.0);
-        let already_reserves_scrollbar = tree.style(node.node).is_ok_and(|style| {
-            style.overflow.y == TaffyOverflow::Scroll && style.scrollbar_width > 0.0
-        });
-        if !overflows || already_reserves_scrollbar {
+    for node in nodes {
+        let Ok(layout) = tree.layout(node.node).copied() else {
             continue;
-        }
-
+        };
         let mut style = tree
             .style(node.node)
             .expect("computed auto-overflow style should remain available")
             .clone();
-        style.overflow.y = TaffyOverflow::Scroll;
-        style.scrollbar_width = 1.0;
-        tree.set_style(node.node, style)
-            .expect("auto-overflow style should remain mutable");
-        changed = true;
+        let promote_x = node.overflow.x == Overflow::Auto
+            && layout.scroll_width() > 0.0
+            && style.overflow.x != TaffyOverflow::Scroll;
+        let promote_y = node.overflow.y == Overflow::Auto
+            && layout.scroll_height() > 0.0
+            && style.overflow.y != TaffyOverflow::Scroll;
+        if promote_x || promote_y {
+            if promote_x {
+                style.overflow.x = TaffyOverflow::Scroll;
+            }
+            if promote_y {
+                style.overflow.y = TaffyOverflow::Scroll;
+            }
+            style.scrollbar_width = 1.0;
+            tree.set_style(node.node, style)
+                .expect("auto-overflow style should remain mutable");
+            changed = true;
+        }
     }
     changed
 }
@@ -240,7 +254,7 @@ fn build_view(
         nodes.push(LayoutNode {
             node,
             path: path.clone(),
-            vertical_overflow: None,
+            overflow: Axes::new(Overflow::Visible, Overflow::Visible),
         });
         return vec![node];
     };
@@ -252,11 +266,7 @@ fn build_view(
         return Vec::new();
     }
 
-    let children = if view.__uses_computed_child_layout() {
-        build_children_with_style(view, path, resolved, ctx, tree, nodes)
-    } else {
-        Vec::new()
-    };
+    let children = build_children_with_style(view, path, resolved, ctx, tree, nodes);
     let style = to_taffy_style(view, resolved, ctx.viewport_size());
     let node = if children.is_empty() {
         tree.new_leaf_with_context(style, path.clone())
@@ -268,7 +278,9 @@ fn build_view(
     nodes.push(LayoutNode {
         node,
         path: path.clone(),
-        vertical_overflow: resolved.overflow.map(|overflow| overflow.y),
+        overflow: resolved
+            .overflow
+            .unwrap_or_else(|| Axes::new(Overflow::Visible, Overflow::Auto)),
     });
     vec![node]
 }

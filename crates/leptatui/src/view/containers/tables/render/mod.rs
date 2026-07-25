@@ -11,5 +11,5 @@ mod layout;
 mod view;
 
 pub(super) use view::{
-    focused_link_span_for_table_view, min_height_for_table_view, render_table_view,
+    focused_link_span_for_table_view, intrinsic_height_for_table_view, render_table_view,
 };

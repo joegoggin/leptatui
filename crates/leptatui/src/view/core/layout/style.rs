@@ -60,7 +60,9 @@ pub(super) fn to_taffy_style(
     let flex_direction = style.flex_direction.unwrap_or_default();
     let borders = style.borders.unwrap_or_else(|| default_borders(view));
     let padding = style.padding.unwrap_or_default();
-    let overflow = style.overflow.unwrap_or_default();
+    let overflow = style
+        .overflow
+        .unwrap_or_else(|| crate::Axes::new(Overflow::Visible, Overflow::Auto));
     let gap = style
         .gap
         .unwrap_or_else(|| crate::Axes::all(Length::Cells(0.0)));
@@ -72,7 +74,7 @@ pub(super) fn to_taffy_style(
             x: map_overflow(overflow.x),
             y: map_overflow(overflow.y),
         },
-        scrollbar_width: if overflow.y == Overflow::Scroll {
+        scrollbar_width: if overflow.x == Overflow::Scroll || overflow.y == Overflow::Scroll {
             1.0
         } else {
             0.0
@@ -82,6 +84,7 @@ pub(super) fn to_taffy_style(
         size: map_dimensions(style.size.unwrap_or_default(), viewport),
         min_size: map_dimensions(style.min_size.unwrap_or_default(), viewport),
         max_size: map_dimensions(style.max_size.unwrap_or_default(), viewport),
+        aspect_ratio: style.aspect_ratio.and_then(sanitize_aspect_ratio),
         margin: map_auto_edges(
             style
                 .margin
@@ -344,6 +347,20 @@ fn sanitize_factor(value: f32) -> f32 {
     }
 }
 
+/// Returns a finite positive width-to-height ratio.
+///
+/// # Arguments
+///
+/// * `value` — Authored preferred aspect ratio.
+///
+/// # Returns
+///
+/// A finite positive ratio, or [`None`] when the value cannot constrain
+/// layout safely.
+fn sanitize_aspect_ratio(value: f32) -> Option<f32> {
+    (value.is_finite() && value > 0.0).then_some(value)
+}
+
 /// Converts a flex main-axis direction.
 ///
 /// # Arguments
@@ -552,7 +569,9 @@ fn map_grid_line(value: GridLine) -> TaffyLine<TaffyGridPlacement> {
 /// A [`TaffyGridPlacement`] containing automatic, line, or span placement.
 fn map_grid_placement(value: GridPlacement) -> TaffyGridPlacement {
     match value {
-        GridPlacement::Auto => TaffyGridPlacement::Auto,
+        GridPlacement::Auto | GridPlacement::Line(0) | GridPlacement::Span(0) => {
+            TaffyGridPlacement::Auto
+        }
         GridPlacement::Line(line) => TaffyGridPlacement::Line(line.into()),
         GridPlacement::Span(span) => TaffyGridPlacement::Span(span),
     }

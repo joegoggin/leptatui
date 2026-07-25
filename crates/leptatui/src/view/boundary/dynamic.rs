@@ -212,7 +212,7 @@ impl View for DynamicView {
         self.with_current_view_mut(|child| child.__handle_form_key(key))
     }
 
-    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+    fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
         self.with_current_view_mut(|child| child.__scroll_first_overflowing(delta))
     }
 
@@ -228,7 +228,12 @@ impl View for DynamicView {
         self.with_current_view(AnyView::__has_overflowing_scroll_target)
     }
 
-    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
         self.with_current_view_mut(|child| {
             child.__scroll_overflowing_at_position(column, row, delta)
         })

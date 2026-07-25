@@ -87,7 +87,16 @@ impl View for ProgressBarView {
         if let Some(label) = self.label.as_deref() {
             gauge = gauge.label(Span::styled(label, ratatui_style));
         }
-        ctx.render_widget(gauge);
+        if let Some(geometry) = ctx.active_layout_geometry(&self.metadata) {
+            ctx.with_area(geometry.border_box, |ctx| {
+                ctx.render_widget(style.to_block());
+            });
+            ctx.with_area(geometry.content_box, |ctx| {
+                ctx.render_widget(gauge);
+            });
+        } else {
+            ctx.render_widget(gauge);
+        }
         Ok(())
     }
 

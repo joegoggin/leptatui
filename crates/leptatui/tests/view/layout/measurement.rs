@@ -21,7 +21,7 @@ fn flex_row_min_height_uses_tallest_child() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = view.__min_height(&mut ctx);
+        min_height = intrinsic_height(&view, &mut ctx);
     })?;
 
     assert_eq!(min_height, 1);
@@ -50,7 +50,7 @@ fn text_area_min_height_counts_trailing_newline() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = view.__min_height(&mut ctx);
+        min_height = intrinsic_height(&view, &mut ctx);
     })?;
 
     assert_eq!(min_height, 4);
@@ -63,7 +63,7 @@ fn text_area_min_height_counts_trailing_newline() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// component(div([text("One"), text("Two"), text("Three")])).__min_height(ctx)
+/// component(div([text("One"), text("Two"), text("Three")])).measure(...)
 /// ```
 ///
 /// # Assertions
@@ -84,7 +84,7 @@ fn component_view_min_height_uses_wrapped_view_height() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = view.__min_height(&mut ctx);
+        min_height = intrinsic_height(view.as_view(), &mut ctx);
     })?;
 
     assert_eq!(min_height, 3);

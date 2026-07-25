@@ -6,12 +6,11 @@
 
 pub(crate) mod render;
 
-use self::render::{
-    focused_control_span_for_container, min_height_for_container, render_container,
-};
+use self::render::{focused_control_span_for_container, measure_container, render_container};
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    measurement::{AvailableSpace, measure_legacy_height},
+    events::scroll_overflowing_at_position_in_paint_order,
+    measurement::AvailableSpace,
     render::VerticalSpan,
 };
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
@@ -62,10 +61,12 @@ impl View for DivView {
         available_space: LayoutSize<AvailableSpace>,
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
-        measure_legacy_height(
-            min_height_for_container(&self.children, &self.metadata, ctx),
+        measure_container(
+            &self.children,
+            &self.metadata,
             known_dimensions,
             available_space,
+            ctx,
         )
     }
 
@@ -88,12 +89,8 @@ impl View for DivView {
         self
     }
 
-    fn __uses_computed_child_layout(&self) -> bool {
-        true
-    }
-
-    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
-        if self.metadata.max_scroll_offset() > 0 && self.metadata.scroll_by(delta) {
+    fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
+        if self.metadata.scroll_by(delta) {
             return true;
         }
         self.children
@@ -130,16 +127,23 @@ impl View for DivView {
                 .any(AnyView::__has_overflowing_scroll_target)
     }
 
-    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
-        if self
-            .children
-            .iter_mut()
-            .any(|child| child.__scroll_overflowing_at_position(column, row, delta))
-        {
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
+        let paint_order = self.metadata.child_paint_order();
+        if scroll_overflowing_at_position_in_paint_order(
+            &mut self.children,
+            &paint_order,
+            column,
+            row,
+            delta,
+        ) {
             return true;
         }
-        if self.metadata.max_scroll_offset() > 0 && self.metadata.contains_hit_position(column, row)
-        {
+        if self.metadata.contains_hit_position(column, row) {
             return self.metadata.scroll_by(delta);
         }
         false

@@ -49,7 +49,8 @@ pub(crate) fn render_editable_text_view(
     let style = resolve_style(&view.metadata, ctx);
     ctx.record_metadata_hit_area(&view.metadata);
     let block = style.to_block_with_default_borders(Borders::ALL);
-    let inner = block.inner(ctx.area());
+    let geometry = ctx.active_layout_geometry(&view.metadata);
+    let inner = geometry.map_or_else(|| block.inner(ctx.area()), |geometry| geometry.content_box);
     let pending = pending_insert_render(&view.value, &view.editable_state);
     let display_value = if let Some(pending) = pending.as_ref() {
         pending.value.as_str()
@@ -58,7 +59,13 @@ pub(crate) fn render_editable_text_view(
     } else {
         view.value.as_str()
     };
-    ctx.render_widget(block);
+    if let Some(geometry) = geometry {
+        ctx.with_area(geometry.border_box, |ctx| {
+            ctx.render_widget(block);
+        });
+    } else {
+        ctx.render_widget(block);
+    }
 
     match view.kind {
         EditableControlKind::Input => {

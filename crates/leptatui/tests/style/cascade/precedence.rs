@@ -255,15 +255,16 @@ fn stylesheet_normal_declaration_does_not_override_important_mixin_value() {
 /// # Example Under Test
 ///
 /// ```text
-/// inline: display Flex, position Relative, z_index Auto
-/// .layout: display Grid, position Absolute, z_index 7 !important
+/// inline: display Flex, aspect_ratio 1, position Relative, z_index Auto
+/// .layout: display Grid, aspect_ratio 1.5, position Absolute,
+///          z_index 7 !important
 /// ```
 ///
 /// # Assertions
 ///
 /// - View metadata is available for stylesheet resolution.
-/// - Every grouped box, flexbox, alignment, grid, and positioning property
-///   resolves from the important stylesheet rule.
+/// - Every grouped box, sizing, flexbox, alignment, grid, and positioning
+///   property resolves from the important stylesheet rule.
 ///
 /// # Why
 ///
@@ -279,6 +280,7 @@ fn stylesheet_important_layout_properties_override_inline_values() {
         .size(LayoutSize::all(Dimension::Auto))
         .min_size(LayoutSize::all(Dimension::Auto))
         .max_size(LayoutSize::all(Dimension::Auto))
+        .aspect_ratio(1.0)
         .margin(Edges::all(LengthAuto::Auto))
         .gap(Axes::all(Length::cells(0.0)))
         .flex_direction(FlexDirection::Row)
@@ -309,6 +311,7 @@ fn stylesheet_important_layout_properties_override_inline_values() {
             size: LayoutSize::new(Dimension::MinContent, Dimension::MaxContent) !important,
             min_size: LayoutSize::all(Dimension::from(Length::cells(2.0))) !important,
             max_size: LayoutSize::all(Dimension::FitContent(Length::cells(40.0))) !important,
+            aspect_ratio: 1.5 !important,
             margin: Edges::all(LengthAuto::from(Length::cells(1.0))) !important,
             gap: Axes::new(Length::cells(2.0), Length::cells(3.0)) !important,
             flex_direction: FlexDirection::ColumnReverse !important,
@@ -347,6 +350,7 @@ fn stylesheet_important_layout_properties_override_inline_values() {
         ))
         .min_size(LayoutSize::all(Dimension::from(Length::cells(2.0))))
         .max_size(LayoutSize::all(Dimension::FitContent(Length::cells(40.0))))
+        .aspect_ratio(1.5)
         .margin(Edges::all(Length::cells(1.0).into()))
         .gap(Axes::new(Length::cells(2.0), Length::cells(3.0)))
         .flex_direction(FlexDirection::ColumnReverse)

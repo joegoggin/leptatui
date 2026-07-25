@@ -5,21 +5,15 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use crate::view::core::render::{VerticalSpan, resolve_style};
+use crate::view::core::{
+    measurement::measure_view_height,
+    render::{VerticalSpan, focused_control_span_for_view, resolve_style},
+};
 use crate::view::{AnyView, ListItemView, ListView, StyleMetadata};
 use crate::{TuiStyle, app::Result, component::RenderCtx};
 
 /// Horizontal indentation applied to each recursively nested list.
 const LIST_NEST_INDENT: u16 = 2;
-
-/// Returns the focused control's vertical span within a child view.
-fn focused_control_span_for_view(
-    view: &AnyView,
-    ctx: &mut RenderCtx<'_, '_>,
-) -> Option<VerticalSpan> {
-    view.__focused_button_span(ctx)
-        .map(|(top, bottom)| VerticalSpan { top, bottom })
-}
 
 pub(crate) fn focused_control_span_for_list_view(
     items: &[AnyView],
@@ -39,7 +33,7 @@ pub(crate) fn focused_control_span_for_list_view(
             let mut row = 0u32;
 
             for item in items {
-                let item_height = min_height_for_list_item(item, marker_width, ctx);
+                let item_height = intrinsic_height_for_list_item(item, marker_width, ctx);
                 let item_area = Rect {
                     height: item_height,
                     ..area
@@ -110,7 +104,8 @@ fn focused_control_span_for_list_item_children(
     for child in children {
         let indent = list_item_child_indent(child, marker_width);
         let child_base = horizontal_inset(area, indent);
-        let child_height = ctx.with_area(child_base, |ctx| child.__min_height(ctx));
+        let child_height =
+            ctx.with_area(child_base, |ctx| measure_view_height(child.as_view(), ctx));
         let child_area = Rect {
             height: child_height,
             ..child_base
@@ -151,9 +146,16 @@ pub(crate) fn render_list_view(
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     let style = resolve_style(metadata, ctx);
-    ctx.render_widget(Block::new().style(style.to_ratatui_style()));
+    let geometry = ctx.active_layout_geometry(metadata);
+    if let Some(geometry) = geometry {
+        ctx.with_area(geometry.border_box, |ctx| {
+            ctx.render_widget(style.to_block());
+        });
+    } else {
+        ctx.render_widget(Block::new().style(style.to_ratatui_style()));
+    }
     let (markers, marker_width) = list_markers(items.len(), ordered_start);
-    let area = ctx.area();
+    let area = geometry.map_or_else(|| ctx.area(), |geometry| geometry.content_box);
 
     ctx.with_area_inherited_style_and_selector_ancestor(
         area,
@@ -169,7 +171,7 @@ pub(crate) fn render_list_view(
                     break;
                 }
 
-                let height = min_height_for_list_item(item, marker_width, ctx).min(remaining);
+                let height = intrinsic_height_for_list_item(item, marker_width, ctx).min(remaining);
                 let item_area = Rect { y, height, ..area };
                 ctx.with_area(item_area, |ctx| {
                     render_marked_list_item(item, marker, marker_width, ctx)
@@ -320,7 +322,7 @@ fn render_list_item_children(
         let indent = list_item_child_indent(child, marker_width);
         let child_base = horizontal_inset(Rect { y, ..area }, indent);
         let height = ctx
-            .with_area(child_base, |ctx| child.__min_height(ctx))
+            .with_area(child_base, |ctx| measure_view_height(child.as_view(), ctx))
             .min(remaining);
         if height == 0 {
             continue;
@@ -348,7 +350,11 @@ fn render_list_item_children(
 /// # Returns
 ///
 /// A [`u16`] height including a marker-only row for empty items.
-fn min_height_for_list_item(item: &AnyView, marker_width: u16, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+fn intrinsic_height_for_list_item(
+    item: &AnyView,
+    marker_width: u16,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> u16 {
     if let Some(item) = item.downcast_ref::<ListItemView>() {
         let style = resolve_style(&item.metadata, ctx);
         let area = ctx.area();
@@ -356,11 +362,11 @@ fn min_height_for_list_item(item: &AnyView, marker_width: u16, ctx: &mut RenderC
             area,
             style.inherited_values(),
             item.metadata.clone(),
-            |ctx| min_height_for_list_item_children(&item.children, marker_width, ctx),
+            |ctx| intrinsic_height_for_list_item_children(&item.children, marker_width, ctx),
         );
     }
 
-    min_height_for_list_item_children(std::slice::from_ref(item), marker_width, ctx)
+    intrinsic_height_for_list_item_children(std::slice::from_ref(item), marker_width, ctx)
 }
 
 /// Returns the intrinsic height of an ordered or unordered list.
@@ -375,7 +381,7 @@ fn min_height_for_list_item(item: &AnyView, marker_width: u16, ctx: &mut RenderC
 /// # Returns
 ///
 /// A [`u16`] sum of all item heights.
-pub(crate) fn min_height_for_list_view(
+pub(crate) fn intrinsic_height_for_list_view(
     items: &[AnyView],
     ordered_start: Option<usize>,
     metadata: &StyleMetadata,
@@ -392,7 +398,7 @@ pub(crate) fn min_height_for_list_view(
         |ctx| {
             items
                 .iter()
-                .map(|item| min_height_for_list_item(item, marker_width, ctx))
+                .map(|item| intrinsic_height_for_list_item(item, marker_width, ctx))
                 .fold(0, u16::saturating_add)
         },
     )
@@ -409,7 +415,7 @@ pub(crate) fn min_height_for_list_view(
 /// # Returns
 ///
 /// A [`u16`] height of at least one row for the item marker.
-fn min_height_for_list_item_children(
+fn intrinsic_height_for_list_item_children(
     children: &[AnyView],
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
@@ -420,7 +426,7 @@ fn min_height_for_list_item_children(
         .map(|child| {
             let indent = list_item_child_indent(child, marker_width);
             let child_area = horizontal_inset(area, indent);
-            ctx.with_area(child_area, |ctx| child.__min_height(ctx))
+            ctx.with_area(child_area, |ctx| measure_view_height(child.as_view(), ctx))
         })
         .fold(0, u16::saturating_add)
         .max(1)

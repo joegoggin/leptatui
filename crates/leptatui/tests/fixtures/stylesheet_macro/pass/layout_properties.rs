@@ -11,6 +11,7 @@ fn layout_variables() -> StyleModule {
         $size: LayoutSize::new(Dimension::MinContent, Dimension::MaxContent);
         $min_size: LayoutSize::all(Dimension::from(Length::cells(2.0)));
         $max_size: LayoutSize::all(Dimension::FitContent(Length::cells(40.0)));
+        $aspect_ratio: 1.5_f32;
         $margin: Edges::all(LengthAuto::from(Length::cells(1.0)));
         $gap: Axes::new(Length::cells(2.0), Length::cells(3.0));
         $flex_direction: FlexDirection::ColumnReverse;
@@ -44,6 +45,7 @@ fn main() {
             size: layout.$size,
             min_size: layout.$min_size,
             max_size: layout.$max_size,
+            aspect_ratio: layout.$aspect_ratio,
             margin: layout.$margin,
             gap: layout.$gap,
             flex_direction: layout.$flex_direction,
@@ -79,6 +81,7 @@ fn main() {
         resolved.overflow,
         Some(Axes::new(Overflow::Hidden, Overflow::Auto))
     );
+    assert_eq!(resolved.aspect_ratio, Some(1.5));
     assert_eq!(resolved.position, Some(Position::Absolute));
     assert_eq!(resolved.z_index, Some(ZIndex::Integer(7)));
 }

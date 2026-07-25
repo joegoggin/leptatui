@@ -89,6 +89,8 @@ pub struct StyleDeclarations {
     min_size: Option<Declaration<LayoutSize<Dimension>>>,
     /// Maximum size declaration.
     max_size: Option<Declaration<LayoutSize<Dimension>>>,
+    /// Preferred width-to-height ratio declaration.
+    aspect_ratio: Option<Declaration<f32>>,
     /// Outer margin declaration.
     margin: Option<Declaration<Edges<LengthAuto>>>,
     /// Child gap declaration.
@@ -150,6 +152,7 @@ impl StyleDeclarations {
             size: None,
             min_size: None,
             max_size: None,
+            aspect_ratio: None,
             margin: None,
             gap: None,
             flex_direction: None,

@@ -203,7 +203,7 @@ fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_height() -> Result<
     let mut code_height = 0;
     measured.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        code_height = code.__min_height(&mut ctx);
+        code_height = intrinsic_height(&code, &mut ctx);
     })?;
     assert_eq!(code_height, 5);
 
@@ -241,7 +241,7 @@ fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()>
     let mut empty_height = 0;
     empty_terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        empty_height = empty.__min_height(&mut ctx);
+        empty_height = intrinsic_height(&empty, &mut ctx);
     })?;
     assert_eq!(empty_height, 3);
 
@@ -258,7 +258,7 @@ fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()>
         let mut render_result = Ok(());
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            let _ = view.__min_height(&mut ctx);
+            let _ = intrinsic_height(&view, &mut ctx);
             render_result = view.render(&mut ctx);
         })?;
         render_result?;
@@ -301,7 +301,7 @@ fn code_block_height_saturates_beyond_terminal_row_limit() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = view.__min_height(&mut ctx);
+        min_height = intrinsic_height(&view, &mut ctx);
         render_result = view.render(&mut ctx);
     })?;
     render_result?;

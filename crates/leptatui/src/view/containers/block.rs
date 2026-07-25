@@ -1,12 +1,21 @@
 //! Bordered single-child container view.
 
+use crate::view::containers::layout::render::{
+    focused_control_span_for_container, render_container_with_default_borders,
+};
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    measurement::{AvailableSpace, measure_legacy_height},
+    events::scroll_overflowing_at_position_in_paint_order,
+    measurement::{AvailableSpace, measure_view_height, sanitize_cells},
     render::{VerticalSpan, resolve_style, vertical_border_rows, vertical_padding_rows},
 };
 use crate::view::{AnyView, IntoView, StyleMetadata, View, ViewType};
-use crate::{Borders, LayoutSize, app::Result, component::RenderCtx};
+use crate::{
+    Borders, LayoutSize,
+    app::Result,
+    component::{LayoutPhase, RenderCtx},
+    view::core::layout::prepare_layout,
+};
 
 /// Bordered container around one child.
 #[derive(Debug, PartialEq)]
@@ -33,50 +42,13 @@ pub fn block(child: impl IntoView) -> BlockView {
     }
 }
 
-/// Returns the focused control's vertical span within a child view.
-fn focused_control_span_for_view(
-    view: &AnyView,
-    ctx: &mut RenderCtx<'_, '_>,
-) -> Option<VerticalSpan> {
-    view.__focused_button_span(ctx)
-        .map(|(top, bottom)| VerticalSpan { top, bottom })
-}
-
-fn focused_control_span_for_block(
-    view: &BlockView,
-    ctx: &mut RenderCtx<'_, '_>,
-) -> Option<VerticalSpan> {
-    let child = view.children.first()?;
-    let style = resolve_style(&view.metadata, ctx);
-    let area = ctx.area();
-    let inner = style
-        .to_block_with_default_borders(Borders::ALL)
-        .inner(area);
-    let top_offset = u32::from(inner.y.saturating_sub(area.y));
-    ctx.with_area_inherited_style_and_selector_ancestor(
-        inner,
-        style.inherited_values(),
-        view.metadata.clone(),
-        |ctx| focused_control_span_for_view(child, ctx),
-    )
-    .map(|span| span.offset_by(top_offset))
-}
-
 impl View for BlockView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let style = resolve_style(&self.metadata, ctx);
-        let block = style.to_block_with_default_borders(Borders::ALL);
-        let inner = block.inner(ctx.area());
-        ctx.render_widget(block);
-        let Some(child) = self.children.first() else {
-            return Ok(());
-        };
-        ctx.with_area_inherited_style_and_selector_ancestor(
-            inner,
-            style.inherited_values(),
-            self.metadata.clone(),
-            |ctx| child.render(ctx),
-        )
+        if ctx.layout_phase() == LayoutPhase::Inactive || self.metadata.layout_geometry().is_none()
+        {
+            prepare_layout(self, ctx);
+        }
+        render_container_with_default_borders(&self.children, &self.metadata, Borders::ALL, ctx)
     }
 
     fn measure(
@@ -86,21 +58,25 @@ impl View for BlockView {
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
+        let width = known_dimensions
+            .width
+            .or_else(|| available_space.width.definite())
+            .map_or(0.0, sanitize_cells);
         let child_height = self.children.first().map_or(0, |child| {
             ctx.with_area_inherited_style_and_selector_ancestor(
                 ctx.area(),
                 style.inherited_values(),
                 self.metadata.clone(),
-                |ctx| child.__min_height(ctx),
+                |ctx| measure_view_height(child.as_view(), ctx),
             )
         });
-        measure_legacy_height(
-            child_height
-                .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-                .saturating_add(vertical_padding_rows(style.padding)),
-            known_dimensions,
-            available_space,
-        )
+        let natural_height = child_height
+            .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+            .saturating_add(vertical_padding_rows(style.padding));
+        let height = known_dimensions
+            .height
+            .map_or(f32::from(natural_height), sanitize_cells);
+        LayoutSize::new(width, height)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {
@@ -122,8 +98,69 @@ impl View for BlockView {
         self
     }
 
+    fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
+        if self.metadata.scroll_by(delta) {
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(|child| child.__scroll_first_overflowing(delta))
+    }
+
+    fn __scroll_first_overflowing_to_top(&mut self) -> bool {
+        if self.metadata.max_scroll_offset() > 0 && self.metadata.scroll_offset() > 0 {
+            self.metadata.set_scroll_offset(0);
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(AnyView::__scroll_first_overflowing_to_top)
+    }
+
+    fn __scroll_first_overflowing_to_bottom(&mut self) -> bool {
+        let maximum = self.metadata.max_scroll_offset();
+        if maximum > 0 && self.metadata.scroll_offset() < maximum {
+            self.metadata.set_scroll_offset(maximum);
+            return true;
+        }
+        self.children
+            .iter_mut()
+            .any(AnyView::__scroll_first_overflowing_to_bottom)
+    }
+
+    fn __has_overflowing_scroll_target(&self) -> bool {
+        self.metadata.max_scroll_offset() > 0
+            || self
+                .children
+                .iter()
+                .any(AnyView::__has_overflowing_scroll_target)
+    }
+
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
+        let paint_order = self.metadata.child_paint_order();
+        if scroll_overflowing_at_position_in_paint_order(
+            &mut self.children,
+            &paint_order,
+            column,
+            row,
+            delta,
+        ) {
+            return true;
+        }
+        if self.metadata.contains_hit_position(column, row) {
+            return self.metadata.scroll_by(delta);
+        }
+        false
+    }
+
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
-        focused_control_span_for_block(self, ctx).map(VerticalSpan::into_tuple)
+        focused_control_span_for_container(&self.children, &self.metadata, ctx)
+            .map(VerticalSpan::into_tuple)
     }
 }
 

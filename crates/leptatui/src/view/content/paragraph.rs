@@ -40,8 +40,19 @@ impl View for ParagraphView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
         let rendered = resolved_rich_text(&self.content, &self.metadata, style, ctx);
-        let area = ctx.area();
-        ctx.render_widget(semantic_paragraph(&rendered, style));
+        let area = if let Some(geometry) = ctx.active_layout_geometry(&self.metadata) {
+            ctx.with_area(geometry.border_box, |ctx| {
+                ctx.render_widget(style.to_block());
+            });
+            ctx.with_area(geometry.content_box, |ctx| {
+                ctx.render_widget(semantic_paragraph(&rendered, style));
+            });
+            geometry.content_box
+        } else {
+            let area = ctx.area();
+            ctx.render_widget(semantic_paragraph(&rendered, style));
+            area
+        };
         self.content.record_link_hit_areas(
             area,
             area.width,
@@ -89,7 +100,10 @@ impl View for ParagraphView {
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         self.content
-            .focused_link_span(ctx.area().width)
+            .focused_link_span(
+                ctx.active_layout_geometry(&self.metadata)
+                    .map_or_else(|| ctx.area().width, |geometry| geometry.content_box.width),
+            )
             .map(|span| span.into_tuple())
     }
 }

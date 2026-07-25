@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     any_view::AnyView,
-    measurement::{AvailableSpace, cells_to_u16, measure_default},
+    measurement::{AvailableSpace, measure_default},
     metadata::StyleMetadata,
 };
 
@@ -97,21 +97,6 @@ pub trait View: Any {
         super::events::handle_view_key_event(self, key)
     }
 
-    /// Returns the minimum useful height for the legacy renderer.
-    #[doc(hidden)]
-    fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        let area = ctx.area();
-        let measured = self.measure(
-            LayoutSize::new(Some(f32::from(area.width)), None),
-            LayoutSize::new(
-                AvailableSpace::Definite(f32::from(area.width)),
-                AvailableSpace::Definite(f32::from(area.height)),
-            ),
-            ctx,
-        );
-        cells_to_u16(measured.height)
-    }
-
     /// Returns selector metadata when this node participates in styling.
     ///
     /// # Returns
@@ -176,16 +161,6 @@ pub trait View: Any {
     /// `true` when the view is a layout-transparent structural boundary.
     #[doc(hidden)]
     fn __is_layout_transparent(&self) -> bool {
-        false
-    }
-
-    /// Returns whether retained children participate in computed layout.
-    ///
-    /// # Returns
-    ///
-    /// `true` when the view's retained children generate layout boxes.
-    #[doc(hidden)]
-    fn __uses_computed_child_layout(&self) -> bool {
         false
     }
 
@@ -343,6 +318,18 @@ pub trait View: Any {
         row: u16,
         index: &mut usize,
     ) -> Option<usize> {
+        if let Some(metadata) = self.style_metadata() {
+            let paint_order = metadata.child_paint_order();
+            if !paint_order.is_empty() {
+                return super::events::focusable_index_at_position_in_paint_order(
+                    self.children(),
+                    &paint_order,
+                    column,
+                    row,
+                    index,
+                );
+            }
+        }
         self.children()
             .iter()
             .find_map(|child| child.__focusable_index_at_position_inner(column, row, index))
@@ -396,8 +383,16 @@ pub trait View: Any {
     }
 
     /// Scrolls the first overflowing container in this subtree.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether an offset changed.
     #[doc(hidden)]
-    fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
+    fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {
         self.children_mut()
             .iter_mut()
             .any(|child| child.__scroll_first_overflowing(delta))
@@ -473,13 +468,18 @@ pub trait View: Any {
     ///
     /// * `column` — Zero-based terminal column to hit test.
     /// * `row` — Zero-based terminal row to hit test.
-    /// * `delta` — Signed row count to apply to the scroll offset.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
     ///
     /// # Returns
     ///
     /// A [`bool`] indicating whether a positioned layout consumed the scroll.
     #[doc(hidden)]
-    fn __scroll_overflowing_at_position(&mut self, column: u16, row: u16, delta: i16) -> bool {
+    fn __scroll_overflowing_at_position(
+        &mut self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> bool {
         self.children_mut()
             .iter_mut()
             .any(|child| child.__scroll_overflowing_at_position(column, row, delta))

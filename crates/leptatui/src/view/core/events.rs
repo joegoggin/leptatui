@@ -5,11 +5,77 @@ use crossterm::event::{
 };
 
 use crate::{
+    AnyView, Axes,
     app::{AppControl, Result},
     component::KeyControl,
 };
 
 use super::contract::View;
+
+/// Finds a pointer target by searching direct children from front to back.
+///
+/// Flattened focus indexes remain source-ordered so keyboard traversal is
+/// unaffected by visual stacking.
+///
+/// # Arguments
+///
+/// * `children` — Direct children containing possible pointer targets.
+/// * `paint_order` — Source indexes ordered from back to front.
+/// * `column` — Zero-based terminal column to hit test.
+/// * `row` — Zero-based terminal row to hit test.
+/// * `index` — Running source-ordered flattened focus index.
+///
+/// # Returns
+///
+/// An [`Option`] containing the source-ordered focus index of the topmost hit.
+pub(crate) fn focusable_index_at_position_in_paint_order(
+    children: &[AnyView],
+    paint_order: &[usize],
+    column: u16,
+    row: u16,
+    index: &mut usize,
+) -> Option<usize> {
+    let mut child_focus_indexes = Vec::with_capacity(children.len());
+    let mut next_index = *index;
+    for child in children {
+        child_focus_indexes.push(next_index);
+        next_index = next_index.saturating_add(child.__focusable_count());
+    }
+    *index = next_index;
+
+    paint_order.iter().rev().find_map(|child_index| {
+        let child = children.get(*child_index)?;
+        let mut child_focus_index = *child_focus_indexes.get(*child_index)?;
+        child.__focusable_index_at_position_inner(column, row, &mut child_focus_index)
+    })
+}
+
+/// Scrolls the topmost direct child containing a pointer position.
+///
+/// # Arguments
+///
+/// * `children` — Direct children containing possible scroll targets.
+/// * `paint_order` — Source indexes ordered from back to front.
+/// * `column` — Zero-based terminal column under the pointer.
+/// * `row` — Zero-based terminal row under the pointer.
+/// * `delta` — Signed horizontal and vertical cell deltas.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether a topmost descendant consumed the scroll.
+pub(crate) fn scroll_overflowing_at_position_in_paint_order(
+    children: &mut [AnyView],
+    paint_order: &[usize],
+    column: u16,
+    row: u16,
+    delta: Axes<i16>,
+) -> bool {
+    paint_order.iter().rev().any(|child_index| {
+        children
+            .get_mut(*child_index)
+            .is_some_and(|child| child.__scroll_overflowing_at_position(column, row, delta))
+    })
+}
 
 pub(crate) fn handle_view_event<V>(view: &mut V, event: Event) -> Result<AppControl>
 where
@@ -69,22 +135,44 @@ where
             Ok(AppControl::Continue)
         }
         MouseEventKind::ScrollDown => {
-            if !view.__scroll_overflowing_at_position(mouse.column, mouse.row, 1) {
-                view.__scroll_first_overflowing(1);
-            }
+            scroll_at_position(view, mouse.column, mouse.row, Axes::new(0, 1));
             Ok(AppControl::Continue)
         }
         MouseEventKind::ScrollUp => {
-            if !view.__scroll_overflowing_at_position(mouse.column, mouse.row, -1) {
-                view.__scroll_first_overflowing(-1);
-            }
+            scroll_at_position(view, mouse.column, mouse.row, Axes::new(0, -1));
             Ok(AppControl::Continue)
         }
-        MouseEventKind::Down(_)
-        | MouseEventKind::Up(_)
-        | MouseEventKind::Drag(_)
-        | MouseEventKind::ScrollLeft
-        | MouseEventKind::ScrollRight => Ok(AppControl::Continue),
+        MouseEventKind::ScrollLeft => {
+            scroll_at_position(view, mouse.column, mouse.row, Axes::new(-1, 0));
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::ScrollRight => {
+            scroll_at_position(view, mouse.column, mouse.row, Axes::new(1, 0));
+            Ok(AppControl::Continue)
+        }
+        MouseEventKind::Down(_) | MouseEventKind::Up(_) | MouseEventKind::Drag(_) => {
+            Ok(AppControl::Continue)
+        }
+    }
+}
+
+/// Scrolls the innermost overflow container at a pointer position.
+///
+/// Falls back to the first matching container when no rendered hit area
+/// consumes the event.
+///
+/// # Arguments
+///
+/// * `view` — View tree receiving the scroll event.
+/// * `column` — Zero-based terminal column under the pointer.
+/// * `row` — Zero-based terminal row under the pointer.
+/// * `delta` — Signed horizontal and vertical cell deltas.
+fn scroll_at_position<V>(view: &mut V, column: u16, row: u16, delta: Axes<i16>)
+where
+    V: View + ?Sized,
+{
+    if !view.__scroll_overflowing_at_position(column, row, delta) {
+        view.__scroll_first_overflowing(delta);
     }
 }
 
@@ -199,7 +287,7 @@ where
     V: View + ?Sized,
 {
     clear_scroll_to_top_key_pending(view);
-    key_control_from_bool(view.__scroll_first_overflowing(delta))
+    key_control_from_bool(view.__scroll_first_overflowing(Axes::new(0, delta)))
 }
 
 /// Handles the two-key `gg` scroll-to-top sequence.
