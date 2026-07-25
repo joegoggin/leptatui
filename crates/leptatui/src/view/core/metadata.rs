@@ -220,6 +220,8 @@ pub struct StyleMetadata {
     content_extent: Cell<LayoutSize<u16>>,
     /// Terminal-coordinate hit areas recorded during the latest render.
     hit_areas: RefCell<Vec<Rect>>,
+    /// Direct child indexes in latest-rendered back-to-front paint order.
+    child_paint_order: RefCell<Vec<usize>>,
     /// Rounded geometry from the latest root layout pass.
     layout_state: Cell<LayoutState>,
 }
@@ -248,6 +250,7 @@ impl StyleMetadata {
             max_scroll_offsets: Cell::new(Axes::all(0)),
             content_extent: Cell::new(LayoutSize::all(0)),
             hit_areas: RefCell::new(Vec::new()),
+            child_paint_order: RefCell::new(Vec::new()),
             layout_state: Cell::new(LayoutState::Uncomputed),
         }
     }
@@ -507,6 +510,7 @@ impl StyleMetadata {
     /// Clears all last-rendered hit areas.
     pub(crate) fn clear_hit_areas(&self) {
         self.hit_areas.borrow_mut().clear();
+        self.child_paint_order.borrow_mut().clear();
     }
 
     /// Replaces last-rendered hit areas with one optional area.
@@ -536,6 +540,26 @@ impl StyleMetadata {
         if area.width > 0 && area.height > 0 {
             self.hit_areas.borrow_mut().push(area);
         }
+    }
+
+    /// Stores direct child indexes in back-to-front paint order.
+    ///
+    /// # Arguments
+    ///
+    /// * `order` — Source indexes ordered from the first painted child to the last.
+    pub(crate) fn set_child_paint_order(&self, order: impl IntoIterator<Item = usize>) {
+        let mut child_paint_order = self.child_paint_order.borrow_mut();
+        child_paint_order.clear();
+        child_paint_order.extend(order);
+    }
+
+    /// Returns direct child indexes in latest-rendered back-to-front paint order.
+    ///
+    /// # Returns
+    ///
+    /// A [`Vec`] containing source indexes from the first painted child to the last.
+    pub(crate) fn child_paint_order(&self) -> Vec<usize> {
+        self.child_paint_order.borrow().clone()
     }
 
     /// Stores whether a `g` key is waiting for a second `g`.

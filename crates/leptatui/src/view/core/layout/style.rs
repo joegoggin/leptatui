@@ -569,7 +569,9 @@ fn map_grid_line(value: GridLine) -> TaffyLine<TaffyGridPlacement> {
 /// A [`TaffyGridPlacement`] containing automatic, line, or span placement.
 fn map_grid_placement(value: GridPlacement) -> TaffyGridPlacement {
     match value {
-        GridPlacement::Auto => TaffyGridPlacement::Auto,
+        GridPlacement::Auto | GridPlacement::Line(0) | GridPlacement::Span(0) => {
+            TaffyGridPlacement::Auto
+        }
         GridPlacement::Line(line) => TaffyGridPlacement::Line(line.into()),
         GridPlacement::Span(span) => TaffyGridPlacement::Span(span),
     }

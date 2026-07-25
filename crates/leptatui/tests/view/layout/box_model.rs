@@ -309,3 +309,48 @@ fn zero_sized_boxes_saturate_inner_geometry_without_affecting_following_paint() 
     assert_eq!(symbol_position(&terminal, "A", 8), (0, 4));
     Ok(())
 }
+
+/// Verifies a block paints and hit-tests its child from retained geometry.
+///
+/// # Example Under Test
+///
+/// ```text
+/// block(4x3 red button("Go"))
+/// terminal size = 8x5
+/// ```
+///
+/// # Assertions
+///
+/// - The child retains its authored four-column border box.
+/// - The child background does not fill the block's remaining content width.
+/// - Pointer focus succeeds inside the retained child box.
+/// - Pointer focus fails outside the retained child box.
+///
+/// # Why
+///
+/// A block's single child participates in the same computed layout snapshot as
+/// children of other layout containers.
+#[test]
+fn block_child_paint_and_hit_area_follow_retained_geometry() -> Result<()> {
+    let child_style = TuiStyle::new()
+        .background(Color::Red)
+        .box_sizing(BoxSizing::BorderBox)
+        .size(LayoutSize::new(
+            Dimension::from(Length::cells(4.0)),
+            Dimension::from(Length::cells(3.0)),
+        ));
+    let mut root = block(button("Go").with_inline_style(child_style));
+    let mut terminal = Terminal::new(TestBackend::new(8, 5))?;
+
+    draw_view(&mut terminal, &root)?;
+
+    assert_eq!(
+        retained_border_box(&root.children()[0]),
+        ratatui::layout::Rect::new(1, 1, 4, 3)
+    );
+    assert_eq!(cell_colors(&terminal, 4, 2, 8).1, Color::Red);
+    assert_eq!(cell_colors(&terminal, 5, 2, 8).1, Color::Reset);
+    assert!(root.__focus_control_at_position(2, 2));
+    assert!(!root.__focus_control_at_position(5, 2));
+    Ok(())
+}

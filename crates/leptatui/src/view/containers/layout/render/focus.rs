@@ -64,26 +64,34 @@ pub(super) fn focused_control_bounds_for_container(
         style.inherited_values(),
         metadata.clone(),
         |ctx| {
-            children.iter().find_map(|child| {
-                let child_area = child_geometry(
-                    child,
-                    content_area,
-                    ctx.layout_geometry().clip,
-                    layout_offset,
-                    ctx,
+            children
+                .iter()
+                .filter(|child| child.__has_scroll_to_anchor_request())
+                .chain(
+                    children
+                        .iter()
+                        .filter(|child| !child.__has_scroll_to_anchor_request()),
                 )
-                .border_box;
-                let x_offset = u32::from(child_area.x.saturating_sub(content_area.x));
-                let y_offset = u32::from(child_area.y.saturating_sub(content_area.y));
-                ctx.with_area(child_area, |ctx| {
-                    focused_or_anchor_span_for_view(child, ctx).map(|span| FocusBounds {
-                        left: x_offset,
-                        right: x_offset.saturating_add(u32::from(child_area.width)),
-                        top: span.top.saturating_add(y_offset),
-                        bottom: span.bottom.saturating_add(y_offset),
+                .find_map(|child| {
+                    let child_area = child_geometry(
+                        child,
+                        content_area,
+                        ctx.layout_geometry().clip,
+                        layout_offset,
+                        ctx,
+                    )
+                    .border_box;
+                    let x_offset = u32::from(child_area.x.saturating_sub(content_area.x));
+                    let y_offset = u32::from(child_area.y.saturating_sub(content_area.y));
+                    ctx.with_area(child_area, |ctx| {
+                        focused_or_anchor_span_for_view(child, ctx).map(|span| FocusBounds {
+                            left: x_offset,
+                            right: x_offset.saturating_add(u32::from(child_area.width)),
+                            top: span.top.saturating_add(y_offset),
+                            bottom: span.bottom.saturating_add(y_offset),
+                        })
                     })
                 })
-            })
         },
     )
 }

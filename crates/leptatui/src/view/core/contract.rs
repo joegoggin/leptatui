@@ -318,6 +318,18 @@ pub trait View: Any {
         row: u16,
         index: &mut usize,
     ) -> Option<usize> {
+        if let Some(metadata) = self.style_metadata() {
+            let paint_order = metadata.child_paint_order();
+            if !paint_order.is_empty() {
+                return super::events::focusable_index_at_position_in_paint_order(
+                    self.children(),
+                    &paint_order,
+                    column,
+                    row,
+                    index,
+                );
+            }
+        }
         self.children()
             .iter()
             .find_map(|child| child.__focusable_index_at_position_inner(column, row, index))

@@ -205,3 +205,43 @@ fn focus_scroll_request_does_not_override_later_manual_scroll() -> Result<()> {
 
     Ok(())
 }
+
+/// Verifies anchor scrolling takes priority over an earlier focused control.
+///
+/// # Example Under Test
+///
+/// ```text
+/// div([focused button("A1"), text("Gap"), h1("Target")])
+/// height = 4
+/// request scroll to "target", render
+/// ```
+///
+/// # Assertions
+///
+/// - The anchor request is accepted.
+/// - Rendering scrolls the column to the target heading.
+/// - The target heading is visible in the terminal buffer.
+///
+/// # Why
+///
+/// A focused control earlier in source order must not supply the bounds used
+/// for a pending anchor-navigation request.
+#[test]
+fn anchor_scroll_takes_priority_over_earlier_focused_control() -> Result<()> {
+    let width = 18;
+    let backend = TestBackend::new(width, 4);
+    let mut terminal = Terminal::new(backend)?;
+    let mut view = div((
+        button("A1").with_focus(true),
+        text("Gap"),
+        h1("Target").with_id("target"),
+    ));
+
+    assert!(view.__request_scroll_to_id("target"));
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(scroll_offset(&view), 1);
+    assert!(symbol_position_opt(&terminal, "T", width).is_some());
+
+    Ok(())
+}

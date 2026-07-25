@@ -9,6 +9,7 @@ pub(crate) mod render;
 use self::render::{focused_control_span_for_container, measure_container, render_container};
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
+    events::scroll_overflowing_at_position_in_paint_order,
     measurement::AvailableSpace,
     render::VerticalSpan,
 };
@@ -132,11 +133,14 @@ impl View for DivView {
         row: u16,
         delta: crate::Axes<i16>,
     ) -> bool {
-        if self
-            .children
-            .iter_mut()
-            .any(|child| child.__scroll_overflowing_at_position(column, row, delta))
-        {
+        let paint_order = self.metadata.child_paint_order();
+        if scroll_overflowing_at_position_in_paint_order(
+            &mut self.children,
+            &paint_order,
+            column,
+            row,
+            delta,
+        ) {
             return true;
         }
         if self.metadata.contains_hit_position(column, row) {

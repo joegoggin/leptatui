@@ -215,6 +215,130 @@ fn positioned_siblings_paint_by_z_index() -> Result<()> {
     Ok(())
 }
 
+/// Verifies pointer focus follows z-index rather than source order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 6x3 relative container
+/// two overlapping absolute buttons with z-index 0 and 1
+/// test both possible source orders
+/// ```
+///
+/// # Assertions
+///
+/// - The later high-z-index button receives pointer focus over an earlier sibling.
+/// - The earlier high-z-index button receives pointer focus over a later sibling.
+/// - Flattened button focus state remains source-ordered.
+///
+/// # Why
+///
+/// Pointer interaction should target the frontmost painted control without
+/// changing keyboard traversal order.
+#[test]
+fn positioned_pointer_focus_follows_recorded_z_index_paint_order() -> Result<()> {
+    let inset = Edges::new(
+        Length::cells(0.0).into(),
+        LengthAuto::Auto,
+        LengthAuto::Auto,
+        Length::cells(0.0).into(),
+    );
+    let button_style = |z_index| {
+        TuiStyle::new()
+            .box_sizing(BoxSizing::BorderBox)
+            .position(Position::Absolute)
+            .inset(inset)
+            .z_index(ZIndex::Integer(z_index))
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(6.0)),
+                Dimension::from(Length::cells(3.0)),
+            ))
+    };
+    let container_style = TuiStyle::new()
+        .box_sizing(BoxSizing::BorderBox)
+        .position(Position::Relative)
+        .size(LayoutSize::new(
+            Dimension::from(Length::cells(6.0)),
+            Dimension::from(Length::cells(3.0)),
+        ));
+
+    let mut later_is_higher = div((
+        button("Low").with_inline_style(button_style(0)),
+        button("High").with_inline_style(button_style(1)),
+    ))
+    .with_inline_style(container_style)
+    .into_view();
+    let _terminal = render_layout_root(&later_is_higher, 6, 3)?;
+    assert!(later_is_higher.__focus_control_at_position(2, 1));
+    assert_eq!(button_focuses(later_is_higher.as_view()), vec![false, true]);
+
+    let mut earlier_is_higher = div((
+        button("High").with_inline_style(button_style(1)),
+        button("Low").with_inline_style(button_style(0)),
+    ))
+    .with_inline_style(container_style)
+    .into_view();
+    let _terminal = render_layout_root(&earlier_is_higher, 6, 3)?;
+    assert!(earlier_is_higher.__focus_control_at_position(2, 1));
+    assert_eq!(
+        button_focuses(earlier_is_higher.as_view()),
+        vec![true, false]
+    );
+    Ok(())
+}
+
+/// Verifies zero-valued grid placements safely use automatic placement.
+///
+/// # Example Under Test
+///
+/// ```text
+/// grid container
+/// child 1 grid row starts at line 0
+/// child 2 grid column ends with span 0
+/// ```
+///
+/// # Assertions
+///
+/// - Rendering does not panic for a zero grid line.
+/// - Rendering does not panic for a zero grid span.
+/// - Both children remain visible through automatic placement.
+///
+/// # Why
+///
+/// Invalid public layout values should degrade predictably at the layout-engine
+/// boundary rather than panic inside the engine.
+#[test]
+fn zero_grid_placements_fall_back_to_automatic_layout() -> Result<()> {
+    let first = text("A").with_inline_style(
+        TuiStyle::new().grid_row(GridLine::new(
+            GridPlacement::line(0),
+            GridPlacement::Auto,
+        )),
+    );
+    let second = text("B").with_inline_style(
+        TuiStyle::new().grid_column(GridLine::new(
+            GridPlacement::Auto,
+            GridPlacement::span(0),
+        )),
+    );
+    let root = div((first, second))
+        .with_inline_style(
+            TuiStyle::new()
+                .display(Display::Grid)
+                .size(LayoutSize::new(
+                    Dimension::from(Length::cells(4.0)),
+                    Dimension::from(Length::cells(2.0)),
+                )),
+        )
+        .into_view();
+
+    let terminal = render_layout_root(&root, 4, 2)?;
+
+    assert!(symbol_position_opt(&terminal, "A", 4).is_some());
+    assert!(symbol_position_opt(&terminal, "B", 4).is_some());
+    Ok(())
+}
+
 /// Verifies one rounded snapshot exposes all paint and interaction rectangles.
 ///
 /// # Example Under Test

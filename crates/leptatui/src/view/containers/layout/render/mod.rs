@@ -24,7 +24,7 @@ use crate::view::core::{
 };
 use crate::view::{AnyView, StyleMetadata};
 use crate::{
-    Axes, Overflow,
+    Axes, Borders, Overflow,
     app::Result,
     component::RenderCtx,
     view::containers::layout::render::{
@@ -54,13 +54,38 @@ pub(crate) fn render_container(
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
+    render_container_with_default_borders(children, metadata, Borders::NONE, ctx)
+}
+
+/// Renders a generic container with fallback borders and computed child geometry.
+///
+/// # Arguments
+///
+/// * `children` — Child views rendered in source order.
+/// * `metadata` — Container selector and runtime metadata.
+/// * `default_borders` — Border sides used when no authored value overrides them.
+/// * `ctx` — Render context targeting the container border box.
+///
+/// # Returns
+///
+/// An empty [`Result`] on success.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::Io`] if child rendering performs terminal I/O that fails.
+pub(crate) fn render_container_with_default_borders(
+    children: &[AnyView],
+    metadata: &StyleMetadata,
+    default_borders: Borders,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Result<()> {
     if ctx.honors_layout_geometry() {
         let geometry = metadata
             .layout_geometry()
             .expect("computed containers should retain geometry before painting");
         if geometry != ctx.layout_geometry() {
             return ctx.with_layout_geometry(geometry, metadata, |ctx| {
-                render_container(children, metadata, ctx)
+                render_container_with_default_borders(children, metadata, default_borders, ctx)
             });
         }
     }
@@ -69,7 +94,7 @@ pub(crate) fn render_container(
     ctx.record_metadata_hit_area(metadata);
     let geometry = ctx.layout_geometry();
     ctx.with_area(geometry.border_box, |ctx| {
-        ctx.render_widget(style.to_block());
+        ctx.render_widget(style.to_block_with_default_borders(default_borders));
     });
 
     let (content_area, layout_offset) = container_content_area(metadata, ctx);

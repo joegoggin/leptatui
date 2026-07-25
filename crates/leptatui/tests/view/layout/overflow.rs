@@ -747,3 +747,60 @@ fn focus_visibility_scrolls_horizontally() -> Result<()> {
     assert!(rendered_text(&terminal).contains("Two"));
     Ok(())
 }
+
+/// Verifies a bordered block owns and paints its vertical overflow state.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 8x4 block(div(["One", "Two", "Three"]))
+/// overflow: visible auto
+/// PageDown, render
+/// ```
+///
+/// # Assertions
+///
+/// - The block retains a one-row vertical scroll range.
+/// - PageDown advances the block's own scroll offset.
+/// - Redrawing moves the second child row to the top of the content viewport.
+///
+/// # Why
+///
+/// Block children must use the computed container path so clipping, scroll
+/// offsets, and default borders agree with retained geometry.
+#[test]
+fn block_scrolls_child_through_computed_overflow_geometry() -> Result<()> {
+    let mut view = block(div((text("One"), text("Two"), text("Three")))).with_inline_style(
+        TuiStyle::new()
+            .box_sizing(BoxSizing::BorderBox)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(8.0)),
+                Dimension::from(Length::cells(4.0)),
+            ))
+            .overflow(Axes::new(Overflow::Visible, Overflow::Auto)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(8, 4))?;
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(
+        view.style_metadata()
+            .expect("expected block metadata")
+            .max_scroll_offset(),
+        1
+    );
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        view.style_metadata()
+            .expect("expected block metadata")
+            .scroll_offset(),
+        1
+    );
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "T");
+    Ok(())
+}

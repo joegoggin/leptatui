@@ -62,6 +62,8 @@ pub(super) fn render_children(
         })
         .collect::<Vec<_>>();
     paint_order.sort_by_key(|(stacking_level, source_index, _)| (*stacking_level, *source_index));
+    parent_metadata
+        .set_child_paint_order(paint_order.iter().map(|(_, source_index, _)| *source_index));
 
     for (_, _, child) in paint_order {
         if child
