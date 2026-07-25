@@ -43,13 +43,13 @@ fn render_context_applies_media_rules_from_root_viewport() -> Result<()> {
     Ok(())
 }
 
-/// Verifies media direction gives stacked bordered buttons enough height.
+/// Verifies media flex direction gives stacked bordered buttons enough height.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// row([button("A"), button("B")]).stack
-/// @media (max-width: 12) { .stack { direction: Column } }
+/// div([button("A"), button("B")]).stack
+/// @media (max-width: 12) { .stack { flex_direction: Column } }
 /// ```
 ///
 /// # Assertions
@@ -61,12 +61,17 @@ fn render_context_applies_media_rules_from_root_viewport() -> Result<()> {
 fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()> {
     let backend = TestBackend::new(12, 6);
     let mut terminal = Terminal::new(backend)?;
-    let view = row(vec![button("A"), button("B")]).with_classes("stack");
-    let stylesheet = Stylesheet::new().media_rule(
-        MediaQuery::max_width(12),
-        StyleSelector::class("stack"),
-        TuiStyle::new().direction(LayoutDirection::Column),
-    );
+    let view = div(vec![button("A"), button("B")]).with_classes("stack");
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("stack"),
+            TuiStyle::new().display(Display::Flex),
+        )
+        .media_rule(
+            MediaQuery::max_width(12),
+            StyleSelector::class("stack"),
+            TuiStyle::new().flex_direction(FlexDirection::Column),
+        );
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -86,8 +91,8 @@ fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()>
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("Top"), row(buttons).stack, text("End")])
-/// @media (max-width: 12) { .stack { direction: Column } }
+/// div([text("Top"), div(buttons).stack, text("End")])
+/// @media (max-width: 12) { .stack { flex_direction: Column } }
 /// ```
 ///
 /// # Assertions
@@ -98,16 +103,21 @@ fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()>
 fn column_reserves_height_for_nested_stacked_bordered_buttons() -> Result<()> {
     let backend = TestBackend::new(12, 14);
     let mut terminal = Terminal::new(backend)?;
-    let view = column((
+    let view = div((
         text("Top"),
-        row(vec![button("A"), button("B"), button("C"), button("D")]).with_classes("stack"),
+        div(vec![button("A"), button("B"), button("C"), button("D")]).with_classes("stack"),
         text("End"),
     ));
-    let stylesheet = Stylesheet::new().media_rule(
-        MediaQuery::max_width(12),
-        StyleSelector::class("stack"),
-        TuiStyle::new().direction(LayoutDirection::Column),
-    );
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("stack"),
+            TuiStyle::new().display(Display::Flex),
+        )
+        .media_rule(
+            MediaQuery::max_width(12),
+            StyleSelector::class("stack"),
+            TuiStyle::new().flex_direction(FlexDirection::Column),
+        );
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {

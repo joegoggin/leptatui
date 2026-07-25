@@ -136,7 +136,7 @@ fn ControlledForm() -> impl IntoView {
 
     view! {
         <Block class="form-shell">
-            <Column>
+            <Div>
                 <Text class="title">"Controlled form"</Text>
                 {move || {
                     text(
@@ -194,7 +194,7 @@ fn ControlledForm() -> impl IntoView {
                 <Text class="help">
                     "Tab/Shift+Tab focus. i/a enters insert mode. Esc cancels from normal mode. Ctrl+Enter submits notes. q quits."
                 </Text>
-            </Column>
+            </Div>
         </Block>
     }
 }

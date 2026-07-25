@@ -6,7 +6,7 @@
 /// #[component]
 /// fn MacroSignalRoot() -> impl IntoView {
 ///     let (count, set_count) = signal(0);
-///     column([dynamic(... count ...), button(... set_count ...)])
+///     div([dynamic(... count ...), button(... set_count ...)])
 /// }
 /// ```
 ///

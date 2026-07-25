@@ -42,15 +42,15 @@ fn main() {
         navigate.update(|route| *route = Page::Settings);
 
         let view = view! {
-            <Column>
+            <Div>
                 {move || match route.get_untracked() {
                     Page::Home => view! { <HomePage /> },
                     Page::Counter => view! { <CounterPage /> },
                     Page::Settings => view! { <SettingsPage /> },
                 }}
-            </Column>
+            </Div>
         };
 
-        assert_eq!(view.metadata().view_type(), ViewType::Column);
+        assert_eq!(view.metadata().view_type(), ViewType::Div);
     });
 }

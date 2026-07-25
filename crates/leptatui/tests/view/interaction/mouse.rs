@@ -24,13 +24,30 @@ impl View for ClippedFocusPanel {
         ctx.render_view(&self.view)
     }
 
-    /// Returns the panel's constrained three-row height.
+    /// Returns the panel's constrained intrinsic geometry.
+    ///
+    /// # Arguments
+    ///
+    /// * `known_dimensions` — Exact dimensions supplied by parent layout.
+    /// * `available_space` — Soft constraints for unknown dimensions.
+    /// * `_ctx` — Rendering context containing styles and inherited state.
     ///
     /// # Returns
     ///
-    /// A [`u16`] height of three terminal rows.
-    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        3
+    /// A [`LayoutSize`] with a three-row intrinsic height.
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        _ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        LayoutSize::new(
+            known_dimensions.width.unwrap_or(match available_space.width {
+                AvailableSpace::Definite(width) => width,
+                AvailableSpace::MinContent | AvailableSpace::MaxContent => 1.0,
+            }),
+            known_dimensions.height.unwrap_or(3.0),
+        )
     }
 
     /// Returns the child view for default traversal.
@@ -125,8 +142,8 @@ fn mouse_events_reach_custom_view_hooks() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// Row(Button("One"), Button("Two"))
-/// MouseMoved(12, 1)
+/// div((button("One"), button("Two"))).display(Flex)
+/// MouseMoved(6, 1)
 /// ```
 ///
 /// # Assertions
@@ -136,10 +153,11 @@ fn mouse_events_reach_custom_view_hooks() -> Result<()> {
 #[test]
 fn mouse_move_focuses_button_under_pointer() -> Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(20, 3))?;
-    let mut view = row([button("One"), button("Two")]);
+    let mut view = div([button("One"), button("Two")])
+        .with_inline_style(TuiStyle::new().display(Display::Flex));
 
     draw_view(&mut terminal, &view)?;
-    view.handle_event(mouse(MouseEventKind::Moved, 12, 1))?;
+    view.handle_event(mouse(MouseEventKind::Moved, 6, 1))?;
 
     assert_eq!(button_focuses(&view), vec![false, true]);
     Ok(())
@@ -184,7 +202,7 @@ fn mouse_click_activates_button_under_pointer() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// Column("one", "two", "three"), viewport height = 2
+/// div(("one", "two", "three")), viewport height = 2
 /// ScrollDown, ScrollUp
 /// ```
 ///
@@ -195,7 +213,7 @@ fn mouse_click_activates_button_under_pointer() -> Result<()> {
 #[test]
 fn mouse_wheel_scrolls_overflowing_column_under_pointer() -> Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(12, 2))?;
-    let mut view = column([text("one"), text("two"), text("three")]);
+    let mut view = div([text("one"), text("two"), text("three")]);
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(scroll_offset(&view), 0);
@@ -214,7 +232,7 @@ fn mouse_wheel_scrolls_overflowing_column_under_pointer() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// Column(Component(overflowing inner column), Button("Visible"))
+/// div((component(overflowing inner Div), button("Visible")))
 /// repeated ScrollDown at (0, 0)
 /// ```
 ///
@@ -227,7 +245,7 @@ fn mouse_wheel_scrolls_overflowing_column_under_pointer() -> Result<()> {
 fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
     let inner = component(ConstrainedScrollPanel {
-        view: column([
+        view: div([
             text("one"),
             text("two"),
             text("three"),
@@ -237,7 +255,7 @@ fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> Result<()> {
         ])
         .into_view(),
     });
-    let mut view = column((inner, button("Visible")));
+    let mut view = div((inner, button("Visible")));
 
     draw_view(&mut terminal, &view)?;
     assert!(rendered_text(&terminal).contains("one"));
@@ -257,7 +275,7 @@ fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// Column("Header", ClippedPanel(scrolled Column(Button("Nested"), Button("Later"))))
+/// div(("Header", clipped panel(scrolled div((button("Nested"), button("Later"))))))
 /// MouseMoved(1, 0), MouseMoved(1, 1)
 /// ```
 ///
@@ -273,7 +291,7 @@ fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> Result<()> {
 #[test]
 fn nested_clipped_views_compose_mouse_hit_coordinates() -> Result<()> {
     let mut inner_terminal = Terminal::new(TestBackend::new(12, 3))?;
-    let mut inner = column([button("Nested"), button("Later")]);
+    let mut inner = div([button("Nested"), button("Later")]);
     draw_view(&mut inner_terminal, &inner)?;
     inner.handle_key_event(key_event(KeyCode::Down))?;
 
@@ -281,7 +299,7 @@ fn nested_clipped_views_compose_mouse_hit_coordinates() -> Result<()> {
     let panel = ClippedFocusPanel {
         view: inner.into_view(),
     };
-    let mut view = column((text("Header"), panel));
+    let mut view = div((text("Header"), panel));
     draw_view(&mut terminal, &view)?;
 
     view.handle_event(mouse(MouseEventKind::Moved, 1, 0))?;
@@ -298,7 +316,7 @@ fn nested_clipped_views_compose_mouse_hit_coordinates() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// Column(Button("Hidden"), Button("Visible"))
+/// div((button("Hidden"), button("Visible")))
 /// PageDown
 /// MouseMoved(1, 1)
 /// ```
@@ -311,7 +329,7 @@ fn nested_clipped_views_compose_mouse_hit_coordinates() -> Result<()> {
 #[test]
 fn concrete_app_root_clears_offscreen_control_hit_areas() -> Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
-    let mut view = column((button("Hidden"), button("Visible")));
+    let mut view = div((button("Hidden"), button("Visible")));
     let mut first_render_result = Ok(());
 
     terminal.draw(|frame| {

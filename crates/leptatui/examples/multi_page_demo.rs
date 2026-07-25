@@ -98,7 +98,11 @@ fn MultiPageDemo() -> impl IntoView {
         }
 
         .app-title => { fg: $accent, modifier: Modifier::BOLD }
-        .nav => { direction: LayoutDirection::Row }
+        .nav => {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Row
+        }
+        .actions => { display: Display::Flex }
         .page => { fg: $text, bg: $panel, padding: TuiSpacing::uniform(1) }
         .page-title => { fg: $accent, modifier: Modifier::BOLD }
         .body => { fg: $text }
@@ -123,8 +127,8 @@ fn MultiPageDemo() -> impl IntoView {
 
         @media (max-width: 60) {
             .app-shell => { padding: TuiSpacing::ZERO }
-            .nav => { direction: LayoutDirection::Column }
-            .actions => { direction: LayoutDirection::Column }
+            .nav => { flex_direction: FlexDirection::Column }
+            .actions => { flex_direction: FlexDirection::Column }
             .page => { padding: TuiSpacing::ZERO }
             Button => { padding: TuiSpacing::ZERO }
         }
@@ -132,7 +136,7 @@ fn MultiPageDemo() -> impl IntoView {
 
     view! {
         <Block class="app-shell">
-            <Column>
+            <Div>
                 <Text class="app-title">"Leptatui multi-page demo"</Text>
                 <Nav />
                 {move || match route.get_untracked() {
@@ -143,7 +147,7 @@ fn MultiPageDemo() -> impl IntoView {
                 <Text class="muted">
                     "h Home | c Counter | s Settings | +/- count | t theme | q quit"
                 </Text>
-            </Column>
+            </Div>
         </Block>
     }
 }
@@ -174,11 +178,11 @@ fn Nav() -> impl IntoView {
     let settings = use_navigate::<DemoPage>();
 
     view! {
-        <Row class="nav">
+        <Div class="nav">
             <Button on_press=move || navigate_to(home, DemoPage::Home)>"Home"</Button>
             <Button on_press=move || navigate_to(counter, DemoPage::Counter)>"Counter"</Button>
             <Button on_press=move || navigate_to(settings, DemoPage::Settings)>"Settings"</Button>
-        </Row>
+        </Div>
     }
 }
 
@@ -190,7 +194,7 @@ fn HomePage() -> impl IntoView {
 
     view! {
         <Block class="page">
-            <Column>
+            <Div>
                 <Text class="page-title">"Home"</Text>
                 <Text class="body">
                     "This page reads the same shared app state as the other routes."
@@ -209,7 +213,7 @@ fn HomePage() -> impl IntoView {
                 <Text class="muted">
                     "Use c for Counter, s for Settings, or Tab to focus the nav buttons."
                 </Text>
-            </Column>
+            </Div>
         </Block>
     }
 }
@@ -237,14 +241,14 @@ fn CounterPage() -> impl IntoView {
 
     view! {
         <Block class="page">
-            <Column>
+            <Div>
                 <Text class="page-title">"Counter"</Text>
                 {move || {
                     view! {
                         <Text class="stat">{format!("Count: {}", counter.get_untracked())}</Text>
                     }
                 }}
-                <Row class="actions">
+                <Div class="actions">
                     <Button on_press=move || {
                         counter.update(|count| *count += 1);
                         AppControl::Continue
@@ -257,9 +261,9 @@ fn CounterPage() -> impl IntoView {
                         counter.set(0);
                         AppControl::Continue
                     }>"Reset"</Button>
-                </Row>
+                </Div>
                 <Text class="muted">"+/- adjusts the shared count. r resets it."</Text>
-            </Column>
+            </Div>
         </Block>
     }
 }
@@ -284,7 +288,7 @@ fn SettingsPage() -> impl IntoView {
 
     view! {
         <Block class="page">
-            <Column>
+            <Div>
                 <Text class="page-title">"Settings"</Text>
                 {move || {
                     view! {
@@ -296,7 +300,7 @@ fn SettingsPage() -> impl IntoView {
                 <Text class="body">
                     "Theme variables are shared through context and resolved by the stylesheet."
                 </Text>
-                <Row class="actions">
+                <Div class="actions">
                     <Button on_press=move || {
                         mode.update(|mode| {
                             *mode = mode.toggle();
@@ -307,9 +311,9 @@ fn SettingsPage() -> impl IntoView {
                     <Button class="danger" on_press=|| AppControl::Exit>
                         "Quit"
                     </Button>
-                </Row>
+                </Div>
                 <Text class="muted">"Press t to toggle theme without leaving Settings."</Text>
-            </Column>
+            </Div>
         </Block>
     }
 }

@@ -105,7 +105,7 @@ fn stylesheet_focus_selector_matches_only_focused_views() {
 /// requiring direct parent-child adjacency.
 #[test]
 fn descendant_selector_matches_ordered_ancestors() {
-    let mut app = StyleMetadata::new(ViewType::Column);
+    let mut app = StyleMetadata::new(ViewType::Div);
     app.set_classes("app");
     let mut panel = StyleMetadata::new(ViewType::Block);
     panel.set_classes("panel");

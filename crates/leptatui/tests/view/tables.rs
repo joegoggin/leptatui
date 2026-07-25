@@ -86,7 +86,7 @@ fn semantic_table_styles_override_header_defaults_and_style_cells() -> Result<()
 /// # Example Under Test
 ///
 /// ```text
-/// table([row(["A"]), row(["B", "C"])]).background(Blue)
+/// table([div(["A"]), div(["B", "C"])]).background(Blue)
 /// ```
 ///
 /// # Assertions
@@ -221,7 +221,7 @@ fn semantic_table_shrinks_columns_and_wraps_unicode_cells() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// table_body([row(["A"]), row(["B", "C", "D"])])
+/// table_body([div(["A"]), div(["B", "C", "D"])])
 /// terminal size = 7x5
 /// ```
 ///
@@ -257,7 +257,7 @@ fn semantic_table_normalizes_missing_and_extra_cells() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// table_body([row(["A", "B", "C"])])
+/// table_body([div(["A", "B", "C"])])
 /// terminal widths = 5, 0, 1, and 2
 /// ```
 ///
@@ -302,9 +302,9 @@ fn semantic_table_clips_columns_and_handles_zero_width() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([table([row(["A"])]), text("End")])
+/// div([table([div(["A"])]), text("End")])
 /// terminal size = 3x4
-/// table([row(["abcdef"])]) in a 3x2 terminal
+/// table([div(["abcdef"])]) in a 3x2 terminal
 /// ```
 ///
 /// # Assertions
@@ -314,7 +314,7 @@ fn semantic_table_clips_columns_and_handles_zero_width() -> Result<()> {
 /// - Vertical clipping does not render a partial bottom boundary or panic.
 #[test]
 fn semantic_table_reserves_document_height_and_clips_vertically() -> Result<()> {
-    let document = column((
+    let document = div((
         table([table_body([table_row([table_cell("A")])])]),
         text("End"),
     ));

@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("Top"), button("Launch"), text("Tail")]).surface
+/// div([text("Top"), button("Launch"), text("Tail")]).surface
 /// Down
 /// ```
 ///
@@ -17,7 +17,7 @@
 fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down() -> Result<()> {
     let backend = TestBackend::new(12, 2);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column((text("Top"), button("Launch"), text("Tail"))).with_classes("surface");
+    let mut view = div((text("Top"), button("Launch"), text("Tail"))).with_classes("surface");
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::class("surface"),
         TuiStyle::new().background(Color::Blue),
@@ -53,7 +53,7 @@ fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("Top"), button("Launch"), text("Tail")]).surface
+/// div([text("Top"), button("Launch"), text("Tail")]).surface
 /// PageDown, Up
 /// ```
 ///
@@ -67,7 +67,7 @@ fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down
 fn overflowing_column_keeps_parent_background_on_top_row_after_scrolling_up() -> Result<()> {
     let backend = TestBackend::new(12, 2);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column((text("Top"), button("Launch"), text("Tail"))).with_classes("surface");
+    let mut view = div((text("Top"), button("Launch"), text("Tail"))).with_classes("surface");
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::class("surface"),
         TuiStyle::new().background(Color::Blue),

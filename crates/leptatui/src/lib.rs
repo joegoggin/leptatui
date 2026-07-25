@@ -80,7 +80,7 @@
 //! ```
 //! use leptatui::prelude::*;
 //!
-//! let document = column((
+//! let document = div((
 //!     h1("Guide"),
 //!     ordered_list([list_item((
 //!         paragraph("Parent item"),
@@ -118,7 +118,7 @@
 //!     CodeBlock => { fg: Color::LightBlue }
 //! };
 //! let document = view! {
-//!     <Column>
+//!     <Div>
 //!         <H1>"Guide"</H1>
 //!         <OrderedList start=3>
 //!             <ListItem>
@@ -147,7 +147,7 @@
 //!             syntax_theme={SyntaxTheme::Dark}
 //!             line_numbers=true
 //!         >"fn main() {}"</CodeBlock>
-//!     </Column>
+//!     </Div>
 //! };
 //! # let _ = document;
 //! ```
@@ -230,20 +230,23 @@ pub use markdown::{
 pub use resource::{Resource, ResourceState, create_resource};
 pub use route::{RouteState, provide_route, use_navigate, use_route};
 pub use style::{
-    BorderType, Borders, Color, LayoutDirection, MediaQuery, Modifier, StyleDeclarations,
-    StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet, ThemeValue, ThemeVariables,
-    TuiSize, TuiSpacing, TuiStyle, ViewportSize, theme_color,
+    AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
+    Display, Edges, FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridPlacement,
+    JustifyContent, JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto, MediaQuery,
+    Modifier, Overflow, Position, StyleDeclarations, StyleModule, StyleRule, StyleSelector,
+    StyleValue, Stylesheet, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle,
+    ViewportSize, ZIndex, theme_color,
 };
 pub use view::{
-    AnyView, BlockView, ButtonAction, ButtonView, CellAlignment, CodeBlockView, ContainerView,
-    DynamicView, EditableAction, EditableState, EditableView, FormAction, FormView, HeadingLevel,
-    HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews, LayoutView, LinkTarget,
-    LinkView, ListItemView, ListKind, ListView, ParagraphView, ProgressBarView, RichText,
-    StyleMetadata, StyledView, SyntaxTheme, TableCellView, TableRowView, TableSectionKind,
-    TableSectionView, TableView, TextAreaView, TextView, TextualView, View, ViewType, VimMode,
-    block, button, code_block, column, component, dynamic, form, h1, h2, h3, h4, h5, h6, image,
-    input, link, list_item, ordered_list, paragraph, progress_bar, row, table, table_body,
-    table_cell, table_head, table_row, text, text_area, unordered_list,
+    AnyView, AvailableSpace, BlockView, ButtonAction, ButtonView, CellAlignment, CodeBlockView,
+    ContainerView, DivView, DynamicView, EditableAction, EditableState, EditableView, FormAction,
+    FormView, HeadingLevel, HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews,
+    LayoutGeometry, LinkTarget, LinkView, ListItemView, ListKind, ListView, ParagraphView,
+    ProgressBarView, RichText, StyleMetadata, StyledView, SyntaxTheme, TableCellView, TableRowView,
+    TableSectionKind, TableSectionView, TableView, TextAreaView, TextView, TextualView, View,
+    ViewType, VimMode, block, button, code_block, component, div, dynamic, form, h1, h2, h3, h4,
+    h5, h6, image, input, link, list_item, ordered_list, paragraph, progress_bar, table,
+    table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
 };
 
 #[doc(hidden)]

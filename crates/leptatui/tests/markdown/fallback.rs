@@ -25,7 +25,7 @@ fn markdown_fallback_fixture_builds_semantic_views() {
     };
 
     let actual = markdown(FALLBACKS_FIXTURE);
-    let expected = column(separated_blocks((
+    let expected = div(separated_blocks((
         block_quote(separated_blocks((
             paragraph("Alpha beta gamma"),
             block_quote([paragraph("Inner")]),

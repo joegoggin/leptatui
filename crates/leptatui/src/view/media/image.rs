@@ -4,9 +4,13 @@ use std::path::PathBuf;
 
 use ratatui::layout::Rect;
 
-use crate::view::core::{capabilities::impl_styled_view, render::resolve_style};
+use crate::view::core::{
+    capabilities::impl_styled_view,
+    measurement::{AvailableSpace, measure_fixed},
+    render::resolve_style,
+};
 use crate::view::{StyleMetadata, View, ViewType};
-use crate::{TuiSize, app::Result, component::RenderCtx};
+use crate::{LayoutSize, TuiSize, app::Result, component::RenderCtx};
 
 /// Source data used by an image view.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -139,10 +143,19 @@ impl View for ImageView {
         Ok(())
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        resolve_style(&self.metadata, ctx)
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        _available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        let size = resolve_style(&self.metadata, ctx)
             .image_size
-            .map_or(1, |size| size.height)
+            .unwrap_or_else(|| TuiSize::new(1, 1));
+        measure_fixed(
+            LayoutSize::new(f32::from(size.width), f32::from(size.height)),
+            known_dimensions,
+        )
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

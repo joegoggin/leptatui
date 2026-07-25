@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// column([button("Enter").on_press(...), button("Space").on_press(...)])
+/// div([button("Enter").on_press(...), button("Space").on_press(...)])
 /// Tab, Enter, Tab, Space
 /// ```
 ///
@@ -24,7 +24,7 @@ fn enter_and_space_activate_focused_button() -> Result<()> {
     let enter_count = Rc::clone(&count);
     let space_count = Rc::clone(&count);
 
-    let mut view = column([
+    let mut view = div([
         button("Enter").on_press(move || {
             enter_count.set(enter_count.get() + 1);
             AppControl::Continue

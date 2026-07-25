@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 
 use pulldown_cmark::{Options, Parser};
 
-use crate::{AnyView, IntoView, SyntaxTheme, column};
+use crate::{AnyView, IntoView, SyntaxTheme, div};
 
 use self::block::parse_blocks;
 use self::navigation::MarkdownParseContext;
@@ -97,7 +97,7 @@ impl MarkdownOptions {
 ///
 /// # Returns
 ///
-/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
+/// An [`AnyView`] containing a vertical [`DivView`](crate::DivView) of
 /// semantic document blocks separated by empty terminal rows in source order.
 pub fn markdown(source: impl AsRef<str>) -> AnyView {
     markdown_with_options(source, MarkdownOptions::default())
@@ -129,7 +129,7 @@ pub fn markdown(source: impl AsRef<str>) -> AnyView {
 ///
 /// # Returns
 ///
-/// An [`AnyView`] containing a vertical [`LayoutView`](crate::LayoutView) of
+/// An [`AnyView`] containing a vertical [`DivView`](crate::DivView) of
 /// semantic document blocks separated by empty terminal rows in source order.
 pub fn markdown_with_options(source: impl AsRef<str>, options: MarkdownOptions) -> AnyView {
     let link_base = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -157,7 +157,7 @@ fn markdown_with_options_and_source(
 ) -> AnyView {
     let mut parser = Parser::new_ext(source, Options::ENABLE_TABLES);
     let mut context = MarkdownParseContext::new(link_base, source_path);
-    column(parse_blocks(&mut parser, None, options, &mut context)).into_view()
+    div(parse_blocks(&mut parser, None, options, &mut context)).into_view()
 }
 
 /// Loads a UTF-8 Markdown file into a navigable semantic document view.

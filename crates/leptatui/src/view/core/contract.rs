@@ -7,10 +7,15 @@ use crossterm::event::{Event, KeyEvent, MouseEvent};
 use crate::{
     app::{AppControl, Result},
     component::{FocusedControl, KeyControl, RenderCtx},
+    style::LayoutSize,
     view::LinkTarget,
 };
 
-use super::{any_view::AnyView, metadata::StyleMetadata};
+use super::{
+    any_view::AnyView,
+    measurement::{AvailableSpace, cells_to_u16, measure_default},
+    metadata::StyleMetadata,
+};
 
 /// Runtime behavior implemented by every terminal view node.
 ///
@@ -34,17 +39,24 @@ pub trait View: Any {
     /// Returns [`crate::Error::Io`] if rendering performs terminal I/O that fails.
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()>;
 
-    /// Returns the minimum useful height for this node.
+    /// Returns this node's intrinsic terminal-cell size.
     ///
     /// # Arguments
     ///
-    /// * `_ctx` — Rendering context containing available geometry and styles.
+    /// * `known_dimensions` — Exact dimensions supplied by parent layout.
+    /// * `available_space` — Soft constraints for unknown dimensions.
+    /// * `_ctx` — Rendering context containing styles and inherited state.
     ///
     /// # Returns
     ///
-    /// A [`u16`] row count.
-    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        1
+    /// A [`LayoutSize`] containing measured terminal-cell width and height.
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        _ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        measure_default(known_dimensions, available_space)
     }
 
     /// Handles a terminal event using custom and built-in view behavior.
@@ -85,10 +97,19 @@ pub trait View: Any {
         super::events::handle_view_key_event(self, key)
     }
 
-    /// Returns the minimum useful height for compatibility with generated code.
+    /// Returns the minimum useful height for the legacy renderer.
     #[doc(hidden)]
     fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        self.min_height(ctx)
+        let area = ctx.area();
+        let measured = self.measure(
+            LayoutSize::new(Some(f32::from(area.width)), None),
+            LayoutSize::new(
+                AvailableSpace::Definite(f32::from(area.width)),
+                AvailableSpace::Definite(f32::from(area.height)),
+            ),
+            ctx,
+        );
+        cells_to_u16(measured.height)
     }
 
     /// Returns selector metadata when this node participates in styling.
@@ -125,6 +146,47 @@ pub trait View: Any {
     /// A mutable slice containing direct type-erased children.
     fn children_mut(&mut self) -> &mut [AnyView] {
         &mut []
+    }
+
+    /// Visits children used to construct the transient layout tree.
+    ///
+    /// The default exposes ordinary retained children. Structural boundaries
+    /// override this hook to expose their materialized child without creating
+    /// an additional layout box.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Render context carrying stylesheet and component scopes.
+    /// * `visitor` — Callback invoked for each logical layout child.
+    #[doc(hidden)]
+    fn __visit_layout_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        for child in self.children() {
+            visitor(child, ctx);
+        }
+    }
+
+    /// Returns whether this view contributes children without generating a box.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the view is a layout-transparent structural boundary.
+    #[doc(hidden)]
+    fn __is_layout_transparent(&self) -> bool {
+        false
+    }
+
+    /// Returns whether retained children participate in computed layout.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the view's retained children generate layout boxes.
+    #[doc(hidden)]
+    fn __uses_computed_child_layout(&self) -> bool {
+        false
     }
 
     /// Returns this node as [`Any`] for concrete-type inspection.

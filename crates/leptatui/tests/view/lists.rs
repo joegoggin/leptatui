@@ -121,7 +121,7 @@ fn nested_lists_indent_two_cells_per_level() -> Result<()> {
 ///
 /// ```text
 /// unordered_list([list_item([paragraph("Wrapped")])]) in a 1x1 terminal
-/// row([unordered_list(...), unordered_list(...)]) in a 1x1 terminal
+/// div([unordered_list(...), unordered_list(...)]) in a 1x1 terminal
 /// ```
 ///
 /// # Assertions
@@ -138,10 +138,11 @@ fn semantic_lists_handle_narrow_and_zero_width_content() -> Result<()> {
     )?;
     assert_eq!(cell_symbol(&narrow, 0, 0, 1), "-");
 
-    let split_view = row([
+    let split_view = div([
         unordered_list([list_item([paragraph("A")])]),
         unordered_list([list_item([paragraph("B")])]),
-    ]);
+    ])
+    .with_inline_style(TuiStyle::new().display(Display::Flex));
     let mut split = Terminal::new(TestBackend::new(1, 1))?;
     let mut min_height = 0;
     split.draw(|frame| {
@@ -159,7 +160,7 @@ fn semantic_lists_handle_narrow_and_zero_width_content() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([ordered_list(["First", "Second", "Third"])])
+/// div([ordered_list(["First", "Second", "Third"])])
 /// terminal size = 8x2
 /// PageDown
 /// ```
@@ -171,7 +172,7 @@ fn semantic_lists_handle_narrow_and_zero_width_content() -> Result<()> {
 /// - The scrolled viewport reveals the third list item.
 #[test]
 fn semantic_list_height_scrolls_inside_parent_column() -> Result<()> {
-    let mut view = column([ordered_list([
+    let mut view = div([ordered_list([
         list_item([paragraph("First")]),
         list_item([paragraph("Second")]),
         list_item([paragraph("Third")]),

@@ -39,7 +39,7 @@ fn markdown_maps_fenced_code_languages_and_fallbacks() {
 
     assert_eq!(
         markdown(source),
-        column(separate_blocks(views![
+        div(separate_blocks(views![
             code_block("fn main() {}\n").language("rust"),
             code_block("let value = true;\n").language("rs"),
             code_block("plain\n").language("unknown-language"),
@@ -70,7 +70,7 @@ fn markdown_maps_empty_and_indented_code_blocks() {
 
     assert_eq!(
         markdown(source),
-        column(separate_blocks(views![
+        div(separate_blocks(views![
             code_block(""),
             code_block("plain 界\n"),
         ])),

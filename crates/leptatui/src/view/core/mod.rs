@@ -15,5 +15,7 @@ pub(crate) mod capabilities;
 pub(crate) mod contract;
 pub(crate) mod conversion;
 pub(crate) mod events;
+pub(crate) mod layout;
+pub(crate) mod measurement;
 pub(crate) mod metadata;
 pub(crate) mod render;

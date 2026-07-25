@@ -1,33 +1,37 @@
-//! Row and column layout view.
+//! Generic block container view.
 //!
 //! # Modules
 //!
-//! - [`render`] — Layout rendering, measurement, and focus geometry.
+//! - [`render`] — Container rendering, measurement, and focus geometry.
 
 pub(crate) mod render;
 
 use self::render::{
-    focused_control_span_for_layout_view, min_height_for_layout_view, render_layout_view,
+    focused_control_span_for_container, min_height_for_container, render_container,
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
+    measurement::{AvailableSpace, measure_legacy_height},
     render::VerticalSpan,
 };
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
-use crate::{app::Result, component::RenderCtx, style::LayoutDirection};
+use crate::{
+    LayoutSize,
+    app::Result,
+    component::{LayoutPhase, RenderCtx},
+    view::core::layout::prepare_layout,
+};
 
-/// Row or column layout with shared scrolling behavior.
+/// Generic block container with shared scrolling behavior.
 #[derive(Debug, PartialEq)]
-pub struct LayoutView {
-    /// Child views arranged by the layout.
+pub struct DivView {
+    /// Child views arranged by the computed layout.
     pub(crate) children: Vec<AnyView>,
-    /// Direction used when no stylesheet overrides it.
-    pub(crate) default_direction: LayoutDirection,
     /// Selector and runtime metadata.
     pub(crate) metadata: StyleMetadata,
 }
 
-/// Creates a horizontal layout.
+/// Creates a generic block container.
 ///
 /// # Arguments
 ///
@@ -35,46 +39,34 @@ pub struct LayoutView {
 ///
 /// # Returns
 ///
-/// A row-oriented [`LayoutView`].
-pub fn row(children: impl IntoViews) -> LayoutView {
-    LayoutView {
+/// A [`DivView`] containing the converted children.
+pub fn div(children: impl IntoViews) -> DivView {
+    DivView {
         children: children.into_views(),
-        default_direction: LayoutDirection::Row,
-        metadata: StyleMetadata::new(ViewType::Row),
+        metadata: StyleMetadata::new(ViewType::Div),
     }
 }
 
-/// Creates a vertical layout.
-///
-/// # Arguments
-///
-/// * `children` — Homogeneous collection or heterogeneous tuple of child views.
-///
-/// # Returns
-///
-/// A column-oriented [`LayoutView`].
-pub fn column(children: impl IntoViews) -> LayoutView {
-    LayoutView {
-        children: children.into_views(),
-        default_direction: LayoutDirection::Column,
-        metadata: StyleMetadata::new(ViewType::Column),
-    }
-}
-
-impl LayoutView {
-    /// Returns the direction used when no stylesheet overrides the layout.
-    pub const fn default_direction(&self) -> LayoutDirection {
-        self.default_direction
-    }
-}
-
-impl View for LayoutView {
+impl View for DivView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        render_layout_view(&self.children, &self.metadata, self.default_direction, ctx)
+        if ctx.layout_phase() == LayoutPhase::Inactive || self.metadata.layout_geometry().is_none()
+        {
+            prepare_layout(self, ctx);
+        }
+        render_container(&self.children, &self.metadata, ctx)
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        min_height_for_layout_view(&self.children, &self.metadata, self.default_direction, ctx)
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        measure_legacy_height(
+            min_height_for_container(&self.children, &self.metadata, ctx),
+            known_dimensions,
+            available_space,
+        )
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {
@@ -96,11 +88,8 @@ impl View for LayoutView {
         self
     }
 
-    fn can_reconcile_from(&self, previous: &dyn View) -> bool {
-        previous
-            .as_any()
-            .downcast_ref::<Self>()
-            .is_some_and(|previous| self.default_direction == previous.default_direction)
+    fn __uses_computed_child_layout(&self) -> bool {
+        true
     }
 
     fn __scroll_first_overflowing(&mut self, delta: i16) -> bool {
@@ -157,15 +146,10 @@ impl View for LayoutView {
     }
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
-        focused_control_span_for_layout_view(
-            &self.children,
-            &self.metadata,
-            self.default_direction,
-            ctx,
-        )
-        .map(VerticalSpan::into_tuple)
+        focused_control_span_for_container(&self.children, &self.metadata, ctx)
+            .map(VerticalSpan::into_tuple)
     }
 }
 
-impl_styled_view!(LayoutView);
-impl_container_view!(LayoutView);
+impl_styled_view!(DivView);
+impl_container_view!(DivView);

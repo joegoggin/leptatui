@@ -86,10 +86,10 @@ fn Label(#[prop(into)] text: String) -> impl IntoView {
 fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
         <Block>
-            <Column>
+            <Div>
                 <Text>{title}</Text>
-                {column(children())}
-            </Column>
+                {div(children())}
+            </Div>
         </Block>
     }
 }
@@ -103,15 +103,15 @@ view! {
 
 ## Standard Components
 
-Leptatui's standard view set includes layout containers (`Block`, `Row`,
-`Column`), plain and semantic text, nested lists, responsive tables,
+Leptatui's standard view set includes layout containers (`Block`, `Div`),
+plain and semantic text, nested lists, responsive tables,
 syntax-highlighted code blocks, CommonMark documents, buttons, controlled form
 controls, images, and progress bars.
 All are available through `leptatui::prelude::*` as builders and through
 PascalCase `view!` tags.
 
 `View` is an open, object-safe trait. Built-in builders retain concrete return
-types such as `TextView`, `LayoutView`, `InputView`, and `TextAreaView`, so their
+types such as `TextView`, `DivView`, `InputView`, and `TextAreaView`, so their
 type-specific configuration remains available without pattern matching.
 Containers accept homogeneous collections or heterogeneous tuples through
 `IntoViews`; type erasure occurs only when children enter the tree as
@@ -160,7 +160,7 @@ PascalCase `view!` tags:
 ```rust
 use leptatui::prelude::*;
 
-let document = column((
+let document = div((
     h1("Leptatui guide"),
     paragraph("Semantic content wraps with the terminal viewport."),
     ordered_list([
@@ -204,7 +204,7 @@ fn Guide() -> impl IntoView {
     }
 
     view! {
-        <Column>
+        <Div>
             <H1>"Leptatui guide"</H1>
             <OrderedList start=3>
                 <ListItem>
@@ -233,7 +233,7 @@ fn Guide() -> impl IntoView {
                 syntax_theme={SyntaxTheme::Dark}
                 line_numbers=true
             >"fn main() {}"</CodeBlock>
-        </Column>
+        </Div>
     }
 }
 ```
@@ -315,7 +315,7 @@ fn StandardControls() -> impl IntoView {
     let progress = RwSignal::new(0.4);
 
     view! {
-        <Column>
+        <Div>
             {move || {
                 let name_value = name.get_untracked();
                 let notes_value = notes.get_untracked();
@@ -346,7 +346,7 @@ fn StandardControls() -> impl IntoView {
                 alt="Image fallback text"
             />
             {move || progress_bar(progress.get_untracked()).label("Progress")}
-        </Column>
+        </Div>
     }
 }
 ```
@@ -382,17 +382,18 @@ fn Panel() -> impl IntoView {
 
 Stylesheets also support top-level media query blocks for responsive terminal
 UIs. Width and height values are terminal-cell counts from the root viewport,
-and `direction` can switch Row/Column layout at a breakpoint.
+and `flex_direction` can switch a flex container's axis at a breakpoint.
 
 ```rust
 #[component]
 fn ResponsivePanel() -> impl IntoView {
     stylesheet! {
         .panel => { padding: TuiSpacing::uniform(1) }
+        .actions => { display: Display::Flex }
 
         @media (max-width: 80) {
             .panel => { padding: TuiSpacing::ZERO }
-            .actions => { direction: LayoutDirection::Column }
+            .actions => { flex_direction: FlexDirection::Column }
             Text => { fg: Color::Yellow }
         }
 
@@ -403,13 +404,13 @@ fn ResponsivePanel() -> impl IntoView {
 
     view! {
         <Block class="panel">
-            <Column>
+            <Div>
                 <Text>"Devtools"</Text>
-                <Row class="actions">
+                <Div class="actions">
                     <Button>"Inspect"</Button>
                     <Button>"Quit"</Button>
-                </Row>
-            </Column>
+                </Div>
+            </Div>
         </Block>
     }
 }
@@ -490,10 +491,10 @@ fn Actions() -> impl IntoView {
     }
 
     view! {
-        <Row>
+        <Div style={TuiStyle::new().display(Display::Flex)}>
             <Button class="submit">"Submit"</Button>
             <Button class="quit">"Quit"</Button>
-        </Row>
+        </Div>
     }
 }
 ```
@@ -587,7 +588,7 @@ fn ThemeRoot() -> impl IntoView {
 
     view! {
         <Block class="panel">
-            <Column>
+            <Div>
                 <ThemeLabel />
                 <Button on_press=move || {
                     mode.update(|mode| {
@@ -598,7 +599,7 @@ fn ThemeRoot() -> impl IntoView {
                 }>
                     "Toggle theme"
                 </Button>
-            </Column>
+            </Div>
         </Block>
     }
 }
@@ -638,7 +639,7 @@ fn Nav() -> impl IntoView {
     let navigate = use_navigate::<Page>();
 
     view! {
-        <Row>
+        <Div style={TuiStyle::new().display(Display::Flex)}>
             <Button on_press=move || {
                 navigate.update(|route| *route = Page::Home);
                 AppControl::Continue
@@ -651,7 +652,7 @@ fn Nav() -> impl IntoView {
                 navigate.update(|route| *route = Page::Settings);
                 AppControl::Continue
             }>"Settings"</Button>
-        </Row>
+        </Div>
     }
 }
 
@@ -660,14 +661,14 @@ fn HomePage() -> impl IntoView {
     let counter = expect_context::<RwSignal<i32>>();
 
     view! {
-        <Column>
+        <Div>
             <Text>"Home"</Text>
             {move || {
                 view! {
                     <Text>{format!("Count: {}", counter.get_untracked())}</Text>
                 }
             }}
-        </Column>
+        </Div>
     }
 }
 
@@ -676,7 +677,7 @@ fn CounterPage() -> impl IntoView {
     let counter = expect_context::<RwSignal<i32>>();
 
     view! {
-        <Column>
+        <Div>
             <Text>"Counter"</Text>
             <Button on_press=move || {
                 counter.update(|count| *count += 1);
@@ -684,7 +685,7 @@ fn CounterPage() -> impl IntoView {
             }>
                 "Increment"
             </Button>
-        </Column>
+        </Div>
     }
 }
 
@@ -710,14 +711,14 @@ fn Root() -> impl IntoView {
     provide_context(counter);
 
     view! {
-        <Column>
+        <Div>
             <Nav />
             {move || match route.get_untracked() {
                 Page::Home => view! { <HomePage /> },
                 Page::Counter => view! { <CounterPage /> },
                 Page::Settings => view! { <SettingsPage /> },
             }}
-        </Column>
+        </Div>
     }
 }
 
@@ -789,10 +790,10 @@ fn TodoApp() -> impl IntoView {
     });
 
     view! {
-        <Column>
+        <Div>
             <TodoList />
             <TodoActions />
-        </Column>
+        </Div>
     }
 }
 
@@ -802,7 +803,7 @@ fn TodoList() -> impl IntoView {
 
     dynamic(move || match todos.items.get_untracked() {
         ResourceState::Pending => text("Loading todos..."),
-        ResourceState::Ready(items) => column(items.into_iter().map(text).collect::<Vec<_>>()),
+        ResourceState::Ready(items) => div(items.into_iter().map(text).collect::<Vec<_>>()),
         ResourceState::Error(error) => text(format!("Load failed: {error}")),
     })
 }
@@ -814,7 +815,7 @@ fn TodoActions() -> impl IntoView {
     let reload = todos.refresh;
 
     view! {
-        <Row>
+        <Div style={TuiStyle::new().display(Display::Flex)}>
             <Button on_press=move || {
                 create.dispatch(String::from("Review async state"));
                 AppControl::Continue
@@ -827,7 +828,7 @@ fn TodoActions() -> impl IntoView {
             }>
                 "Reload"
             </Button>
-        </Row>
+        </Div>
     }
 }
 ```

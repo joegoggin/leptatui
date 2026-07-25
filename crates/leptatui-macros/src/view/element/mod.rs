@@ -32,7 +32,7 @@ use super::{attr::Attr, child::Child};
 
 /// Parsed terminal element with attributes and children.
 pub(super) struct Element {
-    /// Element tag name, such as `Text` or `Column`.
+    /// Element tag name, such as `Text` or `Div`.
     pub(super) name: Ident,
     /// Attribute names attached to the element.
     pub(super) attrs: Vec<Attr>,
@@ -173,13 +173,9 @@ impl Element {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::block(#child) }
             }),
-            "Row" => self.expand_child_list("Row", |children| {
+            "Div" => self.expand_child_list("Div", |children| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::row(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
-            }),
-            "Column" => self.expand_child_list("Column", |children| {
-                let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::column(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
+                quote! { #leptatui::div(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
             }),
             "Form" => self.expand_child_list("Form", |children| {
                 let leptatui = crate::crate_path::leptatui();

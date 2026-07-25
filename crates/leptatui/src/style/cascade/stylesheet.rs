@@ -11,7 +11,7 @@ use crate::style::TuiStyle;
 use super::{StyleSelector, selector::Specificity};
 
 /// Style rule pairing a selector with a style overlay.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StyleRule {
     /// Selector used to decide whether the rule applies to a view.
     selector: StyleSelector,
@@ -52,7 +52,7 @@ impl StyleRule {
 /// Ordered collection of style rules.
 ///
 /// Rules are resolved by CSS selector specificity, then by insertion order.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Stylesheet {
     /// Rules registered for style resolution.
     rules: Vec<StyleRule>,

@@ -3,7 +3,7 @@
 use pulldown_cmark::{Event, Tag, TagEnd};
 use ratatui::style::Style;
 
-use crate::{AnyView, Borders, IntoView, TuiSpacing, TuiStyle, block, column, paragraph};
+use crate::{AnyView, Borders, IntoView, TuiSpacing, TuiStyle, block, div, paragraph};
 
 use super::{
     MarkdownOptions,
@@ -106,7 +106,7 @@ pub(super) fn parse_blocks<'a>(
 ///
 /// CommonMark blank lines delimit blocks without producing parser events. An
 /// empty semantic paragraph restores that document spacing while keeping the
-/// surrounding column's existing measurement and scrolling behavior.
+/// surrounding div's existing measurement and scrolling behavior.
 ///
 /// # Arguments
 ///
@@ -142,7 +142,7 @@ pub(super) fn separate_blocks(blocks: Vec<AnyView>) -> Vec<AnyView> {
 ///
 /// A left-bordered [`crate::BlockView`] containing the quote children.
 pub(super) fn block_quote(children: Vec<AnyView>) -> AnyView {
-    block(column(children))
+    block(div(children))
         .with_inline_style(
             TuiStyle::new()
                 .borders(Borders::LEFT)
@@ -157,7 +157,7 @@ pub(super) fn block_quote(children: Vec<AnyView>) -> AnyView {
 ///
 /// A one-row [`crate::BlockView`] whose top border fills the available width.
 pub(super) fn thematic_break() -> AnyView {
-    block(column(Vec::<AnyView>::new()))
+    block(div(Vec::<AnyView>::new()))
         .with_inline_style(TuiStyle::new().borders(Borders::TOP))
         .into_view()
 }

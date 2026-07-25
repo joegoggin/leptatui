@@ -1,21 +1,22 @@
-/// Verifies row minimum height uses split child widths for wrapped text.
+/// Verifies flex-row minimum height uses the tallest child.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// row([text("Hello World"), text("Side")])
+/// div([text("Hello World"), text("Side")])
 /// terminal width = 12
 /// ```
 ///
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The row minimum height accounts for wrapping inside the split child area.
+/// - The flex row reports the tallest child's intrinsic height.
 #[test]
-fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
+fn flex_row_min_height_uses_tallest_child() -> Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
-    let view = row(vec![text("Hello World"), text("Side")]);
+    let view = div(vec![text("Hello World"), text("Side")])
+        .with_inline_style(TuiStyle::new().display(Display::Flex));
     let mut min_height = 0;
 
     terminal.draw(|frame| {
@@ -23,7 +24,7 @@ fn row_min_height_uses_split_child_widths_for_wrapped_text() -> Result<()> {
         min_height = view.__min_height(&mut ctx);
     })?;
 
-    assert_eq!(min_height, 2);
+    assert_eq!(min_height, 1);
 
     Ok(())
 }
@@ -62,7 +63,7 @@ fn text_area_min_height_counts_trailing_newline() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// component(column([text("One"), text("Two"), text("Three")])).__min_height(ctx)
+/// component(div([text("One"), text("Two"), text("Three")])).__min_height(ctx)
 /// ```
 ///
 /// # Assertions
@@ -78,7 +79,7 @@ fn text_area_min_height_counts_trailing_newline() -> Result<()> {
 fn component_view_min_height_uses_wrapped_view_height() -> Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
-    let view = component(column([text("One"), text("Two"), text("Three")]));
+    let view = component(div([text("One"), text("Two"), text("Three")]));
     let mut min_height = 0;
 
     terminal.draw(|frame| {
@@ -96,7 +97,7 @@ fn component_view_min_height_uses_wrapped_view_height() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("Hello World"), text("Bottom")])
+/// div([text("Hello World"), text("Bottom")])
 /// terminal size = 7x2
 /// PageDown
 /// ```
@@ -111,7 +112,7 @@ fn component_view_min_height_uses_wrapped_view_height() -> Result<()> {
 fn overflowing_column_scrolls_wrapped_text_rows() -> Result<()> {
     let backend = TestBackend::new(7, 2);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column(vec![text("Hello World"), text("Bottom")]);
+    let mut view = div(vec![text("Hello World"), text("Bottom")]);
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {

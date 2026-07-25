@@ -3,7 +3,7 @@
 //! # Modules
 //!
 //! - [`block`] — Bordered single-child containers.
-//! - [`layout`] — Row and column layout containers.
+//! - [`layout`] — Generic block containers.
 //! - [`lists`] — Ordered and unordered semantic lists.
 //! - [`tables`] — Responsive semantic tables.
 

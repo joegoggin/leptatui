@@ -255,7 +255,7 @@ fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([text_area("Hello World"), text("End")])
+/// div([text_area("Hello World"), text("End")])
 /// width = 6
 /// ```
 ///
@@ -267,7 +267,7 @@ fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
 fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
     let backend = TestBackend::new(6, 7);
     let mut terminal = Terminal::new(backend)?;
-    let view = column((text_area("Hello World"), text("End")));
+    let view = div((text_area("Hello World"), text("End")));
 
     draw_view(&mut terminal, &view)?;
 
@@ -281,7 +281,7 @@ fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("Hello World"), text("End")])
+/// div([text("Hello World"), text("End")])
 /// width = 6
 /// ```
 ///
@@ -295,7 +295,7 @@ fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
 fn column_reserves_height_for_wrapped_text() -> Result<()> {
     let backend = TestBackend::new(6, 3);
     let mut terminal = Terminal::new(backend)?;
-    let view = column(vec![text("Hello World"), text("End")]);
+    let view = div(vec![text("Hello World"), text("End")]);
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {

@@ -7,9 +7,10 @@ use crossterm::event::Event;
 use ratatui::Frame;
 
 use crate::{
-    AnyView, View,
+    AnyView, StyleMetadata, View,
     component::{FocusedControl, RenderCtx},
     context,
+    view::core::layout::prepare_layout,
 };
 
 use super::{AppControl, Result};
@@ -125,8 +126,20 @@ where
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
         context::hooks::__with_context_scope(|| {
             let mut ctx = RenderCtx::new(frame);
+            prepare_layout(self, &mut ctx);
             View::__clear_hit_areas(self);
             if let Some(metadata) = View::style_metadata(self) {
+                if metadata.is_layout_hidden() {
+                    return Ok(());
+                }
+                if let Some(geometry) = metadata.layout_geometry()
+                    && geometry.border_box != ctx.area()
+                {
+                    return ctx.with_area(geometry.border_box, |ctx| {
+                        ctx.record_metadata_hit_area(metadata);
+                        View::render(self, ctx)
+                    });
+                }
                 ctx.record_metadata_hit_area(metadata);
             }
             View::render(self, &mut ctx)
@@ -134,14 +147,23 @@ where
     }
 
     fn handle_event(&mut self, event: Event) -> Result<AppControl> {
+        if View::style_metadata(self).is_some_and(StyleMetadata::is_layout_hidden) {
+            return Ok(AppControl::Continue);
+        }
         View::handle_event(self, event)
     }
 
     fn __flush_pending_input(&mut self) -> Option<AppControl> {
+        if View::style_metadata(self).is_some_and(StyleMetadata::is_layout_hidden) {
+            return None;
+        }
         View::__flush_pending_input(self)
     }
 
     fn __focused_control(&self) -> Option<FocusedControl> {
+        if View::style_metadata(self).is_some_and(StyleMetadata::is_layout_hidden) {
+            return None;
+        }
         View::__focused_control(self)
     }
 }

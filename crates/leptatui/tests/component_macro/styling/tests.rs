@@ -24,6 +24,29 @@ fn generated_component_stylesheet_styles_own_views() -> Result<()> {
     Ok(())
 }
 
+/// Verifies layout traversal enters generated component stylesheet scopes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroHiddenLayoutChild
+/// .hidden { display: none }
+/// ```
+///
+/// # Assertions
+///
+/// - The generated component renders successfully.
+/// - Its locally hidden text is absent from the terminal.
+#[test]
+fn generated_component_layout_resolves_local_display_none() -> Result<()> {
+    let mut component = MacroHiddenLayoutChild::new();
+    let terminal = render_component(&mut component, 16, 3)?;
+
+    assert!(!rendered_text(&terminal).contains("Hidden"));
+
+    Ok(())
+}
+
 /// Verifies component styles do not leak into sibling component subtrees.
 ///
 /// # Example Under Test

@@ -40,13 +40,43 @@ impl StyleDeclarations {
             style = style.padding(padding.value);
         }
 
-        if let Some(direction) = &self.direction {
-            style = style.direction(direction.value);
-        }
-
         if let Some(size) = &self.image_size {
             style = style.image_size(size.value);
         }
+
+        macro_rules! resolve_layout {
+            ($field:ident) => {
+                if let Some(declaration) = &self.$field {
+                    style = style.$field(declaration.value);
+                }
+            };
+        }
+
+        resolve_layout!(display);
+        resolve_layout!(box_sizing);
+        resolve_layout!(overflow);
+        resolve_layout!(size);
+        resolve_layout!(min_size);
+        resolve_layout!(max_size);
+        resolve_layout!(margin);
+        resolve_layout!(gap);
+        resolve_layout!(flex_direction);
+        resolve_layout!(flex_wrap);
+        resolve_layout!(flex_basis);
+        resolve_layout!(flex_grow);
+        resolve_layout!(flex_shrink);
+        resolve_layout!(align_items);
+        resolve_layout!(align_self);
+        resolve_layout!(align_content);
+        resolve_layout!(justify_items);
+        resolve_layout!(justify_self);
+        resolve_layout!(justify_content);
+        resolve_layout!(grid_auto_flow);
+        resolve_layout!(grid_row);
+        resolve_layout!(grid_column);
+        resolve_layout!(position);
+        resolve_layout!(inset);
+        resolve_layout!(z_index);
 
         style
     }
@@ -89,13 +119,43 @@ impl From<TuiStyle> for StyleDeclarations {
             declarations = declarations.padding(padding);
         }
 
-        if let Some(direction) = style.direction {
-            declarations = declarations.direction(direction);
-        }
-
         if let Some(size) = style.image_size {
             declarations = declarations.image_size(size);
         }
+
+        macro_rules! convert_layout {
+            ($field:ident) => {
+                if let Some(value) = style.$field {
+                    declarations = declarations.$field(value);
+                }
+            };
+        }
+
+        convert_layout!(display);
+        convert_layout!(box_sizing);
+        convert_layout!(overflow);
+        convert_layout!(size);
+        convert_layout!(min_size);
+        convert_layout!(max_size);
+        convert_layout!(margin);
+        convert_layout!(gap);
+        convert_layout!(flex_direction);
+        convert_layout!(flex_wrap);
+        convert_layout!(flex_basis);
+        convert_layout!(flex_grow);
+        convert_layout!(flex_shrink);
+        convert_layout!(align_items);
+        convert_layout!(align_self);
+        convert_layout!(align_content);
+        convert_layout!(justify_items);
+        convert_layout!(justify_self);
+        convert_layout!(justify_content);
+        convert_layout!(grid_auto_flow);
+        convert_layout!(grid_row);
+        convert_layout!(grid_column);
+        convert_layout!(position);
+        convert_layout!(inset);
+        convert_layout!(z_index);
 
         declarations
     }

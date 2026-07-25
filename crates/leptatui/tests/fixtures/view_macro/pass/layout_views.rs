@@ -1,27 +1,28 @@
 //! Pass fixture for nested layout views in `view!`.
 //!
-//! This binary verifies columns, rows, text views, and buttons compose into the
+//! This binary verifies block and flex divs, text views, and buttons compose into the
 //! expected render-tree shape.
 
 use leptatui::prelude::*;
 
-/// Exercises nested row and column expansion.
+/// Exercises nested block and flex div expansion.
 fn main() {
     let view = view! {
-        <Column>
+        <Div>
             <Text>{"Counter"}</Text>
-            <Row>
+            <Div style={TuiStyle::new().display(Display::Flex)}>
                 <Button>"Increment"</Button>
                 <Button>{"Reset"}</Button>
-            </Row>
-        </Column>
+            </Div>
+        </Div>
     };
 
     assert_eq!(
         view,
-        column((
+        div((
             text("Counter"),
-            row([button("Increment"), button("Reset")]),
+            div([button("Increment"), button("Reset")])
+                .with_inline_style(TuiStyle::new().display(Display::Flex)),
         ))
     );
 }

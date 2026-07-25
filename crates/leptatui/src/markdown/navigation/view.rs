@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    AnyView, IntoView, LinkTarget, View,
+    AnyView, AvailableSpace, IntoView, LayoutSize, LinkTarget, View,
     app::{AppControl, Result},
     component::{KeyControl, RenderCtx},
     paragraph,
@@ -196,8 +196,17 @@ impl View for MarkdownView {
         self.state.borrow().current.document.render(ctx)
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        self.state.borrow().current.document.__min_height(ctx)
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        self.state
+            .borrow()
+            .current
+            .document
+            .measure(known_dimensions, available_space, ctx)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -206,6 +215,18 @@ impl View for MarkdownView {
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    fn __visit_layout_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        visitor(&self.state.borrow().current.document, ctx);
+    }
+
+    fn __is_layout_transparent(&self) -> bool {
+        true
     }
 
     fn reconcile(&mut self, previous: &dyn View) {
@@ -431,7 +452,7 @@ fn load_markdown_page(
             let link_base = path.parent().unwrap_or_else(|| Path::new("."));
             markdown_with_options_and_source(&source, options, link_base, Some(&path))
         }
-        Err(error) => crate::column([paragraph(format!(
+        Err(error) => crate::div([paragraph(format!(
             "failed to read Markdown file `{}`: {error}",
             path.display()
         ))])

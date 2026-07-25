@@ -47,7 +47,7 @@ fn selector_metadata_remains_available_inside_component_boundaries() -> Result<(
 /// # Example Under Test
 ///
 /// ```text
-/// column([dynamic(|| text("Dynamic")), component(EventExit)])
+/// div([dynamic(|| text("Dynamic")), component(EventExit)])
 /// ```
 ///
 /// # Assertions
@@ -58,7 +58,7 @@ fn selector_metadata_remains_available_inside_component_boundaries() -> Result<(
 fn renders_dynamic_and_component_child_views() -> Result<()> {
     let backend = TestBackend::new(24, 5);
     let mut terminal = Terminal::new(backend)?;
-    let view = column((dynamic(|| text("Dynamic")), component(EventExit)));
+    let view = div((dynamic(|| text("Dynamic")), component(EventExit)));
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -86,7 +86,7 @@ fn renders_dynamic_and_component_child_views() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([text("Static"), component(EventExit)])
+/// div([text("Static"), component(EventExit)])
 ///     .handle_event(Event::Resize(24, 5))
 /// ```
 ///
@@ -97,7 +97,7 @@ fn renders_dynamic_and_component_child_views() -> Result<()> {
 /// - `AppControl::Exit` short-circuits child traversal.
 #[test]
 fn dispatches_events_through_component_child_views() -> Result<()> {
-    let mut view = column((text("Static"), component(EventExit)));
+    let mut view = div((text("Static"), component(EventExit)));
 
     assert_eq!(view.handle_event(Event::Resize(24, 5))?, AppControl::Exit);
 
@@ -109,7 +109,7 @@ fn dispatches_events_through_component_child_views() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([dynamic(|| component(EventCounter))])
+/// div([dynamic(|| component(EventCounter))])
 ///     .handle_event(Event::Resize(24, 5))
 /// ```
 ///
@@ -121,7 +121,7 @@ fn dispatches_events_through_component_child_views() -> Result<()> {
 fn dispatches_events_through_dynamic_child_views() -> Result<()> {
     let count = Rc::new(Cell::new(0));
     let child_count = Rc::clone(&count);
-    let mut view = column([dynamic(move || {
+    let mut view = div([dynamic(move || {
         component(EventCounter {
             count: Rc::clone(&child_count),
         })
@@ -251,7 +251,7 @@ fn reconciliation_does_not_leak_editable_state_to_unrelated_views() {
 /// # Example Under Test
 ///
 /// ```text
-/// reconcile(Column, previous Row)
+/// reconcile(Div block, previous Div flex)
 /// reconcile(UnorderedList, previous OrderedList)
 /// reconcile(TableBody, previous TableHead)
 /// reconcile(H2, previous H1)
@@ -259,23 +259,27 @@ fn reconciliation_does_not_leak_editable_state_to_unrelated_views() {
 ///
 /// # Assertions
 ///
-/// - Different layout, list, table-section, and heading variants are incompatible.
-/// - Focused descendant state does not cross a layout variant change.
+/// - A `Div` remains compatible when its layout styles change.
+/// - Focused descendant state crosses a compatible layout style change.
+/// - Different list, table-section, and heading variants remain incompatible.
 #[test]
-fn reconciliation_does_not_cross_semantic_variants() {
-    assert!(!column(()).can_reconcile_from(&row(())));
+fn reconciliation_preserves_div_state_across_layout_styles() {
+    assert!(div(()).can_reconcile_from(
+        &div(()).with_inline_style(TuiStyle::new().display(Display::Flex))
+    ));
     assert!(!unordered_list(()).can_reconcile_from(&ordered_list(())));
     assert!(!table_body(()).can_reconcile_from(&table_head(())));
     assert!(!h2("Heading").can_reconcile_from(&h1("Heading")));
 
-    let previous = row([button("Action").with_focus(true)]);
-    let mut next = column([button("Action")]);
+    let previous = div([button("Action").with_focus(true)])
+        .with_inline_style(TuiStyle::new().display(Display::Flex));
+    let mut next = div([button("Action")]);
     leptatui::__private::__reconcile_view(&mut next, &previous);
 
     let button = next.children()[0]
         .downcast_ref::<ButtonView>()
         .expect("expected button view");
-    assert!(!button.metadata().is_focused());
+    assert!(button.metadata().is_focused());
 }
 
 /// Verifies dynamic reconciliation replaces newly produced nested dynamic boundaries.

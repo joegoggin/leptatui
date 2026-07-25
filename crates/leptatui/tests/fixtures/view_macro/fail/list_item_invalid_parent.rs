@@ -5,8 +5,8 @@ use leptatui::prelude::*;
 /// Triggers direct list-item ancestry validation.
 fn main() {
     let _ = view! {
-        <Column>
+        <Div>
             <ListItem><Paragraph>"Orphan"</Paragraph></ListItem>
-        </Column>
+        </Div>
     };
 }

@@ -29,7 +29,7 @@ pub use boundary::{
 };
 pub use containers::{
     block::{BlockView, block},
-    layout::{LayoutView, column, row},
+    layout::{DivView, div},
     lists::{
         list::{ListKind, ListView, ordered_list, unordered_list},
         list_item::{ListItemView, list_item},
@@ -64,7 +64,8 @@ pub use core::{
     capabilities::{ContainerView, EditableView, StyledView, TextualView},
     contract::View,
     conversion::{IntoView, IntoViews},
-    metadata::{StyleMetadata, ViewType},
+    measurement::AvailableSpace,
+    metadata::{LayoutGeometry, StyleMetadata, ViewType},
 };
 pub(crate) use link::{InlineLink, LinkedSpan};
 pub use link::{LinkTarget, RichText};

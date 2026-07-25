@@ -64,8 +64,7 @@ pub(super) fn is_builtin_element(name: &Ident) -> bool {
     matches!(
         name.to_string().as_str(),
         "Block"
-            | "Row"
-            | "Column"
+            | "Div"
             | "Form"
             | "Text"
             | "H1"

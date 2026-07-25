@@ -9,6 +9,29 @@ use ratatui::layout::Rect;
 
 use crate::style::{Modifier, TuiStyle};
 
+/// Rounded terminal rectangles computed for one visible layout box.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct LayoutGeometry {
+    /// Rectangle including content, padding, and borders.
+    pub border_box: Rect,
+    /// Rectangle including content and padding but excluding borders.
+    pub padding_box: Rect,
+    /// Rectangle available to the view's content.
+    pub content_box: Rect,
+}
+
+/// Transient layout state from the most recent root render.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum LayoutState {
+    /// No layout pass has visited this view yet.
+    #[default]
+    Uncomputed,
+    /// The view generated a visible layout box.
+    Visible(LayoutGeometry),
+    /// The view belongs to a `display: none` subtree.
+    Hidden,
+}
+
 /// Open terminal element identity used by stylesheet type selectors.
 ///
 /// Built-in identities are available as associated constants. External views
@@ -71,12 +94,9 @@ impl ViewType {
     /// Semantic table-cell view.
     #[allow(non_upper_case_globals)]
     pub const TableCell: Self = Self::new("TableCell");
-    /// Horizontal layout view.
+    /// Generic block container view.
     #[allow(non_upper_case_globals)]
-    pub const Row: Self = Self::new("Row");
-    /// Vertical layout view.
-    #[allow(non_upper_case_globals)]
-    pub const Column: Self = Self::new("Column");
+    pub const Div: Self = Self::new("Div");
     /// Grouping container for form controls.
     #[allow(non_upper_case_globals)]
     pub const Form: Self = Self::new("Form");
@@ -146,8 +166,7 @@ impl ViewType {
             | Self::TableCell
             | Self::Block
             | Self::Text
-            | Self::Row
-            | Self::Column
+            | Self::Div
             | Self::Form
             | Self::Button
             | Self::Input
@@ -193,6 +212,8 @@ pub struct StyleMetadata {
     max_scroll_offset: Cell<u16>,
     /// Terminal-coordinate hit areas recorded during the latest render.
     hit_areas: RefCell<Vec<Rect>>,
+    /// Rounded geometry from the latest root layout pass.
+    layout_state: Cell<LayoutState>,
 }
 
 impl StyleMetadata {
@@ -218,6 +239,7 @@ impl StyleMetadata {
             scroll_offset: Cell::new(0),
             max_scroll_offset: Cell::new(0),
             hit_areas: RefCell::new(Vec::new()),
+            layout_state: Cell::new(LayoutState::Uncomputed),
         }
     }
 
@@ -264,6 +286,50 @@ impl StyleMetadata {
     /// A [`bool`] indicating whether this view is focused.
     pub const fn is_focused(&self) -> bool {
         self.focused
+    }
+
+    /// Returns rounded geometry from the most recent root layout pass.
+    ///
+    /// Hidden views and views that have not participated in a layout pass
+    /// return `None`.
+    ///
+    /// # Returns
+    ///
+    /// An optional [`LayoutGeometry`] containing border, padding, and content
+    /// rectangles in terminal coordinates.
+    pub fn layout_geometry(&self) -> Option<LayoutGeometry> {
+        match self.layout_state.get() {
+            LayoutState::Visible(geometry) => Some(geometry),
+            LayoutState::Uncomputed | LayoutState::Hidden => None,
+        }
+    }
+
+    /// Returns whether the latest layout pass excluded this view.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the view is in a `display: none` subtree.
+    pub(crate) fn is_layout_hidden(&self) -> bool {
+        self.layout_state.get() == LayoutState::Hidden
+    }
+
+    /// Clears geometry before rebuilding a root layout snapshot.
+    pub(crate) fn clear_layout_geometry(&self) {
+        self.layout_state.set(LayoutState::Uncomputed);
+    }
+
+    /// Stores visible rounded geometry for this view.
+    ///
+    /// # Arguments
+    ///
+    /// * `geometry` — Rounded border, padding, and content rectangles to retain.
+    pub(crate) fn set_layout_geometry(&self, geometry: LayoutGeometry) {
+        self.layout_state.set(LayoutState::Visible(geometry));
+    }
+
+    /// Marks this view as excluded from layout and interaction.
+    pub(crate) fn set_layout_hidden(&self) {
+        self.layout_state.set(LayoutState::Hidden);
     }
 
     /// Returns whether this view requested focus visibility scrolling.

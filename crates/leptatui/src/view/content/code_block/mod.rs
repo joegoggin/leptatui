@@ -17,10 +17,14 @@ use unicode_width::UnicodeWidthStr;
 use self::highlight::highlighted_source_lines;
 use crate::view::core::{
     capabilities::impl_styled_view,
-    render::{line_count_height, resolve_style, vertical_border_rows, vertical_padding_rows},
+    measurement::{AvailableSpace, cells_to_u16, resolve_intrinsic_axis, sanitize_cells},
+    render::{
+        horizontal_border_columns, horizontal_padding_columns, line_count_height, resolve_style,
+        vertical_border_rows, vertical_padding_rows,
+    },
 };
 use crate::view::{StyleMetadata, View, ViewType};
-use crate::{Borders, TuiStyle, app::Result, component::RenderCtx};
+use crate::{Borders, LayoutSize, TuiStyle, app::Result, component::RenderCtx};
 
 /// Bundled syntax and background theme used by code-block views.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -350,15 +354,61 @@ impl View for CodeBlockView {
         )
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
-        code_block_layout(
+        let borders = style.borders.unwrap_or(Borders::ALL);
+        let horizontal_inset = horizontal_border_columns(borders)
+            .saturating_add(horizontal_padding_columns(style.padding));
+        let gutter_width = if self.line_numbers {
+            u16::try_from(
+                self.highlighted_lines
+                    .len()
+                    .max(1)
+                    .to_string()
+                    .len()
+                    .saturating_add(3),
+            )
+            .unwrap_or(u16::MAX)
+        } else {
+            0
+        };
+        let max_code_width = self
+            .highlighted_lines
+            .iter()
+            .map(|line| u16::try_from(line.width()).unwrap_or(u16::MAX))
+            .max()
+            .unwrap_or(0);
+        let min_code_width = u16::from(!self.highlighted_lines.is_empty());
+        let width = resolve_intrinsic_axis(
+            known_dimensions.width,
+            available_space.width,
+            f32::from(
+                min_code_width
+                    .saturating_add(gutter_width)
+                    .saturating_add(horizontal_inset),
+            ),
+            f32::from(
+                max_code_width
+                    .saturating_add(gutter_width)
+                    .saturating_add(horizontal_inset),
+            ),
+        );
+        let natural_height = code_block_layout(
             &self.highlighted_lines,
             self.line_numbers,
             style,
-            ctx.area(),
+            Rect::new(0, 0, cells_to_u16(width), u16::MAX),
         )
-        .1
+        .1;
+        let height = known_dimensions
+            .height
+            .map_or(f32::from(natural_height), sanitize_cells);
+        LayoutSize::new(width, height)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

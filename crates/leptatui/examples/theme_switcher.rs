@@ -106,9 +106,11 @@ fn ThemeDemo() -> impl IntoView {
             }
         }
 
+        .controls => { display: Display::Flex }
+
         @media (max-width: 60) {
             .app-panel => { padding: TuiSpacing::ZERO }
-            .controls => { direction: LayoutDirection::Column }
+            .controls => { flex_direction: FlexDirection::Column }
             .theme-button => {
                 padding: TuiSpacing::ZERO
             }
@@ -117,13 +119,13 @@ fn ThemeDemo() -> impl IntoView {
 
     view! {
         <Block class="app-panel">
-            <Column>
+            <Div>
                 <Text class="title">"Theme variables"</Text>
                 <ThemeStatus />
                 <Text class="body">
                     "The same stylesheet resolves against the active context theme."
                 </Text>
-                <Row class="controls">
+                <Div class="controls">
                     <Button
                         class="theme-button"
                         on_press=move || {
@@ -139,8 +141,8 @@ fn ThemeDemo() -> impl IntoView {
                     <Button class="theme-button danger" on_press=|| AppControl::Exit>
                         "Quit"
                     </Button>
-                </Row>
-            </Column>
+                </Div>
+            </Div>
         </Block>
     }
 }

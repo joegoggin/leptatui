@@ -20,7 +20,6 @@ fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
     let mut view = form((text("Title"), input("Ada"), button("Save")));
 
     draw_view(&mut terminal, &view)?;
-
     let title_position = symbol_position(&terminal, "T", 12);
     let input_position = symbol_position(&terminal, "A", 12);
     assert_eq!(title_position, (0, 0));

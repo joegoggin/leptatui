@@ -6,14 +6,19 @@ use ratatui::widgets::Paragraph;
 
 use crate::view::core::{
     capabilities::impl_styled_view,
-    render::{resolve_style, vertical_border_rows, vertical_padding_rows},
+    measurement::{AvailableSpace, measure_fixed},
+    render::{
+        horizontal_border_columns, horizontal_padding_columns, resolve_style, vertical_border_rows,
+        vertical_padding_rows,
+    },
 };
 use crate::view::{StyleMetadata, View, ViewType};
 use crate::{
-    Borders,
+    Borders, LayoutSize,
     app::{AppControl, Result},
     component::{FocusedControl, RenderCtx},
 };
+use unicode_width::UnicodeWidthStr;
 
 /// Shared callback invoked when a button is activated.
 pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
@@ -106,10 +111,25 @@ impl View for ButtonView {
         Ok(())
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        _available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
-        1u16.saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-            .saturating_add(vertical_padding_rows(style.padding))
+        let borders = style.borders.unwrap_or(Borders::ALL);
+        let width = u16::try_from(UnicodeWidthStr::width(self.label.as_str()))
+            .unwrap_or(u16::MAX)
+            .saturating_add(horizontal_border_columns(borders))
+            .saturating_add(horizontal_padding_columns(style.padding));
+        let height = 1u16
+            .saturating_add(vertical_border_rows(borders))
+            .saturating_add(vertical_padding_rows(style.padding));
+        measure_fixed(
+            LayoutSize::new(f32::from(width), f32::from(height)),
+            known_dimensions,
+        )
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

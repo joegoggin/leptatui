@@ -2,13 +2,14 @@
 
 use crate::view::core::{
     capabilities::{impl_styled_view, impl_textual_view},
-    render::{line_count_height, resolve_style, semantic_paragraph},
+    measurement::{AvailableSpace, measure_rich_text},
+    render::{resolve_style, semantic_paragraph},
 };
 use crate::view::{
     CellAlignment, StyleMetadata, View, ViewType,
     link::{RichTextWrapMode, impl_rich_text_view, resolved_rich_text},
 };
-use crate::{RichText, app::Result, component::RenderCtx};
+use crate::{LayoutSize, RichText, app::Result, component::RenderCtx};
 
 /// Semantic paragraph content.
 #[derive(Debug, PartialEq)]
@@ -52,11 +53,23 @@ impl View for ParagraphView {
         Ok(())
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
-        line_count_height(
-            semantic_paragraph(self.content.text(), style).line_count(ctx.area().width),
-        )
+        let mut measured = measure_rich_text(
+            self.content.text(),
+            style,
+            known_dimensions,
+            available_space,
+        );
+        if known_dimensions.height.is_none() {
+            measured.height = measured.height.max(1.0);
+        }
+        measured
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

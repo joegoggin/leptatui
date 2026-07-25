@@ -103,8 +103,8 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
         .line_numbers(true);
     let view = markdown_with_options(CODE_FIXTURE, options);
     let document = view
-        .downcast_ref::<LayoutView>()
-        .expect("Markdown document should be a column layout");
+        .downcast_ref::<DivView>()
+        .expect("Markdown document should have a Div root");
     let code_blocks = document
         .children()
         .iter()
@@ -196,7 +196,7 @@ fn markdown_fixtures_handle_empty_and_zero_sized_viewports() -> Result<()> {
     let empty = markdown(EMPTY_FIXTURE);
     assert!(
         empty
-            .downcast_ref::<LayoutView>()
+            .downcast_ref::<DivView>()
             .is_some_and(|layout| layout.children().is_empty())
     );
     let empty_terminal = render_view(empty.as_view(), 0, 0)?;

@@ -92,7 +92,7 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// use leptatui::prelude::*;
 /// signal(0)
 /// provide_context(String::from("from prelude"))
-/// block(column([
+/// block(div([
 ///     h1("Guide"),
 ///     paragraph("Overview"),
 ///     markdown("# Markdown"),
@@ -153,7 +153,7 @@ fn prelude_exposes_reactivity_and_context() {
         let form_view = form((input_view, text_area_view))
             .on_submit(move || form_action_for_submit())
             .on_cancel(|| AppControl::Continue);
-        let view = block(column((
+        let view = block(div((
             text("from prelude"),
             h1("Guide"),
             h2("Section"),
@@ -198,7 +198,7 @@ fn prelude_exposes_reactivity_and_context() {
         );
 
         let macro_view = view! {
-            <Column>
+            <Div>
                 <H1>"Guide"</H1>
                 <Paragraph>"Overview"</Paragraph>
                 <Markdown src={markdown_path} />
@@ -223,7 +223,7 @@ fn prelude_exposes_reactivity_and_context() {
                     <Image src="assets/logo.png" alt="Project logo" />
                     <ProgressBar value=0.5 label="Half" />
                 </Form>
-            </Column>
+            </Div>
         };
         let _ = macro_view;
         let macro_markdown = view! {

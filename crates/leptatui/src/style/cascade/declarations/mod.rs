@@ -11,7 +11,10 @@ mod merge;
 mod resolve;
 
 use crate::style::{
-    BorderType, Borders, Color, LayoutDirection, Modifier, ThemeValue, TuiSize, TuiSpacing,
+    AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
+    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, ThemeValue, TuiSize,
+    TuiSpacing, ZIndex,
 };
 
 /// One style declaration value plus its cascade importance.
@@ -58,7 +61,7 @@ impl<T> Declaration<T> {
 }
 
 /// Style declarations before runtime theme variables are resolved.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct StyleDeclarations {
     /// Foreground color declaration.
     foreground: Option<Declaration<ThemeValue<Color>>>,
@@ -72,10 +75,58 @@ pub struct StyleDeclarations {
     border_type: Option<Declaration<BorderType>>,
     /// Padding declaration.
     padding: Option<Declaration<TuiSpacing>>,
-    /// Layout direction declaration.
-    direction: Option<Declaration<LayoutDirection>>,
     /// Image render size declaration.
     image_size: Option<Declaration<TuiSize>>,
+    /// Layout display declaration.
+    display: Option<Declaration<Display>>,
+    /// Authored-size box-model declaration.
+    box_sizing: Option<Declaration<BoxSizing>>,
+    /// Overflow declaration.
+    overflow: Option<Declaration<Axes<Overflow>>>,
+    /// Preferred size declaration.
+    size: Option<Declaration<LayoutSize<Dimension>>>,
+    /// Minimum size declaration.
+    min_size: Option<Declaration<LayoutSize<Dimension>>>,
+    /// Maximum size declaration.
+    max_size: Option<Declaration<LayoutSize<Dimension>>>,
+    /// Outer margin declaration.
+    margin: Option<Declaration<Edges<LengthAuto>>>,
+    /// Child gap declaration.
+    gap: Option<Declaration<Axes<Length>>>,
+    /// Flex direction declaration.
+    flex_direction: Option<Declaration<FlexDirection>>,
+    /// Flex wrapping declaration.
+    flex_wrap: Option<Declaration<FlexWrap>>,
+    /// Flex basis declaration.
+    flex_basis: Option<Declaration<Dimension>>,
+    /// Flex growth declaration.
+    flex_grow: Option<Declaration<f32>>,
+    /// Flex shrink declaration.
+    flex_shrink: Option<Declaration<f32>>,
+    /// Child cross-axis alignment declaration.
+    align_items: Option<Declaration<AlignItems>>,
+    /// Item cross-axis alignment declaration.
+    align_self: Option<Declaration<AlignSelf>>,
+    /// Cross-axis content distribution declaration.
+    align_content: Option<Declaration<AlignContent>>,
+    /// Child inline-axis alignment declaration.
+    justify_items: Option<Declaration<JustifyItems>>,
+    /// Item inline-axis alignment declaration.
+    justify_self: Option<Declaration<JustifySelf>>,
+    /// Main-axis or inline-axis content distribution declaration.
+    justify_content: Option<Declaration<JustifyContent>>,
+    /// Grid automatic-flow declaration.
+    grid_auto_flow: Option<Declaration<GridAutoFlow>>,
+    /// Grid row placement declaration.
+    grid_row: Option<Declaration<GridLine>>,
+    /// Grid column placement declaration.
+    grid_column: Option<Declaration<GridLine>>,
+    /// Positioning scheme declaration.
+    position: Option<Declaration<Position>>,
+    /// Positioned inset declaration.
+    inset: Option<Declaration<Edges<LengthAuto>>>,
+    /// Positioned stacking-level declaration.
+    z_index: Option<Declaration<ZIndex>>,
 }
 
 impl StyleDeclarations {
@@ -92,8 +143,32 @@ impl StyleDeclarations {
             borders: None,
             border_type: None,
             padding: None,
-            direction: None,
             image_size: None,
+            display: None,
+            box_sizing: None,
+            overflow: None,
+            size: None,
+            min_size: None,
+            max_size: None,
+            margin: None,
+            gap: None,
+            flex_direction: None,
+            flex_wrap: None,
+            flex_basis: None,
+            flex_grow: None,
+            flex_shrink: None,
+            align_items: None,
+            align_self: None,
+            align_content: None,
+            justify_items: None,
+            justify_self: None,
+            justify_content: None,
+            grid_auto_flow: None,
+            grid_row: None,
+            grid_column: None,
+            position: None,
+            inset: None,
+            z_index: None,
         }
     }
 }

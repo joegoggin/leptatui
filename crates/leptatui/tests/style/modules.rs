@@ -13,8 +13,7 @@
 ///
 /// - Literal color variables are stored as color style values.
 /// - Theme color variables are returned from the color getter.
-/// - Modifier, borders, border type, spacing, direction, and size variables use
-///   typed getters.
+/// - Visual and layout variables use typed getters.
 /// - Stored mixins can be retrieved by name.
 ///
 /// # Why
@@ -33,8 +32,33 @@ fn style_module_stores_typed_variables_and_mixins() {
         .variable("borders", Borders::ALL)
         .variable("border_type", BorderType::Rounded)
         .variable("padding", TuiSpacing::uniform(1))
-        .variable("direction", LayoutDirection::Column)
         .variable("thumbnail", TuiSize::new(24, 8))
+        .variable("display", Display::Grid)
+        .variable("box_sizing", BoxSizing::BorderBox)
+        .variable("overflow", Axes::new(Overflow::Hidden, Overflow::Auto))
+        .variable(
+            "layout_size",
+            LayoutSize::new(Dimension::MinContent, Dimension::MaxContent),
+        )
+        .variable("edges", Edges::all(LengthAuto::Auto))
+        .variable("gap", Axes::all(Length::cells(1.0)))
+        .variable("flex_direction", FlexDirection::Column)
+        .variable("flex_wrap", FlexWrap::Wrap)
+        .variable("dimension", Dimension::from(Length::percent(25.0)))
+        .variable("number", 2.0_f32)
+        .variable("align_items", AlignItems::Center)
+        .variable("align_self", AlignSelf::FlexEnd)
+        .variable("align_content", AlignContent::SpaceAround)
+        .variable("justify_items", JustifyItems::End)
+        .variable("justify_self", JustifySelf::Center)
+        .variable("justify_content", JustifyContent::SpaceEvenly)
+        .variable("grid_auto_flow", GridAutoFlow::ColumnDense)
+        .variable(
+            "grid_line",
+            GridLine::new(GridPlacement::line(1), GridPlacement::span(2)),
+        )
+        .variable("position", Position::Absolute)
+        .variable("z_index", ZIndex::Integer(3))
         .mixin("control", control.clone());
 
     assert_eq!(
@@ -52,12 +76,93 @@ fn style_module_stores_typed_variables_and_mixins() {
         BorderType::Rounded
     );
     assert_eq!(module.expect_spacing("padding"), TuiSpacing::uniform(1));
-    assert_eq!(
-        module.expect_layout_direction("direction"),
-        LayoutDirection::Column
-    );
     assert_eq!(module.expect_size("thumbnail"), TuiSize::new(24, 8));
+    assert_eq!(module.expect_display("display"), Display::Grid);
+    assert_eq!(
+        module.expect_box_sizing("box_sizing"),
+        BoxSizing::BorderBox
+    );
+    assert_eq!(
+        module.expect_overflow("overflow"),
+        Axes::new(Overflow::Hidden, Overflow::Auto)
+    );
+    assert_eq!(
+        module.expect_layout_size("layout_size"),
+        LayoutSize::new(Dimension::MinContent, Dimension::MaxContent)
+    );
+    assert_eq!(
+        module.expect_length_auto_edges("edges"),
+        Edges::all(LengthAuto::Auto)
+    );
+    assert_eq!(module.expect_gap("gap"), Axes::all(Length::cells(1.0)));
+    assert_eq!(
+        module.expect_flex_direction("flex_direction"),
+        FlexDirection::Column
+    );
+    assert_eq!(module.expect_flex_wrap("flex_wrap"), FlexWrap::Wrap);
+    assert_eq!(
+        module.expect_dimension("dimension"),
+        Dimension::from(Length::percent(25.0))
+    );
+    assert_eq!(module.expect_number("number"), 2.0);
+    assert_eq!(module.expect_align_items("align_items"), AlignItems::Center);
+    assert_eq!(module.expect_align_self("align_self"), AlignSelf::FlexEnd);
+    assert_eq!(
+        module.expect_align_content("align_content"),
+        AlignContent::SpaceAround
+    );
+    assert_eq!(
+        module.expect_justify_items("justify_items"),
+        JustifyItems::End
+    );
+    assert_eq!(
+        module.expect_justify_self("justify_self"),
+        JustifySelf::Center
+    );
+    assert_eq!(
+        module.expect_justify_content("justify_content"),
+        JustifyContent::SpaceEvenly
+    );
+    assert_eq!(
+        module.expect_grid_auto_flow("grid_auto_flow"),
+        GridAutoFlow::ColumnDense
+    );
+    assert_eq!(
+        module.expect_grid_line("grid_line"),
+        GridLine::new(GridPlacement::line(1), GridPlacement::span(2))
+    );
+    assert_eq!(module.expect_position("position"), Position::Absolute);
+    assert_eq!(module.expect_z_index("z_index"), ZIndex::Integer(3));
     assert_eq!(module.expect_mixin("control"), &control);
+}
+
+/// Verifies imported layout variables report incompatible stored kinds.
+///
+/// # Example Under Test
+///
+/// ```text
+/// StyleModule::new()
+///     .variable("layout", Axes::all(Overflow::Hidden))
+///     .expect_display("layout")
+/// ```
+///
+/// # Assertions
+///
+/// - The typed getter panics.
+/// - The panic names the variable's stored kind and expected display kind.
+///
+/// # Why
+///
+/// Imported variables are checked at runtime, so their diagnostics must retain
+/// stylesheet-oriented property context.
+#[test]
+#[should_panic(
+    expected = "stylesheet module variable `$layout` is overflow, expected display"
+)]
+fn style_module_reports_incompatible_layout_variable_kinds() {
+    StyleModule::new()
+        .variable("layout", Axes::all(Overflow::Hidden))
+        .expect_display("layout");
 }
 
 /// Verifies declaration merging overlays another declaration set.

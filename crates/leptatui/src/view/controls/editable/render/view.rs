@@ -1,4 +1,4 @@
-//! Editable-control rendering and intrinsic height measurement.
+//! Editable-control rendering and intrinsic two-axis measurement.
 
 use super::super::{
     model::{EditableControlKind, EditableModel},
@@ -15,11 +15,17 @@ use super::{
     },
 };
 use crate::{
-    Borders, RenderCtx, Result,
-    view::core::render::{
-        line_count_height, resolve_style, vertical_border_rows, vertical_padding_rows,
+    Borders, LayoutSize, RenderCtx, Result,
+    view::core::{
+        measurement::{AvailableSpace, measure_fixed, measure_rich_text, sanitize_cells},
+        render::{
+            horizontal_border_columns, horizontal_padding_columns, resolve_style,
+            vertical_border_rows, vertical_padding_rows,
+        },
     },
 };
+use ratatui::text::Text;
+use unicode_width::UnicodeWidthStr;
 
 /// Renders a controlled input or text area.
 ///
@@ -161,43 +167,91 @@ pub(crate) fn render_editable_text_view(
     Ok(())
 }
 
-/// Returns the intrinsic height of a controlled input or text area.
+/// Returns the intrinsic size of a controlled input or text area.
 ///
 /// # Arguments
 ///
 /// * `view` — Editable control model to measure.
-/// * `ctx` — Rendering context containing the available width and styles.
+/// * `known_dimensions` — Exact dimensions supplied by parent layout.
+/// * `available_space` — Soft constraints for unknown dimensions.
+/// * `ctx` — Rendering context containing resolved styles.
 ///
 /// # Returns
 ///
-/// A [`u16`] intrinsic height including borders and padding.
-pub(crate) fn min_height_for_editable_text_view(
+/// A [`LayoutSize`] including the control's borders and padding.
+pub(crate) fn measure_editable_text_view(
     view: &EditableModel,
+    known_dimensions: LayoutSize<Option<f32>>,
+    available_space: LayoutSize<AvailableSpace>,
     ctx: &mut RenderCtx<'_, '_>,
-) -> u16 {
+) -> LayoutSize<f32> {
     let style = resolve_style(&view.metadata, ctx);
-    let border_height = vertical_border_rows(style.borders.unwrap_or(Borders::ALL));
+    let borders = style.borders.unwrap_or(Borders::ALL);
+    let border_width = horizontal_border_columns(borders);
+    let padding_width = horizontal_padding_columns(style.padding);
+    let horizontal_inset = border_width.saturating_add(padding_width);
+    let border_height = vertical_border_rows(borders);
     let padding_height = vertical_padding_rows(style.padding);
-    if view.kind == EditableControlKind::Input {
-        return 1u16
-            .saturating_add(border_height)
-            .saturating_add(padding_height);
-    }
-
+    let vertical_inset = border_height.saturating_add(padding_height);
     let display_value = if view.value.is_empty() {
         view.placeholder.as_deref().unwrap_or("")
     } else {
         &view.value
     };
-    let inner = style
-        .to_block_with_default_borders(Borders::ALL)
-        .inner(ctx.area());
-    line_count_height(
-        text_area_paragraph(display_value, style, 0, 0, None)
-            .line_count(inner.width)
-            .saturating_add(trailing_text_area_empty_line_rows(display_value)),
+
+    if view.kind == EditableControlKind::Input {
+        let content_width = u16::try_from(UnicodeWidthStr::width(display_value))
+            .unwrap_or(u16::MAX)
+            .max(1);
+        return measure_fixed(
+            LayoutSize::new(
+                f32::from(content_width.saturating_add(horizontal_inset)),
+                f32::from(1u16.saturating_add(vertical_inset)),
+            ),
+            known_dimensions,
+        );
+    }
+
+    let inset_width = f32::from(horizontal_inset);
+    let inset_height = f32::from(vertical_inset);
+    let content_known = LayoutSize::new(
+        known_dimensions
+            .width
+            .map(|width| sanitize_cells(sanitize_cells(width) - inset_width)),
+        known_dimensions
+            .height
+            .map(|height| sanitize_cells(sanitize_cells(height) - inset_height)),
+    );
+    let content_available = LayoutSize::new(
+        match available_space.width {
+            AvailableSpace::Definite(width) => {
+                AvailableSpace::Definite(sanitize_cells(sanitize_cells(width) - inset_width))
+            }
+            constraint => constraint,
+        },
+        match available_space.height {
+            AvailableSpace::Definite(height) => {
+                AvailableSpace::Definite(sanitize_cells(sanitize_cells(height) - inset_height))
+            }
+            constraint => constraint,
+        },
+    );
+    let text = Text::from(display_value.to_owned());
+    let mut measured = measure_rich_text(&text, style, content_known, content_available);
+    if known_dimensions.height.is_none() {
+        let trailing_rows =
+            u16::try_from(trailing_text_area_empty_line_rows(display_value)).unwrap_or(u16::MAX);
+        measured.height = measured.height.max(1.0) + f32::from(trailing_rows);
+    }
+
+    LayoutSize::new(
+        known_dimensions.width.map_or_else(
+            || sanitize_cells(measured.width + inset_width),
+            sanitize_cells,
+        ),
+        known_dimensions.height.map_or_else(
+            || sanitize_cells(measured.height + inset_height),
+            sanitize_cells,
+        ),
     )
-    .max(1)
-    .saturating_add(border_height)
-    .saturating_add(padding_height)
 }

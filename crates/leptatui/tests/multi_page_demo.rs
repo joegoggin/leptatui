@@ -81,14 +81,14 @@ fn DemoWorkflowRoot() -> impl IntoView {
     }
 
     view! {
-        <Column>
+        <Div>
             <DemoWorkflowNav />
             {move || match route.get_untracked() {
                 DemoTestPage::Home => view! { <DemoWorkflowHome /> },
                 DemoTestPage::Counter => view! { <DemoWorkflowCounter /> },
                 DemoTestPage::Settings => view! { <DemoWorkflowSettings /> },
             }}
-        </Column>
+        </Div>
     }
 }
 
@@ -114,11 +114,11 @@ fn DemoWorkflowNav() -> impl IntoView {
     });
 
     view! {
-        <Row>
+        <Div style={TuiStyle::new().display(Display::Flex)}>
             <Button>"Home"</Button>
             <Button>"Counter"</Button>
             <Button>"Settings"</Button>
-        </Row>
+        </Div>
     }
 }
 
@@ -129,7 +129,7 @@ fn DemoWorkflowHome() -> impl IntoView {
     let theme_mode = expect_context::<RwSignal<DemoTestTheme>>();
 
     view! {
-        <Column class="page">
+        <Div class="page">
             <Text class="title">"Home"</Text>
             {move || {
                 view! {
@@ -142,7 +142,7 @@ fn DemoWorkflowHome() -> impl IntoView {
                     </Text>
                 }
             }}
-        </Column>
+        </Div>
     }
 }
 
@@ -168,10 +168,10 @@ fn DemoWorkflowCounter() -> impl IntoView {
     });
 
     view! {
-        <Column class="page">
+        <Div class="page">
             <Text class="title">"Counter"</Text>
             {move || view! { <Text>{format!("Count: {}", counter.get_untracked())}</Text> }}
-        </Column>
+        </Div>
     }
 }
 
@@ -194,10 +194,10 @@ fn DemoWorkflowSettings() -> impl IntoView {
     });
 
     view! {
-        <Column class="page">
+        <Div class="page">
             <Text class="title">"Settings"</Text>
             {move || view! { <Text>{format!("Theme: {:?}", mode.get_untracked())}</Text> }}
-        </Column>
+        </Div>
     }
 }
 

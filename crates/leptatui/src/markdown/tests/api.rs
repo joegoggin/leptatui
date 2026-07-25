@@ -113,7 +113,7 @@ fn markdown_file_failures_render_path_aware_fallbacks() {
     fs::write(&invalid_utf8_path, [0xff, 0xfe]).expect("invalid UTF-8 fixture should be written");
 
     let expected_fallback = |path: &Path, error: &io::Error| {
-        column([paragraph(format!(
+        div([paragraph(format!(
             "failed to read Markdown file `{}`: {error}",
             path.display()
         ))])
@@ -183,7 +183,7 @@ fn markdown_source_rendering_performs_no_filesystem_io() -> Result<()> {
     assert!(!missing_path.exists());
 
     let view = markdown(&source);
-    assert_eq!(view, column([paragraph(source)]));
+    assert_eq!(view, div([paragraph(source)]));
     let mut terminal = Terminal::new(TestBackend::new(80, 2))?;
     let mut render_result = Ok(());
     terminal.draw(|frame| {

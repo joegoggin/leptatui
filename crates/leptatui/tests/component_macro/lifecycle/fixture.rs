@@ -14,7 +14,7 @@ fn MacroSignalRoot() -> impl leptatui::IntoView {
         KeyControl::Pass
     });
 
-    column((
+    div((
         dynamic(move || text(format!("Count: {}", count.get_untracked()))),
         button("Increment").on_press(move || {
             set_count.update(|count| *count += 1);

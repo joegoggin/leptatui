@@ -18,9 +18,15 @@ impl View for FocusPanel {
         ctx.render_view(&self.view)
     }
 
-    /// Returns the minimum useful render height of the child view.
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        self.view.__min_height(ctx)
+    /// Returns the child's intrinsic terminal-cell geometry.
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        self.view
+            .measure(known_dimensions, available_space, ctx)
     }
 
     /// Returns the number of focusable controls inside the child view.
@@ -114,8 +120,19 @@ impl View for ConstrainedScrollPanel {
         ctx.render_view(&self.view)
     }
 
-    fn min_height(&self, _ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        3
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        _ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        LayoutSize::new(
+            known_dimensions.width.unwrap_or(match available_space.width {
+                AvailableSpace::Definite(width) => width,
+                AvailableSpace::MinContent | AvailableSpace::MaxContent => 1.0,
+            }),
+            known_dimensions.height.unwrap_or(3.0),
+        )
     }
 
     fn __clear_hit_areas(&self) {

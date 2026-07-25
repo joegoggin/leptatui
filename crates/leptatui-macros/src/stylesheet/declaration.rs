@@ -188,15 +188,87 @@ fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'s
             "border_type_important",
         )),
         "padding" => Ok((StyleValueKind::Spacing, "padding", "padding_important")),
-        "direction" => Ok((
-            StyleValueKind::LayoutDirection,
-            "direction",
-            "direction_important",
-        )),
         "image_size" => Ok((StyleValueKind::Size, "image_size", "image_size_important")),
+        "display" => Ok((StyleValueKind::Display, "display", "display_important")),
+        "box_sizing" => Ok((
+            StyleValueKind::BoxSizing,
+            "box_sizing",
+            "box_sizing_important",
+        )),
+        "overflow" => Ok((StyleValueKind::Overflow, "overflow", "overflow_important")),
+        "size" => Ok((StyleValueKind::LayoutSize, "size", "size_important")),
+        "min_size" => Ok((StyleValueKind::LayoutSize, "min_size", "min_size_important")),
+        "max_size" => Ok((StyleValueKind::LayoutSize, "max_size", "max_size_important")),
+        "margin" => Ok((
+            StyleValueKind::LengthAutoEdges,
+            "margin",
+            "margin_important",
+        )),
+        "gap" => Ok((StyleValueKind::Gap, "gap", "gap_important")),
+        "flex_direction" => Ok((
+            StyleValueKind::FlexDirection,
+            "flex_direction",
+            "flex_direction_important",
+        )),
+        "flex_wrap" => Ok((StyleValueKind::FlexWrap, "flex_wrap", "flex_wrap_important")),
+        "flex_basis" => Ok((
+            StyleValueKind::Dimension,
+            "flex_basis",
+            "flex_basis_important",
+        )),
+        "flex_grow" => Ok((StyleValueKind::Number, "flex_grow", "flex_grow_important")),
+        "flex_shrink" => Ok((
+            StyleValueKind::Number,
+            "flex_shrink",
+            "flex_shrink_important",
+        )),
+        "align_items" => Ok((
+            StyleValueKind::AlignItems,
+            "align_items",
+            "align_items_important",
+        )),
+        "align_self" => Ok((
+            StyleValueKind::AlignSelf,
+            "align_self",
+            "align_self_important",
+        )),
+        "align_content" => Ok((
+            StyleValueKind::AlignContent,
+            "align_content",
+            "align_content_important",
+        )),
+        "justify_items" => Ok((
+            StyleValueKind::JustifyItems,
+            "justify_items",
+            "justify_items_important",
+        )),
+        "justify_self" => Ok((
+            StyleValueKind::JustifySelf,
+            "justify_self",
+            "justify_self_important",
+        )),
+        "justify_content" => Ok((
+            StyleValueKind::JustifyContent,
+            "justify_content",
+            "justify_content_important",
+        )),
+        "grid_auto_flow" => Ok((
+            StyleValueKind::GridAutoFlow,
+            "grid_auto_flow",
+            "grid_auto_flow_important",
+        )),
+        "grid_row" => Ok((StyleValueKind::GridLine, "grid_row", "grid_row_important")),
+        "grid_column" => Ok((
+            StyleValueKind::GridLine,
+            "grid_column",
+            "grid_column_important",
+        )),
+        "position" => Ok((StyleValueKind::Position, "position", "position_important")),
+        "inset" => Ok((StyleValueKind::LengthAutoEdges, "inset", "inset_important")),
+        "z_index" => Ok((StyleValueKind::ZIndex, "z_index", "z_index_important")),
         _ => Err(Error::new_spanned(
             name,
-            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, direction, or image_size",
+            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_row, grid_column, position, inset, or z_index",
         )),
     }
 }

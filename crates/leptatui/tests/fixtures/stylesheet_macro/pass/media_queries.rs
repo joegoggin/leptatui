@@ -10,7 +10,7 @@ fn main() {
         @media (max-width: 80) {
             .panel => {
                 padding: TuiSpacing::ZERO,
-                direction: LayoutDirection::Column
+                flex_direction: FlexDirection::Column
 
                 Text => { fg: Color::Yellow }
             }
@@ -33,7 +33,7 @@ fn main() {
             StyleSelector::class("panel"),
             TuiStyle::new()
                 .padding(TuiSpacing::ZERO)
-                .direction(LayoutDirection::Column),
+                .flex_direction(FlexDirection::Column),
         )
         .media_rule(
             MediaQuery::max_width(80),

@@ -2,10 +2,11 @@
 
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
+    measurement::{AvailableSpace, measure_legacy_height},
     render::{VerticalSpan, resolve_style, vertical_border_rows, vertical_padding_rows},
 };
 use crate::view::{AnyView, IntoView, StyleMetadata, View, ViewType};
-use crate::{Borders, app::Result, component::RenderCtx};
+use crate::{Borders, LayoutSize, app::Result, component::RenderCtx};
 
 /// Bordered container around one child.
 #[derive(Debug, PartialEq)]
@@ -78,7 +79,12 @@ impl View for BlockView {
         )
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
         let child_height = self.children.first().map_or(0, |child| {
             ctx.with_area_inherited_style_and_selector_ancestor(
@@ -88,9 +94,13 @@ impl View for BlockView {
                 |ctx| child.__min_height(ctx),
             )
         });
-        child_height
-            .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-            .saturating_add(vertical_padding_rows(style.padding))
+        measure_legacy_height(
+            child_height
+                .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+                .saturating_add(vertical_padding_rows(style.padding)),
+            known_dimensions,
+            available_space,
+        )
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

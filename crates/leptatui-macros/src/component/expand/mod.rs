@@ -195,7 +195,12 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
-            fn min_height(&self, ctx: &mut #leptatui::RenderCtx<'_, '_>) -> u16 {
+            fn measure(
+                &self,
+                known_dimensions: #leptatui::LayoutSize<::core::option::Option<f32>>,
+                available_space: #leptatui::LayoutSize<#leptatui::AvailableSpace>,
+                ctx: &mut #leptatui::RenderCtx<'_, '_>,
+            ) -> #leptatui::LayoutSize<f32> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;
                 let __leptatui_stylesheet = &self.__leptatui_stylesheet;
@@ -203,10 +208,41 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
                     __leptatui_owner.with(|| {
                         #leptatui::__private::__with_context_scope_if_missing(|| {
-                            __leptatui_view.__min_height(ctx)
+                            __leptatui_view.measure(
+                                known_dimensions,
+                                available_space,
+                                ctx,
+                            )
                         })
                     })
                 })
+            }
+
+            #[doc(hidden)]
+            fn __visit_layout_children(
+                &self,
+                ctx: &mut #leptatui::RenderCtx<'_, '_>,
+                visitor: &mut dyn FnMut(
+                    &#leptatui::AnyView,
+                    &mut #leptatui::RenderCtx<'_, '_>,
+                ),
+            ) {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+                let __leptatui_stylesheet = &self.__leptatui_stylesheet;
+
+                ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
+                    __leptatui_owner.with(|| {
+                        #leptatui::__private::__with_context_scope_if_missing(|| {
+                            visitor(__leptatui_view, ctx);
+                        })
+                    })
+                });
+            }
+
+            #[doc(hidden)]
+            fn __is_layout_transparent(&self) -> bool {
+                true
             }
 
             #[doc(hidden)]

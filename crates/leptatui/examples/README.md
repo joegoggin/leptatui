@@ -77,7 +77,7 @@ types:
 ```rust
 use leptatui::prelude::*;
 
-let document = column((
+let document = div((
     h2("Nested list"),
     ordered_list([list_item((
         paragraph("Parent item"),
@@ -115,7 +115,7 @@ stylesheet! {
 }
 
 let document = view! {
-    <Column>
+    <Div>
         <OrderedList start=3>
             <ListItem>
                 <Paragraph>"Parent item"</Paragraph>
@@ -129,7 +129,7 @@ let document = view! {
             syntax_theme={SyntaxTheme::Dark}
             line_numbers=true
         >"fn main() {}"</CodeBlock>
-    </Column>
+    </Div>
 };
 ```
 

@@ -31,10 +31,10 @@ fn Root() -> impl IntoView {
 
     view! {
         <Block class="hello-panel">
-            <Column>
+            <Div>
                 <Text>"Hello, world!"</Text>
                 <Text>"Press q to quit."</Text>
-            </Column>
+            </Div>
         </Block>
     }
 }

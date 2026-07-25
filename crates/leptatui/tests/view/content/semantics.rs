@@ -180,7 +180,7 @@ fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([paragraph("界界界"), text("End")])
+/// div([paragraph("界界界"), text("End")])
 /// terminal width = 4
 /// ```
 ///
@@ -191,7 +191,7 @@ fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
 /// - The following text view renders after both paragraph rows.
 #[test]
 fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()> {
-    let view = column((paragraph("界界界"), text("End")));
+    let view = div((paragraph("界界界"), text("End")));
     let mut terminal = Terminal::new(TestBackend::new(4, 3))?;
 
     draw_view(&mut terminal, &view)?;
@@ -210,7 +210,7 @@ fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()>
 ///
 /// ```text
 /// paragraph("One Two") in a 4x1 terminal
-/// row([paragraph("A"), paragraph("B")]) in a 1x1 terminal
+/// div([paragraph("A"), paragraph("B")]) in a 1x1 terminal
 /// ```
 ///
 /// # Assertions
@@ -225,7 +225,8 @@ fn semantic_text_clips_overflow_and_handles_zero_width_splits() -> Result<()> {
     assert_eq!(symbol_position(&clipped, "O", 4), (0, 0));
     assert!(symbol_position_opt(&clipped, "T", 4).is_none());
 
-    let narrow_view = row([paragraph("A"), paragraph("B")]);
+    let narrow_view = div([paragraph("A"), paragraph("B")])
+        .with_inline_style(TuiStyle::new().display(Display::Flex));
     let mut narrow = Terminal::new(TestBackend::new(1, 1))?;
     let mut min_height = 0;
     narrow.draw(|frame| {

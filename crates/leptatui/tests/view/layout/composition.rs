@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// column([text rows..., row([button("Launch"), button("Quit")]).focus-actions])
+/// div([text rows..., div([button("Launch"), button("Quit")]).focus-actions])
 /// PageDown
 /// ```
 ///
@@ -16,18 +16,23 @@
 fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
     let backend = TestBackend::new(12, 6);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column((
+    let mut view = div((
         text("One"),
         text("Two"),
         text("Three"),
         text("Four"),
-        row(vec![button("Launch"), button("Quit")]).with_classes("focus-actions"),
+        div(vec![button("Launch"), button("Quit")]).with_classes("focus-actions"),
     ));
-    let stylesheet = Stylesheet::new().media_rule(
-        MediaQuery::max_width(12),
-        StyleSelector::class("focus-actions"),
-        TuiStyle::new().direction(LayoutDirection::Column),
-    );
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("focus-actions"),
+            TuiStyle::new().display(Display::Flex),
+        )
+        .media_rule(
+            MediaQuery::max_width(12),
+            StyleSelector::class("focus-actions"),
+            TuiStyle::new().flex_direction(FlexDirection::Column),
+        );
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -60,7 +65,7 @@ fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column([block(text("Top")), row(buttons).stack, text("End")])
+/// div([block(text("Top")), div(buttons).stack, text("End")])
 /// PageDown, PageDown
 /// ```
 ///
@@ -78,16 +83,21 @@ fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
 fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()> {
     let backend = TestBackend::new(12, 6);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = column((
+    let mut view = div((
         block(text("Top")),
-        row(vec![button("A"), button("B"), button("C"), button("D")]).with_classes("stack"),
+        div(vec![button("A"), button("B"), button("C"), button("D")]).with_classes("stack"),
         text("End"),
     ));
-    let stylesheet = Stylesheet::new().media_rule(
-        MediaQuery::max_width(12),
-        StyleSelector::class("stack"),
-        TuiStyle::new().direction(LayoutDirection::Column),
-    );
+    let stylesheet = Stylesheet::new()
+        .rule(
+            StyleSelector::class("stack"),
+            TuiStyle::new().display(Display::Flex),
+        )
+        .media_rule(
+            MediaQuery::max_width(12),
+            StyleSelector::class("stack"),
+            TuiStyle::new().flex_direction(FlexDirection::Column),
+        );
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -132,12 +142,12 @@ fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()
     Ok(())
 }
 
-/// Verifies row layout stays horizontal without a direction override.
+/// Verifies flex layout stays horizontal without a direction override.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// row([text("A"), text("B")])
+/// div([text("A"), text("B")])
 /// terminal width = 4
 /// ```
 ///
@@ -145,12 +155,13 @@ fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()
 ///
 /// - The terminal draw call succeeds.
 /// - The view render call succeeds.
-/// - The child text views render on the same row in separate columns.
+/// - The child text views render on the same row at intrinsic widths.
 #[test]
-fn row_layout_stays_horizontal_without_direction_override() -> Result<()> {
+fn flex_layout_stays_horizontal_without_direction_override() -> Result<()> {
     let backend = TestBackend::new(4, 2);
     let mut terminal = Terminal::new(backend)?;
-    let view = row(vec![text("A"), text("B")]);
+    let view = div(vec![text("A"), text("B")])
+        .with_inline_style(TuiStyle::new().display(Display::Flex));
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -160,7 +171,7 @@ fn row_layout_stays_horizontal_without_direction_override() -> Result<()> {
     render_result?;
 
     assert_eq!(symbol_position(&terminal, "A", 4), (0, 0));
-    assert_eq!(symbol_position(&terminal, "B", 4), (2, 0));
+    assert_eq!(symbol_position(&terminal, "B", 4), (1, 0));
 
     Ok(())
 }

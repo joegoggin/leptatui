@@ -34,7 +34,7 @@ fn markdown_preserves_nested_and_mixed_lists() {
 
     assert_eq!(
         markdown(source),
-        column([ordered_list([
+        div([ordered_list([
             list_item(separate_blocks(views![
                 paragraph("First"),
                 paragraph("Second paragraph."),
@@ -86,7 +86,7 @@ fn markdown_maps_table_structure_and_alignment() {
 
     assert_eq!(
         markdown(source),
-        column([table([
+        div([table([
             table_head([table_row(aligned_cells([
                 "Default", "Left", "Center", "Right",
             ]))]),
@@ -117,7 +117,7 @@ fn markdown_renders_nested_blockquotes_with_wrapped_prefixes() -> Result<()> {
 
     assert_eq!(
         markdown(source),
-        column([block_quote(views![
+        div([block_quote(views![
             paragraph("Alpha beta gamma"),
             paragraph(""),
             block_quote(views![paragraph("Inner")]),
@@ -148,7 +148,7 @@ fn markdown_renders_nested_blockquotes_with_wrapped_prefixes() -> Result<()> {
 /// - Wider terminals fill the complete row with rule glyphs.
 #[test]
 fn markdown_renders_thematic_breaks_at_narrow_widths() -> Result<()> {
-    assert_eq!(markdown("---\n"), column([thematic_break()]));
+    assert_eq!(markdown("---\n"), div([thematic_break()]));
     assert_eq!(rendered_markdown_lines("---\n", 1, 1)?, ["─"]);
     assert_eq!(rendered_markdown_lines("---\n", 6, 1)?, ["──────"]);
 

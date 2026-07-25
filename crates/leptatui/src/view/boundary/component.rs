@@ -9,6 +9,7 @@ use std::{any::TypeId, cell::RefCell, fmt, rc::Rc};
 use crossterm::event::{Event, KeyEvent};
 
 use crate::{
+    AvailableSpace, LayoutSize,
     app::{AppControl, Result},
     component::{FocusedControl, KeyControl, RenderCtx},
     context::ContextScope,
@@ -105,9 +106,28 @@ impl ComponentView {
         self.with_reset_component(|component| component.render(ctx))
     }
 
-    /// Returns the minimum useful render height inside this component boundary.
-    pub(crate) fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        self.with_reset_component(|component| component.as_view().__min_height(ctx))
+    /// Returns intrinsic geometry inside this component boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `known_dimensions` — Exact dimensions supplied by parent layout.
+    /// * `available_space` — Soft constraints for unknown dimensions.
+    /// * `ctx` — Rendering context containing styles and inherited state.
+    ///
+    /// # Returns
+    ///
+    /// A [`LayoutSize`] containing the component's measured geometry.
+    pub(crate) fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        self.with_reset_component(|component| {
+            component
+                .as_view()
+                .measure(known_dimensions, available_space, ctx)
+        })
     }
 
     /// Dispatches an event inside this component's existing context scope.
@@ -409,8 +429,13 @@ impl View for ComponentView {
         ComponentView::render(self, ctx)
     }
 
-    fn min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        ComponentView::min_height(self, ctx)
+    fn measure(
+        &self,
+        known_dimensions: LayoutSize<Option<f32>>,
+        available_space: LayoutSize<AvailableSpace>,
+        ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        ComponentView::measure(self, known_dimensions, available_space, ctx)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -419,6 +444,18 @@ impl View for ComponentView {
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    fn __visit_layout_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        self.with_reset_component(|component| visitor(component, ctx));
+    }
+
+    fn __is_layout_transparent(&self) -> bool {
+        true
     }
 
     fn reconcile(&mut self, previous: &dyn View) {

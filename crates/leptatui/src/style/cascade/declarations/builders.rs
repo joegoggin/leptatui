@@ -2,8 +2,65 @@
 
 use super::{Declaration, StyleDeclarations};
 use crate::style::{
-    BorderType, Borders, Color, LayoutDirection, Modifier, ThemeValue, TuiSize, TuiSpacing,
+    AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
+    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, ThemeValue, TuiSize,
+    TuiSpacing, ZIndex,
 };
+
+macro_rules! layout_declaration_builders {
+    ($(($field:ident, $important:ident, $setter:ident, $type:ty, $description:literal)),+ $(,)?) => {
+        $(
+            #[doc = concat!("Sets the normal ", $description, " declaration.")]
+            ///
+            /// # Arguments
+            ///
+            /// * `value` — Layout property value to declare.
+            ///
+            /// # Returns
+            ///
+            /// A [`StyleDeclarations`] value with the declaration applied.
+            pub const fn $field(mut self, value: $type) -> Self {
+                if !matches!(
+                    self.$field,
+                    Some(Declaration {
+                        important: true,
+                        ..
+                    })
+                ) {
+                    self.$field = Some(Declaration::normal(value));
+                }
+
+                self
+            }
+
+            #[doc = concat!("Sets the important ", $description, " declaration.")]
+            ///
+            /// # Arguments
+            ///
+            /// * `value` — Layout property value to declare.
+            ///
+            /// # Returns
+            ///
+            /// A [`StyleDeclarations`] value with the important declaration applied.
+            #[doc(hidden)]
+            pub const fn $important(mut self, value: $type) -> Self {
+                self.$field = Some(Declaration::important(value));
+                self
+            }
+
+            #[doc = concat!("Sets the ", $description, " declaration with explicit importance.")]
+            ///
+            /// # Arguments
+            ///
+            /// * `value` — Layout property value to declare.
+            /// * `important` — Whether the declaration has important priority.
+            pub(super) fn $setter(&mut self, value: $type, important: bool) {
+                set_declaration(&mut self.$field, value, important);
+            }
+        )+
+    };
+}
 
 impl StyleDeclarations {
     /// Sets the normal foreground color declaration.
@@ -207,44 +264,6 @@ impl StyleDeclarations {
         self
     }
 
-    /// Sets the normal layout direction declaration.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` — Child layout direction for container views.
-    ///
-    /// # Returns
-    ///
-    /// A [`StyleDeclarations`] value with the layout direction declaration applied.
-    pub const fn direction(mut self, direction: LayoutDirection) -> Self {
-        if !matches!(
-            self.direction,
-            Some(Declaration {
-                important: true,
-                ..
-            })
-        ) {
-            self.direction = Some(Declaration::normal(direction));
-        }
-
-        self
-    }
-
-    /// Sets the important layout direction declaration.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` — Child layout direction for container views.
-    ///
-    /// # Returns
-    ///
-    /// A [`StyleDeclarations`] value with the important layout direction declaration applied.
-    #[doc(hidden)]
-    pub const fn direction_important(mut self, direction: LayoutDirection) -> Self {
-        self.direction = Some(Declaration::important(direction));
-        self
-    }
-
     /// Sets the normal image render size declaration.
     ///
     /// # Arguments
@@ -282,6 +301,172 @@ impl StyleDeclarations {
         self.image_size = Some(Declaration::important(size));
         self
     }
+
+    layout_declaration_builders!(
+        (display, display_important, set_display, Display, "layout display"),
+        (
+            box_sizing,
+            box_sizing_important,
+            set_box_sizing,
+            BoxSizing,
+            "authored-size box model"
+        ),
+        (
+            overflow,
+            overflow_important,
+            set_overflow,
+            Axes<Overflow>,
+            "overflow"
+        ),
+        (
+            size,
+            size_important,
+            set_size,
+            LayoutSize<Dimension>,
+            "preferred size"
+        ),
+        (
+            min_size,
+            min_size_important,
+            set_min_size,
+            LayoutSize<Dimension>,
+            "minimum size"
+        ),
+        (
+            max_size,
+            max_size_important,
+            set_max_size,
+            LayoutSize<Dimension>,
+            "maximum size"
+        ),
+        (
+            margin,
+            margin_important,
+            set_margin,
+            Edges<LengthAuto>,
+            "outer margin"
+        ),
+        (gap, gap_important, set_gap, Axes<Length>, "child gap"),
+        (
+            flex_direction,
+            flex_direction_important,
+            set_flex_direction,
+            FlexDirection,
+            "flex direction"
+        ),
+        (
+            flex_wrap,
+            flex_wrap_important,
+            set_flex_wrap,
+            FlexWrap,
+            "flex wrapping"
+        ),
+        (
+            flex_basis,
+            flex_basis_important,
+            set_flex_basis,
+            Dimension,
+            "flex basis"
+        ),
+        (
+            flex_grow,
+            flex_grow_important,
+            set_flex_grow,
+            f32,
+            "flex growth"
+        ),
+        (
+            flex_shrink,
+            flex_shrink_important,
+            set_flex_shrink,
+            f32,
+            "flex shrink"
+        ),
+        (
+            align_items,
+            align_items_important,
+            set_align_items,
+            AlignItems,
+            "child cross-axis alignment"
+        ),
+        (
+            align_self,
+            align_self_important,
+            set_align_self,
+            AlignSelf,
+            "item cross-axis alignment"
+        ),
+        (
+            align_content,
+            align_content_important,
+            set_align_content,
+            AlignContent,
+            "cross-axis content distribution"
+        ),
+        (
+            justify_items,
+            justify_items_important,
+            set_justify_items,
+            JustifyItems,
+            "child inline-axis alignment"
+        ),
+        (
+            justify_self,
+            justify_self_important,
+            set_justify_self,
+            JustifySelf,
+            "item inline-axis alignment"
+        ),
+        (
+            justify_content,
+            justify_content_important,
+            set_justify_content,
+            JustifyContent,
+            "main-axis or inline-axis content distribution"
+        ),
+        (
+            grid_auto_flow,
+            grid_auto_flow_important,
+            set_grid_auto_flow,
+            GridAutoFlow,
+            "grid automatic flow"
+        ),
+        (
+            grid_row,
+            grid_row_important,
+            set_grid_row,
+            GridLine,
+            "grid row placement"
+        ),
+        (
+            grid_column,
+            grid_column_important,
+            set_grid_column,
+            GridLine,
+            "grid column placement"
+        ),
+        (
+            position,
+            position_important,
+            set_position,
+            Position,
+            "positioning scheme"
+        ),
+        (
+            inset,
+            inset_important,
+            set_inset,
+            Edges<LengthAuto>,
+            "positioned inset"
+        ),
+        (
+            z_index,
+            z_index_important,
+            set_z_index,
+            ZIndex,
+            "positioned stacking level"
+        ),
+    );
 
     /// Sets the foreground declaration.
     ///
@@ -341,16 +526,6 @@ impl StyleDeclarations {
     /// * `important` — Whether the declaration has important priority.
     pub(super) fn set_padding(&mut self, padding: TuiSpacing, important: bool) {
         set_declaration(&mut self.padding, padding, important);
-    }
-
-    /// Sets the layout direction declaration.
-    ///
-    /// # Arguments
-    ///
-    /// * `direction` — Child layout direction for container views.
-    /// * `important` — Whether the declaration has important priority.
-    pub(super) fn set_direction(&mut self, direction: LayoutDirection, important: bool) {
-        set_declaration(&mut self.direction, direction, important);
     }
 
     /// Sets the image render size declaration.

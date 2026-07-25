@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// column(Line 0..Line 9)
+/// div(Line 0..Line 9)
 /// G
 /// ```
 ///
@@ -18,7 +18,7 @@ fn overflowing_column_scrolls_to_bottom_with_vim_g() -> Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
-    let mut view = column(children.collect::<Vec<_>>());
+    let mut view = div(children.collect::<Vec<_>>());
 
     draw_view(&mut terminal, &view)?;
 
@@ -37,7 +37,7 @@ fn overflowing_column_scrolls_to_bottom_with_vim_g() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column(Line 0..Line 9)
+/// div(Line 0..Line 9)
 /// Ctrl-D, Ctrl-D, Ctrl-U, Ctrl-U
 /// ```
 ///
@@ -52,7 +52,7 @@ fn overflowing_column_pages_with_vim_control_keys() -> Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
-    let mut view = column(children.collect::<Vec<_>>());
+    let mut view = div(children.collect::<Vec<_>>());
 
     draw_view(&mut terminal, &view)?;
 
@@ -80,7 +80,7 @@ fn overflowing_column_pages_with_vim_control_keys() -> Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// column(Line 0..Line 9)
+/// div(Line 0..Line 9)
 /// G, g, g
 /// ```
 ///
@@ -95,7 +95,7 @@ fn overflowing_column_scrolls_to_top_with_vim_gg() -> Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
-    let mut view = column(children.collect::<Vec<_>>());
+    let mut view = div(children.collect::<Vec<_>>());
 
     draw_view(&mut terminal, &view)?;
     view.handle_key_event(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))?;
@@ -134,7 +134,7 @@ fn vim_scroll_to_top_prefix_resets_on_unrelated_key() -> Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
-    let mut view = column(children.collect::<Vec<_>>());
+    let mut view = div(children.collect::<Vec<_>>());
 
     draw_view(&mut terminal, &view)?;
     view.handle_key_event(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))?;
