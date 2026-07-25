@@ -48,6 +48,8 @@ struct LayoutNode {
     node: NodeId,
     /// Logical path back to the corresponding Leptatui view.
     path: LayoutPath,
+    /// Authored vertical overflow used for conditional scrollbar promotion.
+    vertical_overflow: Option<Overflow>,
 }
 
 /// Builds, computes, rounds, and stores one root layout snapshot.
@@ -68,21 +70,94 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
         return;
     }
 
-    let viewport = ctx.viewport_size();
-    let clamp_root_to_viewport = roots.len() == 1;
-    let root_node = if clamp_root_to_viewport {
+    let available = ViewportSize::from(ctx.area());
+    let clamp_root_to_area = roots.len() == 1;
+    let root_node = if clamp_root_to_area {
         roots[0]
     } else {
-        tree.new_with_children(synthetic_root_style(viewport), &roots)
+        tree.new_with_children(synthetic_root_style(available), &roots)
             .expect("transient layout roots should form a valid Taffy tree")
     };
 
     ctx.set_layout_phase(LayoutPhase::Measure);
+    compute_layout(&mut tree, root_node, available, root, ctx);
+    while promote_overflowing_auto_nodes(&mut tree, &nodes) {
+        compute_layout(&mut tree, root_node, available, root, ctx);
+    }
+
+    let root_path = nodes
+        .iter()
+        .find(|layout_node| layout_node.node == root_node)
+        .map(|layout_node| layout_node.path.clone());
+    let root_vertical_overflow = root_path
+        .as_ref()
+        .and_then(|path| vertical_overflow_at_path(root, &path.0, ctx));
+    let root_overflows_available_area = tree
+        .layout(root_node)
+        .is_ok_and(|layout| layout.size.height > f32::from(available.height));
+    let root_does_not_scroll = matches!(
+        root_vertical_overflow,
+        Some(Overflow::Clip | Overflow::Visible)
+    );
+    if root_overflows_available_area
+        && !root_does_not_scroll
+        && root_path
+            .as_ref()
+            .is_some_and(|path| uses_computed_child_layout_at_path(root, &path.0, ctx))
+    {
+        let mut style = tree
+            .style(root_node)
+            .expect("computed root style should remain available")
+            .clone();
+        style.size.height = TaffyDimension::length(f32::from(available.height));
+        if root_vertical_overflow != Some(Overflow::Hidden) {
+            style.overflow.y = TaffyOverflow::Scroll;
+            style.scrollbar_width = 1.0;
+        }
+        tree.set_style(root_node, style)
+            .expect("computed root style should remain mutable");
+        compute_layout(&mut tree, root_node, available, root, ctx);
+    }
+
+    let paths = nodes
+        .into_iter()
+        .map(|node| (node.node, node.path))
+        .collect::<HashMap<_, _>>();
+    let area = ctx.area();
+    retain_geometry(
+        &tree,
+        root_node,
+        (f32::from(area.x), f32::from(area.y)),
+        &paths,
+        root,
+        ctx,
+        clamp_root_to_area,
+    );
+
+    ctx.set_layout_phase(LayoutPhase::Paint);
+}
+
+/// Computes one Taffy layout pass with Leptatui intrinsic measurement.
+///
+/// # Arguments
+///
+/// * `tree` — Transient Taffy tree to compute.
+/// * `root_node` — Root node for the computation.
+/// * `available` — Definite terminal area available to the root.
+/// * `root` — Rendered Leptatui root used to resolve measurement paths.
+/// * `ctx` — Render context used to reproduce traversal scopes.
+fn compute_layout(
+    tree: &mut TaffyTree<LayoutPath>,
+    root_node: NodeId,
+    available: ViewportSize,
+    root: &dyn View,
+    ctx: &mut RenderCtx<'_, '_>,
+) {
     tree.compute_layout_with_measure(
         root_node,
         TaffySize {
-            width: TaffyAvailableSpace::Definite(f32::from(viewport.width)),
-            height: TaffyAvailableSpace::Definite(f32::from(viewport.height)),
+            width: TaffyAvailableSpace::Definite(f32::from(available.width)),
+            height: TaffyAvailableSpace::Definite(f32::from(available.height)),
         },
         |known, available, _node, path, _style| {
             let Some(path) = path else {
@@ -105,73 +180,45 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
         },
     )
     .expect("transient layout computation should use valid node identifiers");
+}
 
-    let root_path = nodes
+/// Promotes overflowing automatic containers to scrollbar-reserving layout.
+///
+/// # Arguments
+///
+/// * `tree` — Computed Taffy tree whose styles may be promoted.
+/// * `nodes` — Leptatui node records containing authored overflow behavior.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether another layout pass is required.
+fn promote_overflowing_auto_nodes(tree: &mut TaffyTree<LayoutPath>, nodes: &[LayoutNode]) -> bool {
+    let mut changed = false;
+    for node in nodes
         .iter()
-        .find(|layout_node| layout_node.node == root_node)
-        .map(|layout_node| layout_node.path.clone());
-    let root_overflows_viewport = tree
-        .layout(root_node)
-        .is_ok_and(|layout| layout.size.height > f32::from(viewport.height));
-    if root_overflows_viewport
-        && root_path
-            .as_ref()
-            .is_some_and(|path| uses_computed_child_layout_at_path(root, &path.0, ctx))
+        .filter(|node| node.vertical_overflow == Some(Overflow::Auto))
     {
+        let overflows = tree
+            .layout(node.node)
+            .is_ok_and(|layout| layout.scroll_height() > 0.0);
+        let already_reserves_scrollbar = tree.style(node.node).is_ok_and(|style| {
+            style.overflow.y == TaffyOverflow::Scroll && style.scrollbar_width > 0.0
+        });
+        if !overflows || already_reserves_scrollbar {
+            continue;
+        }
+
         let mut style = tree
-            .style(root_node)
-            .expect("computed root style should remain available")
+            .style(node.node)
+            .expect("computed auto-overflow style should remain available")
             .clone();
-        style.size.height = TaffyDimension::length(f32::from(viewport.height));
         style.overflow.y = TaffyOverflow::Scroll;
         style.scrollbar_width = 1.0;
-        tree.set_style(root_node, style)
-            .expect("computed root style should remain mutable");
-        tree.compute_layout_with_measure(
-            root_node,
-            TaffySize {
-                width: TaffyAvailableSpace::Definite(f32::from(viewport.width)),
-                height: TaffyAvailableSpace::Definite(f32::from(viewport.height)),
-            },
-            |known, available, _node, path, _style| {
-                let Some(path) = path else {
-                    return TaffySize::ZERO;
-                };
-                let measured = measure_at_path(
-                    root,
-                    &path.0,
-                    LayoutSize::new(known.width, known.height),
-                    LayoutSize::new(
-                        from_taffy_available(available.width),
-                        from_taffy_available(available.height),
-                    ),
-                    ctx,
-                );
-                TaffySize {
-                    width: sanitize_cells(measured.width),
-                    height: sanitize_cells(measured.height),
-                }
-            },
-        )
-        .expect("scrolling root layout should use valid node identifiers");
+        tree.set_style(node.node, style)
+            .expect("auto-overflow style should remain mutable");
+        changed = true;
     }
-
-    let paths = nodes
-        .into_iter()
-        .map(|node| (node.node, node.path))
-        .collect::<HashMap<_, _>>();
-    let area = ctx.area();
-    retain_geometry(
-        &tree,
-        root_node,
-        (f32::from(area.x), f32::from(area.y)),
-        &paths,
-        root,
-        ctx,
-        clamp_root_to_viewport,
-    );
-
-    ctx.set_layout_phase(LayoutPhase::Paint);
+    changed
 }
 
 /// Mirrors one view and its logical children into Taffy.
@@ -208,6 +255,7 @@ fn build_view(
         nodes.push(LayoutNode {
             node,
             path: path.clone(),
+            vertical_overflow: None,
         });
         return vec![node];
     };
@@ -235,6 +283,7 @@ fn build_view(
     nodes.push(LayoutNode {
         node,
         path: path.clone(),
+        vertical_overflow: resolved.overflow.map(|overflow| overflow.y),
     });
     vec![node]
 }
@@ -351,7 +400,9 @@ fn measure_at_path(
     ctx: &mut RenderCtx<'_, '_>,
 ) -> LayoutSize<f32> {
     if path.is_empty() {
-        return view.measure(known, available, ctx);
+        let (known, available) = box_inclusive_measurement_constraints(view, known, available, ctx);
+        let measured = view.measure(known, available, ctx);
+        return measured_content_size(view, measured, ctx);
     }
 
     let target = path[0];
@@ -370,6 +421,104 @@ fn measure_at_path(
         index = index.saturating_add(1);
     });
     measured.unwrap_or_else(|| LayoutSize::all(0.0))
+}
+
+/// Converts Taffy content-box constraints for a chrome-inclusive built-in.
+///
+/// # Arguments
+///
+/// * `view` — View that will receive the intrinsic measurement request.
+/// * `known` — Exact content-box dimensions supplied by Taffy.
+/// * `available` — Soft content-box constraints supplied by Taffy.
+/// * `ctx` — Render context used to resolve the view's effective chrome.
+///
+/// # Returns
+///
+/// A tuple containing border-box dimensions expected by the built-in view.
+fn box_inclusive_measurement_constraints(
+    view: &dyn View,
+    known: LayoutSize<Option<f32>>,
+    available: LayoutSize<AvailableSpace>,
+    ctx: &RenderCtx<'_, '_>,
+) -> (LayoutSize<Option<f32>>, LayoutSize<AvailableSpace>) {
+    let Some(chrome) = measured_box_chrome(view, ctx) else {
+        return (known, available);
+    };
+    let add_available = |constraint, inset| match constraint {
+        AvailableSpace::Definite(value) => AvailableSpace::Definite(sanitize_cells(value + inset)),
+        intrinsic => intrinsic,
+    };
+    (
+        LayoutSize::new(
+            known
+                .width
+                .map(|width| sanitize_cells(width + chrome.width)),
+            known
+                .height
+                .map(|height| sanitize_cells(height + chrome.height)),
+        ),
+        LayoutSize::new(
+            add_available(available.width, chrome.width),
+            add_available(available.height, chrome.height),
+        ),
+    )
+}
+
+/// Converts a chrome-inclusive built-in measurement into content-box size.
+///
+/// # Arguments
+///
+/// * `view` — View that produced the intrinsic measurement.
+/// * `measured` — Intrinsic border-box size returned by the view.
+/// * `ctx` — Render context used to resolve the view's effective chrome.
+///
+/// # Returns
+///
+/// A [`LayoutSize`] containing the content size expected by Taffy.
+fn measured_content_size(
+    view: &dyn View,
+    measured: LayoutSize<f32>,
+    ctx: &RenderCtx<'_, '_>,
+) -> LayoutSize<f32> {
+    let Some(chrome) = measured_box_chrome(view, ctx) else {
+        return measured;
+    };
+
+    LayoutSize::new(
+        sanitize_cells(measured.width - chrome.width),
+        sanitize_cells(measured.height - chrome.height),
+    )
+}
+
+/// Returns the resolved border and padding consumed by one built-in view.
+///
+/// # Arguments
+///
+/// * `view` — View whose measurement convention and chrome are inspected.
+/// * `ctx` — Render context used to resolve the view's effective chrome.
+///
+/// # Returns
+///
+/// An optional [`LayoutSize`] containing horizontal and vertical chrome.
+fn measured_box_chrome(view: &dyn View, ctx: &RenderCtx<'_, '_>) -> Option<LayoutSize<f32>> {
+    if !measures_own_box(view) {
+        return None;
+    }
+    let style = view
+        .style_metadata()
+        .map_or_else(TuiStyle::new, |metadata| ctx.resolve_style(metadata));
+    let borders = style.borders.unwrap_or_else(|| default_borders(view));
+    let padding = style.padding.unwrap_or_default();
+    let horizontal = u16::from(borders.contains(Borders::LEFT))
+        .saturating_add(u16::from(borders.contains(Borders::RIGHT)))
+        .saturating_add(padding.left)
+        .saturating_add(padding.right);
+    let vertical = u16::from(borders.contains(Borders::TOP))
+        .saturating_add(u16::from(borders.contains(Borders::BOTTOM)))
+        .saturating_add(padding.top)
+        .saturating_add(padding.bottom);
+
+    Some(LayoutSize::new(f32::from(horizontal), f32::from(vertical)))
 }
 
 /// Returns whether the view at one logical path computes child layout.
@@ -403,6 +552,41 @@ fn uses_computed_child_layout_at_path(
         index = index.saturating_add(1);
     });
     uses_computed_layout
+}
+
+/// Returns the resolved vertical overflow for one logical path.
+///
+/// # Arguments
+///
+/// * `view` — Current traversal root.
+/// * `path` — Remaining child indexes leading to the target view.
+/// * `ctx` — Render context used to reproduce structural scopes.
+///
+/// # Returns
+///
+/// An optional [`Overflow`] authored for the addressed view's vertical axis.
+fn vertical_overflow_at_path(
+    view: &dyn View,
+    path: &[usize],
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<Overflow> {
+    if path.is_empty() {
+        return view
+            .style_metadata()
+            .and_then(|metadata| ctx.resolve_style(metadata).overflow)
+            .map(|overflow| overflow.y);
+    }
+
+    let target = path[0];
+    let mut index = 0usize;
+    let mut overflow = None;
+    visit_children_with_style(view, ctx, &mut |child, child_ctx| {
+        if index == target {
+            overflow = vertical_overflow_at_path(child.as_view(), &path[1..], child_ctx);
+        }
+        index = index.saturating_add(1);
+    });
+    overflow
 }
 
 /// Visits logical children with the same inherited style used during building.
@@ -441,7 +625,7 @@ fn visit_children_with_style(
 /// * `paths` — Mapping from Taffy nodes to logical view paths.
 /// * `root` — Rendered root used to resolve each path.
 /// * `ctx` — Render context used to reproduce traversal scopes.
-/// * `clamp_to_viewport` — Whether this node is the sole visible root box.
+/// * `clamp_to_area` — Whether this node is the sole visible root box.
 fn retain_geometry(
     tree: &TaffyTree<LayoutPath>,
     node: NodeId,
@@ -449,7 +633,7 @@ fn retain_geometry(
     paths: &HashMap<NodeId, LayoutPath>,
     root: &dyn View,
     ctx: &mut RenderCtx<'_, '_>,
-    clamp_to_viewport: bool,
+    clamp_to_area: bool,
 ) {
     let layout = tree
         .layout(node)
@@ -461,7 +645,7 @@ fn retain_geometry(
 
     if let Some(path) = paths.get(&node) {
         let mut border_box = terminal_rect(origin, layout.size.width, layout.size.height);
-        if clamp_to_viewport {
+        if clamp_to_area {
             border_box = border_box.intersection(ctx.area());
         }
         let padding_box = inset_rect(
@@ -560,17 +744,17 @@ fn set_geometry_at_path(
 ///
 /// # Arguments
 ///
-/// * `viewport` — Terminal viewport constraining the synthetic root.
+/// * `available` — Assigned terminal area constraining the synthetic root.
 ///
 /// # Returns
 ///
 /// A [`TaffyStyle`] containing definite viewport dimensions.
-fn synthetic_root_style(viewport: ViewportSize) -> TaffyStyle {
+fn synthetic_root_style(available: ViewportSize) -> TaffyStyle {
     TaffyStyle {
         display: TaffyDisplay::Block,
         size: TaffySize {
-            width: TaffyDimension::length(f32::from(viewport.width)),
-            height: TaffyDimension::length(f32::from(viewport.height)),
+            width: TaffyDimension::length(f32::from(available.width)),
+            height: TaffyDimension::length(f32::from(available.height)),
         },
         ..TaffyStyle::default()
     }
@@ -592,21 +776,7 @@ fn to_taffy_style(view: &dyn View, style: TuiStyle, viewport: ViewportSize) -> T
     let flex_direction = style.flex_direction.unwrap_or_default();
     let borders = style.borders.unwrap_or_else(|| default_borders(view));
     let padding = style.padding.unwrap_or_default();
-    let measures_own_box = view.as_any().is::<BlockView>()
-        || view.as_any().is::<ButtonView>()
-        || view.as_any().is::<CodeBlockView>()
-        || view.as_any().is::<InputView>()
-        || view.as_any().is::<TextAreaView>();
-    let layout_borders = if measures_own_box {
-        Borders::NONE
-    } else {
-        borders
-    };
-    let layout_padding = if measures_own_box {
-        crate::TuiSpacing::ZERO
-    } else {
-        padding
-    };
+    let overflow = style.overflow.unwrap_or_default();
     let gap = style
         .gap
         .unwrap_or_else(|| crate::Axes::all(Length::Cells(0.0)));
@@ -615,8 +785,13 @@ fn to_taffy_style(view: &dyn View, style: TuiStyle, viewport: ViewportSize) -> T
         display: map_display(display),
         box_sizing: map_box_sizing(style.box_sizing.unwrap_or_default()),
         overflow: TaffyPoint {
-            x: map_overflow(style.overflow.unwrap_or_default().x),
-            y: map_overflow(style.overflow.unwrap_or_default().y),
+            x: map_overflow(overflow.x),
+            y: map_overflow(overflow.y),
+        },
+        scrollbar_width: if overflow.y == Overflow::Scroll {
+            1.0
+        } else {
+            0.0
         },
         position: map_position(style.position.unwrap_or_default()),
         inset: map_auto_edges(style.inset.unwrap_or_default(), viewport),
@@ -630,12 +805,12 @@ fn to_taffy_style(view: &dyn View, style: TuiStyle, viewport: ViewportSize) -> T
             viewport,
         ),
         padding: TaffyRect {
-            left: LengthPercentage::length(f32::from(layout_padding.left)),
-            right: LengthPercentage::length(f32::from(layout_padding.right)),
-            top: LengthPercentage::length(f32::from(layout_padding.top)),
-            bottom: LengthPercentage::length(f32::from(layout_padding.bottom)),
+            left: LengthPercentage::length(f32::from(padding.left)),
+            right: LengthPercentage::length(f32::from(padding.right)),
+            top: LengthPercentage::length(f32::from(padding.top)),
+            bottom: LengthPercentage::length(f32::from(padding.bottom)),
         },
-        border: border_edges(layout_borders),
+        border: border_edges(borders),
         gap: TaffySize {
             width: map_length(gap.x, viewport),
             height: map_length(gap.y, viewport),
@@ -1097,6 +1272,23 @@ fn map_grid_placement(value: GridPlacement) -> TaffyGridPlacement {
         GridPlacement::Line(line) => TaffyGridPlacement::Line(line.into()),
         GridPlacement::Span(span) => TaffyGridPlacement::Span(span),
     }
+}
+
+/// Returns whether a built-in view includes chrome in intrinsic measurements.
+///
+/// # Arguments
+///
+/// * `view` — View whose measurement behavior is inspected.
+///
+/// # Returns
+///
+/// `true` when the view reports a border-box intrinsic size.
+fn measures_own_box(view: &dyn View) -> bool {
+    view.as_any().is::<BlockView>()
+        || view.as_any().is::<ButtonView>()
+        || view.as_any().is::<CodeBlockView>()
+        || view.as_any().is::<InputView>()
+        || view.as_any().is::<TextAreaView>()
 }
 
 /// Returns the widget borders used when no authored value overrides them.

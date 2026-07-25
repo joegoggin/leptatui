@@ -133,11 +133,17 @@ pub enum Dimension {
     Auto,
     /// Uses the contained definite length.
     Length(Length),
-    /// Uses the smallest intrinsic size that avoids avoidable overflow.
+    /// Currently behaves like [`Dimension::Auto`].
+    ///
+    /// Minimum-content sizing is not yet implemented.
     MinContent,
-    /// Uses the preferred intrinsic size without soft wrapping.
+    /// Currently behaves like [`Dimension::Auto`].
+    ///
+    /// Maximum-content sizing is not yet implemented.
     MaxContent,
-    /// Clamps intrinsic sizing to the contained available length.
+    /// Currently behaves like [`Dimension::Length`].
+    ///
+    /// Intrinsic fit-content clamping is not yet implemented.
     FitContent(Length),
 }
 

@@ -87,6 +87,88 @@ impl View for HiddenLayoutProbe {
     }
 }
 
+/// Verifies a nested layout uses its assigned area as its containing block.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 12x3 bordered block
+/// 100%-wide inner flex layout: A <space-between> B
+/// ```
+///
+/// # Assertions
+///
+/// - The first flex child renders against the block's left inner edge.
+/// - The second flex child renders against the block's right inner edge.
+#[test]
+fn nested_layout_uses_assigned_area_as_containing_block() -> Result<()> {
+    let root = block(
+        div((text("A"), text("B"))).with_inline_style(
+            TuiStyle::new()
+                .display(Display::Flex)
+                .size(LayoutSize::new(
+                    Dimension::from(Length::percent(100.0)),
+                    Dimension::Auto,
+                ))
+                .justify_content(JustifyContent::SpaceBetween),
+        ),
+    )
+    .into_view();
+
+    let terminal = render_layout_root(&root, 12, 3)?;
+
+    assert_eq!(cell_symbol(&terminal, 1, 1, 12), "A");
+    assert_eq!(cell_symbol(&terminal, 10, 1, 12), "B");
+    Ok(())
+}
+
+/// Verifies positioned siblings paint in ascending z-index order.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 1x1 relative container
+/// absolute "A": z-index 1
+/// absolute "B": z-index 0, later in source order
+/// ```
+///
+/// # Assertions
+///
+/// - The higher-z-index first sibling paints over the later sibling.
+#[test]
+fn positioned_siblings_paint_by_z_index() -> Result<()> {
+    let inset = Edges::new(
+        Length::cells(0.0).into(),
+        LengthAuto::Auto,
+        LengthAuto::Auto,
+        Length::cells(0.0).into(),
+    );
+    let higher = text("A").with_inline_style(
+        TuiStyle::new()
+            .position(Position::Absolute)
+            .inset(inset)
+            .z_index(ZIndex::Integer(1)),
+    );
+    let lower = text("B").with_inline_style(
+        TuiStyle::new()
+            .position(Position::Absolute)
+            .inset(inset)
+            .z_index(ZIndex::Integer(0)),
+    );
+    let root = div((higher, lower))
+        .with_inline_style(
+            TuiStyle::new()
+                .position(Position::Relative)
+                .size(LayoutSize::all(Dimension::from(Length::cells(1.0)))),
+        )
+        .into_view();
+
+    let terminal = render_layout_root(&root, 1, 1)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 1), "A");
+    Ok(())
+}
+
 /// Verifies one rounded snapshot exposes border, padding, and content boxes.
 ///
 /// # Example Under Test
@@ -126,6 +208,46 @@ fn layout_tree_retains_rounded_box_geometry() -> Result<()> {
     assert_eq!(layout.border_box, ratatui::layout::Rect::new(0, 0, 6, 6));
     assert_eq!(layout.padding_box, ratatui::layout::Rect::new(1, 1, 4, 4));
     assert_eq!(layout.content_box, ratatui::layout::Rect::new(2, 2, 2, 2));
+    Ok(())
+}
+
+/// Verifies content-box sizing adds authored padding and borders.
+///
+/// # Example Under Test
+///
+/// ```text
+/// content size: 6x6
+/// padding: 1 cell
+/// borders: 1 cell
+/// ```
+///
+/// # Assertions
+///
+/// - The border box includes content, padding, and borders as `10x10`.
+/// - Removing the borders produces an `8x8` padding box.
+/// - Removing the padding produces the authored `6x6` content box.
+#[test]
+fn content_box_sizing_includes_builtin_chrome() -> Result<()> {
+    let root = block(text("inside"))
+        .with_inline_style(
+            TuiStyle::new()
+                .size(LayoutSize::new(
+                    Dimension::from(Length::cells(6.0)),
+                    Dimension::from(Length::cells(6.0)),
+                ))
+                .padding(TuiSpacing::uniform(1)),
+        )
+        .into_view();
+
+    let _terminal = render_layout_root(&root, 20, 15)?;
+
+    let layout = root
+        .style_metadata()
+        .and_then(StyleMetadata::layout_geometry)
+        .expect("computed block geometry");
+    assert_eq!(layout.border_box, ratatui::layout::Rect::new(0, 0, 10, 10));
+    assert_eq!(layout.padding_box, ratatui::layout::Rect::new(1, 1, 8, 8));
+    assert_eq!(layout.content_box, ratatui::layout::Rect::new(2, 2, 6, 6));
     Ok(())
 }
 

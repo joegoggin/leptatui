@@ -7,7 +7,18 @@ use ratatui::{
 
 use crate::view::core::render::{VerticalSpan, resolve_style, scroll_span_into_view};
 use crate::view::{AnyView, StyleMetadata};
-use crate::{TuiStyle, app::Result, component::RenderCtx};
+use crate::{Overflow, Position, TuiStyle, ZIndex, app::Result, component::RenderCtx};
+
+/// Geometry and clipping settings used while painting container children.
+#[derive(Clone, Copy)]
+struct ChildPaintOptions {
+    /// Signed translation from retained to assigned geometry.
+    layout_offset: (i32, i32),
+    /// Whether painting is clipped to the content width.
+    clips_horizontal: bool,
+    /// Whether painting is clipped to the content height.
+    clips_vertical: bool,
+}
 
 /// Returns the focused control's vertical span inside computed child geometry.
 ///
@@ -78,18 +89,46 @@ pub(crate) fn render_container(
         .max()
         .unwrap_or(content_area.height);
     let max_scroll_offset = content_height.saturating_sub(content_area.height);
-    metadata.set_max_scroll_offset(max_scroll_offset);
+    let vertical_overflow = style.overflow.map(|overflow| overflow.y);
+    let clips_horizontal = !style
+        .overflow
+        .is_some_and(|overflow| overflow.x == Overflow::Visible);
+    let clips_vertical = vertical_overflow != Some(Overflow::Visible);
+    let paint_options = ChildPaintOptions {
+        layout_offset,
+        clips_horizontal,
+        clips_vertical,
+    };
 
-    if max_scroll_offset == 0 {
+    if matches!(vertical_overflow, Some(Overflow::Clip | Overflow::Visible)) {
+        metadata.set_max_scroll_offset(0);
         return render_children(
             children,
             content_area,
             0,
             style.inherited_values(),
             metadata,
-            layout_offset,
+            paint_options,
             ctx,
         );
+    }
+
+    metadata.set_max_scroll_offset(max_scroll_offset);
+
+    if max_scroll_offset == 0 {
+        render_children(
+            children,
+            content_area,
+            0,
+            style.inherited_values(),
+            metadata,
+            paint_options,
+            ctx,
+        )?;
+        if vertical_overflow == Some(Overflow::Scroll) {
+            render_scrollbar(0, 0, content_area, ctx);
+        }
+        return Ok(());
     }
 
     if let Some(span) = focused_control_span_for_container(children, metadata, ctx) {
@@ -110,10 +149,12 @@ pub(crate) fn render_container(
         row_offset,
         style.inherited_values(),
         metadata,
-        layout_offset,
+        paint_options,
         ctx,
     )?;
-    render_scrollbar(row_offset, max_scroll_offset, content_area, ctx);
+    if vertical_overflow != Some(Overflow::Hidden) {
+        render_scrollbar(row_offset, max_scroll_offset, content_area, ctx);
+    }
     Ok(())
 }
 
@@ -188,11 +229,11 @@ fn focused_control_span_for_view(
 /// # Arguments
 ///
 /// * `children` — Child views rendered in source order.
-/// * `content_area` — Parent content box used for clipping.
+/// * `content_area` — Parent content box used for positioning and clipping.
 /// * `row_offset` — Vertical scroll offset applied to retained child geometry.
 /// * `inherited_style` — Cascaded style inherited by each child.
 /// * `parent_metadata` — Parent metadata supplying selector ancestry.
-/// * `layout_offset` — Signed translation from retained to assigned geometry.
+/// * `options` — Retained-geometry translation and axis clipping settings.
 /// * `ctx` — Render context targeting the container.
 ///
 /// # Returns
@@ -208,10 +249,25 @@ fn render_children(
     row_offset: u16,
     inherited_style: TuiStyle,
     parent_metadata: &StyleMetadata,
-    layout_offset: (i32, i32),
+    options: ChildPaintOptions,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
-    for child in children {
+    let mut paint_order = children
+        .iter()
+        .enumerate()
+        .map(|(source_index, child)| {
+            let stacking_level = ctx.with_area_inherited_style_and_selector_ancestor(
+                content_area,
+                inherited_style,
+                parent_metadata.clone(),
+                |child_ctx| child_stacking_level(child, child_ctx),
+            );
+            (stacking_level, source_index, child)
+        })
+        .collect::<Vec<_>>();
+    paint_order.sort_by_key(|(stacking_level, source_index, _)| (*stacking_level, *source_index));
+
+    for (_, _, child) in paint_order {
         if child
             .style_metadata()
             .is_some_and(StyleMetadata::is_layout_hidden)
@@ -219,11 +275,19 @@ fn render_children(
             continue;
         }
 
-        let full_area = child_area(child, content_area, layout_offset, ctx);
+        let full_area = child_area(child, content_area, options.layout_offset, ctx);
         let shifted_top = i32::from(full_area.y) - i32::from(row_offset);
         let shifted_bottom = shifted_top.saturating_add(i32::from(full_area.height));
-        let visible_top = shifted_top.max(i32::from(content_area.y));
-        let visible_bottom = shifted_bottom.min(i32::from(content_area.bottom()));
+        let visible_top = if options.clips_vertical {
+            shifted_top.max(i32::from(content_area.y))
+        } else {
+            shifted_top.max(0)
+        };
+        let visible_bottom = if options.clips_vertical {
+            shifted_bottom.min(i32::from(content_area.bottom()))
+        } else {
+            shifted_bottom.min(i32::from(u16::MAX))
+        };
         if visible_bottom <= visible_top {
             continue;
         }
@@ -232,13 +296,20 @@ fn render_children(
             y: u16::try_from(shifted_top.max(0)).unwrap_or(u16::MAX),
             ..full_area
         };
+        let visible_left = if options.clips_horizontal {
+            full_area.x.max(content_area.x)
+        } else {
+            full_area.x
+        };
+        let visible_right = if options.clips_horizontal {
+            full_area.right().min(content_area.right())
+        } else {
+            full_area.right()
+        };
         let visible_area = Rect {
-            x: full_area.x.max(content_area.x),
+            x: visible_left,
             y: u16::try_from(visible_top).unwrap_or(u16::MAX),
-            width: full_area
-                .right()
-                .min(content_area.right())
-                .saturating_sub(full_area.x.max(content_area.x)),
+            width: visible_right.saturating_sub(visible_left),
             height: u16::try_from(visible_bottom.saturating_sub(visible_top)).unwrap_or(u16::MAX),
         };
 
@@ -261,6 +332,30 @@ fn render_children(
         }
     }
     Ok(())
+}
+
+/// Returns the authored stacking level for one positioned child.
+///
+/// # Arguments
+///
+/// * `child` — Child view whose resolved positioning and z-index are inspected.
+/// * `ctx` — Render context supplying the active style cascade.
+///
+/// # Returns
+///
+/// An `i32` stacking level, with static and automatic children at level zero.
+fn child_stacking_level(child: &AnyView, ctx: &RenderCtx<'_, '_>) -> i32 {
+    let Some(metadata) = child.style_metadata() else {
+        return 0;
+    };
+    let style = resolve_style(metadata, ctx);
+    if style.position.unwrap_or_default() == Position::Static {
+        return 0;
+    }
+    match style.z_index.unwrap_or_default() {
+        ZIndex::Auto => 0,
+        ZIndex::Integer(level) => level,
+    }
 }
 
 /// Returns one child's retained border box or the parent content fallback.

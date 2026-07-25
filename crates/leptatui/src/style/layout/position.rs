@@ -10,9 +10,13 @@ pub enum Position {
     Relative,
     /// Leaves normal flow and uses the nearest positioned containing block.
     Absolute,
-    /// Leaves normal flow and uses the terminal viewport as its containing block.
+    /// Currently behaves like [`Position::Absolute`].
+    ///
+    /// Terminal-viewport anchoring is not yet implemented.
     Fixed,
-    /// Participates in normal flow and clamps to insets within its scroll container.
+    /// Currently behaves like [`Position::Relative`].
+    ///
+    /// Scroll-container clamping is not yet implemented.
     Sticky,
 }
 
