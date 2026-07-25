@@ -198,7 +198,7 @@ fn semantic_table_shrinks_columns_and_wraps_unicode_cells() -> Result<()> {
     let mut min_height = 0;
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = view.__min_height(&mut ctx);
+        min_height = intrinsic_height(&view, &mut ctx);
     })?;
 
     draw_view(&mut terminal, &view)?;
@@ -287,7 +287,7 @@ fn semantic_table_clips_columns_and_handles_zero_width() -> Result<()> {
         let mut render_result = Ok(());
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            min_height = view.__min_height(&mut ctx);
+            min_height = intrinsic_height(&view, &mut ctx);
             render_result = view.render(&mut ctx);
         })?;
         render_result?;

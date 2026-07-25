@@ -208,7 +208,14 @@ fn markdown_fixtures_handle_empty_and_zero_sized_viewports() -> Result<()> {
         let mut render_result = Ok(());
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            let _ = code.__min_height(&mut ctx);
+            let _ = code.measure(
+                LayoutSize::new(Some(f32::from(width)), None),
+                LayoutSize::new(
+                    AvailableSpace::Definite(f32::from(width)),
+                    AvailableSpace::Definite(2.0),
+                ),
+                &mut ctx,
+            );
             render_result = code.render(&mut ctx);
         })?;
         render_result?;

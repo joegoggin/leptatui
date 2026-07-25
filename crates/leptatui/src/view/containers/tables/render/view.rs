@@ -250,7 +250,7 @@ fn clear_table_link_scroll_requests(sections: &[AnyView]) {
 /// # Returns
 ///
 /// A [`u16`] height including horizontal row boundaries.
-pub(in crate::view::containers::tables) fn min_height_for_table_view(
+pub(in crate::view::containers::tables) fn intrinsic_height_for_table_view(
     sections: &[AnyView],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,

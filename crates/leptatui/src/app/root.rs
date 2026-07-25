@@ -132,13 +132,13 @@ where
                 if metadata.is_layout_hidden() {
                     return Ok(());
                 }
-                if let Some(geometry) = metadata.layout_geometry() {
-                    return ctx.with_layout_geometry(geometry, metadata, |ctx| {
-                        ctx.record_metadata_hit_area(metadata);
-                        View::render(self, ctx)
-                    });
-                }
-                ctx.record_metadata_hit_area(metadata);
+                let geometry = metadata
+                    .layout_geometry()
+                    .expect("styled app roots should retain geometry before painting");
+                return ctx.with_layout_geometry(geometry, metadata, |ctx| {
+                    ctx.record_metadata_hit_area(metadata);
+                    View::render(self, ctx)
+                });
             }
             View::render(self, &mut ctx)
         })

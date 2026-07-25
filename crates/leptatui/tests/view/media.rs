@@ -195,7 +195,7 @@ fn image_stylesheet_size_controls_min_height() -> Result<()> {
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = ctx.__with_stylesheet(&stylesheet, |ctx| view.__min_height(ctx));
+        min_height = ctx.__with_stylesheet(&stylesheet, |ctx| intrinsic_height(&view, ctx));
     })?;
 
     assert_eq!(min_height, 3);

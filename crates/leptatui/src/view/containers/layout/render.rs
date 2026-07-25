@@ -5,10 +5,14 @@ use ratatui::{
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
-use crate::view::core::render::{VerticalSpan, resolve_style, scroll_span_into_view};
+use crate::view::core::{
+    measurement::{AvailableSpace, cells_to_u16, measure_view_height, sanitize_cells},
+    render::{VerticalSpan, resolve_style, scroll_span_into_view},
+};
 use crate::view::{AnyView, StyleMetadata};
 use crate::{
-    Axes, LayoutGeometry, Overflow, Position, TuiStyle, ZIndex, app::Result, component::RenderCtx,
+    Axes, LayoutGeometry, LayoutSize, Overflow, Position, TuiStyle, ZIndex, app::Result,
+    component::RenderCtx,
 };
 
 /// Geometry and clipping settings used while painting container children.
@@ -124,13 +128,15 @@ pub(crate) fn render_container(
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
-    if ctx.honors_layout_geometry()
-        && let Some(geometry) = metadata.layout_geometry()
-        && geometry != ctx.layout_geometry()
-    {
-        return ctx.with_layout_geometry(geometry, metadata, |ctx| {
-            render_container(children, metadata, ctx)
-        });
+    if ctx.honors_layout_geometry() {
+        let geometry = metadata
+            .layout_geometry()
+            .expect("computed containers should retain geometry before painting");
+        if geometry != ctx.layout_geometry() {
+            return ctx.with_layout_geometry(geometry, metadata, |ctx| {
+                render_container(children, metadata, ctx)
+            });
+        }
     }
 
     let style = resolve_style(metadata, ctx);
@@ -227,30 +233,43 @@ fn scroll_horizontal_bounds_into_view(
     metadata.set_scroll_offsets(offsets);
 }
 
-/// Returns the legacy minimum height of block-flow children.
+/// Measures a computed container through the two-axis view contract.
 ///
 /// # Arguments
 ///
 /// * `children` — Child views measured in source order.
 /// * `metadata` — Container metadata supplying inherited style.
+/// * `known_dimensions` — Exact dimensions supplied by parent layout.
+/// * `available_space` — Soft constraints used for unknown dimensions.
 /// * `ctx` — Render context used for child measurement.
 ///
 /// # Returns
 ///
-/// A minimum terminal height covering every child.
-pub(crate) fn min_height_for_container(
+/// A [`LayoutSize`] containing the container's intrinsic dimensions.
+pub(crate) fn measure_container(
     children: &[AnyView],
     metadata: &StyleMetadata,
+    known_dimensions: LayoutSize<Option<f32>>,
+    available_space: LayoutSize<AvailableSpace>,
     ctx: &mut RenderCtx<'_, '_>,
-) -> u16 {
+) -> LayoutSize<f32> {
     let style = resolve_style(metadata, ctx);
-    let area = ctx.area();
-    ctx.with_area_inherited_style_and_selector_ancestor(
+    let width = known_dimensions
+        .width
+        .or_else(|| available_space.width.definite())
+        .map_or(0.0, sanitize_cells);
+    let area = Rect {
+        width: cells_to_u16(width),
+        ..ctx.area()
+    };
+    let natural_height = ctx.with_area_inherited_style_and_selector_ancestor(
         area,
         style.inherited_values(),
         metadata.clone(),
         |ctx| {
-            let heights = children.iter().map(|child| child.__min_height(ctx));
+            let heights = children
+                .iter()
+                .map(|child| measure_view_height(child.as_view(), ctx));
             if style.display == Some(crate::Display::Flex)
                 && matches!(
                     style.flex_direction.unwrap_or_default(),
@@ -262,7 +281,11 @@ pub(crate) fn min_height_for_container(
                 heights.fold(0, u16::saturating_add)
             }
         },
-    )
+    );
+    let height = known_dimensions
+        .height
+        .map_or(f32::from(natural_height), sanitize_cells);
+    LayoutSize::new(width, height)
 }
 
 /// Returns the focused span for one child view.

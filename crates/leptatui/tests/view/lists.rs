@@ -147,7 +147,7 @@ fn semantic_lists_handle_narrow_and_zero_width_content() -> Result<()> {
     let mut min_height = 0;
     split.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = split_view.__min_height(&mut ctx);
+        min_height = intrinsic_height(&split_view, &mut ctx);
     })?;
     draw_view(&mut split, &split_view)?;
     assert!(min_height >= 1);

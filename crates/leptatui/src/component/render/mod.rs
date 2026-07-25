@@ -112,8 +112,8 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
 
     /// Returns active geometry when the view participated in retained layout.
     ///
-    /// Manually arranged legacy children do not receive retained metadata and
-    /// should continue deriving their local chrome from [`area`](Self::area).
+    /// Composite widgets can assign internal child areas that intentionally
+    /// derive local chrome from [`area`](Self::area).
     ///
     /// # Arguments
     ///
@@ -284,7 +284,10 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.target.render_stateful_widget(widget, self.area, state);
     }
 
-    /// Renders a Leptatui view into the current target area.
+    /// Renders a Leptatui view as composite content in the current target area.
+    ///
+    /// The child uses the explicitly assigned area instead of adopting retained
+    /// outer layout geometry.
     ///
     /// # Arguments
     ///
@@ -299,7 +302,15 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// Returns [`crate::app::Error::Io`] if view rendering performs terminal
     /// I/O that fails.
     pub fn render_view(&mut self, view: &AnyView) -> Result<()> {
-        view.render(self)
+        let area = self.area;
+        let stylesheets = self.stylesheets.clone();
+        let selector_ancestors = self.selector_ancestors.clone();
+        let mut child =
+            self.child_context(area, self.inherited_style, stylesheets, selector_ancestors);
+        child.geometry = geometry_for_area(area);
+        child.geometry_owner = None;
+        child.layout_state.disable_retained_geometry();
+        view.render(&mut child)
     }
 
     /// Renders into a temporary child area with explicit inherited style.

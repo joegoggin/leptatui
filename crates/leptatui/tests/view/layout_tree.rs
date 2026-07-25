@@ -239,6 +239,7 @@ fn layout_tree_retains_rounded_box_geometry() -> Result<()> {
                 Dimension::from(Length::cells(6.0)),
                 Dimension::from(Length::cells(6.0)),
             ))
+            .overflow(Axes::all(Overflow::Visible))
             .padding(TuiSpacing::uniform(1)),
     );
     let root = div((styled_block, text("after"))).into_view();

@@ -110,7 +110,7 @@ fn semantic_text_variants_wrap_and_report_intrinsic_height() -> Result<()> {
         let mut min_height = 0;
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            min_height = view.__min_height(&mut ctx);
+            min_height = intrinsic_height(&view, &mut ctx);
         })?;
         draw_view(&mut terminal, &view)?;
 
@@ -149,7 +149,7 @@ fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
         let mut render_result = Ok(());
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            min_height = view.__min_height(&mut ctx);
+            min_height = intrinsic_height(&view, &mut ctx);
             render_result = view.render(&mut ctx);
         })?;
         render_result?;
@@ -231,7 +231,7 @@ fn semantic_text_clips_overflow_and_handles_zero_width_splits() -> Result<()> {
     let mut min_height = 0;
     narrow.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = narrow_view.__min_height(&mut ctx);
+        min_height = intrinsic_height(&narrow_view, &mut ctx);
     })?;
     draw_view(&mut narrow, &narrow_view)?;
     assert_eq!(min_height, 1);

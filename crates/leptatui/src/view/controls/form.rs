@@ -5,11 +5,11 @@ use std::{fmt, rc::Rc};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::view::containers::layout::render::{
-    focused_control_span_for_container, min_height_for_container, render_container,
+    focused_control_span_for_container, measure_container, render_container,
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    measurement::{AvailableSpace, measure_legacy_height},
+    measurement::AvailableSpace,
     render::VerticalSpan,
 };
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
@@ -195,10 +195,12 @@ impl View for FormView {
         available_space: LayoutSize<AvailableSpace>,
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
-        measure_legacy_height(
-            min_height_for_container(&self.children, &self.metadata, ctx),
+        measure_container(
+            &self.children,
+            &self.metadata,
             known_dimensions,
             available_space,
+            ctx,
         )
     }
 
@@ -293,10 +295,6 @@ impl View for FormView {
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
         focused_control_span_for_container(&self.children, &self.metadata, ctx)
             .map(VerticalSpan::into_tuple)
-    }
-
-    fn __uses_computed_child_layout(&self) -> bool {
-        true
     }
 }
 

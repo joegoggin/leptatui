@@ -5,10 +5,11 @@
 //! terminal-buffer output.
 
 use leptatui::{
-    AnyView, Borders, CellAlignment, CodeBlockView, DivView, IntoView, IntoViews, MarkdownOptions,
-    Modifier, RenderCtx, Result, SyntaxTheme, TuiSpacing, TuiStyle, View, block, code_block, div,
-    h1, h2, h3, h4, h5, h6, list_item, markdown, markdown_with_options, ordered_list, paragraph,
-    table, table_body, table_cell, table_head, table_row, unordered_list,
+    AnyView, AvailableSpace, Borders, CellAlignment, CodeBlockView, DivView, IntoView, IntoViews,
+    LayoutSize, MarkdownOptions, Modifier, RenderCtx, Result, SyntaxTheme, TuiSpacing, TuiStyle,
+    View, block, code_block, div, h1, h2, h3, h4, h5, h6, list_item, markdown,
+    markdown_with_options, ordered_list, paragraph, table, table_body, table_cell, table_head,
+    table_row, unordered_list,
     view::{Line, Span, Text},
 };
 use ratatui::{Terminal, backend::TestBackend, style::Style};

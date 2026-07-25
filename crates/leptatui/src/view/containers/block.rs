@@ -2,7 +2,7 @@
 
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    measurement::{AvailableSpace, measure_legacy_height},
+    measurement::{AvailableSpace, measure_view_height, sanitize_cells},
     render::{VerticalSpan, resolve_style, vertical_border_rows, vertical_padding_rows},
 };
 use crate::view::{AnyView, IntoView, StyleMetadata, View, ViewType};
@@ -100,21 +100,25 @@ impl View for BlockView {
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
         let style = resolve_style(&self.metadata, ctx);
+        let width = known_dimensions
+            .width
+            .or_else(|| available_space.width.definite())
+            .map_or(0.0, sanitize_cells);
         let child_height = self.children.first().map_or(0, |child| {
             ctx.with_area_inherited_style_and_selector_ancestor(
                 ctx.area(),
                 style.inherited_values(),
                 self.metadata.clone(),
-                |ctx| child.__min_height(ctx),
+                |ctx| measure_view_height(child.as_view(), ctx),
             )
         });
-        measure_legacy_height(
-            child_height
-                .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-                .saturating_add(vertical_padding_rows(style.padding)),
-            known_dimensions,
-            available_space,
-        )
+        let natural_height = child_height
+            .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+            .saturating_add(vertical_padding_rows(style.padding));
+        let height = known_dimensions
+            .height
+            .map_or(f32::from(natural_height), sanitize_cells);
+        LayoutSize::new(width, height)
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {

@@ -6,12 +6,10 @@
 
 pub(crate) mod render;
 
-use self::render::{
-    focused_control_span_for_container, min_height_for_container, render_container,
-};
+use self::render::{focused_control_span_for_container, measure_container, render_container};
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    measurement::{AvailableSpace, measure_legacy_height},
+    measurement::AvailableSpace,
     render::VerticalSpan,
 };
 use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
@@ -62,10 +60,12 @@ impl View for DivView {
         available_space: LayoutSize<AvailableSpace>,
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
-        measure_legacy_height(
-            min_height_for_container(&self.children, &self.metadata, ctx),
+        measure_container(
+            &self.children,
+            &self.metadata,
             known_dimensions,
             available_space,
+            ctx,
         )
     }
 
@@ -86,10 +86,6 @@ impl View for DivView {
     }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
-    }
-
-    fn __uses_computed_child_layout(&self) -> bool {
-        true
     }
 
     fn __scroll_first_overflowing(&mut self, delta: crate::Axes<i16>) -> bool {

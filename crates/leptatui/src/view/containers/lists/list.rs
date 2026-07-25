@@ -1,7 +1,7 @@
 //! Ordered and unordered semantic list view.
 
 use super::render::{
-    focused_control_span_for_list_view, min_height_for_list_view, render_list_view,
+    focused_control_span_for_list_view, intrinsic_height_for_list_view, render_list_view,
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
@@ -142,7 +142,7 @@ impl View for ListView {
             ..ctx.area()
         };
         let natural_height = ctx.with_area(area, |ctx| {
-            min_height_for_list_view(&self.children, start, &self.metadata, ctx)
+            intrinsic_height_for_list_view(&self.children, start, &self.metadata, ctx)
         });
         let height = known_dimensions
             .height
@@ -161,6 +161,13 @@ impl View for ListView {
     }
     fn children_mut(&mut self) -> &mut [AnyView] {
         &mut self.children
+    }
+
+    fn __visit_layout_children(
+        &self,
+        _ctx: &mut RenderCtx<'_, '_>,
+        _visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self

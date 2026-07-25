@@ -6,7 +6,7 @@
 use ratatui::text::Text;
 use unicode_width::UnicodeWidthStr;
 
-use crate::{LayoutSize, TuiStyle};
+use crate::{LayoutSize, RenderCtx, TuiStyle, View};
 
 use super::render::{line_count_height, semantic_paragraph};
 
@@ -123,34 +123,34 @@ pub(crate) fn measure_fixed(
     )
 }
 
-/// Adapts a legacy height calculation to the two-axis contract.
-///
-/// Container views use this bridge until computed layout replaces their
-/// recursive measurement. An unknown width uses a definite available width
-/// when present and otherwise reports zero.
+/// Measures a view's intrinsic height at the current rendering width.
 ///
 /// # Arguments
 ///
-/// * `height` — Legacy intrinsic row count.
-/// * `known_dimensions` — Exact dimensions supplied by parent layout.
-/// * `available_space` — Soft constraints used when width is unknown.
+/// * `view` — View whose two-axis measurement supplies the height.
+/// * `ctx` — Rendering context containing the current available area.
 ///
 /// # Returns
 ///
-/// A [`LayoutSize`] containing the bridged width and height.
-pub(crate) fn measure_legacy_height(
-    height: u16,
-    known_dimensions: LayoutSize<Option<f32>>,
-    available_space: LayoutSize<AvailableSpace>,
-) -> LayoutSize<f32> {
-    let width = known_dimensions
-        .width
-        .or_else(|| available_space.width.definite())
-        .map_or(0.0, sanitize_cells);
-    let height = known_dimensions
-        .height
-        .map_or(f32::from(height), sanitize_cells);
-    LayoutSize::new(width, height)
+/// A saturated `u16` height measured through [`View::measure`].
+pub(crate) fn measure_view_height(view: &dyn View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+    if view
+        .style_metadata()
+        .is_some_and(crate::StyleMetadata::is_layout_hidden)
+    {
+        return 0;
+    }
+
+    let area = ctx.area();
+    let measured = view.measure(
+        LayoutSize::new(Some(f32::from(area.width)), None),
+        LayoutSize::new(
+            AvailableSpace::Definite(f32::from(area.width)),
+            AvailableSpace::Definite(f32::from(area.height)),
+        ),
+        ctx,
+    );
+    cells_to_u16(measured.height)
 }
 
 /// Measures word-wrapped rich text without painting it.

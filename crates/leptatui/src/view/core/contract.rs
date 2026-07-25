@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     any_view::AnyView,
-    measurement::{AvailableSpace, cells_to_u16, measure_default},
+    measurement::{AvailableSpace, measure_default},
     metadata::StyleMetadata,
 };
 
@@ -97,21 +97,6 @@ pub trait View: Any {
         super::events::handle_view_key_event(self, key)
     }
 
-    /// Returns the minimum useful height for the legacy renderer.
-    #[doc(hidden)]
-    fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        let area = ctx.area();
-        let measured = self.measure(
-            LayoutSize::new(Some(f32::from(area.width)), None),
-            LayoutSize::new(
-                AvailableSpace::Definite(f32::from(area.width)),
-                AvailableSpace::Definite(f32::from(area.height)),
-            ),
-            ctx,
-        );
-        cells_to_u16(measured.height)
-    }
-
     /// Returns selector metadata when this node participates in styling.
     ///
     /// # Returns
@@ -176,16 +161,6 @@ pub trait View: Any {
     /// `true` when the view is a layout-transparent structural boundary.
     #[doc(hidden)]
     fn __is_layout_transparent(&self) -> bool {
-        false
-    }
-
-    /// Returns whether retained children participate in computed layout.
-    ///
-    /// # Returns
-    ///
-    /// `true` when the view's retained children generate layout boxes.
-    #[doc(hidden)]
-    fn __uses_computed_child_layout(&self) -> bool {
         false
     }
 

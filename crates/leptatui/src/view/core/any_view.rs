@@ -650,9 +650,10 @@ impl AnyView {
             if metadata.is_layout_hidden() {
                 return Ok(());
             }
-            if ctx.honors_layout_geometry()
-                && let Some(geometry) = metadata.layout_geometry()
-            {
+            if ctx.honors_layout_geometry() {
+                let geometry = metadata
+                    .layout_geometry()
+                    .expect("styled views should retain geometry before painting");
                 return ctx.with_layout_geometry(geometry, metadata, |ctx| {
                     ctx.record_metadata_hit_area(metadata);
                     self.as_view().render(ctx)
@@ -685,15 +686,6 @@ impl AnyView {
         }
         self.as_view()
             .measure(known_dimensions, available_space, ctx)
-    }
-
-    /// Returns the minimum useful height of the stored subtree.
-    #[doc(hidden)]
-    pub fn __min_height(&self, ctx: &mut RenderCtx<'_, '_>) -> u16 {
-        if self.is_layout_hidden() {
-            return 0;
-        }
-        self.as_view().__min_height(ctx)
     }
 
     /// Dispatches an event through the stored subtree.

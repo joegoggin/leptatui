@@ -20,7 +20,7 @@ use super::{
     LayoutPath,
     geometry::{RetentionBounds, retain_geometry},
     measure::{
-        from_taffy_available, measure_at_path, overflow_at_path, uses_computed_child_layout_at_path,
+        from_taffy_available, has_layout_children_at_path, measure_at_path, overflow_at_path,
     },
     style::{synthetic_root_style, to_taffy_style},
 };
@@ -77,15 +77,15 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
         .as_ref()
         .and_then(|path| overflow_at_path(root, &path.0, ctx))
         .unwrap_or_else(|| Axes::new(Overflow::Visible, Overflow::Auto));
-    let root_uses_computed_layout = root_path
+    let root_has_layout_children = root_path
         .as_ref()
-        .is_some_and(|path| uses_computed_child_layout_at_path(root, &path.0, ctx));
+        .is_some_and(|path| has_layout_children_at_path(root, &path.0, ctx));
     let root_layout = tree.layout(root_node).copied().unwrap_or_default();
     let constrain_x = root_layout.size.width > f32::from(available.width)
         && !matches!(root_overflow.x, Overflow::Clip | Overflow::Visible);
     let constrain_y = root_layout.size.height > f32::from(available.height)
         && !matches!(root_overflow.y, Overflow::Clip | Overflow::Visible);
-    if root_uses_computed_layout && (constrain_x || constrain_y) {
+    if root_has_layout_children && (constrain_x || constrain_y) {
         let mut style = tree
             .style(root_node)
             .expect("computed root style should remain available")
@@ -266,11 +266,7 @@ fn build_view(
         return Vec::new();
     }
 
-    let children = if view.__uses_computed_child_layout() {
-        build_children_with_style(view, path, resolved, ctx, tree, nodes)
-    } else {
-        Vec::new()
-    };
+    let children = build_children_with_style(view, path, resolved, ctx, tree, nodes);
     let style = to_taffy_style(view, resolved, ctx.viewport_size());
     let node = if children.is_empty() {
         tree.new_leaf_with_context(style, path.clone())
