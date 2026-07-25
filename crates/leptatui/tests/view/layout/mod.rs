@@ -1,6 +1,7 @@
 // Block flow, measurement, overflow, scrolling, and responsive behavior tests.
 
 include!("block_flow.rs");
+include!("sizing.rs");
 include!("overflow.rs");
 include!("scroll_keys.rs");
 include!("scroll_rendering.rs");

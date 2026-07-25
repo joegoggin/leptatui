@@ -199,6 +199,11 @@ fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'s
         "size" => Ok((StyleValueKind::LayoutSize, "size", "size_important")),
         "min_size" => Ok((StyleValueKind::LayoutSize, "min_size", "min_size_important")),
         "max_size" => Ok((StyleValueKind::LayoutSize, "max_size", "max_size_important")),
+        "aspect_ratio" => Ok((
+            StyleValueKind::Number,
+            "aspect_ratio",
+            "aspect_ratio_important",
+        )),
         "margin" => Ok((
             StyleValueKind::LengthAutoEdges,
             "margin",
@@ -268,7 +273,7 @@ fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'s
         "z_index" => Ok((StyleValueKind::ZIndex, "z_index", "z_index_important")),
         _ => Err(Error::new_spanned(
             name,
-            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_row, grid_column, position, inset, or z_index",
+            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, aspect_ratio, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_row, grid_column, position, inset, or z_index",
         )),
     }
 }

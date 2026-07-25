@@ -1,4 +1,4 @@
-error: unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_row, grid_column, position, inset, or z_index
+error: unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, aspect_ratio, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_row, grid_column, position, inset, or z_index
  --> tests/fixtures/stylesheet_macro/fail/unsupported_declaration.rs:8:19
   |
 8 |         Text => { color: Color::White }

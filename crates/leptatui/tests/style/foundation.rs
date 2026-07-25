@@ -86,12 +86,14 @@ fn tui_style_builds_a_block_with_border_configuration() {
 /// TuiStyle::new()
 ///     .display(Display::Flex)
 ///     .size(LayoutSize::all(Dimension::Auto))
+///     .aspect_ratio(16.0 / 9.0)
 ///     .position(Position::Absolute)
 /// ```
 ///
 /// # Assertions
 ///
 /// - Every phase-13 layout builder stores its typed value.
+/// - The preferred aspect ratio retains its floating-point value.
 /// - Flex growth and shrink factors retain floating-point values.
 /// - Layout properties are removed from inherited descendant values.
 #[test]
@@ -108,6 +110,7 @@ fn tui_style_stores_layout_properties_without_inheriting_them() {
         ))
         .min_size(LayoutSize::all(Dimension::MinContent))
         .max_size(LayoutSize::all(Dimension::MaxContent))
+        .aspect_ratio(16.0 / 9.0)
         .margin(Edges::all(LengthAuto::from(length)))
         .gap(Axes::new(length, Length::cells(3.0)))
         .flex_direction(FlexDirection::Column)
@@ -149,6 +152,7 @@ fn tui_style_stores_layout_properties_without_inheriting_them() {
         style.max_size,
         Some(LayoutSize::all(Dimension::MaxContent))
     );
+    assert_eq!(style.aspect_ratio, Some(16.0 / 9.0));
     assert_eq!(style.margin, Some(Edges::all(length.into())));
     assert_eq!(style.gap, Some(Axes::new(length, Length::cells(3.0))));
     assert_eq!(style.flex_direction, Some(FlexDirection::Column));

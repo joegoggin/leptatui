@@ -109,6 +109,7 @@ impl StyleDeclarations {
         overlay_layout!(size, set_size);
         overlay_layout!(min_size, set_min_size);
         overlay_layout!(max_size, set_max_size);
+        overlay_layout!(aspect_ratio, set_aspect_ratio);
         overlay_layout!(margin, set_margin);
         overlay_layout!(gap, set_gap);
         overlay_layout!(flex_direction, set_flex_direction);

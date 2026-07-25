@@ -82,6 +82,7 @@ pub(super) fn to_taffy_style(
         size: map_dimensions(style.size.unwrap_or_default(), viewport),
         min_size: map_dimensions(style.min_size.unwrap_or_default(), viewport),
         max_size: map_dimensions(style.max_size.unwrap_or_default(), viewport),
+        aspect_ratio: style.aspect_ratio.and_then(sanitize_aspect_ratio),
         margin: map_auto_edges(
             style
                 .margin
@@ -342,6 +343,20 @@ fn sanitize_factor(value: f32) -> f32 {
     } else {
         0.0
     }
+}
+
+/// Returns a finite positive width-to-height ratio.
+///
+/// # Arguments
+///
+/// * `value` — Authored preferred aspect ratio.
+///
+/// # Returns
+///
+/// A finite positive ratio, or [`None`] when the value cannot constrain
+/// layout safely.
+fn sanitize_aspect_ratio(value: f32) -> Option<f32> {
+    (value.is_finite() && value > 0.0).then_some(value)
 }
 
 /// Converts a flex main-axis direction.
