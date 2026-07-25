@@ -305,7 +305,8 @@ fn render_code_block_view(
         .unwrap_or_else(|| syntax_theme.background());
     let mut content_style = style;
     content_style.background = Some(background);
-    let area = ctx.area();
+    let geometry = ctx.active_layout_geometry(metadata);
+    let area = geometry.map_or_else(|| ctx.area(), |geometry| geometry.border_box);
     let (content, required_height) =
         code_block_layout(highlighted_lines, line_numbers, content_style, area);
     let mut visible_style = style;
@@ -317,20 +318,27 @@ fn render_code_block_view(
     visible_style.background = None;
     let mut background_area_style = visible_style;
     background_area_style.padding = None;
-    let background_area = background_area_style
-        .to_block_with_default_borders(Borders::ALL)
-        .inner(area);
+    let background_area = geometry.map_or_else(
+        || {
+            background_area_style
+                .to_block_with_default_borders(Borders::ALL)
+                .inner(area)
+        },
+        |geometry| geometry.padding_box,
+    );
     let block = visible_style.to_block_with_default_borders(Borders::ALL);
     let block = if let Some(language) = language {
         block.title(language.to_owned())
     } else {
         block
     };
-    let inner = block.inner(area);
+    let inner = geometry.map_or_else(|| block.inner(area), |geometry| geometry.content_box);
     ctx.with_area(background_area, |ctx| {
         ctx.render_widget(Block::new().style(Style::new().bg(background)));
     });
-    ctx.render_widget(block);
+    ctx.with_area(area, |ctx| {
+        ctx.render_widget(block);
+    });
     ctx.with_area_inherited_style_and_selector_ancestor(
         inner,
         style.inherited_values(),

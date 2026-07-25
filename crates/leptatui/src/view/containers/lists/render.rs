@@ -151,9 +151,16 @@ pub(crate) fn render_list_view(
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     let style = resolve_style(metadata, ctx);
-    ctx.render_widget(Block::new().style(style.to_ratatui_style()));
+    let geometry = ctx.active_layout_geometry(metadata);
+    if let Some(geometry) = geometry {
+        ctx.with_area(geometry.border_box, |ctx| {
+            ctx.render_widget(style.to_block());
+        });
+    } else {
+        ctx.render_widget(Block::new().style(style.to_ratatui_style()));
+    }
     let (markers, marker_width) = list_markers(items.len(), ordered_start);
-    let area = ctx.area();
+    let area = geometry.map_or_else(|| ctx.area(), |geometry| geometry.content_box);
 
     ctx.with_area_inherited_style_and_selector_ancestor(
         area,

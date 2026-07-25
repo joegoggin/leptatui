@@ -48,10 +48,16 @@ fn focused_control_span_for_block(
 ) -> Option<VerticalSpan> {
     let child = view.children.first()?;
     let style = resolve_style(&view.metadata, ctx);
-    let area = ctx.area();
-    let inner = style
-        .to_block_with_default_borders(Borders::ALL)
-        .inner(area);
+    let geometry = ctx.active_layout_geometry(&view.metadata);
+    let area = geometry.map_or_else(|| ctx.area(), |geometry| geometry.border_box);
+    let inner = geometry.map_or_else(
+        || {
+            style
+                .to_block_with_default_borders(Borders::ALL)
+                .inner(area)
+        },
+        |geometry| geometry.content_box,
+    );
     let top_offset = u32::from(inner.y.saturating_sub(area.y));
     ctx.with_area_inherited_style_and_selector_ancestor(
         inner,
@@ -66,8 +72,16 @@ impl View for BlockView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
         let block = style.to_block_with_default_borders(Borders::ALL);
-        let inner = block.inner(ctx.area());
-        ctx.render_widget(block);
+        let geometry = ctx.active_layout_geometry(&self.metadata);
+        let inner =
+            geometry.map_or_else(|| block.inner(ctx.area()), |geometry| geometry.content_box);
+        if let Some(geometry) = geometry {
+            ctx.with_area(geometry.border_box, |ctx| {
+                ctx.render_widget(block);
+            });
+        } else {
+            ctx.render_widget(block);
+        }
         let Some(child) = self.children.first() else {
             return Ok(());
         };

@@ -18,6 +18,10 @@ pub struct LayoutGeometry {
     pub padding_box: Rect,
     /// Rectangle available to the view's content.
     pub content_box: Rect,
+    /// Visible content rectangle after reserving scrollbar gutters.
+    pub viewport: Rect,
+    /// Accumulated ancestor clip applied while painting and hit testing.
+    pub clip: Rect,
 }
 
 /// Transient layout state from the most recent root render.
@@ -300,8 +304,8 @@ impl StyleMetadata {
     ///
     /// # Returns
     ///
-    /// An optional [`LayoutGeometry`] containing border, padding, and content
-    /// rectangles in terminal coordinates.
+    /// An optional [`LayoutGeometry`] containing border, padding, content,
+    /// viewport, and clip rectangles in terminal coordinates.
     pub fn layout_geometry(&self) -> Option<LayoutGeometry> {
         match self.layout_state.get() {
             LayoutState::Visible(geometry) => Some(geometry),
@@ -327,7 +331,7 @@ impl StyleMetadata {
     ///
     /// # Arguments
     ///
-    /// * `geometry` — Rounded border, padding, and content rectangles to retain.
+    /// * `geometry` — Rounded box, viewport, and clip rectangles to retain.
     pub(crate) fn set_layout_geometry(&self, geometry: LayoutGeometry) {
         self.layout_state.set(LayoutState::Visible(geometry));
     }

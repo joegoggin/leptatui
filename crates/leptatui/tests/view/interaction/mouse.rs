@@ -374,6 +374,50 @@ fn horizontal_clipping_maps_partial_child_hit_coordinates() -> Result<()> {
     Ok(())
 }
 
+/// Verifies clipped link hit areas use the retained ancestor clip.
+///
+/// # Example Under Test
+///
+/// ```text
+/// terminal: 8x3
+/// parent: 4x2, overflow hidden
+/// child link: 8x3
+/// MouseMoved(5, 1), MouseMoved(2, 1)
+/// ```
+///
+/// # Assertions
+///
+/// - A terminal cell outside the parent's viewport does not focus the link.
+/// - A cell inside the retained viewport focuses the same link.
+#[test]
+fn clipped_link_hit_area_uses_retained_geometry() -> Result<()> {
+    let child = link("Wide", "https://example.com").with_inline_style(
+        TuiStyle::new()
+            .box_sizing(BoxSizing::BorderBox)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(8.0)),
+                Dimension::from(Length::cells(3.0)),
+            )),
+    );
+    let mut view = div([child]).with_inline_style(
+        TuiStyle::new()
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(4.0)),
+                Dimension::from(Length::cells(2.0)),
+            ))
+            .overflow(Axes::all(Overflow::Hidden)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
+
+    draw_view(&mut terminal, &view)?;
+    view.handle_event(mouse(MouseEventKind::Moved, 5, 1))?;
+    assert_eq!(view.__focused_control(), None);
+
+    view.handle_event(mouse(MouseEventKind::Moved, 2, 1))?;
+    assert_eq!(view.__focused_control(), Some(FocusedControl::Link));
+    Ok(())
+}
+
 /// Verifies concrete app roots clear hit areas for controls scrolled offscreen.
 ///
 /// # Example Under Test

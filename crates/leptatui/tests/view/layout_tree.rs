@@ -40,6 +40,52 @@ struct HiddenLayoutProbe {
     events: Rc<Cell<usize>>,
 }
 
+/// Styleable leaf that records the geometry exposed by its render context.
+struct GeometryContextProbe {
+    /// Selector and retained layout metadata.
+    metadata: StyleMetadata,
+    /// Last geometry observed during painting.
+    geometry: Rc<Cell<Option<LayoutGeometry>>>,
+}
+
+impl View for GeometryContextProbe {
+    /// Records the active rounded layout snapshot.
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        self.geometry.set(Some(ctx.layout_geometry()));
+        Ok(())
+    }
+
+    /// Returns a minimal intrinsic size before authored constraints apply.
+    fn measure(
+        &self,
+        _known_dimensions: LayoutSize<Option<f32>>,
+        _available_space: LayoutSize<AvailableSpace>,
+        _ctx: &mut RenderCtx<'_, '_>,
+    ) -> LayoutSize<f32> {
+        LayoutSize::all(1.0)
+    }
+
+    /// Returns the probe's selector and retained layout metadata.
+    fn style_metadata(&self) -> Option<&StyleMetadata> {
+        Some(&self.metadata)
+    }
+
+    /// Returns mutable selector and retained layout metadata.
+    fn style_metadata_mut(&mut self) -> Option<&mut StyleMetadata> {
+        Some(&mut self.metadata)
+    }
+
+    /// Returns the probe for shared concrete-type inspection.
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    /// Returns the probe for mutable concrete-type inspection.
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 impl View for HiddenLayoutProbe {
     /// Records an unexpected paint request.
     fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
@@ -169,7 +215,7 @@ fn positioned_siblings_paint_by_z_index() -> Result<()> {
     Ok(())
 }
 
-/// Verifies one rounded snapshot exposes border, padding, and content boxes.
+/// Verifies one rounded snapshot exposes all paint and interaction rectangles.
 ///
 /// # Example Under Test
 ///
@@ -182,6 +228,8 @@ fn positioned_siblings_paint_by_z_index() -> Result<()> {
 /// - The border box occupies the authored `6x6` area.
 /// - Removing one-cell borders produces a `4x4` padding box.
 /// - Removing one-cell padding produces a `2x2` content box.
+/// - A box without scrollbars uses its content box as the viewport.
+/// - The child inherits the root terminal clip.
 #[test]
 fn layout_tree_retains_rounded_box_geometry() -> Result<()> {
     let styled_block = block(text("inside")).with_inline_style(
@@ -208,6 +256,54 @@ fn layout_tree_retains_rounded_box_geometry() -> Result<()> {
     assert_eq!(layout.border_box, ratatui::layout::Rect::new(0, 0, 6, 6));
     assert_eq!(layout.padding_box, ratatui::layout::Rect::new(1, 1, 4, 4));
     assert_eq!(layout.content_box, ratatui::layout::Rect::new(2, 2, 2, 2));
+    assert_eq!(layout.viewport, ratatui::layout::Rect::new(2, 2, 2, 2));
+    assert_eq!(layout.clip, ratatui::layout::Rect::new(0, 0, 20, 10));
+    Ok(())
+}
+
+/// Verifies render contexts expose the translated retained snapshot.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 6x5 custom leaf
+/// borders: all
+/// padding: 1
+/// terminal: 10x6
+/// ```
+///
+/// # Assertions
+///
+/// - The custom view receives the same geometry retained on its metadata.
+/// - Border, padding, content, viewport, and clip rectangles are all exposed.
+#[test]
+fn render_context_exposes_retained_layout_geometry() -> Result<()> {
+    let observed = Rc::new(Cell::new(None));
+    let mut metadata = StyleMetadata::new(ViewType::new("GeometryContextProbe"));
+    metadata.set_inline_style(
+        TuiStyle::new()
+            .borders(Borders::ALL)
+            .box_sizing(BoxSizing::BorderBox)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(6.0)),
+                Dimension::from(Length::cells(5.0)),
+            ))
+            .padding(TuiSpacing::uniform(1)),
+    );
+    let root = div((GeometryContextProbe {
+        metadata,
+        geometry: Rc::clone(&observed),
+    },))
+    .into_view();
+
+    let _terminal = render_layout_root(&root, 10, 6)?;
+    let geometry = observed.get().expect("render context geometry");
+
+    assert_eq!(geometry.border_box, ratatui::layout::Rect::new(0, 0, 6, 5));
+    assert_eq!(geometry.padding_box, ratatui::layout::Rect::new(1, 1, 4, 3));
+    assert_eq!(geometry.content_box, ratatui::layout::Rect::new(2, 2, 2, 1));
+    assert_eq!(geometry.viewport, geometry.content_box);
+    assert_eq!(geometry.clip, ratatui::layout::Rect::new(0, 0, 10, 6));
     Ok(())
 }
 

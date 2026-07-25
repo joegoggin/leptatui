@@ -136,7 +136,14 @@ impl View for ImageView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
         let ImageSource::Path(path) = &self.source;
-        let area = image_render_area(ctx.area(), style.image_size);
+        let area = if let Some(geometry) = ctx.active_layout_geometry(&self.metadata) {
+            ctx.with_area(geometry.border_box, |ctx| {
+                ctx.render_widget(style.to_block());
+            });
+            image_render_area(geometry.content_box, style.image_size)
+        } else {
+            image_render_area(ctx.area(), style.image_size)
+        };
         ctx.with_area(area, |ctx| {
             ctx.render_terminal_image_path(path, self.alt.as_deref(), style.to_ratatui_style());
         });

@@ -200,6 +200,49 @@ fn background_and_rounded_borders_paint_only_the_border_box() -> Result<()> {
     Ok(())
 }
 
+/// Verifies leaf painting consumes retained border and content rectangles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 8x5 text("X")
+/// blue background, borders: all, padding: 1
+/// ```
+///
+/// # Assertions
+///
+/// - Border glyphs occupy the retained border-box corners.
+/// - The text begins at the retained content-box origin.
+/// - Border, padding, and content cells share the authored background.
+#[test]
+fn styled_leaf_paints_from_retained_box_geometry() -> Result<()> {
+    let root = div((text("X").with_inline_style(
+        TuiStyle::new()
+            .background(Color::Blue)
+            .borders(Borders::ALL)
+            .box_sizing(BoxSizing::BorderBox)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(8.0)),
+                Dimension::from(Length::cells(5.0)),
+            ))
+            .padding(TuiSpacing::uniform(1)),
+    ),))
+    .into_view();
+
+    let terminal = render_layout_root(&root, 10, 6)?;
+
+    assert_eq!(cell_symbol(&terminal, 0, 0, 10), symbol_border::PLAIN.top_left);
+    assert_eq!(
+        cell_symbol(&terminal, 7, 4, 10),
+        symbol_border::PLAIN.bottom_right
+    );
+    assert_eq!(symbol_position(&terminal, "X", 10), (2, 2));
+    for (x, y) in [(0, 0), (1, 1), (2, 2), (6, 3)] {
+        assert_eq!(cell_colors(&terminal, x, y, 10).1, Color::Blue);
+    }
+    Ok(())
+}
+
 /// Verifies zero and chrome-constrained boxes retain safe saturated geometry.
 ///
 /// # Example Under Test

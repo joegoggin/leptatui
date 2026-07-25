@@ -100,12 +100,25 @@ impl ButtonView {
 impl View for ButtonView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
-        ctx.render_widget(
-            Paragraph::new(self.label.as_str())
-                .centered()
-                .style(style.to_ratatui_style())
-                .block(style.to_block_with_default_borders(Borders::ALL)),
-        );
+        if let Some(geometry) = ctx.active_layout_geometry(&self.metadata) {
+            ctx.with_area(geometry.border_box, |ctx| {
+                ctx.render_widget(style.to_block_with_default_borders(Borders::ALL));
+            });
+            ctx.with_area(geometry.content_box, |ctx| {
+                ctx.render_widget(
+                    Paragraph::new(self.label.as_str())
+                        .centered()
+                        .style(style.to_ratatui_style()),
+                );
+            });
+        } else {
+            ctx.render_widget(
+                Paragraph::new(self.label.as_str())
+                    .centered()
+                    .style(style.to_ratatui_style())
+                    .block(style.to_block_with_default_borders(Borders::ALL)),
+            );
+        }
         ctx.record_metadata_hit_area(&self.metadata);
         self.metadata.clear_scroll_into_view_request();
         Ok(())

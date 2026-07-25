@@ -551,6 +551,71 @@ fn overflow_modes_resolve_independently_on_both_axes() -> Result<()> {
     Ok(())
 }
 
+/// Verifies scrollbar and descendant clips come from the rounded snapshot.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 5x3 scroll container
+/// 8x4 child
+/// horizontal and vertical scrollbars
+/// ```
+///
+/// # Assertions
+///
+/// - The retained content box covers the full authored `5x3` area.
+/// - Two gutters reduce the retained viewport to `4x2`.
+/// - The child inherits that viewport as its effective clip.
+/// - Maximum scroll offsets use the same rounded viewport.
+#[test]
+fn retained_viewport_and_clip_define_two_axis_scrolling() -> Result<()> {
+    let child = text("content").with_inline_style(TuiStyle::new().size(LayoutSize::new(
+        Dimension::from(Length::cells(8.0)),
+        Dimension::from(Length::cells(4.0)),
+    )));
+    let root = div([child])
+        .with_inline_style(
+            TuiStyle::new()
+                .box_sizing(BoxSizing::BorderBox)
+                .size(LayoutSize::new(
+                    Dimension::from(Length::cells(5.0)),
+                    Dimension::from(Length::cells(3.0)),
+                ))
+                .overflow(Axes::all(Overflow::Scroll)),
+        )
+        .into_view();
+
+    let _terminal = render_layout_root(&root, 5, 3)?;
+    let root_geometry = root
+        .style_metadata()
+        .and_then(StyleMetadata::layout_geometry)
+        .expect("root geometry");
+    let child_geometry = root
+        .downcast_ref::<leptatui::DivView>()
+        .expect("Div root")
+        .child_views()[0]
+        .style_metadata()
+        .and_then(StyleMetadata::layout_geometry)
+        .expect("child geometry");
+
+    assert_eq!(
+        root_geometry.content_box,
+        ratatui::layout::Rect::new(0, 0, 5, 3)
+    );
+    assert_eq!(
+        root_geometry.viewport,
+        ratatui::layout::Rect::new(0, 0, 4, 2)
+    );
+    assert_eq!(child_geometry.clip, root_geometry.viewport);
+    assert_eq!(
+        root.style_metadata()
+            .expect("root metadata")
+            .max_scroll_offsets(),
+        Axes::new(4, 2)
+    );
+    Ok(())
+}
+
 /// Verifies reconciliation retains two-axis overflow state and content extent.
 ///
 /// # Example Under Test

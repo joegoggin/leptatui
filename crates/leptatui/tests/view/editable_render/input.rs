@@ -152,6 +152,50 @@ fn focused_input_sets_terminal_cursor_position() -> Result<()> {
     Ok(())
 }
 
+/// Verifies a cursor outside retained clip geometry is not forwarded.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 4x1 hidden-overflow parent
+/// focused 4x3 input
+/// ```
+///
+/// # Assertions
+///
+/// - Only the input's top border is visible.
+/// - The content-row cursor remains clipped instead of moving below the
+///   parent's viewport.
+#[test]
+fn focused_input_cursor_respects_retained_clip() -> Result<()> {
+    let child = input("A").with_focus(true).with_inline_style(
+        TuiStyle::new()
+            .box_sizing(BoxSizing::BorderBox)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(4.0)),
+                Dimension::from(Length::cells(3.0)),
+            )),
+    );
+    let view = div([child]).with_inline_style(
+        TuiStyle::new()
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(4.0)),
+                Dimension::from(Length::cells(1.0)),
+            ))
+            .overflow(Axes::all(Overflow::Hidden)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(4, 3))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        cell_symbol(&terminal, 0, 0, 4),
+        symbol_border::PLAIN.top_left
+    );
+    terminal.backend_mut().assert_cursor_position((0, 0));
+    Ok(())
+}
+
 /// Verifies component-backed roots expose focused editable control mode.
 ///
 /// # Example Under Test

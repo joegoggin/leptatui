@@ -18,7 +18,7 @@ impl RenderCtx<'_, '_> {
     /// # Arguments
     ///
     /// * `view` — View rendered into the offscreen buffer.
-    /// * `full_area` — Full unclipped area assigned to the view.
+    /// * `geometry` — Full child geometry expressed in offscreen coordinates.
     /// * `source` — First offscreen column and row copied into the target.
     /// * `target_area` — Visible destination area receiving copied cells.
     /// * `inherited_style` — Style values inherited by the clipped view.
@@ -35,19 +35,21 @@ impl RenderCtx<'_, '_> {
     pub(crate) fn render_view_clipped(
         &mut self,
         view: &AnyView,
-        full_area: Rect,
+        geometry: crate::LayoutGeometry,
         source: Position,
         target_area: Rect,
         inherited_style: TuiStyle,
         selector_ancestor: StyleMetadata,
     ) -> Result<()> {
+        let full_area = geometry.border_box;
         if target_area.width == 0 || target_area.height == 0 || full_area.height == 0 {
             return Ok(());
         }
 
         if self.target.supports_terminal_images() && self.terminal_images.supports_protocol() {
-            let handled = self.with_area_inherited_style_and_selector_ancestor(
-                full_area,
+            let handled = self.with_assigned_layout_geometry_and_selector_ancestor(
+                geometry,
+                view.style_metadata(),
                 inherited_style,
                 selector_ancestor.clone(),
                 |ctx| view.render_terminal_image_clipped(source.x, source.y, target_area, ctx),
@@ -90,6 +92,8 @@ impl RenderCtx<'_, '_> {
                     cursor_position: &mut cursor_position,
                 },
                 area: Rect::new(0, 0, full_area.width, full_area.height),
+                geometry,
+                geometry_owner: view.style_metadata().map(std::ptr::from_ref),
                 viewport_size: self.viewport_size,
                 stylesheets: self.stylesheets.clone(),
                 inherited_style,

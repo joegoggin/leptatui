@@ -241,3 +241,51 @@ fn image_stylesheet_size_constrains_fallback_area() -> Result<()> {
 
     Ok(())
 }
+
+/// Verifies horizontally clipped images use the container's retained viewport.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 4x1 hidden-overflow div
+/// 6x1 image fallback: ABCDEF
+/// ScrollRight
+/// ```
+///
+/// # Assertions
+///
+/// - Initial painting copies the first four fallback cells.
+/// - Horizontal scrolling advances the image source by one cell.
+/// - The image remains clipped to the four-cell viewport.
+#[test]
+fn image_fallback_clipping_uses_retained_viewport_geometry() -> Result<()> {
+    let child = image("missing.png")
+        .alt("ABCDEF")
+        .with_inline_style(
+            TuiStyle::new()
+                .image_size(TuiSize::new(6, 1))
+                .size(LayoutSize::new(
+                    Dimension::from(Length::cells(6.0)),
+                    Dimension::from(Length::cells(1.0)),
+                ))
+                .flex_shrink(0.0),
+        );
+    let mut view = div([child]).with_inline_style(
+        TuiStyle::new()
+            .display(Display::Flex)
+            .size(LayoutSize::new(
+                Dimension::from(Length::cells(4.0)),
+                Dimension::from(Length::cells(1.0)),
+            ))
+            .overflow(Axes::new(Overflow::Hidden, Overflow::Clip)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(4, 1))?;
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(rendered_text(&terminal), "ABCD");
+
+    view.handle_event(mouse(MouseEventKind::ScrollRight, 0, 0))?;
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(rendered_text(&terminal), "BCDE");
+    Ok(())
+}

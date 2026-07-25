@@ -38,7 +38,16 @@ pub fn text(content: impl Into<String>) -> TextView {
 impl View for TextView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
-        ctx.render_widget(semantic_paragraph(&self.content, style));
+        if let Some(geometry) = ctx.active_layout_geometry(&self.metadata) {
+            ctx.with_area(geometry.border_box, |ctx| {
+                ctx.render_widget(style.to_block());
+            });
+            ctx.with_area(geometry.content_box, |ctx| {
+                ctx.render_widget(semantic_paragraph(&self.content, style));
+            });
+        } else {
+            ctx.render_widget(semantic_paragraph(&self.content, style));
+        }
         Ok(())
     }
 

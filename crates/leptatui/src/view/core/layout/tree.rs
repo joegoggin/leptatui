@@ -18,7 +18,7 @@ use crate::{
 
 use super::{
     LayoutPath,
-    geometry::retain_geometry,
+    geometry::{RetentionBounds, retain_geometry},
     measure::{
         from_taffy_available, measure_at_path, overflow_at_path, uses_computed_child_layout_at_path,
     },
@@ -112,19 +112,22 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
         }
     }
 
-    let paths = nodes
+    let retained_nodes = nodes
         .into_iter()
-        .map(|node| (node.node, node.path))
+        .map(|node| (node.node, (node.path, node.overflow)))
         .collect::<HashMap<_, _>>();
     let area = ctx.area();
     retain_geometry(
         &tree,
         root_node,
         (f32::from(area.x), f32::from(area.y)),
-        &paths,
+        &retained_nodes,
         root,
         ctx,
-        clamp_root_to_area,
+        RetentionBounds {
+            clamp_to_area: clamp_root_to_area,
+            inherited_clip: area,
+        },
     );
 
     ctx.set_layout_phase(LayoutPhase::Paint);

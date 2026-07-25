@@ -46,7 +46,13 @@ pub(in crate::view::containers::tables) fn render_table_view(
         rows,
         widths,
     } = resolve_table_layout(sections, metadata, ctx);
-    let area = ctx.area();
+    let geometry = ctx.active_layout_geometry(metadata);
+    if let Some(geometry) = geometry {
+        ctx.with_area(geometry.border_box, |ctx| {
+            ctx.render_widget(table_style.to_block());
+        });
+    }
+    let area = geometry.map_or_else(|| ctx.area(), |geometry| geometry.content_box);
     if widths.is_empty() || rows.is_empty() || area.height == 0 {
         return Ok(());
     }
