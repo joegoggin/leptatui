@@ -16,6 +16,7 @@ mod measure;
 mod style;
 mod tree;
 
+pub(crate) use geometry::descendant_clip_rect;
 pub(crate) use tree::prepare_layout;
 
 /// Logical child indexes from the rendered root to one layout box.

@@ -174,7 +174,7 @@ fn scrollbar_gutters(
 /// # Returns
 ///
 /// A [`TerminalRect`] constraining clipped axes while preserving visible axes.
-fn descendant_clip_rect(
+pub(crate) fn descendant_clip_rect(
     inherited: TerminalRect,
     viewport: TerminalRect,
     overflow: Axes<Overflow>,

@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Paragraph, Wrap},
 };
 
+use crate::view::AnyView;
 use crate::{RenderCtx, TuiSpacing, TuiStyle};
 
 use super::metadata::StyleMetadata;
@@ -91,6 +92,24 @@ impl VerticalSpan {
     pub(crate) fn into_tuple(self) -> (u32, u32) {
         (self.top, self.bottom)
     }
+}
+
+/// Returns the focused control's vertical span within a child view.
+///
+/// # Arguments
+///
+/// * `view` — Child view searched for the focused control.
+/// * `ctx` — Render context defining the child's retained area.
+///
+/// # Returns
+///
+/// An optional [`VerticalSpan`] when the child contains a focused control.
+pub(crate) fn focused_control_span_for_view(
+    view: &AnyView,
+    ctx: &mut RenderCtx<'_, '_>,
+) -> Option<VerticalSpan> {
+    view.__focused_button_span(ctx)
+        .map(|(top, bottom)| VerticalSpan { top, bottom })
 }
 
 /// Moves a scroll offset just enough to make a span visible.

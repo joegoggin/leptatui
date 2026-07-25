@@ -3,7 +3,10 @@
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
     measurement::{AvailableSpace, measure_view_height, sanitize_cells},
-    render::{VerticalSpan, resolve_style, vertical_border_rows, vertical_padding_rows},
+    render::{
+        VerticalSpan, focused_control_span_for_view, resolve_style, vertical_border_rows,
+        vertical_padding_rows,
+    },
 };
 use crate::view::{AnyView, IntoView, StyleMetadata, View, ViewType};
 use crate::{Borders, LayoutSize, app::Result, component::RenderCtx};
@@ -31,15 +34,6 @@ pub fn block(child: impl IntoView) -> BlockView {
         children: vec![child.into_view()],
         metadata: StyleMetadata::new(ViewType::Block),
     }
-}
-
-/// Returns the focused control's vertical span within a child view.
-fn focused_control_span_for_view(
-    view: &AnyView,
-    ctx: &mut RenderCtx<'_, '_>,
-) -> Option<VerticalSpan> {
-    view.__focused_button_span(ctx)
-        .map(|(top, bottom)| VerticalSpan { top, bottom })
 }
 
 fn focused_control_span_for_block(

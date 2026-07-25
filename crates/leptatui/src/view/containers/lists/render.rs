@@ -7,22 +7,13 @@ use ratatui::{
 
 use crate::view::core::{
     measurement::measure_view_height,
-    render::{VerticalSpan, resolve_style},
+    render::{VerticalSpan, focused_control_span_for_view, resolve_style},
 };
 use crate::view::{AnyView, ListItemView, ListView, StyleMetadata};
 use crate::{TuiStyle, app::Result, component::RenderCtx};
 
 /// Horizontal indentation applied to each recursively nested list.
 const LIST_NEST_INDENT: u16 = 2;
-
-/// Returns the focused control's vertical span within a child view.
-fn focused_control_span_for_view(
-    view: &AnyView,
-    ctx: &mut RenderCtx<'_, '_>,
-) -> Option<VerticalSpan> {
-    view.__focused_button_span(ctx)
-        .map(|(top, bottom)| VerticalSpan { top, bottom })
-}
 
 pub(crate) fn focused_control_span_for_list_view(
     items: &[AnyView],
