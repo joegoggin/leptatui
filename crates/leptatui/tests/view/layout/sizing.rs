@@ -398,8 +398,8 @@ fn fractional_percentages_round_cumulatively_to_terminal_cells() -> Result<()> {
         ))
         .flex_shrink(0.0);
     let root = div((
-        text("A").with_inline_style(child_style),
-        text("B").with_inline_style(child_style),
+        text("A").with_inline_style(child_style.clone()),
+        text("B").with_inline_style(child_style.clone()),
         text("C").with_inline_style(child_style),
     ))
     .with_inline_style(

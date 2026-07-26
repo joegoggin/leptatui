@@ -166,7 +166,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             &self.stylesheets,
             metadata,
             &self.selector_ancestors,
-            self.inherited_style,
+            self.inherited_style.clone(),
             metadata.inline_style(),
             Some(self.viewport_size),
             &theme,
@@ -183,7 +183,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         let mut stylesheets = self.stylesheets.clone();
         stylesheets.push(stylesheet.clone());
         let area = self.area;
-        let inherited_style = self.inherited_style;
+        let inherited_style = self.inherited_style.clone();
         let selector_ancestors = self.selector_ancestors.clone();
 
         let mut child = self.child_context(area, inherited_style, stylesheets, selector_ancestors);
@@ -231,7 +231,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// A [`TuiStyle`] containing inherited style values for the current area.
     pub(crate) fn inherited_style(&self) -> TuiStyle {
-        self.inherited_style
+        self.inherited_style.clone()
     }
 
     /// Renders a Ratatui widget into the current target area.
@@ -305,8 +305,12 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         let area = self.area;
         let stylesheets = self.stylesheets.clone();
         let selector_ancestors = self.selector_ancestors.clone();
-        let mut child =
-            self.child_context(area, self.inherited_style, stylesheets, selector_ancestors);
+        let mut child = self.child_context(
+            area,
+            self.inherited_style.clone(),
+            stylesheets,
+            selector_ancestors,
+        );
         child.geometry = geometry_for_area(area);
         child.geometry_owner = None;
         child.layout_state.disable_retained_geometry();
@@ -428,7 +432,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         let selector_ancestors = self.selector_ancestors.clone();
         let mut child = self.child_context(
             geometry.border_box,
-            self.inherited_style,
+            self.inherited_style.clone(),
             stylesheets,
             selector_ancestors,
         );
@@ -452,7 +456,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         area: Rect,
         render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
     ) -> R {
-        self.with_area_and_inherited_style(area, self.inherited_style, render)
+        self.with_area_and_inherited_style(area, self.inherited_style.clone(), render)
     }
 }
 

@@ -718,7 +718,7 @@ fn focus_visibility_scrolls_horizontally() -> Result<()> {
         ))
         .flex_shrink(0.0);
     let mut view = div([
-        button("One").with_inline_style(button_style),
+        button("One").with_inline_style(button_style.clone()),
         button("Two").with_inline_style(button_style),
     ])
     .with_inline_style(

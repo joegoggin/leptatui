@@ -54,7 +54,7 @@ pub(super) fn render_children(
         .map(|(source_index, child)| {
             let stacking_level = ctx.with_area_inherited_style_and_selector_ancestor(
                 options.content_area,
-                inherited_style,
+                inherited_style.clone(),
                 parent_metadata.clone(),
                 |child_ctx| child_stacking_level(child, child_ctx),
             );
@@ -110,7 +110,7 @@ pub(super) fn render_children(
             ctx.with_assigned_layout_geometry_and_selector_ancestor(
                 geometry,
                 child.style_metadata(),
-                inherited_style,
+                inherited_style.clone(),
                 parent_metadata.clone(),
                 |ctx| child.as_view().render(ctx),
             )?;
@@ -124,7 +124,7 @@ pub(super) fn render_children(
                 geometry,
                 ratatui::layout::Position::new(source_x, source_y),
                 visible_area,
-                inherited_style,
+                inherited_style.clone(),
                 parent_metadata.clone(),
             )?;
         }

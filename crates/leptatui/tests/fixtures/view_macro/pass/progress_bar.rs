@@ -12,7 +12,7 @@ fn main() {
             label="Uploading"
             class="meter primary"
             id="upload"
-            style={style}
+            style={style.clone()}
         />
     };
 

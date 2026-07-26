@@ -231,11 +231,11 @@ pub use resource::{Resource, ResourceState, create_resource};
 pub use route::{RouteState, provide_route, use_navigate, use_route};
 pub use style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
-    Display, Edges, FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridPlacement,
-    JustifyContent, JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto, MediaQuery,
-    Modifier, Overflow, Position, StyleDeclarations, StyleModule, StyleRule, StyleSelector,
-    StyleValue, Stylesheet, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle,
-    ViewportSize, ZIndex, theme_color,
+    Display, Edges, FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridMaxTrackSize,
+    GridMinTrackSize, GridPlacement, GridRepeat, GridTemplateTrack, GridTrackSize, JustifyContent,
+    JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto, MediaQuery, Modifier, Overflow,
+    Position, StyleDeclarations, StyleModule, StyleRule, StyleSelector, StyleValue, Stylesheet,
+    ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, ViewportSize, ZIndex, theme_color,
 };
 pub use view::{
     AnyView, AvailableSpace, BlockView, ButtonAction, ButtonView, CellAlignment, CodeBlockView,

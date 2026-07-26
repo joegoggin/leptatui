@@ -262,6 +262,26 @@ fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'s
             "grid_auto_flow",
             "grid_auto_flow_important",
         )),
+        "grid_template_rows" => Ok((
+            StyleValueKind::GridTemplateTracks,
+            "grid_template_rows",
+            "grid_template_rows_important",
+        )),
+        "grid_template_columns" => Ok((
+            StyleValueKind::GridTemplateTracks,
+            "grid_template_columns",
+            "grid_template_columns_important",
+        )),
+        "grid_auto_rows" => Ok((
+            StyleValueKind::GridAutoTracks,
+            "grid_auto_rows",
+            "grid_auto_rows_important",
+        )),
+        "grid_auto_columns" => Ok((
+            StyleValueKind::GridAutoTracks,
+            "grid_auto_columns",
+            "grid_auto_columns_important",
+        )),
         "grid_row" => Ok((StyleValueKind::GridLine, "grid_row", "grid_row_important")),
         "grid_column" => Ok((
             StyleValueKind::GridLine,
@@ -273,7 +293,7 @@ fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'s
         "z_index" => Ok((StyleValueKind::ZIndex, "z_index", "z_index_important")),
         _ => Err(Error::new_spanned(
             name,
-            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, aspect_ratio, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_row, grid_column, position, inset, or z_index",
+            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, aspect_ratio, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_template_rows, grid_template_columns, grid_auto_rows, grid_auto_columns, grid_row, grid_column, position, inset, or z_index",
         )),
     }
 }

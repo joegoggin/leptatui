@@ -204,7 +204,7 @@ fn render_heading(
     ctx: &mut RenderCtx<'_, '_>,
 ) {
     let style = resolve_style(metadata, ctx);
-    let rendered = resolved_rich_text(content, metadata, style, ctx);
+    let rendered = resolved_rich_text(content, metadata, &style, ctx);
     let area = if let Some(geometry) = ctx.active_layout_geometry(metadata) {
         ctx.with_area(geometry.border_box, |ctx| {
             ctx.render_widget(style.to_block());

@@ -2,8 +2,10 @@
 mod layout_values {
     use leptatui::{
         AlignContent, AlignItems, AlignSelf, Axes, BoxSizing, Dimension, Display, Edges,
-        FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridPlacement, JustifyContent,
-        JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto, Overflow, Position, ZIndex,
+        FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridMaxTrackSize,
+        GridMinTrackSize, GridPlacement, GridRepeat, GridTemplateTrack, GridTrackSize,
+        JustifyContent, JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto, Overflow,
+        Position, ZIndex,
     };
 
     /// Verifies every definite length unit and intrinsic dimension can be constructed.
@@ -56,6 +58,76 @@ mod layout_values {
             Dimension::FitContent(Length::Cells(12.0))
         );
         assert_eq!(Fraction::from(2.5), Fraction::new(2.5));
+    }
+
+    /// Verifies public grid sizing types represent every supported track form.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// minmax(2 cells, 3fr)
+    /// repeat(2, 25% 1fr)
+    /// repeat(auto-fill, 25% 1fr)
+    /// repeat(auto-fit, 25% 1fr)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Fixed, percentage, fractional, automatic, and intrinsic tracks retain their values.
+    /// - `minmax()` keeps independently typed minimum and maximum bounds.
+    /// - Counted, auto-fill, and auto-fit repetitions retain their fragments.
+    #[test]
+    fn grid_track_types_retain_authored_templates() {
+        let minmax = GridTrackSize::minmax(
+            GridMinTrackSize::Length(Length::cells(2.0)),
+            GridMaxTrackSize::Fraction(Fraction::new(3.0)),
+        );
+        let fragment = vec![
+            GridTrackSize::from(Length::percent(25.0)),
+            GridTrackSize::from(Fraction::new(1.0)),
+        ];
+        let templates = vec![
+            GridTemplateTrack::from(GridTrackSize::Length(Length::cells(4.0))),
+            GridTemplateTrack::repeat(GridRepeat::count(2), fragment.clone()),
+            GridTemplateTrack::repeat(GridRepeat::AutoFill, fragment.clone()),
+            GridTemplateTrack::repeat(GridRepeat::AutoFit, fragment.clone()),
+        ];
+
+        assert_eq!(
+            minmax,
+            GridTrackSize::MinMax {
+                min: GridMinTrackSize::Length(Length::Cells(2.0)),
+                max: GridMaxTrackSize::Fraction(Fraction::new(3.0)),
+            }
+        );
+        assert_eq!(GridTrackSize::Auto, GridTrackSize::Auto);
+        assert_eq!(GridTrackSize::MinContent, GridTrackSize::MinContent);
+        assert_eq!(GridTrackSize::MaxContent, GridTrackSize::MaxContent);
+        assert_eq!(
+            templates[0],
+            GridTemplateTrack::Track(GridTrackSize::Length(Length::Cells(4.0)))
+        );
+        assert_eq!(
+            templates[1],
+            GridTemplateTrack::Repeat {
+                repetition: GridRepeat::Count(2),
+                tracks: fragment.clone(),
+            }
+        );
+        assert_eq!(
+            templates[2],
+            GridTemplateTrack::Repeat {
+                repetition: GridRepeat::AutoFill,
+                tracks: fragment.clone(),
+            }
+        );
+        assert_eq!(
+            templates[3],
+            GridTemplateTrack::Repeat {
+                repetition: GridRepeat::AutoFit,
+                tracks: fragment,
+            }
+        );
     }
 
     /// Verifies generic geometry helpers preserve physical and axis ordering.

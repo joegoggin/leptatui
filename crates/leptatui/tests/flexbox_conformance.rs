@@ -374,11 +374,15 @@ fn fixture_view(fixture: &FlexFixture) -> AnyView {
     let children = fixture
         .items
         .iter()
-        .map(|item| text(item.label).with_inline_style(item.style).into_view())
+        .map(|item| {
+            text(item.label)
+                .with_inline_style(item.style.clone())
+                .into_view()
+        })
         .collect::<Vec<_>>();
 
     div(children)
-        .with_inline_style(fixture.container_style)
+        .with_inline_style(fixture.container_style.clone())
         .into_view()
 }
 

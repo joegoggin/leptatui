@@ -273,6 +273,16 @@ fn stylesheet_normal_declaration_does_not_override_important_mixin_value() {
 #[test]
 fn stylesheet_important_layout_properties_override_inline_values() {
     let line = GridLine::new(GridPlacement::line(2), GridPlacement::span(3));
+    let inline_template = vec![GridTemplateTrack::from(GridTrackSize::Auto)];
+    let important_template = vec![GridTemplateTrack::repeat(
+        GridRepeat::count(2),
+        vec![GridTrackSize::from(Fraction::new(1.0))],
+    )];
+    let inline_auto_tracks = vec![GridTrackSize::Auto];
+    let important_auto_tracks = vec![GridTrackSize::minmax(
+        GridMinTrackSize::MinContent,
+        GridMaxTrackSize::MaxContent,
+    )];
     let inline = TuiStyle::new()
         .display(Display::Flex)
         .box_sizing(BoxSizing::ContentBox)
@@ -295,6 +305,10 @@ fn stylesheet_important_layout_properties_override_inline_values() {
         .justify_self(JustifySelf::Auto)
         .justify_content(JustifyContent::Start)
         .grid_auto_flow(GridAutoFlow::Row)
+        .grid_template_rows(inline_template.clone())
+        .grid_template_columns(inline_template)
+        .grid_auto_rows(inline_auto_tracks.clone())
+        .grid_auto_columns(inline_auto_tracks)
         .grid_row(GridLine::default())
         .grid_column(GridLine::default())
         .position(Position::Relative)
@@ -326,6 +340,10 @@ fn stylesheet_important_layout_properties_override_inline_values() {
             justify_self: JustifySelf::Center !important,
             justify_content: JustifyContent::SpaceEvenly !important,
             grid_auto_flow: GridAutoFlow::ColumnDense !important,
+            grid_template_rows: important_template.clone() !important,
+            grid_template_columns: important_template.clone() !important,
+            grid_auto_rows: important_auto_tracks.clone() !important,
+            grid_auto_columns: important_auto_tracks.clone() !important,
             grid_row: line !important,
             grid_column: line !important,
             position: Position::Absolute !important,
@@ -365,6 +383,10 @@ fn stylesheet_important_layout_properties_override_inline_values() {
         .justify_self(JustifySelf::Center)
         .justify_content(JustifyContent::SpaceEvenly)
         .grid_auto_flow(GridAutoFlow::ColumnDense)
+        .grid_template_rows(important_template.clone())
+        .grid_template_columns(important_template)
+        .grid_auto_rows(important_auto_tracks.clone())
+        .grid_auto_columns(important_auto_tracks)
         .grid_row(line)
         .grid_column(line)
         .position(Position::Absolute)

@@ -53,7 +53,9 @@ fn main() {
     let expected = Stylesheet::new()
         .rule(
             StyleSelector::class("submit"),
-            base.foreground(Color::Black).background(Color::White),
+            base.clone()
+                .foreground(Color::Black)
+                .background(Color::White),
         )
         .rule(
             StyleSelector::class("quit"),

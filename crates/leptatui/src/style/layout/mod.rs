@@ -11,7 +11,7 @@
 //! - [`box_model`] — Display, box sizing, and overflow values.
 //! - [`flex`] — Flexbox direction and wrapping values.
 //! - [`geometry`] — Length, dimension, edge, axis, and size values.
-//! - [`grid`] — Grid auto-flow and item-placement values.
+//! - [`grid`] — Grid track sizing, auto-flow, and item-placement values.
 //! - [`position`] — Positioning and stacking values.
 //!
 //! # Example
@@ -44,5 +44,8 @@ pub use alignment::{
 pub use box_model::{BoxSizing, Display, Overflow};
 pub use flex::{FlexDirection, FlexWrap};
 pub use geometry::{Axes, Dimension, Edges, Fraction, LayoutSize, Length, LengthAuto};
-pub use grid::{GridAutoFlow, GridLine, GridPlacement};
+pub use grid::{
+    GridAutoFlow, GridLine, GridMaxTrackSize, GridMinTrackSize, GridPlacement, GridRepeat,
+    GridTemplateTrack, GridTrackSize,
+};
 pub use position::{Position, ZIndex};

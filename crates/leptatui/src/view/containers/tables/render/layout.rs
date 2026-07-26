@@ -131,7 +131,7 @@ fn collect_table_cell(cell: &AnyView, ctx: &mut RenderCtx<'_, '_>) -> RenderedTa
     if let Some(cell) = cell.downcast_ref::<TableCellView>() {
         let style = resolve_style(&cell.metadata, ctx);
         return RenderedTableCell {
-            content: resolved_rich_text(&cell.content, &cell.metadata, style, ctx),
+            content: resolved_rich_text(&cell.content, &cell.metadata, &style, ctx),
             alignment: cell.alignment,
             style,
             link_scroll_requested: cell.content.focused_link_requested_scroll(),

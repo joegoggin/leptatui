@@ -14,7 +14,7 @@ fn main() {
             alt="Project logo"
             class="media primary"
             id="logo"
-            style={style}
+            style={style.clone()}
         />
     };
 

@@ -78,7 +78,7 @@ fn view_metadata_setters_store_selector_fields() {
     let view = button("Save")
         .with_id("save")
         .with_classes("primary toolbar")
-        .with_inline_style(style)
+        .with_inline_style(style.clone())
         .with_focus(true);
     let metadata = view.style_metadata().expect("button metadata");
 

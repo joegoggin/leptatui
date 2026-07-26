@@ -5,7 +5,8 @@
 
 use leptatui::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
-    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, GridPlacement, JustifyContent,
+    Display, Edges, FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridMaxTrackSize,
+    GridMinTrackSize, GridPlacement, GridRepeat, GridTemplateTrack, GridTrackSize, JustifyContent,
     JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto, MediaQuery, Modifier, Overflow,
     Position, StyleDeclarations, StyleMetadata, StyleModule, StyleSelector, StyleValue, Stylesheet,
     ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, ViewType, ViewportSize, ZIndex,

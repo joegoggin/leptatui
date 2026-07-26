@@ -3,9 +3,9 @@
 use super::{Declaration, StyleDeclarations};
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
-    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
-    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, ThemeValue, TuiSize,
-    TuiSpacing, ZIndex,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, GridTemplateTrack,
+    GridTrackSize, JustifyContent, JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto,
+    Modifier, Overflow, Position, ThemeValue, TuiSize, TuiSpacing, ZIndex,
 };
 
 macro_rules! layout_declaration_builders {
@@ -54,6 +54,60 @@ macro_rules! layout_declaration_builders {
             /// # Arguments
             ///
             /// * `value` — Layout property value to declare.
+            /// * `important` — Whether the declaration has important priority.
+            pub(super) fn $setter(&mut self, value: $type, important: bool) {
+                set_declaration(&mut self.$field, value, important);
+            }
+        )+
+    };
+}
+
+macro_rules! owned_layout_declaration_builders {
+    ($(($field:ident, $important:ident, $setter:ident, $type:ty, $description:literal)),+ $(,)?) => {
+        $(
+            #[doc = concat!("Sets the normal ", $description, " declaration.")]
+            ///
+            /// # Arguments
+            ///
+            /// * `value` — Owned layout property value to declare.
+            ///
+            /// # Returns
+            ///
+            /// A [`StyleDeclarations`] value with the declaration applied.
+            pub fn $field(mut self, value: $type) -> Self {
+                if !matches!(
+                    self.$field,
+                    Some(Declaration {
+                        important: true,
+                        ..
+                    })
+                ) {
+                    self.$field = Some(Declaration::normal(value));
+                }
+
+                self
+            }
+
+            #[doc = concat!("Sets the important ", $description, " declaration.")]
+            ///
+            /// # Arguments
+            ///
+            /// * `value` — Owned layout property value to declare.
+            ///
+            /// # Returns
+            ///
+            /// A [`StyleDeclarations`] value with the important declaration applied.
+            #[doc(hidden)]
+            pub fn $important(mut self, value: $type) -> Self {
+                self.$field = Some(Declaration::important(value));
+                self
+            }
+
+            #[doc = concat!("Sets the ", $description, " declaration with explicit importance.")]
+            ///
+            /// # Arguments
+            ///
+            /// * `value` — Owned layout property value to declare.
             /// * `important` — Whether the declaration has important priority.
             pub(super) fn $setter(&mut self, value: $type, important: bool) {
                 set_declaration(&mut self.$field, value, important);
@@ -472,6 +526,37 @@ impl StyleDeclarations {
             set_z_index,
             ZIndex,
             "positioned stacking level"
+        ),
+    );
+
+    owned_layout_declaration_builders!(
+        (
+            grid_template_rows,
+            grid_template_rows_important,
+            set_grid_template_rows,
+            Vec<GridTemplateTrack>,
+            "explicit grid row template"
+        ),
+        (
+            grid_template_columns,
+            grid_template_columns_important,
+            set_grid_template_columns,
+            Vec<GridTemplateTrack>,
+            "explicit grid column template"
+        ),
+        (
+            grid_auto_rows,
+            grid_auto_rows_important,
+            set_grid_auto_rows,
+            Vec<GridTrackSize>,
+            "automatic grid row sizing"
+        ),
+        (
+            grid_auto_columns,
+            grid_auto_columns_important,
+            set_grid_auto_columns,
+            Vec<GridTrackSize>,
+            "automatic grid column sizing"
         ),
     );
 

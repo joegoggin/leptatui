@@ -12,9 +12,9 @@ mod resolve;
 
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
-    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
-    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, ThemeValue, TuiSize,
-    TuiSpacing, ZIndex,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, GridTemplateTrack,
+    GridTrackSize, JustifyContent, JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto,
+    Modifier, Overflow, Position, ThemeValue, TuiSize, TuiSpacing, ZIndex,
 };
 
 /// One style declaration value plus its cascade importance.
@@ -119,6 +119,14 @@ pub struct StyleDeclarations {
     justify_content: Option<Declaration<JustifyContent>>,
     /// Grid automatic-flow declaration.
     grid_auto_flow: Option<Declaration<GridAutoFlow>>,
+    /// Explicit grid row-template declaration.
+    grid_template_rows: Option<Declaration<Vec<GridTemplateTrack>>>,
+    /// Explicit grid column-template declaration.
+    grid_template_columns: Option<Declaration<Vec<GridTemplateTrack>>>,
+    /// Automatic grid row-sizing declaration.
+    grid_auto_rows: Option<Declaration<Vec<GridTrackSize>>>,
+    /// Automatic grid column-sizing declaration.
+    grid_auto_columns: Option<Declaration<Vec<GridTrackSize>>>,
     /// Grid row placement declaration.
     grid_row: Option<Declaration<GridLine>>,
     /// Grid column placement declaration.
@@ -167,6 +175,10 @@ impl StyleDeclarations {
             justify_self: None,
             justify_content: None,
             grid_auto_flow: None,
+            grid_template_rows: None,
+            grid_template_columns: None,
+            grid_auto_rows: None,
+            grid_auto_columns: None,
             grid_row: None,
             grid_column: None,
             position: None,

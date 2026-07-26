@@ -266,7 +266,7 @@ fn positioned_pointer_focus_follows_recorded_z_index_paint_order() -> Result<()>
         button("Low").with_inline_style(button_style(0)),
         button("High").with_inline_style(button_style(1)),
     ))
-    .with_inline_style(container_style)
+    .with_inline_style(container_style.clone())
     .into_view();
     let _terminal = render_layout_root(&later_is_higher, 6, 3)?;
     assert!(later_is_higher.__focus_control_at_position(2, 1));

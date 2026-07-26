@@ -50,7 +50,7 @@ impl RenderCtx<'_, '_> {
             let handled = self.with_assigned_layout_geometry_and_selector_ancestor(
                 geometry,
                 view.style_metadata(),
-                inherited_style,
+                inherited_style.clone(),
                 selector_ancestor.clone(),
                 |ctx| view.render_terminal_image_clipped(source.x, source.y, target_area, ctx),
             )?;

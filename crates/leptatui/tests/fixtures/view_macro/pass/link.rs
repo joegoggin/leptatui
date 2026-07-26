@@ -10,7 +10,7 @@ fn main() {
             href="https://example.com"
             class="navigation primary"
             id="guide"
-            style={style}
+            style={style.clone()}
         >{"Guide".to_owned()}</Link>
     };
 

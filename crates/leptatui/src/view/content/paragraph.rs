@@ -39,7 +39,7 @@ pub fn paragraph(content: impl Into<RichText>) -> ParagraphView {
 impl View for ParagraphView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
-        let rendered = resolved_rich_text(&self.content, &self.metadata, style, ctx);
+        let rendered = resolved_rich_text(&self.content, &self.metadata, &style, ctx);
         let area = if let Some(geometry) = ctx.active_layout_geometry(&self.metadata) {
             ctx.with_area(geometry.border_box, |ctx| {
                 ctx.render_widget(style.to_block());
