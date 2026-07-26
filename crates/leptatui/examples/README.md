@@ -14,6 +14,18 @@ cargo run --example hello_world
 
 Press `q` to exit.
 
+## Responsive Flex
+
+Run the responsive navigation, content, and sidebar example:
+
+```sh
+cargo run --example responsive_flex
+```
+
+The wide layout keeps navigation controls in a row and places a growing
+content region beside a fixed-basis sidebar. Resize the terminal to 60 columns
+or fewer to stack the navigation and workspace vertically. Press `q` to exit.
+
 ## Counter
 
 Run the styled counter example:

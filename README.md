@@ -416,6 +416,39 @@ fn ResponsivePanel() -> impl IntoView {
 }
 ```
 
+### Flexbox Contract
+
+Set `display: Display::Flex` on a container to lay out its direct children on
+one main axis. Flex containers default to `FlexDirection::Row` and
+`FlexWrap::NoWrap`. Items default to an automatic intrinsic basis, no growth,
+and a shrink factor of `1.0`; gaps default to zero. Container alignment uses
+the layout engine defaults: items and lines stretch on the cross axis, while
+main-axis content starts at the selected edge.
+
+The public flex contract includes:
+
+- `flex_direction`: row, row-reverse, column, and column-reverse.
+- `flex_wrap`: no-wrap, wrap, and wrap-reverse.
+- `gap`: independent horizontal and vertical item or line gaps.
+- `flex_basis`, `flex_grow`, and `flex_shrink`: preferred item size and
+  positive or negative free-space distribution.
+- `justify_content`: main-axis packing and space distribution.
+- `align_items` and `align_self`: container and per-item cross-axis alignment.
+- `align_content`: wrapped-line distribution on the cross axis.
+
+Text, controls, blocks, and nested layout containers participate through their
+intrinsic measurements. Media queries can change flex properties when the
+terminal viewport changes, causing layout and measurement to run again.
+Engine-owned fractional geometry is rounded cumulatively when retained as
+terminal rectangles so adjacent children remain contiguous and the final item
+ends at the expected parent edge.
+
+Run the responsive navigation, content, and sidebar example:
+
+```sh
+cargo run --example responsive_flex
+```
+
 Reusable declaration groups can be declared with `@mixin` and expanded in rule
 bodies with `@include`.
 
@@ -846,6 +879,15 @@ cargo run --example hello_world
 ```
 
 Press `q` to exit.
+
+Run the responsive flexbox example:
+
+```sh
+cargo run --example responsive_flex
+```
+
+Resize the terminal to 60 columns or fewer to stack the navigation, content,
+and sidebar.
 
 Run the interactive counter:
 
