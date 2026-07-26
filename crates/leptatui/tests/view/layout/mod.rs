@@ -5,6 +5,7 @@ include!("box_model.rs");
 include!("sizing.rs");
 include!("flex_container.rs");
 include!("flex_item.rs");
+include!("flex_multiline.rs");
 include!("overflow.rs");
 include!("scroll_keys.rs");
 include!("scroll_rendering.rs");
