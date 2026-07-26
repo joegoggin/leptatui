@@ -16,8 +16,8 @@ use crossterm::event::{
 };
 use leptatui::{
     __private::FocusedControl,
-    AlignContent, AlignItems, AnyView, AppControl, AvailableSpace, Axes, BorderType, Borders,
-    BoxSizing, ButtonView, CellAlignment, Color, ContainerView, Dimension, Display, Edges,
+    AlignContent, AlignItems, AlignSelf, AnyView, AppControl, AvailableSpace, Axes, BorderType,
+    Borders, BoxSizing, ButtonView, CellAlignment, Color, ContainerView, Dimension, Display, Edges,
     EditableState, FlexDirection, FlexWrap, FormView, GridLine, GridPlacement, ImageSource,
     InputView, IntoView, JustifyContent, KeyControl, LayoutGeometry, LayoutSize, Length,
     LengthAuto, LinkTarget, LinkView, ListItemView, MediaQuery, Modifier, Overflow, Position,
