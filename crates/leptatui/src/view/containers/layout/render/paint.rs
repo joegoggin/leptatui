@@ -5,10 +5,10 @@ use ratatui::{
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
-use crate::view::core::render::resolve_style;
+use crate::view::core::{layout::stacking::StackingLevel, render::resolve_style};
 use crate::view::{AnyView, StyleMetadata};
 use crate::{
-    Axes, Edges, Length, LengthAuto, Position, TuiStyle, ViewportSize, ZIndex,
+    Axes, Edges, Length, LengthAuto, Position, TuiStyle, ViewportSize,
     app::Result,
     component::{RenderCtx, StickyScrollport},
     view::core::measurement::sanitize_cells,
@@ -162,7 +162,7 @@ pub(super) fn render_children(
     Ok(())
 }
 
-/// Returns the authored positioning and stacking level for one child.
+/// Returns the authored positioning and stacking category for one child.
 ///
 /// # Arguments
 ///
@@ -171,22 +171,22 @@ pub(super) fn render_children(
 ///
 /// # Returns
 ///
-/// A [`tuple`](prim@tuple) containing positioning, stacking level, and inset
-/// edges, with static and automatic children at level zero.
+/// A [`tuple`](prim@tuple) containing positioning, stacking category, and
+/// inset edges.
 fn child_paint_style(
     child: &AnyView,
     ctx: &RenderCtx<'_, '_>,
-) -> (Position, i32, Edges<LengthAuto>) {
+) -> (Position, StackingLevel, Edges<LengthAuto>) {
     let Some(metadata) = child.style_metadata() else {
-        return (Position::Static, 0, Edges::all(LengthAuto::Auto));
+        return (
+            Position::Static,
+            StackingLevel::NormalFlow,
+            Edges::all(LengthAuto::Auto),
+        );
     };
     let style = resolve_style(metadata, ctx);
     let position = style.position.unwrap_or_default();
-    let stacking_level = match style.z_index.unwrap_or_default() {
-        _ if position == Position::Static => 0,
-        ZIndex::Auto => 0,
-        ZIndex::Integer(level) => level,
-    };
+    let stacking_level = StackingLevel::new(position, style.z_index.unwrap_or_default());
     (position, stacking_level, style.inset.unwrap_or_default())
 }
 

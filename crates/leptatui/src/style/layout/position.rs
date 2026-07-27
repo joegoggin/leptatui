@@ -18,12 +18,15 @@ pub enum Position {
 }
 
 /// Stacking level applied to a positioned layout box.
+///
+/// Static boxes ignore this value. An explicit integer on a positioned box
+/// establishes a local stacking context, including an integer value of zero.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ZIndex {
-    /// Uses source-order stacking without an explicit integer level.
+    /// Uses the positioned automatic layer in source order.
     #[default]
     Auto,
-    /// Uses the contained signed stacking level.
+    /// Uses the contained signed stacking level and establishes a context.
     Integer(i32),
 }
 

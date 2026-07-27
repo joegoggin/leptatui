@@ -9,12 +9,14 @@
 //! - [`fixed`] — Deferred viewport-level painting for fixed descendants.
 //! - [`geometry`] — Retained terminal geometry conversion and assignment.
 //! - [`measure`] — View measurement and logical-path traversal.
+//! - [`stacking`] — Shared web-inspired paint-level classification.
 //! - [`style`] — Leptatui-to-Taffy style conversion.
 //! - [`tree`] — Layout-tree construction, computation, and orchestration.
 
 mod fixed;
 mod geometry;
 mod measure;
+pub(crate) mod stacking;
 mod style;
 mod tree;
 
