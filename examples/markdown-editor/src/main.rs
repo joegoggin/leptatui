@@ -1,15 +1,16 @@
 //! Standalone Markdown editor application.
 //!
 //! This binary validates a browsing root before starting Leptatui's managed
-//! terminal sessions, then coordinates restored-terminal editor sessions while
-//! delegating application behavior to focused domain, infrastructure,
-//! controller, and UI modules.
+//! terminal sessions, then coordinates routed pages and restored-terminal
+//! editor sessions while delegating application behavior to focused domain,
+//! infrastructure, controller, and UI modules.
 
 mod cli;
 mod controller;
 mod domain;
 mod editor_process;
 mod filesystem;
+mod recent_files;
 mod ui;
 
 #[cfg(test)]
@@ -25,8 +26,12 @@ use clap::Parser;
 use leptatui::prelude::App;
 
 use crate::{
-    cli::Cli, controller::Controller, editor_process::EditorProcess, filesystem::FileSystem,
-    ui::app_view,
+    cli::Cli,
+    controller::Controller,
+    editor_process::EditorProcess,
+    filesystem::FileSystem,
+    recent_files::RecentFilesStore,
+    ui::{AppRoute, app_view_at_route},
 };
 
 /// Validates startup configuration and runs the Markdown editor.
@@ -43,22 +48,29 @@ use crate::{
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
     let requested_root = Cli::parse().requested_root()?;
-    let controller = Rc::new(RefCell::new(Controller::initialize(
+    let controller = Rc::new(RefCell::new(Controller::initialize_with_store(
         &requested_root,
         FileSystem::new(),
         EditorProcess::new(),
+        RecentFilesStore::standard(),
     )?));
+    let mut initial_route = AppRoute::Home;
 
     loop {
         let edit_requested = Rc::new(Cell::new(false));
-        App::new(app_view(Rc::clone(&controller), Rc::clone(&edit_requested)))
-            .run()
-            .await?;
+        App::new(app_view_at_route(
+            Rc::clone(&controller),
+            Rc::clone(&edit_requested),
+            initial_route,
+        ))
+        .run()
+        .await?;
 
         if !edit_requested.get() {
             return Ok(());
         }
 
         controller.borrow_mut().edit_preview();
+        initial_route = AppRoute::Viewer;
     }
 }

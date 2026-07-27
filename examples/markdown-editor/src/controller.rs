@@ -1,15 +1,34 @@
 //! Application controller for the Markdown editor.
 //!
 //! The controller validates initial state through infrastructure services and
-//! provides UI-facing access to the resulting domain values.
+//! provides UI-facing access to explorer, viewer, and persistent recent-file
+//! state.
 
-use std::{io, path::Path};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use crate::{
-    domain::{ExplorerEntryKind, ExplorerState, PreviewState, Workspace},
+    domain::{
+        ExplorerEntryKind, ExplorerState, PreviewState, RECENT_FILE_LIMIT, RecentFilesState,
+        Workspace,
+    },
     editor_process::EditorProcess,
     filesystem::FileSystem,
+    recent_files::RecentFilesStore,
 };
+
+/// Result of activating the selected explorer entry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExplorerActivation {
+    /// No explorer entry was selected.
+    None,
+    /// A directory was selected and the explorer handled the transition.
+    Directory,
+    /// A Markdown document was selected for the viewer.
+    Document,
+}
 
 /// Application state and service boundaries used by the Markdown editor UI.
 #[derive(Clone, Debug)]
@@ -20,10 +39,16 @@ pub(crate) struct Controller {
     explorer: ExplorerState,
     /// Open Markdown source or its recoverable read error.
     preview: PreviewState,
+    /// Persisted recent Markdown paths and recoverable storage state.
+    recent_files: RecentFilesState,
+    /// Global persisted MRU paths, including entries for other workspaces.
+    stored_recent_files: Vec<PathBuf>,
     /// Filesystem service used for anchored explorer transitions.
     filesystem: FileSystem,
     /// Process service used to launch the editor outside the managed terminal.
     editor_process: EditorProcess,
+    /// Storage service used to retain recent paths between launches.
+    recent_files_store: RecentFilesStore,
 }
 
 impl Controller {
@@ -46,18 +71,73 @@ impl Controller {
     ///
     /// Returns [`io::Error`] if the requested root cannot initialize a
     /// workspace.
+    #[cfg(test)]
     pub(crate) fn initialize(
         requested_root: &Path,
         filesystem: FileSystem,
         editor_process: EditorProcess,
     ) -> io::Result<Self> {
+        Self::initialize_with_store(
+            requested_root,
+            filesystem,
+            editor_process,
+            RecentFilesStore::memory(),
+        )
+    }
+
+    /// Initializes the application with an explicit recent-file store.
+    ///
+    /// # Arguments
+    ///
+    /// * `requested_root` — User-selected or current-directory root.
+    /// * `filesystem` — Service used to validate and canonicalize the root.
+    /// * `editor_process` — Service used for external editor operations.
+    /// * `recent_files_store` — Service used to load and save recent paths.
+    ///
+    /// # Returns
+    ///
+    /// A [`Controller`] containing validated startup and recent-file state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if the requested root cannot initialize a
+    /// workspace. Recent-file load failures become recoverable state.
+    pub(crate) fn initialize_with_store(
+        requested_root: &Path,
+        filesystem: FileSystem,
+        editor_process: EditorProcess,
+        recent_files_store: RecentFilesStore,
+    ) -> io::Result<Self> {
         let workspace = filesystem.validate_root(requested_root)?;
+        let (stored_paths, recent_error) = match recent_files_store.load() {
+            Ok(paths) => (paths, None),
+            Err(error) => (Vec::new(), Some(error.to_string())),
+        };
+        let mut stored_recent_files = Vec::new();
+        for path in stored_paths {
+            if !stored_recent_files.contains(&path) {
+                stored_recent_files.push(path);
+            }
+        }
+        stored_recent_files.truncate(RECENT_FILE_LIMIT);
+
+        let mut recent_paths = Vec::new();
+        for path in &stored_recent_files {
+            if let Ok(canonical) = filesystem.validate_markdown(&workspace, path)
+                && !recent_paths.contains(&canonical)
+            {
+                recent_paths.push(canonical);
+            }
+        }
         let mut controller = Self {
             explorer: ExplorerState::new(workspace.root().to_path_buf()),
             preview: PreviewState::new(),
+            recent_files: RecentFilesState::new(recent_paths, recent_error),
+            stored_recent_files,
             workspace,
             filesystem,
             editor_process,
+            recent_files_store,
         };
         controller.browse_root();
 
@@ -92,6 +172,16 @@ impl Controller {
         &self.preview
     }
 
+    /// Returns recent-file state.
+    ///
+    /// # Returns
+    ///
+    /// A [`RecentFilesState`] reference containing available paths and any
+    /// recoverable persistence error.
+    pub(crate) fn recent_files(&self) -> &RecentFilesState {
+        &self.recent_files
+    }
+
     /// Moves the explorer selection toward the previous entry.
     pub(crate) fn select_previous(&mut self) {
         self.explorer.select_previous();
@@ -109,22 +199,45 @@ impl Controller {
     ///
     /// # Returns
     ///
-    /// A boolean indicating whether an explorer entry was selected.
-    pub(crate) fn activate_selected(&mut self) -> bool {
+    /// An [`ExplorerActivation`] describing the selected entry kind.
+    pub(crate) fn activate_selected(&mut self) -> ExplorerActivation {
         let Some(entry) = self.explorer.selected_entry().cloned() else {
-            return false;
+            return ExplorerActivation::None;
         };
 
         match entry.kind() {
             ExplorerEntryKind::Directory => {
                 self.browse(entry.path());
+                ExplorerActivation::Directory
             }
             ExplorerEntryKind::Markdown => {
                 self.open_preview(entry.path());
+                ExplorerActivation::Document
             }
         }
+    }
 
-        true
+    /// Opens a recent Markdown path through the workspace boundary.
+    ///
+    /// Failed recent paths are removed from history while their read error
+    /// remains available to the Viewer page.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Persisted Markdown path selected on Home.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether the document loaded successfully.
+    pub(crate) fn open_recent(&mut self, path: &Path) -> bool {
+        let loaded = self.open_preview(path);
+        if !loaded {
+            self.recent_files.remove(path);
+            self.stored_recent_files.retain(|entry| entry != path);
+            self.save_recent_files();
+        }
+
+        loaded
     }
 
     /// Reloads the currently open Markdown preview.
@@ -157,7 +270,9 @@ impl Controller {
         };
 
         match self.editor_process.edit(&path) {
-            Ok(()) => self.open_preview(&path),
+            Ok(()) => {
+                self.open_preview(&path);
+            }
             Err(error) => self.preview.record_error(path, error.to_string()),
         }
 
@@ -226,12 +341,38 @@ impl Controller {
     /// # Arguments
     ///
     /// * `path` — Absolute selected Markdown path.
-    fn open_preview(&mut self, path: &Path) {
+    fn open_preview(&mut self, path: &Path) -> bool {
         match self.filesystem.read_markdown(&self.workspace, path) {
-            Ok(source) => self.preview.replace_document(path.to_path_buf(), source),
-            Err(error) => self
-                .preview
-                .record_error(path.to_path_buf(), error.to_string()),
+            Ok(source) => {
+                let canonical_path = self
+                    .filesystem
+                    .validate_markdown(&self.workspace, path)
+                    .unwrap_or_else(|_| path.to_path_buf());
+                self.preview
+                    .replace_document(canonical_path.clone(), source);
+                self.recent_files.promote(canonical_path.clone());
+                self.stored_recent_files
+                    .retain(|entry| entry != &canonical_path);
+                self.stored_recent_files.insert(0, canonical_path);
+                self.stored_recent_files.truncate(RECENT_FILE_LIMIT);
+                self.save_recent_files();
+                true
+            }
+            Err(error) => {
+                self.preview
+                    .record_error(path.to_path_buf(), error.to_string());
+                false
+            }
         }
+    }
+
+    /// Persists the current recent-file ordering.
+    fn save_recent_files(&mut self) {
+        let error = self
+            .recent_files_store
+            .save(&self.stored_recent_files)
+            .err()
+            .map(|error| error.to_string());
+        self.recent_files.set_error(error);
     }
 }

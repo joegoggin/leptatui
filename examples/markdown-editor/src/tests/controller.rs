@@ -2,7 +2,11 @@
 
 use std::{cell::RefCell, ffi::OsString, fs, rc::Rc};
 
-use crate::{controller::Controller, editor_process::EditorProcess, filesystem::FileSystem};
+use crate::{
+    controller::{Controller, ExplorerActivation},
+    editor_process::EditorProcess,
+    filesystem::FileSystem,
+};
 
 use super::support::{RecordingLauncher, TestEnvironment, TestLaunchOutcome, TestTree};
 
@@ -68,14 +72,17 @@ fn explorer_activation_browses_directories_and_opens_markdown() {
         Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
             .expect("the workspace should initialize");
 
-    assert!(controller.activate_selected());
+    assert_eq!(
+        controller.activate_selected(),
+        ExplorerActivation::Directory
+    );
     assert_eq!(
         controller.explorer().directory(),
         fs::canonicalize(&docs).expect("the docs directory should canonicalize")
     );
     assert_eq!(controller.explorer().selection(), Some(0));
 
-    assert!(controller.activate_selected());
+    assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
     assert_eq!(
         controller.preview().path(),
         Some(
@@ -113,11 +120,11 @@ fn preview_replaces_document_when_another_file_opens() {
         Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
             .expect("the workspace should initialize");
 
-    assert!(controller.activate_selected());
+    assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
     assert_eq!(controller.preview().source(), Some("# Alpha"));
 
     controller.select_next();
-    assert!(controller.activate_selected());
+    assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
     assert_eq!(
         controller.preview().path(),
         Some(
@@ -155,7 +162,7 @@ fn preview_reload_recovers_after_a_missing_file_returns() {
         Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
             .expect("the workspace should initialize");
 
-    assert!(controller.activate_selected());
+    assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
     fs::remove_file(&guide).expect("the open Markdown file should be removed");
     assert!(controller.reload_preview());
     assert_eq!(controller.preview().source(), None);
@@ -195,7 +202,7 @@ fn preview_invalid_utf8_is_recoverable() {
         Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
             .expect("the workspace should initialize");
 
-    assert!(controller.activate_selected());
+    assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
     assert_eq!(controller.preview().source(), None);
     let error = controller
         .preview()
@@ -248,9 +255,12 @@ fn editor_success_reloads_preview_and_preserves_browsing_context() {
     let mut controller = Controller::initialize(tree.root(), FileSystem::new(), editor_process)
         .expect("the workspace should initialize");
 
-    assert!(controller.activate_selected());
+    assert_eq!(
+        controller.activate_selected(),
+        ExplorerActivation::Directory
+    );
     controller.select_next();
-    assert!(controller.activate_selected());
+    assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
     let expected_directory = controller.explorer().directory().to_path_buf();
     let expected_selection = controller.explorer().selection();
 
@@ -325,7 +335,7 @@ fn editor_failures_are_visible_and_retain_the_open_path() {
         );
         let mut controller = Controller::initialize(tree.root(), FileSystem::new(), editor_process)
             .expect("the workspace should initialize");
-        assert!(controller.activate_selected());
+        assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
 
         assert!(controller.edit_preview());
         assert_eq!(

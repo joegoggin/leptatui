@@ -182,6 +182,35 @@ impl FileSystem {
         workspace: &Workspace,
         requested_file: &Path,
     ) -> io::Result<String> {
+        let canonical_file = self.validate_markdown(workspace, requested_file)?;
+
+        fs::read_to_string(&canonical_file)
+            .map_err(|source| path_error(source, "failed to read Markdown file", &canonical_file))
+    }
+
+    /// Validates a Markdown file below a workspace root.
+    ///
+    /// The requested path is canonicalized and checked for containment,
+    /// regular-file metadata, and a supported Markdown extension.
+    ///
+    /// # Arguments
+    ///
+    /// * `workspace` — Validated root that bounds the file.
+    /// * `requested_file` — Markdown path to validate.
+    ///
+    /// # Returns
+    ///
+    /// A canonical [`PathBuf`] for the validated Markdown file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if the path cannot be resolved, escapes the
+    /// workspace, is not a regular file, or has an unsupported extension.
+    pub(crate) fn validate_markdown(
+        &self,
+        workspace: &Workspace,
+        requested_file: &Path,
+    ) -> io::Result<PathBuf> {
         let canonical_file =
             canonicalize_with_context(requested_file, "failed to resolve Markdown file")?;
         ensure_within_root(workspace.root(), &canonical_file)?;
@@ -198,9 +227,17 @@ impl FileSystem {
                 ),
             ));
         }
+        if !canonical_file.file_name().is_some_and(is_markdown_name) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "preview path is not a Markdown file: {}",
+                    canonical_file.display()
+                ),
+            ));
+        }
 
-        fs::read_to_string(&canonical_file)
-            .map_err(|source| path_error(source, "failed to read Markdown file", &canonical_file))
+        Ok(canonical_file)
     }
 }
 

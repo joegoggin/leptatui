@@ -11,7 +11,10 @@ use leptatui::prelude::{KeyCode, KeyControl, KeyEvent, KeyModifiers, View};
 use ratatui::{Terminal, backend::TestBackend};
 
 use crate::{
-    controller::Controller, editor_process::EditorProcess, filesystem::FileSystem, ui::app_view,
+    controller::Controller,
+    editor_process::EditorProcess,
+    filesystem::FileSystem,
+    ui::{AppRoute, app_view, app_view_at_route},
 };
 
 use super::support::{
@@ -35,7 +38,8 @@ use super::support::{
 ///
 /// # Assertions
 ///
-/// - UI key events enter the nested directory and open its Markdown file.
+/// - Home routes to Explorer before key events enter the nested directory.
+/// - Explorer opens the Markdown file in Viewer.
 /// - Test-backend rendering exposes the current path and original document.
 /// - The edit key exits the TUI session and records an edit request.
 /// - The injected editor receives the canonical path and replaces the source.
@@ -75,12 +79,23 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
     let mut terminal = Terminal::new(TestBackend::new(90, 24))?;
 
     draw_editor(&mut terminal, &view)?;
-    assert!(rendered_lines(&terminal).join("\n").contains("> [D] docs"));
+    assert!(
+        rendered_lines(&terminal)
+            .join("\n")
+            .contains("No recent Markdown files")
+    );
 
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_editor(&mut terminal, &view)?;
+    assert!(rendered_lines(&terminal).join("\n").contains("> [D] docs"));
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
         KeyControl::Handled
     );
+    draw_editor(&mut terminal, &view)?;
     assert_eq!(controller.borrow().explorer().directory(), canonical_docs);
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
@@ -88,7 +103,6 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
     );
     draw_editor(&mut terminal, &view)?;
     let before_edit = rendered_lines(&terminal).join("\n");
-    assert!(before_edit.contains("Directory: docs"));
     assert!(before_edit.contains("Open: docs/guide.md"));
     assert!(before_edit.contains("Before edit"));
 
@@ -118,10 +132,13 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
     );
     assert_eq!(controller.borrow().preview().source(), Some("# After edit"));
 
-    let rebuilt_view = app_view(Rc::clone(&controller), Rc::new(Cell::new(false)));
+    let rebuilt_view = app_view_at_route(
+        Rc::clone(&controller),
+        Rc::new(Cell::new(false)),
+        AppRoute::Viewer,
+    );
     draw_editor(&mut terminal, &rebuilt_view)?;
     let after_edit = rendered_lines(&terminal).join("\n");
-    assert!(after_edit.contains("Directory: docs"));
     assert!(after_edit.contains("Open: docs/guide.md"));
     assert!(after_edit.contains("After edit"));
 

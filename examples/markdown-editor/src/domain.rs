@@ -8,6 +8,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Maximum number of recent files retained by the application.
+pub(crate) const RECENT_FILE_LIMIT: usize = 10;
+
 /// Validated directory that anchors one Markdown editing session.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Workspace {
@@ -345,5 +348,81 @@ impl PreviewState {
         self.source = None;
         self.error = Some(error);
         self.revision = self.revision.wrapping_add(1);
+    }
+}
+
+/// Most-recently-used Markdown paths and recoverable persistence state.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct RecentFilesState {
+    /// Canonical paths in most-recent-first order.
+    entries: Vec<PathBuf>,
+    /// Most recent load or save failure.
+    error: Option<String>,
+}
+
+impl RecentFilesState {
+    /// Creates recent-file state from validated persisted paths.
+    ///
+    /// # Arguments
+    ///
+    /// * `entries` — Canonical paths in most-recent-first order.
+    /// * `error` — Optional recoverable persistence error.
+    ///
+    /// # Returns
+    ///
+    /// A [`RecentFilesState`] capped at [`RECENT_FILE_LIMIT`] entries.
+    pub(crate) fn new(mut entries: Vec<PathBuf>, error: Option<String>) -> Self {
+        entries.truncate(RECENT_FILE_LIMIT);
+        Self { entries, error }
+    }
+
+    /// Returns recent paths in most-recent-first order.
+    ///
+    /// # Returns
+    ///
+    /// A slice of canonical Markdown paths.
+    pub(crate) fn entries(&self) -> &[PathBuf] {
+        &self.entries
+    }
+
+    /// Returns the current recoverable persistence error.
+    ///
+    /// # Returns
+    ///
+    /// An optional error message.
+    pub(crate) fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    /// Promotes a path to the front of the recent list.
+    ///
+    /// Existing copies are removed and the list remains bounded by
+    /// [`RECENT_FILE_LIMIT`].
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Canonical Markdown path to promote.
+    pub(crate) fn promote(&mut self, path: PathBuf) {
+        self.entries.retain(|entry| entry != &path);
+        self.entries.insert(0, path);
+        self.entries.truncate(RECENT_FILE_LIMIT);
+    }
+
+    /// Removes a path from the recent list.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Path that should no longer be offered.
+    pub(crate) fn remove(&mut self, path: &Path) {
+        self.entries.retain(|entry| entry != path);
+    }
+
+    /// Replaces the recoverable persistence error.
+    ///
+    /// # Arguments
+    ///
+    /// * `error` — New load or save error, or `None` after recovery.
+    pub(crate) fn set_error(&mut self, error: Option<String>) {
+        self.error = error;
     }
 }

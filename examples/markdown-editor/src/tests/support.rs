@@ -238,23 +238,3 @@ pub(super) fn rendered_lines(terminal: &Terminal<TestBackend>) -> Vec<String> {
         })
         .collect()
 }
-
-/// Returns the first rendered position of a text fragment.
-///
-/// # Arguments
-///
-/// * `terminal` — Test terminal containing the rendered editor.
-/// * `needle` — Text fragment to locate.
-///
-/// # Returns
-///
-/// An [`Option`] containing the fragment's starting column and row.
-pub(super) fn rendered_position(
-    terminal: &Terminal<TestBackend>,
-    needle: &str,
-) -> Option<(usize, usize)> {
-    rendered_lines(terminal)
-        .iter()
-        .enumerate()
-        .find_map(|(row, line)| line.find(needle).map(|column| (column, row)))
-}
