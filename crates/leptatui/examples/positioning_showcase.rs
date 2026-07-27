@@ -102,7 +102,7 @@ fn PositioningShowcase() -> impl IntoView {
         .negative-layer => {
             position: Position::Relative,
             inset: Edges::new(
-                Length::cells(-1.0).into(),
+                Length::cells(1.0).into(),
                 LengthAuto::Auto,
                 LengthAuto::Auto,
                 Length::cells(2.0).into()

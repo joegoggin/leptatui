@@ -465,7 +465,9 @@ The public layout properties and their value types are:
 `MinContent`, `MaxContent`, and `FitContent`. General box dimensions currently
 treat min-content and max-content like auto, and fit-content like its contained
 length; grid track sizing supports its intrinsic variants directly. Non-finite
-or negative sizes and factors are sanitized before reaching layout.
+values are sanitized before reaching layout. Negative `Length` and factor
+values are clamped to zero, while non-positive aspect ratios fall back to
+automatic sizing.
 
 ### Layout Conformance Matrix
 
