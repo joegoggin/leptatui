@@ -68,6 +68,12 @@ pub struct RenderCtx<'frame, 'buffer> {
     layout_state: LayoutState,
     /// Nearest scrollport constraining sticky descendants.
     sticky_scrollport: Option<StickyScrollport>,
+    /// Whether nested positioned boxes are promoted to an ancestor paint context.
+    defer_positioned_descendants: bool,
+    /// Remaining child indexes leading to one promoted positioned box.
+    stacking_path: Option<Vec<usize>>,
+    /// Whether the promoted endpoint must continue deferring positioned descendants.
+    stacking_endpoint_defers: bool,
 }
 
 /// Signed scrollport geometry inherited by sticky descendants.
@@ -148,6 +154,9 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             paint_sequence: Rc::new(Cell::new(0)),
             layout_state: LayoutState::default(),
             sticky_scrollport: Some(area.into()),
+            defer_positioned_descendants: false,
+            stacking_path: None,
+            stacking_endpoint_defers: false,
         }
     }
 
@@ -284,6 +293,9 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             paint_sequence: Rc::clone(&self.paint_sequence),
             layout_state: self.layout_state.clone(),
             sticky_scrollport: self.sticky_scrollport,
+            defer_positioned_descendants: self.defer_positioned_descendants,
+            stacking_path: self.stacking_path.clone(),
+            stacking_endpoint_defers: self.stacking_endpoint_defers,
         }
     }
 
@@ -315,6 +327,71 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         self.sticky_scrollport = scrollport;
         let result = render(self);
         self.sticky_scrollport = previous;
+        result
+    }
+
+    /// Returns whether the current box defers nested positioned descendants.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether positioned children belong to an ancestor
+    /// paint context.
+    pub(crate) const fn defers_positioned_descendants(&self) -> bool {
+        self.defer_positioned_descendants
+    }
+
+    /// Returns whether rendering is traversing to a promoted positioned box.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether intermediate box chrome should be skipped.
+    pub(crate) const fn is_stacking_path_traversal(&self) -> bool {
+        self.stacking_path.is_some()
+    }
+
+    /// Returns the next child index on the promoted stacking path.
+    ///
+    /// # Returns
+    ///
+    /// An optional tuple containing the next child index, remaining path, and
+    /// endpoint deferral behavior.
+    pub(crate) fn next_stacking_target(&self) -> Option<(usize, Vec<usize>, bool)> {
+        let path = self.stacking_path.as_deref()?;
+        let (&target, remaining) = path.split_first()?;
+        Some((target, remaining.to_vec(), self.stacking_endpoint_defers))
+    }
+
+    /// Renders with replacement positioned-descendant and path state.
+    ///
+    /// # Arguments
+    ///
+    /// * `defer_positioned_descendants` — Whether nested positioned boxes are
+    ///   deferred to an ancestor context.
+    /// * `stacking_path` — Remaining child indexes leading to a promoted box.
+    /// * `endpoint_defers` — Whether the promoted endpoint remains a
+    ///   non-context box.
+    /// * `render` — Closure rendered with the replacement paint state.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
+    pub(crate) fn with_stacking_state<R>(
+        &mut self,
+        defer_positioned_descendants: bool,
+        stacking_path: Option<Vec<usize>>,
+        endpoint_defers: bool,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let previous_defer = self.defer_positioned_descendants;
+        let previous_path = self.stacking_path.clone();
+        let previous_endpoint_defers = self.stacking_endpoint_defers;
+        self.defer_positioned_descendants = defer_positioned_descendants;
+        self.stacking_path = stacking_path;
+        self.stacking_endpoint_defers = endpoint_defers;
+        let result = render(self);
+        self.defer_positioned_descendants = previous_defer;
+        self.stacking_path = previous_path;
+        self.stacking_endpoint_defers = previous_endpoint_defers;
         result
     }
 

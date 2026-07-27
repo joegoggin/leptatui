@@ -2,6 +2,46 @@
 
 use super::*;
 
+/// Verifies automatic absolute insets retain the child's static source position.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 4x4 relative root
+/// normal-flow "A"
+/// absolute 1x1 "X" with automatic insets
+/// normal-flow "B"
+/// ```
+///
+/// # Assertions
+///
+/// - The absolute child uses its source position after `A`.
+/// - The later flow child does not move the absolute child's static position.
+///
+/// # Why
+///
+/// Separating absolute nodes from flow nodes must not move all automatic-inset
+/// boxes after later siblings before layout computes their static positions.
+#[test]
+fn absolute_auto_insets_preserve_static_source_position() -> Result<()> {
+    let absolute =
+        div((text("X"),)).with_inline_style(fixture_size(1.0, 1.0).position(Position::Absolute));
+    let root = div((text("A"), absolute, text("B")))
+        .with_inline_style(
+            fixture_size(4.0, 4.0)
+                .position(Position::Relative)
+                .overflow(Axes::all(Overflow::Visible)),
+        )
+        .into_view();
+
+    let _terminal = render_view(root.as_view(), 4, 4)?;
+    let rects = retained_child_rects(&root);
+
+    assert_eq!(rects[1].y, 1);
+    assert_eq!(rects[2].y, 1);
+    Ok(())
+}
+
 /// Verifies static insets are ignored while relative offsets retain flow space.
 ///
 /// # Example Under Test

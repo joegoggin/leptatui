@@ -449,6 +449,31 @@ Run the responsive navigation, content, and sidebar example:
 cargo run --example responsive_flex
 ```
 
+### Positioning Contract
+
+The `position` property selects how a box participates in layout and how its
+`inset` edges are resolved. `Position::Static` is the default and ignores
+insets. `Position::Relative` keeps its normal-flow space while offsetting its
+painted box. `Position::Absolute` leaves normal flow and uses the nearest
+non-static ancestor, or the layout root, as its containing block.
+`Position::Fixed` also leaves normal flow but is positioned and clipped
+against the terminal viewport. `Position::Sticky` keeps its flow space and
+clamps its painted box to the authored inset inside the nearest scrollport.
+
+Automatic insets preserve the box's static source position on that axis.
+Percentage insets resolve against the relevant containing block and are
+recomputed after terminal resizes. Positioned descendants retain ancestor
+clipping and scrolling unless fixed positioning explicitly moves them into
+the viewport layer.
+
+Positioned boxes with `ZIndex::Auto` share their containing stacking context
+and paint in source order at the automatic level. `ZIndex::Integer` assigns a
+signed stacking level and establishes an atomic local stacking context,
+including for an explicit value of zero. Negative positioned layers paint
+after their context's background but before normal-flow content, while
+positive layers paint afterward. Pointer targeting follows the resulting
+paint order.
+
 ### Grid Contract
 
 Set `display: Display::Grid` on a container to lay out its direct children in

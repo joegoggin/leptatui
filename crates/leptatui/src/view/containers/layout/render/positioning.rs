@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 use crate::view::AnyView;
 use crate::view::core::{layout::stacking::StackingLevel, render::resolve_style};
 use crate::{
-    Axes, Edges, Length, LengthAuto, Position, ViewportSize,
+    Axes, Edges, Length, LengthAuto, Position, ViewportSize, ZIndex,
     component::{RenderCtx, StickyScrollport},
     view::core::measurement::sanitize_cells,
 };
@@ -21,23 +21,37 @@ use super::geometry::translate_rect;
 ///
 /// # Returns
 ///
-/// A [`tuple`](prim@tuple) containing positioning, stacking category, and
-/// inset edges.
+/// A [`tuple`](prim@tuple) containing positioning, stacking category, inset
+/// edges, and whether the box establishes an explicit stacking context.
 pub(super) fn child_paint_style(
     child: &AnyView,
-    ctx: &RenderCtx<'_, '_>,
-) -> (Position, StackingLevel, Edges<LengthAuto>) {
+    ctx: &mut RenderCtx<'_, '_>,
+) -> (Position, StackingLevel, Edges<LengthAuto>, bool) {
     let Some(metadata) = child.style_metadata() else {
-        return (
+        let mut nested_style = None;
+        child
+            .as_view()
+            .__visit_retained_children(ctx, &mut |nested, nested_ctx| {
+                nested_style = nested_style.or_else(|| Some(child_paint_style(nested, nested_ctx)));
+            });
+        return nested_style.unwrap_or((
             Position::Static,
             StackingLevel::NormalFlow,
             Edges::all(LengthAuto::Auto),
-        );
+            false,
+        ));
     };
     let style = resolve_style(metadata, ctx);
     let position = style.position.unwrap_or_default();
-    let stacking_level = StackingLevel::new(position, style.z_index.unwrap_or_default());
-    (position, stacking_level, style.inset.unwrap_or_default())
+    let z_index = style.z_index.unwrap_or_default();
+    let stacking_level = StackingLevel::new(position, z_index);
+    let establishes_context = position != Position::Static && matches!(z_index, ZIndex::Integer(_));
+    (
+        position,
+        stacking_level,
+        style.inset.unwrap_or_default(),
+        establishes_context,
+    )
 }
 
 /// Returns one child's final painted origin after scrolling and sticky constraints.

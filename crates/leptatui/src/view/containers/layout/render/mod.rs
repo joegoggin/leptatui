@@ -92,12 +92,15 @@ pub(crate) fn render_container_with_default_borders(
         }
     }
 
+    let traversing_stacking_path = ctx.is_stacking_path_traversal();
     let style = resolve_style(metadata, ctx);
-    ctx.record_metadata_hit_area(metadata);
     let geometry = ctx.layout_geometry();
-    ctx.with_area(geometry.border_box, |ctx| {
-        ctx.render_widget(style.to_block_with_default_borders(default_borders));
-    });
+    if !traversing_stacking_path {
+        ctx.record_metadata_hit_area(metadata);
+        ctx.with_area(geometry.border_box, |ctx| {
+            ctx.render_widget(style.to_block_with_default_borders(default_borders));
+        });
+    }
 
     let (content_area, layout_offset) = container_content_area(metadata, ctx);
     let overflow = style
@@ -115,7 +118,9 @@ pub(crate) fn render_container_with_default_borders(
         layout_offset,
     };
 
-    if let Some(bounds) = focused_control_bounds_for_container(children, metadata, ctx) {
+    if !traversing_stacking_path
+        && let Some(bounds) = focused_control_bounds_for_container(children, metadata, ctx)
+    {
         let scroll_to_anchor = children.iter().any(AnyView::__has_scroll_to_anchor_request);
         if scroll_to_anchor {
             metadata.set_scroll_offset(
@@ -151,7 +156,9 @@ pub(crate) fn render_container_with_default_borders(
             ctx,
         )
     })?;
-    render_scrollbars(offsets, maximum, content_area, viewport, gutters, ctx);
+    if !traversing_stacking_path {
+        render_scrollbars(offsets, maximum, content_area, viewport, gutters, ctx);
+    }
     Ok(())
 }
 

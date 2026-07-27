@@ -2,6 +2,158 @@
 
 use super::*;
 
+/// Verifies transparent boundaries preserve their positioned root's stacking.
+///
+/// # Example Under Test
+///
+/// ```text
+/// relative 1x1 root
+/// dynamic absolute "H" at z-index 2
+/// direct absolute "L" at z-index 1
+/// both at top: 0 and left: 0
+/// ```
+///
+/// # Assertions
+///
+/// - The dynamic boundary contributes no independent stacking category.
+/// - The dynamic positioned root paints above the lower direct sibling.
+///
+/// # Why
+///
+/// Layout-transparent boundaries must forward the paint style of their
+/// materialized root instead of being classified as static normal flow.
+#[test]
+fn transparent_boundaries_preserve_positioned_stacking() -> Result<()> {
+    let inset = cell_insets(Some(0.0), None, None, Some(0.0));
+    let dynamic_high = dynamic(move || {
+        text("H").with_inline_style(
+            fixture_size(1.0, 1.0)
+                .position(Position::Absolute)
+                .inset(inset)
+                .z_index(ZIndex::Integer(2)),
+        )
+    });
+    let direct_low = text("L").with_inline_style(
+        fixture_size(1.0, 1.0)
+            .position(Position::Absolute)
+            .inset(inset)
+            .z_index(ZIndex::Integer(1)),
+    );
+    let root = div((dynamic_high, direct_low))
+        .with_inline_style(fixture_size(1.0, 1.0).position(Position::Relative))
+        .into_view();
+
+    let terminal = render_view(root.as_view(), 1, 1)?;
+
+    assert_eq!(rendered_lines(&terminal)[0], "H");
+    Ok(())
+}
+
+/// Verifies automatic z-index parents do not trap positioned descendants.
+///
+/// # Example Under Test
+///
+/// ```text
+/// relative 1x1 root
+/// absolute automatic-z-index parent
+/// parent child "H" at z-index 100
+/// root sibling "M" at z-index 1
+/// all boxes overlap at top: 0 and left: 0
+/// ```
+///
+/// # Assertions
+///
+/// - The automatic parent does not establish an atomic stacking context.
+/// - The nested level-100 child paints above the root's level-one sibling.
+///
+/// # Why
+///
+/// Only explicit integer z-index values establish contexts; positioned
+/// descendants must otherwise participate in the nearest explicit ancestor
+/// context.
+#[test]
+fn automatic_z_index_parent_does_not_trap_positioned_descendants() -> Result<()> {
+    let inset = cell_insets(Some(0.0), None, None, Some(0.0));
+    let high = text("H").with_inline_style(
+        fixture_size(1.0, 1.0)
+            .position(Position::Absolute)
+            .inset(inset)
+            .z_index(ZIndex::Integer(100)),
+    );
+    let automatic_parent = div((high,)).with_inline_style(
+        fixture_size(1.0, 1.0)
+            .position(Position::Absolute)
+            .inset(inset),
+    );
+    let middle = text("M").with_inline_style(
+        fixture_size(1.0, 1.0)
+            .position(Position::Absolute)
+            .inset(inset)
+            .z_index(ZIndex::Integer(1)),
+    );
+    let root = div((automatic_parent, middle))
+        .with_inline_style(fixture_size(1.0, 1.0).position(Position::Relative))
+        .into_view();
+
+    let terminal = render_view(root.as_view(), 1, 1)?;
+
+    assert_eq!(rendered_lines(&terminal)[0], "H");
+    Ok(())
+}
+
+/// Verifies promoted descendants preserve earlier sibling hit areas.
+///
+/// # Example Under Test
+///
+/// ```text
+/// relative 8x3 root
+/// dynamic absolute automatic-z-index parent
+/// static 5x3 button inside the parent
+/// absolute descendant at left: 6 and z-index 10
+/// MouseMoved(2, 1)
+/// ```
+///
+/// # Assertions
+///
+/// - Replaying the promoted descendant through the dynamic boundary does not
+///   clear the static button's earlier hit area.
+/// - Pointer movement over the static button focuses it.
+///
+/// # Why
+///
+/// Transparent-boundary traversal renders an automatic-context parent once
+/// for its shell and static children, then re-enters it for each promoted
+/// positioned descendant. Re-entry must retain interaction geometry recorded
+/// by the shell pass.
+#[test]
+fn promoted_descendant_replay_preserves_static_sibling_hit_area() -> Result<()> {
+    let parent_inset = cell_insets(Some(0.0), None, None, Some(0.0));
+    let descendant_inset = cell_insets(Some(0.0), None, None, Some(6.0));
+    let dynamic_parent = dynamic(move || {
+        let static_button = button("Stay").with_inline_style(fixture_size(5.0, 3.0));
+        let promoted = text("H").with_inline_style(
+            fixture_size(1.0, 1.0)
+                .position(Position::Absolute)
+                .inset(descendant_inset)
+                .z_index(ZIndex::Integer(10)),
+        );
+        div((static_button, promoted)).with_inline_style(
+            fixture_size(8.0, 3.0)
+                .position(Position::Absolute)
+                .inset(parent_inset),
+        )
+    });
+    let mut root = div((dynamic_parent,))
+        .with_inline_style(fixture_size(8.0, 3.0).position(Position::Relative))
+        .into_view();
+
+    let _terminal = render_view(root.as_view(), 8, 3)?;
+    root.handle_event(mouse(MouseEventKind::Moved, 2, 1))?;
+
+    assert_eq!(root.__focused_control(), Some(FocusedControl::Button));
+    Ok(())
+}
+
 /// Verifies positioned layers surround normal flow in deterministic order.
 ///
 /// # Example Under Test

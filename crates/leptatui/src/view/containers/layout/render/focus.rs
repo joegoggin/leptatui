@@ -87,7 +87,7 @@ pub(super) fn focused_control_bounds_for_container(
                         .filter(|child| !child.__has_scroll_to_anchor_request()),
                 )
                 .find_map(|child| {
-                    let (position, _, insets) = child_paint_style(child, ctx);
+                    let (position, _, insets, _) = child_paint_style(child, ctx);
                     if position == Position::Fixed {
                         return None;
                     }

@@ -36,15 +36,23 @@ struct LayoutNode {
     overflow: Axes<Overflow>,
 }
 
+/// Taffy node paired with its logical depth-first source position.
+struct BuiltNode {
+    /// Taffy node produced for one logical view.
+    node: NodeId,
+    /// Logical path used to preserve source order across positioning categories.
+    source_order: LayoutPath,
+}
+
 /// Taffy nodes produced while mirroring one logical view subtree.
 #[derive(Default)]
 struct BuiltNodes {
     /// Nodes that participate in their immediate layout parent's normal flow.
-    in_flow: Vec<NodeId>,
+    in_flow: Vec<BuiltNode>,
     /// Absolute nodes waiting for the nearest positioned containing block.
-    absolute: Vec<NodeId>,
+    absolute: Vec<BuiltNode>,
     /// Fixed nodes waiting for the terminal viewport containing block.
-    fixed: Vec<NodeId>,
+    fixed: Vec<BuiltNode>,
 }
 
 impl BuiltNodes {
@@ -63,22 +71,36 @@ impl BuiltNodes {
     ///
     /// # Returns
     ///
-    /// A [`Vec`] containing normal-flow nodes followed by absolute descendants.
+    /// A [`Vec`] containing normal-flow and absolute nodes in logical source order.
     fn into_containing_block_children(mut self) -> Vec<NodeId> {
         self.in_flow.append(&mut self.absolute);
-        self.in_flow
+        ordered_node_ids(self.in_flow)
     }
 
     /// Returns all non-fixed nodes captured by the root containing block.
     ///
     /// # Returns
     ///
-    /// A [`tuple`](prim@tuple) containing root flow nodes followed by absolute
-    /// roots and the fixed nodes assigned to the viewport root.
+    /// A [`tuple`](prim@tuple) containing source-ordered root flow and absolute
+    /// nodes plus source-ordered fixed nodes assigned to the viewport root.
     fn into_root_children(mut self) -> (Vec<NodeId>, Vec<NodeId>) {
         self.in_flow.append(&mut self.absolute);
-        (self.in_flow, self.fixed)
+        (ordered_node_ids(self.in_flow), ordered_node_ids(self.fixed))
     }
+}
+
+/// Returns Taffy identifiers sorted by logical depth-first source order.
+///
+/// # Arguments
+///
+/// * `nodes` — Built nodes carrying their logical source paths.
+///
+/// # Returns
+///
+/// A [`Vec`] containing Taffy identifiers in logical source order.
+fn ordered_node_ids(mut nodes: Vec<BuiltNode>) -> Vec<NodeId> {
+    nodes.sort_by(|left, right| left.source_order.0.cmp(&right.source_order.0));
+    nodes.into_iter().map(|node| node.node).collect()
 }
 
 /// Builds, computes, rounds, and stores one root layout snapshot.
@@ -366,7 +388,10 @@ fn build_view(
             overflow: Axes::new(Overflow::Visible, Overflow::Visible),
         });
         return BuiltNodes {
-            in_flow: vec![node],
+            in_flow: vec![BuiltNode {
+                node,
+                source_order: path.clone(),
+            }],
             absolute: Vec::new(),
             fixed: Vec::new(),
         };
@@ -390,7 +415,10 @@ fn build_view(
     let (children, escaped_absolute) = if is_root || position != crate::Position::Static {
         (layout_children.into_containing_block_children(), Vec::new())
     } else {
-        (layout_children.in_flow, layout_children.absolute)
+        (
+            ordered_node_ids(layout_children.in_flow),
+            layout_children.absolute,
+        )
     };
     let style = to_taffy_style(view, &resolved, ctx.viewport_size());
     let node = if children.is_empty() {
@@ -408,7 +436,10 @@ fn build_view(
             .unwrap_or_else(|| Axes::new(Overflow::Visible, Overflow::Auto)),
     });
     if !is_root && position == crate::Position::Fixed {
-        escaped_fixed.insert(0, node);
+        escaped_fixed.push(BuiltNode {
+            node,
+            source_order: path.clone(),
+        });
         BuiltNodes {
             in_flow: Vec::new(),
             absolute: Vec::new(),
@@ -417,12 +448,18 @@ fn build_view(
     } else if !is_root && position == crate::Position::Absolute {
         BuiltNodes {
             in_flow: Vec::new(),
-            absolute: vec![node],
+            absolute: vec![BuiltNode {
+                node,
+                source_order: path.clone(),
+            }],
             fixed: escaped_fixed,
         }
     } else {
         BuiltNodes {
-            in_flow: vec![node],
+            in_flow: vec![BuiltNode {
+                node,
+                source_order: path.clone(),
+            }],
             absolute: escaped_absolute,
             fixed: escaped_fixed,
         }

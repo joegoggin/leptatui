@@ -115,6 +115,9 @@ impl RenderCtx<'_, '_> {
                     source,
                     target_area,
                 ),
+                defer_positioned_descendants: self.defer_positioned_descendants,
+                stacking_path: self.stacking_path.clone(),
+                stacking_endpoint_defers: self.stacking_endpoint_defers,
             };
             view.as_view().render(&mut buffer_ctx)?;
         }

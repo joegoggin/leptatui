@@ -670,7 +670,8 @@ impl AnyView {
     /// Renders the stored concrete node.
     ///
     /// Prior hit areas are cleared before the current root metadata and
-    /// concrete node are rendered.
+    /// concrete node are rendered. Intermediate stacking-path traversal keeps
+    /// hit areas recorded by the box's earlier shell paint.
     ///
     /// # Arguments
     ///
@@ -689,7 +690,9 @@ impl AnyView {
         if is_layout_root {
             prepare_layout(self.as_view(), ctx);
         }
-        self.inner.__clear_hit_areas();
+        if !ctx.is_stacking_path_traversal() {
+            self.inner.__clear_hit_areas();
+        }
         if let Some(metadata) = self.inner.style_metadata() {
             if metadata.is_layout_hidden() {
                 return Ok(());
