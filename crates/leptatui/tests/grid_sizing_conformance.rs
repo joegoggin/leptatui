@@ -30,15 +30,6 @@ fn track(size: GridTrackSize) -> GridTemplateTrack {
     GridTemplateTrack::from(size)
 }
 
-/// Creates one fixed explicit track measured in terminal cells.
-///
-/// # Arguments
-///
-/// * `cells` — Track size in terminal cells.
-///
-/// # Returns
-///
-/// A [`GridTemplateTrack`] containing the fixed size.
 /// Creates one fractionally sized explicit track.
 ///
 /// # Arguments
@@ -462,6 +453,52 @@ fn mixed_templates_expand_percentage_auto_repeat_and_fraction_tracks() -> Result
         ]
     );
     assert_eq!(rendered_lines(&terminal), ["A B C    DDDE       "]);
+    Ok(())
+}
+
+/// Verifies automatic repetitions distinguish filled and collapsed empty tracks.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 8x1 grid
+/// columns: repeat(auto-fill | auto-fit, 2 cells)
+/// two items
+/// inline content alignment: end
+/// ```
+///
+/// # Assertions
+///
+/// - Auto-fill creates four tracks and leaves both items at the grid start.
+/// - Auto-fit collapses the two empty tracks.
+/// - End alignment moves the remaining auto-fit tracks to the container end.
+#[test]
+fn automatic_repetitions_fill_and_collapse_empty_tracks() -> Result<()> {
+    let render = |repetition| -> Result<_> {
+        let root = div((text("A"), text("B")))
+            .with_inline_style(
+                fixture_size(8.0, 1.0)
+                    .display(Display::Grid)
+                    .grid_template_columns(vec![GridTemplateTrack::repeat(
+                        repetition,
+                        vec![GridTrackSize::from(Length::cells(2.0))],
+                    )])
+                    .grid_template_rows(vec![fixed_grid_track(1.0)])
+                    .justify_content(JustifyContent::End),
+            )
+            .into_view();
+
+        let terminal = render_view(root.as_view(), 8, 1)?;
+        Ok((retained_child_rects(&root), rendered_lines(&terminal)))
+    };
+
+    let (fill_rects, fill_rows) = render(GridRepeat::AutoFill)?;
+    assert_eq!(fill_rects, [Rect::new(0, 0, 2, 1), Rect::new(2, 0, 2, 1)]);
+    assert_eq!(fill_rows, ["A B     "]);
+
+    let (fit_rects, fit_rows) = render(GridRepeat::AutoFit)?;
+    assert_eq!(fit_rects, [Rect::new(4, 0, 2, 1), Rect::new(6, 0, 2, 1)]);
+    assert_eq!(fit_rows, ["    A B "]);
     Ok(())
 }
 

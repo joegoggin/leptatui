@@ -169,26 +169,72 @@ fn explicit_fixtures() -> Vec<GridFixture> {
             expected_rows: vec!["A       ", "        ", "    B   "],
         },
         GridFixture {
-            name: "positive implicit tracks",
+            name: "positive implicit tracks cycle sizing patterns",
             width: 8,
-            height: 5,
-            container_style: grid_container(8.0, 5.0, &[2.0], &[1.0], GridAutoFlow::Row)
-                .grid_auto_columns(vec![GridTrackSize::from(Length::cells(3.0))])
-                .grid_auto_rows(vec![GridTrackSize::from(Length::cells(2.0))]),
-            items: vec![grid_item(
-                "A",
-                TuiStyle::new()
-                    .grid_row(GridLine::new(
-                        GridPlacement::line(3),
-                        GridPlacement::line(4),
-                    ))
-                    .grid_column(GridLine::new(
-                        GridPlacement::line(3),
-                        GridPlacement::line(4),
-                    )),
-            )],
-            expected_rects: vec![Rect::new(5, 3, 3, 2)],
-            expected_rows: vec!["        ", "        ", "        ", "     A  ", "        "],
+            height: 8,
+            container_style: grid_container(8.0, 8.0, &[1.0], &[1.0], GridAutoFlow::Row)
+                .grid_auto_columns(vec![
+                    GridTrackSize::from(Length::cells(2.0)),
+                    GridTrackSize::from(Length::cells(3.0)),
+                ])
+                .grid_auto_rows(vec![
+                    GridTrackSize::from(Length::cells(2.0)),
+                    GridTrackSize::from(Length::cells(3.0)),
+                ]),
+            items: (2..=4)
+                .zip(["A", "B", "C"])
+                .map(|(line, label)| {
+                    grid_item(
+                        label,
+                        TuiStyle::new()
+                            .grid_row(GridLine::new(
+                                GridPlacement::line(line),
+                                GridPlacement::line(line + 1),
+                            ))
+                            .grid_column(GridLine::new(
+                                GridPlacement::line(line),
+                                GridPlacement::line(line + 1),
+                            )),
+                    )
+                })
+                .collect(),
+            expected_rects: vec![
+                Rect::new(1, 1, 2, 2),
+                Rect::new(3, 3, 3, 3),
+                Rect::new(6, 6, 2, 2),
+            ],
+            expected_rows: vec![
+                "        ", " A      ", "        ", "   B    ", "        ", "        ", "      C ",
+                "        ",
+            ],
+        },
+        GridFixture {
+            name: "negative implicit tracks cycle before the explicit grid",
+            width: 9,
+            height: 1,
+            container_style: grid_container(9.0, 1.0, &[1.0], &[1.0], GridAutoFlow::Row)
+                .grid_auto_columns(vec![
+                    GridTrackSize::from(Length::cells(2.0)),
+                    GridTrackSize::from(Length::cells(3.0)),
+                ]),
+            items: [(-5, -4, "A"), (-4, -3, "B"), (-3, -2, "C")]
+                .into_iter()
+                .map(|(start, end, label)| {
+                    grid_item(
+                        label,
+                        TuiStyle::new().grid_column(GridLine::new(
+                            GridPlacement::line(start),
+                            GridPlacement::line(end),
+                        )),
+                    )
+                })
+                .collect(),
+            expected_rects: vec![
+                Rect::new(0, 0, 3, 1),
+                Rect::new(3, 0, 2, 1),
+                Rect::new(5, 0, 3, 1),
+            ],
+            expected_rows: vec!["A  B C   "],
         },
         GridFixture {
             name: "explicit collision and automatic avoidance",
@@ -374,7 +420,7 @@ fn fixture_view(fixture: &GridFixture) -> AnyView {
 /// ```text
 /// signed positive and negative line pairs
 /// forward and backward spans
-/// explicitly addressed positive implicit rows and columns
+/// explicitly addressed positive and negative implicit rows and columns
 /// overlapping explicit items followed by an automatic item
 /// zero-valued line and span placements
 /// ```
