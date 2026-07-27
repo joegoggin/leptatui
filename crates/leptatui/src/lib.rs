@@ -43,6 +43,40 @@
 //! they create values implementing Leptatui's [`View`] protocol rather than
 //! Leptos DOM nodes.
 //!
+//! # Layout and Styling
+//!
+//! [`DivView`] is the generic multi-child layout container and defaults to
+//! block flow. [`BlockView`] adds bordered single-child chrome while using the
+//! same computed layout path. Typed [`TuiStyle`] values and
+//! [`macro@stylesheet`] declarations configure block, flexbox, grid, overflow,
+//! positioning, stacking, and terminal-relative geometry without exposing
+//! layout-engine types.
+//!
+//! ```
+//! use leptatui::prelude::*;
+//!
+//! let layout = div((
+//!     text("Main"),
+//!     text("Sidebar"),
+//! ))
+//! .with_inline_style(
+//!     TuiStyle::new()
+//!         .display(Display::Flex)
+//!         .gap(Axes::all(Length::cells(1.0)))
+//!         .size(LayoutSize::new(
+//!             Dimension::from(Length::percent(100.0)),
+//!             Dimension::Auto,
+//!         )),
+//! );
+//! let _ = layout;
+//! ```
+//!
+//! Visible styleable views retain a [`LayoutGeometry`] snapshot containing
+//! border, padding, content, viewport, and accumulated clip rectangles.
+//! Layout uses floating-point calculations and rounds sibling geometry
+//! cumulatively into terminal cells. See [`style`] for the complete typed
+//! vocabulary and current intrinsic-sizing differences.
+//!
 //! Standard components are available as builders such as [`input`],
 //! [`text_area`], [`form`], [`image()`], and [`progress_bar`] and as PascalCase
 //! tags in [`macro@view`]. `Input` and `TextArea` are controlled editable views:

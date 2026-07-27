@@ -1,7 +1,37 @@
 //! Styling primitives for Leptatui applications.
 //!
-//! This module wraps common Ratatui style, border, and padding configuration in
-//! small builder-style value types.
+//! This module wraps Ratatui presentation values and exposes the
+//! engine-independent, web-inspired layout vocabulary shared by inline
+//! [`TuiStyle`] values and [`macro@crate::stylesheet`] declarations. Terminal
+//! cells are the absolute unit; containing-block percentages, viewport units,
+//! automatic values, intrinsic grid tracks, and fractions remain typed until
+//! layout.
+//!
+//! # Layout Example
+//!
+//! ```
+//! use leptatui::prelude::*;
+//!
+//! let inline = TuiStyle::new()
+//!     .display(Display::Flex)
+//!     .size(LayoutSize::new(
+//!         Dimension::from(Length::percent(100.0)),
+//!         Dimension::from(Length::vh(50.0)),
+//!     ))
+//!     .gap(Axes::all(Length::cells(1.0)))
+//!     .overflow(Axes::new(Overflow::Hidden, Overflow::Auto));
+//!
+//! let panel = div((text("Main"), text("Sidebar"))).with_inline_style(inline);
+//! let _ = panel;
+//! ```
+//!
+//! General [`Dimension::MinContent`] and [`Dimension::MaxContent`] values
+//! currently behave like [`Dimension::Auto`], while
+//! [`Dimension::FitContent`] behaves like its contained length. Grid track
+//! types support automatic, min-content, max-content, fractional, `minmax`,
+//! and repeated sizing directly. Computed floating-point geometry is retained
+//! as terminal-cell rectangles with cumulative rounding across sibling
+//! sequences.
 //!
 //! # Modules
 //!

@@ -14,6 +14,19 @@ cargo run --example hello_world
 
 Press `q` to exit.
 
+## Block Layout
+
+Run the block flow and terminal box-model example:
+
+```sh
+cargo run --example block_layout
+```
+
+The example contrasts `Div` and `Block`, content-box and border-box sizing,
+physical spacing, percentage widths, and cumulative rounding across three
+fractional children. Resize to 60 columns or fewer to stack the sizing panels.
+Press `q` to exit.
+
 ## Responsive Flex
 
 Run the responsive navigation, content, and sidebar example:
@@ -38,6 +51,35 @@ The wide layout uses repeated fractional columns, a heading that spans the
 explicit grid, intrinsic rows, and gapped summary and activity panels. Resize
 the terminal to 60 columns or fewer to replace the two-column template with a
 single stacked column. Press `q` to exit.
+
+## Nested Overflow
+
+Run the nested two-axis overflow example:
+
+```sh
+cargo run --example nested_overflow
+```
+
+The outer pane uses hidden horizontal overflow and automatic vertical
+overflow. Its child pane uses automatic horizontal overflow and a forced
+vertical scrollbar. Use `j`/`k` or Page Up/Page Down to scroll vertically.
+Point at either pane and use vertical or horizontal wheel events to target it;
+wheel scrolling bubbles to the outer pane when the inner pane reaches a
+boundary. Press `q` to exit.
+
+## Positioning Showcase
+
+Run the positioning and stacking example:
+
+```sh
+cargo run --example positioning_showcase
+```
+
+The scrollport contains static, relative, absolute, and sticky boxes plus a
+negative stacking layer. A fixed card remains attached to the terminal
+viewport. Use `j`/`k` or Page Up/Page Down to scroll, verify that sticky and
+fixed cards use different containing blocks, and observe the signed z-index
+overlap. Press `q` to exit.
 
 ## Counter
 
