@@ -6,7 +6,7 @@
 use std::{io, path::Path};
 
 use crate::{
-    domain::{ExplorerState, Workspace},
+    domain::{ExplorerEntryKind, ExplorerState, PreviewState, Workspace},
     editor_process::EditorProcess,
     filesystem::FileSystem,
 };
@@ -18,6 +18,8 @@ pub(crate) struct Controller {
     workspace: Workspace,
     /// Last valid explorer listing plus any recoverable navigation error.
     explorer: ExplorerState,
+    /// Open Markdown source or its recoverable read error.
+    preview: PreviewState,
     /// Filesystem service used for anchored explorer transitions.
     filesystem: FileSystem,
     /// Process service retained for future external-editor transitions.
@@ -52,6 +54,7 @@ impl Controller {
         let workspace = filesystem.validate_root(requested_root)?;
         let mut controller = Self {
             explorer: ExplorerState::new(workspace.root().to_path_buf()),
+            preview: PreviewState::new(),
             workspace,
             filesystem,
             _editor_process: editor_process,
@@ -78,6 +81,64 @@ impl Controller {
     /// visible error.
     pub(crate) fn explorer(&self) -> &ExplorerState {
         &self.explorer
+    }
+
+    /// Returns the current Markdown preview.
+    ///
+    /// # Returns
+    ///
+    /// A [`PreviewState`] reference containing the open path and body state.
+    pub(crate) fn preview(&self) -> &PreviewState {
+        &self.preview
+    }
+
+    /// Moves the explorer selection toward the previous entry.
+    pub(crate) fn select_previous(&mut self) {
+        self.explorer.select_previous();
+    }
+
+    /// Moves the explorer selection toward the next entry.
+    pub(crate) fn select_next(&mut self) {
+        self.explorer.select_next();
+    }
+
+    /// Activates the selected directory or Markdown file.
+    ///
+    /// Directories replace the explorer listing. Markdown files replace the
+    /// preview body. A failed file read remains visible in preview state.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether an explorer entry was selected.
+    pub(crate) fn activate_selected(&mut self) -> bool {
+        let Some(entry) = self.explorer.selected_entry().cloned() else {
+            return false;
+        };
+
+        match entry.kind() {
+            ExplorerEntryKind::Directory => {
+                self.browse(entry.path());
+            }
+            ExplorerEntryKind::Markdown => {
+                self.open_preview(entry.path());
+            }
+        }
+
+        true
+    }
+
+    /// Reloads the currently open Markdown preview.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether a preview path was available to reload.
+    pub(crate) fn reload_preview(&mut self) -> bool {
+        let Some(path) = self.preview.path().map(Path::to_path_buf) else {
+            return false;
+        };
+
+        self.open_preview(&path);
+        true
     }
 
     /// Navigates to a requested directory within the workspace.
@@ -139,5 +200,19 @@ impl Controller {
     fn browse_root(&mut self) {
         let root = self.workspace.root().to_path_buf();
         self.browse(&root);
+    }
+
+    /// Loads a Markdown path into recoverable preview state.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Absolute selected Markdown path.
+    fn open_preview(&mut self, path: &Path) {
+        match self.filesystem.read_markdown(&self.workspace, path) {
+            Ok(source) => self.preview.replace_document(path.to_path_buf(), source),
+            Err(error) => self
+                .preview
+                .record_error(path.to_path_buf(), error.to_string()),
+        }
     }
 }

@@ -84,6 +84,15 @@ impl ExplorerEntry {
         &self.name
     }
 
+    /// Returns the canonical explorer target.
+    ///
+    /// # Returns
+    ///
+    /// A [`Path`] containing the directory or Markdown file target.
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
     /// Returns the explorer entry classification.
     ///
     /// # Returns
@@ -142,6 +151,8 @@ impl DirectoryListing {
 pub(crate) struct ExplorerState {
     /// Last directory that loaded successfully.
     listing: DirectoryListing,
+    /// Currently highlighted explorer entry.
+    selection: Option<usize>,
     /// Most recent navigation or discovery failure.
     error: Option<String>,
 }
@@ -159,6 +170,7 @@ impl ExplorerState {
     pub(crate) fn new(root: PathBuf) -> Self {
         Self {
             listing: DirectoryListing::new(root, Vec::new()),
+            selection: None,
             error: None,
         }
     }
@@ -181,6 +193,25 @@ impl ExplorerState {
         self.listing.entries()
     }
 
+    /// Returns the selected explorer index.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the selected entry index.
+    pub(crate) const fn selection(&self) -> Option<usize> {
+        self.selection
+    }
+
+    /// Returns the selected explorer entry.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the highlighted [`ExplorerEntry`].
+    pub(crate) fn selected_entry(&self) -> Option<&ExplorerEntry> {
+        self.selection
+            .and_then(|selection| self.entries().get(selection))
+    }
+
     /// Returns the latest recoverable explorer error.
     ///
     /// # Returns
@@ -196,8 +227,24 @@ impl ExplorerState {
     ///
     /// * `listing` — Newly discovered safe directory listing.
     pub(crate) fn replace_listing(&mut self, listing: DirectoryListing) {
+        self.selection = (!listing.entries().is_empty()).then_some(0);
         self.listing = listing;
         self.error = None;
+    }
+
+    /// Moves the selection toward the beginning of the listing.
+    pub(crate) fn select_previous(&mut self) {
+        if let Some(selection) = &mut self.selection {
+            *selection = selection.saturating_sub(1);
+        }
+    }
+
+    /// Moves the selection toward the end of the listing.
+    pub(crate) fn select_next(&mut self) {
+        let last = self.entries().len().checked_sub(1);
+        if let (Some(selection), Some(last)) = (&mut self.selection, last) {
+            *selection = selection.saturating_add(1).min(last);
+        }
     }
 
     /// Records a recoverable failure without discarding valid explorer data.
@@ -206,6 +253,83 @@ impl ExplorerState {
     ///
     /// * `error` — Contextual error message to expose to the UI.
     pub(crate) fn record_error(&mut self, error: String) {
+        self.error = Some(error);
+    }
+}
+
+/// Loaded Markdown preview or its most recent recoverable error.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PreviewState {
+    /// Absolute Markdown path represented by the preview.
+    path: Option<PathBuf>,
+    /// Successfully loaded UTF-8 Markdown source.
+    source: Option<String>,
+    /// Most recent read or decoding failure.
+    error: Option<String>,
+}
+
+impl PreviewState {
+    /// Creates an empty preview.
+    ///
+    /// # Returns
+    ///
+    /// A [`PreviewState`] without an open Markdown file.
+    pub(crate) const fn new() -> Self {
+        Self {
+            path: None,
+            source: None,
+            error: None,
+        }
+    }
+
+    /// Returns the open Markdown path.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the absolute preview path.
+    pub(crate) fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
+    /// Returns the loaded Markdown source.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing valid UTF-8 Markdown.
+    pub(crate) fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
+
+    /// Returns the current preview error.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing a contextual read or decoding failure.
+    pub(crate) fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    /// Replaces the preview with a loaded Markdown document.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Absolute Markdown path represented by the document.
+    /// * `source` — UTF-8 Markdown source loaded from `path`.
+    pub(crate) fn replace_document(&mut self, path: PathBuf, source: String) {
+        self.path = Some(path);
+        self.source = Some(source);
+        self.error = None;
+    }
+
+    /// Replaces the preview body with a recoverable file error.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Markdown path that failed to load.
+    /// * `error` — Contextual read or decoding failure.
+    pub(crate) fn record_error(&mut self, path: PathBuf, error: String) {
+        self.path = Some(path);
+        self.source = None;
         self.error = Some(error);
     }
 }

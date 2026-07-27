@@ -1,4 +1,8 @@
-//! Startup tests for the Markdown editor.
+//! Behavior tests for the Markdown editor.
+//!
+//! Coverage spans CLI and root validation, anchored explorer discovery,
+//! selection and activation, preview reload failures, keyboard commands, and
+//! responsive test-backend rendering.
 
 use std::{
     env,
@@ -10,6 +14,8 @@ use std::{
 };
 
 use clap::Parser;
+use leptatui::prelude::{KeyCode, KeyControl, KeyEvent, KeyModifiers, RenderCtx, View};
+use ratatui::{Terminal, backend::TestBackend};
 
 use crate::{
     cli::Cli,
@@ -17,6 +23,7 @@ use crate::{
     domain::{ExplorerEntry, ExplorerEntryKind},
     editor_process::EditorProcess,
     filesystem::FileSystem,
+    ui::app_view,
 };
 
 /// Temporary directory tree removed automatically after an explorer test.
@@ -94,6 +101,75 @@ fn explorer_entry_names(entries: &[ExplorerEntry]) -> Vec<String> {
         .iter()
         .map(|entry| entry.name().to_string_lossy().into_owned())
         .collect()
+}
+
+/// Draws a Markdown editor view into a fixed-size test terminal.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal used as the render target.
+/// * `view` — Markdown editor view to render.
+///
+/// # Returns
+///
+/// An empty [`leptatui::Result`] after a successful draw.
+///
+/// # Errors
+///
+/// Returns [`leptatui::Error::Io`] if terminal drawing or view rendering fails.
+fn draw_editor<V>(terminal: &mut Terminal<TestBackend>, view: &V) -> leptatui::Result<()>
+where
+    V: View,
+{
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut context = RenderCtx::new(frame);
+        render_result = view.render(&mut context);
+    })?;
+
+    render_result
+}
+
+/// Returns all rendered terminal rows as plain strings.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered editor.
+///
+/// # Returns
+///
+/// A [`Vec`] containing one string per terminal row.
+fn rendered_lines(terminal: &Terminal<TestBackend>) -> Vec<String> {
+    let area = terminal.backend().buffer().area;
+    (0..area.height)
+        .map(|row| {
+            (0..area.width)
+                .map(|column| {
+                    terminal.backend().buffer().content()
+                        [usize::from(row) * usize::from(area.width) + usize::from(column)]
+                    .symbol()
+                })
+                .collect::<String>()
+        })
+        .collect()
+}
+
+/// Returns the first rendered position of a text fragment.
+///
+/// # Arguments
+///
+/// * `terminal` — Test terminal containing the rendered editor.
+/// * `needle` — Text fragment to locate.
+///
+/// # Returns
+///
+/// An [`Option`] containing the fragment's starting column and row.
+fn rendered_position(terminal: &Terminal<TestBackend>, needle: &str) -> Option<(usize, usize)> {
+    rendered_lines(terminal)
+        .iter()
+        .enumerate()
+        .find_map(|(row, line)| line.find(needle).map(|column| (column, row)))
 }
 
 /// Verifies the CLI accepts no browsing root and uses the current directory.
@@ -314,7 +390,7 @@ fn explorer_lists_directories_before_case_insensitive_markdown_files() {
 ///
 /// - Controller initialization succeeds.
 /// - The current directory is the canonical root.
-/// - The explorer contains no entries and no error.
+/// - The explorer contains no entries, selection, or error.
 #[test]
 fn explorer_represents_empty_directory_without_an_error() {
     let tree = TestTree::new("empty-listing");
@@ -326,6 +402,7 @@ fn explorer_represents_empty_directory_without_an_error() {
 
     assert_eq!(controller.explorer().directory(), expected);
     assert!(controller.explorer().entries().is_empty());
+    assert_eq!(controller.explorer().selection(), None);
     assert_eq!(controller.explorer().error(), None);
 }
 
@@ -378,7 +455,7 @@ fn explorer_parent_navigation_stops_at_root() {
 /// # Assertions
 ///
 /// - Navigation reports failure.
-/// - The root directory and its entries remain current.
+/// - The root directory, entries, and selection remain current.
 /// - The error identifies the missing path and failed resolution.
 #[test]
 fn explorer_missing_path_preserves_listing_and_records_error() {
@@ -390,10 +467,12 @@ fn explorer_missing_path_preserves_listing_and_records_error() {
             .expect("the workspace should initialize");
     let expected_directory = controller.explorer().directory().to_path_buf();
     let expected_entries = controller.explorer().entries().to_vec();
+    let expected_selection = controller.explorer().selection();
 
     assert!(!controller.browse(&missing));
     assert_eq!(controller.explorer().directory(), expected_directory);
     assert_eq!(controller.explorer().entries(), expected_entries);
+    assert_eq!(controller.explorer().selection(), expected_selection);
     let error = controller
         .explorer()
         .error()
@@ -618,4 +697,337 @@ fn explorer_unreadable_directory_is_recoverable() {
             .expect("the denied read should record an error")
             .contains(&private.display().to_string())
     );
+}
+
+/// Verifies explorer selection clamps at both listing boundaries.
+///
+/// # Example Under Test
+///
+/// ```text
+/// workspace/
+/// ├── alpha.md
+/// └── beta.md
+/// ```
+///
+/// # Assertions
+///
+/// - The first sorted entry is selected initially.
+/// - Moving before the first entry keeps index zero selected.
+/// - Moving after the last entry keeps the last index selected.
+#[test]
+fn explorer_selection_clamps_at_listing_boundaries() {
+    let tree = TestTree::new("selection-boundaries");
+    fs::write(tree.root().join("alpha.md"), "# Alpha")
+        .expect("the first Markdown file should be created");
+    fs::write(tree.root().join("beta.md"), "# Beta")
+        .expect("the second Markdown file should be created");
+    let mut controller =
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the workspace should initialize");
+
+    assert_eq!(controller.explorer().selection(), Some(0));
+    controller.select_previous();
+    assert_eq!(controller.explorer().selection(), Some(0));
+
+    controller.select_next();
+    controller.select_next();
+    assert_eq!(controller.explorer().selection(), Some(1));
+}
+
+/// Verifies directory activation replaces the listing and selects its first entry.
+///
+/// # Example Under Test
+///
+/// ```text
+/// workspace/
+/// └── docs/
+///     └── guide.md
+/// ```
+///
+/// # Assertions
+///
+/// - The root directory entry is selected initially.
+/// - Activating it browses into `docs`.
+/// - The nested Markdown file becomes selected.
+/// - Activating the file loads its source and absolute path into the preview.
+#[test]
+fn explorer_activation_browses_directories_and_opens_markdown() {
+    let tree = TestTree::new("activation");
+    let docs = tree.root().join("docs");
+    let guide = docs.join("guide.md");
+    fs::create_dir(&docs).expect("the docs directory should be created");
+    fs::write(&guide, "# Guide").expect("the Markdown file should be created");
+    let mut controller =
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the workspace should initialize");
+
+    assert!(controller.activate_selected());
+    assert_eq!(
+        controller.explorer().directory(),
+        fs::canonicalize(&docs).expect("the docs directory should canonicalize")
+    );
+    assert_eq!(controller.explorer().selection(), Some(0));
+
+    assert!(controller.activate_selected());
+    assert_eq!(
+        controller.preview().path(),
+        Some(
+            fs::canonicalize(&guide)
+                .expect("the guide should canonicalize")
+                .as_path()
+        )
+    );
+    assert_eq!(controller.preview().source(), Some("# Guide"));
+    assert_eq!(controller.preview().error(), None);
+}
+
+/// Verifies opening another Markdown file replaces the previous preview.
+///
+/// # Example Under Test
+///
+/// ```text
+/// workspace/
+/// ├── alpha.md
+/// └── beta.md
+/// ```
+///
+/// # Assertions
+///
+/// - Activating `alpha.md` loads its source.
+/// - Selecting and activating `beta.md` replaces the path and source.
+#[test]
+fn preview_replaces_document_when_another_file_opens() {
+    let tree = TestTree::new("preview-replacement");
+    let alpha = tree.root().join("alpha.md");
+    let beta = tree.root().join("beta.md");
+    fs::write(&alpha, "# Alpha").expect("the first Markdown file should be created");
+    fs::write(&beta, "# Beta").expect("the second Markdown file should be created");
+    let mut controller =
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the workspace should initialize");
+
+    assert!(controller.activate_selected());
+    assert_eq!(controller.preview().source(), Some("# Alpha"));
+
+    controller.select_next();
+    assert!(controller.activate_selected());
+    assert_eq!(
+        controller.preview().path(),
+        Some(
+            fs::canonicalize(&beta)
+                .expect("the second file should canonicalize")
+                .as_path()
+        )
+    );
+    assert_eq!(controller.preview().source(), Some("# Beta"));
+}
+
+/// Verifies preview reload reports a missing file and later recovers.
+///
+/// # Example Under Test
+///
+/// ```text
+/// open guide.md
+/// delete guide.md
+/// reload
+/// recreate guide.md
+/// reload
+/// ```
+///
+/// # Assertions
+///
+/// - The initial preview loads successfully.
+/// - Reloading the deleted file replaces the body with a contextual error.
+/// - Reloading the recreated file replaces the error with its new source.
+#[test]
+fn preview_reload_recovers_after_a_missing_file_returns() {
+    let tree = TestTree::new("reload-recovery");
+    let guide = tree.root().join("guide.md");
+    fs::write(&guide, "# Original").expect("the Markdown file should be created");
+    let mut controller =
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the workspace should initialize");
+
+    assert!(controller.activate_selected());
+    fs::remove_file(&guide).expect("the open Markdown file should be removed");
+    assert!(controller.reload_preview());
+    assert_eq!(controller.preview().source(), None);
+    let error = controller
+        .preview()
+        .error()
+        .expect("the missing file should produce a preview error");
+    assert!(error.contains("failed to resolve Markdown file"));
+    assert!(error.contains(&guide.display().to_string()));
+
+    fs::write(&guide, "# Restored").expect("the Markdown file should be recreated");
+    assert!(controller.reload_preview());
+    assert_eq!(controller.preview().source(), Some("# Restored"));
+    assert_eq!(controller.preview().error(), None);
+}
+
+/// Verifies invalid UTF-8 is presented as recoverable preview state.
+///
+/// # Example Under Test
+///
+/// ```text
+/// workspace/
+/// └── invalid.md = [0xff, 0xfe, 0xfd]
+/// ```
+///
+/// # Assertions
+///
+/// - Activating the selected file keeps its path open.
+/// - No Markdown source is exposed.
+/// - The preview error identifies the failed file read and invalid encoding.
+#[test]
+fn preview_invalid_utf8_is_recoverable() {
+    let tree = TestTree::new("invalid-utf8");
+    let invalid = tree.root().join("invalid.md");
+    fs::write(&invalid, [0xff, 0xfe, 0xfd]).expect("the invalid UTF-8 fixture should be created");
+    let mut controller =
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the workspace should initialize");
+
+    assert!(controller.activate_selected());
+    assert_eq!(controller.preview().source(), None);
+    let error = controller
+        .preview()
+        .error()
+        .expect("invalid UTF-8 should produce a preview error");
+    assert!(error.contains("failed to read Markdown file"));
+    assert!(error.contains(&invalid.display().to_string()));
+    assert!(error.to_lowercase().contains("valid utf-8"));
+}
+
+/// Verifies interactive keys update selection, preview, reload, and scrolling.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Down
+/// Enter
+/// PageDown
+/// r
+/// ```
+///
+/// # Assertions
+///
+/// - The initial selected row is `alpha.md`.
+/// - `Down` moves the selected marker to `beta.md`.
+/// - `Enter` opens and renders `beta.md`.
+/// - `PageDown` is handled and changes the overflowing preview viewport.
+/// - `r` is handled without closing the open preview.
+#[test]
+fn editor_keys_drive_selection_preview_reload_and_scroll() -> leptatui::Result<()> {
+    let tree = TestTree::new("editor-keys");
+    fs::write(tree.root().join("alpha.md"), "# Alpha")
+        .expect("the first Markdown file should be created");
+    let beta_source = (0..24)
+        .map(|index| format!("## Beta line {index}\n"))
+        .collect::<String>();
+    fs::write(tree.root().join("beta.md"), beta_source)
+        .expect("the long Markdown file should be created");
+    let controller = Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+        .expect("the workspace should initialize");
+    let mut view = app_view(controller);
+    let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
+
+    draw_editor(&mut terminal, &view)?;
+    let initial_render = rendered_lines(&terminal).join("\n");
+    assert!(initial_render.contains("> [M] alpha.md"));
+    assert!(initial_render.contains("q quit"));
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_editor(&mut terminal, &view)?;
+    assert!(
+        rendered_lines(&terminal)
+            .join("\n")
+            .contains("> [M] beta.md")
+    );
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_editor(&mut terminal, &view)?;
+    let before_scroll = rendered_lines(&terminal);
+    assert!(before_scroll.join("\n").contains("Beta line 0"));
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_editor(&mut terminal, &view)?;
+    assert_ne!(rendered_lines(&terminal), before_scroll);
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_editor(&mut terminal, &view)?;
+    assert!(rendered_lines(&terminal).join("\n").contains("Open: "));
+
+    Ok(())
+}
+
+/// Verifies the workspace switches from side-by-side to stacked panes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// viewport = 100x30
+/// viewport = 50x30
+/// ```
+///
+/// # Assertions
+///
+/// - Wide rendering places Explorer and Preview headings on the same row.
+/// - Narrow rendering places Preview below Explorer.
+/// - Both layouts render the selected Markdown document.
+#[test]
+fn editor_renders_wide_and_narrow_pane_layouts() -> leptatui::Result<()> {
+    let tree = TestTree::new("responsive-layout");
+    fs::write(tree.root().join("guide.md"), "# Responsive guide")
+        .expect("the Markdown file should be created");
+
+    let mut wide_controller =
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the wide controller should initialize");
+    assert!(wide_controller.activate_selected());
+    let wide_view = app_view(wide_controller);
+    let mut wide_terminal = Terminal::new(TestBackend::new(100, 30))?;
+    draw_editor(&mut wide_terminal, &wide_view)?;
+    let (_, wide_explorer_row) =
+        rendered_position(&wide_terminal, "Explorer").expect("Explorer should render");
+    let (_, wide_preview_row) =
+        rendered_position(&wide_terminal, "Preview").expect("Preview should render");
+    assert_eq!(wide_explorer_row, wide_preview_row);
+    assert!(
+        rendered_lines(&wide_terminal)
+            .join("\n")
+            .contains("Responsive guide")
+    );
+
+    let mut narrow_controller =
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the narrow controller should initialize");
+    assert!(narrow_controller.activate_selected());
+    let narrow_view = app_view(narrow_controller);
+    let mut narrow_terminal = Terminal::new(TestBackend::new(50, 30))?;
+    draw_editor(&mut narrow_terminal, &narrow_view)?;
+    let (_, narrow_explorer_row) =
+        rendered_position(&narrow_terminal, "Explorer").expect("Explorer should render");
+    let (_, narrow_preview_row) =
+        rendered_position(&narrow_terminal, "Preview").expect("Preview should render");
+    assert!(narrow_preview_row > narrow_explorer_row);
+    let narrow_text = rendered_lines(&narrow_terminal).join("\n");
+    assert!(
+        narrow_text.contains("Responsive guide"),
+        "narrow rendering: {narrow_text:?}"
+    );
+
+    Ok(())
 }
