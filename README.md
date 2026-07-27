@@ -449,6 +449,44 @@ Run the responsive navigation, content, and sidebar example:
 cargo run --example responsive_flex
 ```
 
+### Grid Contract
+
+Set `display: Display::Grid` on a container to lay out its direct children in
+explicit or automatically created rows and columns. Grid templates use
+Leptatui-owned track values rather than exposing layout-engine types. Empty
+templates create tracks as automatic placement requires, automatic flow
+defaults to row-major sparse packing, and row and column gaps default to zero.
+
+The public grid contract includes:
+
+- `grid_template_columns` and `grid_template_rows`: fixed-cell, percentage,
+  fractional, automatic, min-content, max-content, `minmax`, and repeated
+  explicit tracks.
+- `grid_auto_columns` and `grid_auto_rows`: cyclic sizing patterns for implicit
+  tracks created outside the explicit template.
+- `grid_auto_flow`: sparse or dense row-major and column-major placement.
+- `grid_column` and `grid_row`: signed explicit line pairs, automatic edges,
+  and forward or backward spans.
+- `gap`: independent horizontal and vertical spacing between tracks.
+- `justify_content` and `align_content`: positioning and distribution of the
+  grid track area inside the container.
+- `justify_items`, `align_items`, `justify_self`, and `align_self`: container
+  defaults and per-item alignment overrides.
+
+Text and nested containers contribute intrinsic measurements to automatic and
+intrinsic tracks. Fixed tracks and gaps reserve space before fractions consume
+the remainder, while item min/max sizes constrain the rectangle inside its
+assigned grid area. Media-query changes and terminal resizes rebuild the
+template and retained geometry. Fractional engine coordinates are rounded
+cumulatively into terminal rectangles so adjacent tracks remain contiguous and
+the final track reaches the parent edge.
+
+Run the responsive dashboard example:
+
+```sh
+cargo run --example responsive_grid
+```
+
 Reusable declaration groups can be declared with `@mixin` and expanded in rule
 bodies with `@include`.
 
@@ -888,6 +926,15 @@ cargo run --example responsive_flex
 
 Resize the terminal to 60 columns or fewer to stack the navigation, content,
 and sidebar.
+
+Run the responsive grid dashboard:
+
+```sh
+cargo run --example responsive_grid
+```
+
+Resize the terminal to 60 columns or fewer to replace the two-column dashboard
+with a single stacked column.
 
 Run the interactive counter:
 

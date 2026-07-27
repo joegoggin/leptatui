@@ -5,12 +5,14 @@
 //! nested-grid contributions, and resize recomputation through Leptatui's
 //! public style API.
 
+use std::process::Command;
+
 use leptatui::prelude::*;
 use ratatui::layout::Rect;
 
 mod support;
 
-use support::{render_view, rendered_lines};
+use support::{render_component, render_view, rendered_lines};
 
 /// Returns a definite border-box size for a grid fixture.
 ///
@@ -452,4 +454,249 @@ fn grid_rebuilds_fractional_geometry_after_terminal_resize() -> Result<()> {
         [Rect::new(0, 0, 3, 1), Rect::new(4, 0, 6, 1)]
     );
     Ok(())
+}
+
+/// Verifies mixed grid templates retain their expected terminal geometry.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 20x1 grid
+/// columns: repeat(2, 2 cells), 25%, auto, 1fr
+/// labels: "A", "B", "C", "DDD", "E"
+/// ```
+///
+/// # Assertions
+///
+/// - The repeated fragment expands into two fixed two-cell columns.
+/// - The percentage column receives five cells from the container width.
+/// - The automatic column uses the intrinsic width of its three-cell label.
+/// - The fractional column consumes the remaining eight cells.
+/// - Painted output records every resulting track boundary.
+#[test]
+fn mixed_templates_expand_percentage_auto_repeat_and_fraction_tracks() -> Result<()> {
+    let root = div((text("A"), text("B"), text("C"), text("DDD"), text("E")))
+        .with_inline_style(
+            fixture_size(20.0, 1.0)
+                .display(Display::Grid)
+                .overflow(Axes::all(Overflow::Visible))
+                .grid_template_columns(vec![
+                    GridTemplateTrack::repeat(
+                        GridRepeat::count(2),
+                        vec![GridTrackSize::from(Length::cells(2.0))],
+                    ),
+                    track(GridTrackSize::from(Length::percent(25.0))),
+                    track(GridTrackSize::Auto),
+                    fractional_track(1.0),
+                ])
+                .grid_template_rows(vec![fixed_track(1.0)]),
+        )
+        .into_view();
+
+    let terminal = render_view(root.as_view(), 20, 1)?;
+
+    assert_eq!(
+        retained_child_rects(&root),
+        [
+            Rect::new(0, 0, 2, 1),
+            Rect::new(2, 0, 2, 1),
+            Rect::new(4, 0, 5, 1),
+            Rect::new(9, 0, 3, 1),
+            Rect::new(12, 0, 8, 1),
+        ]
+    );
+    assert_eq!(rendered_lines(&terminal), ["A B C    DDDE       "]);
+    Ok(())
+}
+
+/// Verifies fractional grid tracks round cumulatively to terminal cells.
+///
+/// # Example Under Test
+///
+/// ```text
+/// 10x1 grid
+/// columns: 1fr, 1fr, 1fr
+/// labels: "A", "B", "C"
+/// ```
+///
+/// # Assertions
+///
+/// - Three equal fractions round to widths of three, four, and three cells.
+/// - Each item begins where the preceding rounded rectangle ends.
+/// - The final item ends exactly at the ten-cell container edge.
+/// - Painted output records the rounded starting column of every item.
+#[test]
+fn fractional_tracks_round_cumulatively_to_the_container_edge() -> Result<()> {
+    let root = div((text("A"), text("B"), text("C")))
+        .with_inline_style(
+            fixture_size(10.0, 1.0)
+                .display(Display::Grid)
+                .overflow(Axes::all(Overflow::Visible))
+                .grid_template_columns(vec![
+                    fractional_track(1.0),
+                    fractional_track(1.0),
+                    fractional_track(1.0),
+                ])
+                .grid_template_rows(vec![fixed_track(1.0)]),
+        )
+        .into_view();
+
+    let terminal = render_view(root.as_view(), 10, 1)?;
+
+    assert_eq!(
+        retained_child_rects(&root),
+        [
+            Rect::new(0, 0, 3, 1),
+            Rect::new(3, 0, 4, 1),
+            Rect::new(7, 0, 3, 1),
+        ]
+    );
+    assert_eq!(rendered_lines(&terminal), ["A  B   C  "]);
+    Ok(())
+}
+
+/// Responsive grid dashboard fixture.
+#[component]
+fn ResponsiveGridFixture() -> impl IntoView {
+    stylesheet! {
+        .fixture-dashboard => {
+            display: Display::Grid,
+            grid_template_columns: vec![
+                GridTemplateTrack::from(GridTrackSize::from(Fraction::new(2.0))),
+                GridTemplateTrack::from(GridTrackSize::from(Fraction::new(1.0)))
+            ],
+            grid_template_rows: vec![
+                GridTemplateTrack::from(GridTrackSize::from(Length::cells(1.0))),
+                GridTemplateTrack::from(GridTrackSize::from(Length::cells(1.0)))
+            ],
+            gap: Axes::all(Length::cells(1.0))
+        }
+        .fixture-heading => {
+            grid_column: GridLine::new(
+                GridPlacement::line(1),
+                GridPlacement::line(-1)
+            )
+        }
+
+        @media (max-width: 60) {
+            .fixture-dashboard => {
+                grid_template_columns: vec![
+                    GridTemplateTrack::from(
+                        GridTrackSize::from(Fraction::new(1.0))
+                    )
+                ],
+                grid_template_rows: vec![
+                    GridTemplateTrack::from(
+                        GridTrackSize::from(Length::cells(1.0))
+                    ),
+                    GridTemplateTrack::from(
+                        GridTrackSize::from(Length::cells(1.0))
+                    ),
+                    GridTemplateTrack::from(
+                        GridTrackSize::from(Length::cells(1.0))
+                    )
+                ]
+            }
+        }
+    }
+
+    view! {
+        <Div class="fixture-dashboard">
+            <Text class="fixture-heading">"Dashboard"</Text>
+            <Text>"Revenue"</Text>
+            <Text>"Activity"</Text>
+        </Div>
+    }
+}
+
+/// Returns the first terminal position containing a symbol.
+///
+/// # Arguments
+///
+/// * `rows` — Rendered terminal rows.
+/// * `symbol` — Text fragment to locate.
+///
+/// # Returns
+///
+/// A `(column, row)` pair for the first match.
+fn symbol_position(rows: &[String], symbol: &str) -> (usize, usize) {
+    rows.iter()
+        .enumerate()
+        .find_map(|(row, text)| text.find(symbol).map(|column| (column, row)))
+        .unwrap_or_else(|| panic!("responsive grid symbol {symbol:?} missing from {rows:?}"))
+}
+
+/// Verifies a responsive grid recomputes across viewport and media-query changes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// same dashboard component
+/// wide viewport: 80x6
+/// narrow viewport: 40x6
+/// wide viewport again: 80x6
+/// breakpoint: max-width 60
+/// ```
+///
+/// # Assertions
+///
+/// - The heading spans the dashboard above both panels at every viewport.
+/// - Wide rendering places revenue and activity on the same row.
+/// - Narrow rendering places activity below revenue after the media query applies.
+/// - Returning to the wide viewport restores the original panel positions.
+#[test]
+fn responsive_grid_recomputes_after_viewport_and_media_query_changes() -> Result<()> {
+    let mut fixture = ResponsiveGridFixture::new();
+
+    let wide = rendered_lines(&render_component(&mut fixture, 80, 6)?);
+    let wide_heading = symbol_position(&wide, "Dashboard");
+    let wide_revenue = symbol_position(&wide, "Revenue");
+    let wide_activity = symbol_position(&wide, "Activity");
+
+    assert!(wide_heading.1 < wide_revenue.1);
+    assert_eq!(wide_revenue.1, wide_activity.1);
+    assert!(wide_activity.0 > wide_revenue.0);
+
+    let narrow = rendered_lines(&render_component(&mut fixture, 40, 6)?);
+    let narrow_heading = symbol_position(&narrow, "Dashboard");
+    let narrow_revenue = symbol_position(&narrow, "Revenue");
+    let narrow_activity = symbol_position(&narrow, "Activity");
+
+    assert!(narrow_heading.1 < narrow_revenue.1);
+    assert!(narrow_activity.1 > narrow_revenue.1);
+
+    let wide_again = rendered_lines(&render_component(&mut fixture, 80, 6)?);
+
+    assert_eq!(symbol_position(&wide_again, "Dashboard"), wide_heading,);
+    assert_eq!(symbol_position(&wide_again, "Revenue"), wide_revenue);
+    assert_eq!(symbol_position(&wide_again, "Activity"), wide_activity);
+    Ok(())
+}
+
+/// Verifies the runnable responsive grid dashboard compiles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// cargo check --quiet --example responsive_grid
+/// ```
+///
+/// # Assertions
+///
+/// - Cargo launches successfully for the example target.
+/// - The responsive grid example exits compilation with a successful status.
+#[test]
+fn responsive_grid_example_compiles() {
+    let output = Command::new("cargo")
+        .args(["check", "--quiet", "--example", "responsive_grid"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("cargo check should run for responsive_grid");
+
+    assert!(
+        output.status.success(),
+        "cargo check failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
 }

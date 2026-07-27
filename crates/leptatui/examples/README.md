@@ -26,6 +26,19 @@ The wide layout keeps navigation controls in a row and places a growing
 content region beside a fixed-basis sidebar. Resize the terminal to 60 columns
 or fewer to stack the navigation and workspace vertically. Press `q` to exit.
 
+## Responsive Grid
+
+Run the responsive dashboard example:
+
+```sh
+cargo run --example responsive_grid
+```
+
+The wide layout uses repeated fractional columns, a heading that spans the
+explicit grid, intrinsic rows, and gapped summary and activity panels. Resize
+the terminal to 60 columns or fewer to replace the two-column template with a
+single stacked column. Press `q` to exit.
+
 ## Counter
 
 Run the styled counter example:

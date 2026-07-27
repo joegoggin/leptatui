@@ -86,7 +86,7 @@ mod layout_values {
             GridTrackSize::from(Length::percent(25.0)),
             GridTrackSize::from(Fraction::new(1.0)),
         ];
-        let templates = vec![
+        let templates = [
             GridTemplateTrack::from(GridTrackSize::Length(Length::cells(4.0))),
             GridTemplateTrack::repeat(GridRepeat::count(2), fragment.clone()),
             GridTemplateTrack::repeat(GridRepeat::AutoFill, fragment.clone()),
