@@ -3,7 +3,7 @@
 use ratatui::layout::Rect;
 
 use crate::view::core::{
-    measurement::{AvailableSpace, cells_to_u16, measure_view_height, sanitize_cells},
+    measurement::{AvailableSpace, cells_to_u16, measure_view, sanitize_cells},
     render::resolve_style,
 };
 use crate::view::{AnyView, StyleMetadata};
@@ -45,21 +45,21 @@ pub(crate) fn measure_container(
         |ctx| {
             let heights = children
                 .iter()
-                .map(|child| measure_view_height(child.as_view(), ctx));
+                .map(|child| measure_view(child.as_view(), ctx).height);
             if style.display == Some(crate::Display::Flex)
                 && matches!(
                     style.flex_direction.unwrap_or_default(),
                     crate::FlexDirection::Row | crate::FlexDirection::RowReverse
                 )
             {
-                heights.max().unwrap_or(0)
+                heights.fold(0.0, f32::max)
             } else {
-                heights.fold(0, u16::saturating_add)
+                heights.fold(0.0, |total, height| sanitize_cells(total + height))
             }
         },
     );
     let height = known_dimensions
         .height
-        .map_or(f32::from(natural_height), sanitize_cells);
+        .map_or_else(|| sanitize_cells(natural_height), sanitize_cells);
     LayoutSize::new(width, height)
 }

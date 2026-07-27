@@ -416,6 +416,156 @@ fn ResponsivePanel() -> impl IntoView {
 }
 ```
 
+### Layout and Typed Styles
+
+Leptatui exposes layout as Rust values rather than parsed CSS strings or
+layout-engine types. Apply a `TuiStyle` directly with a view's `style`
+attribute or declare the same properties in `stylesheet!`. Inline and
+stylesheet declarations both resolve into one computed style before every
+root layout pass.
+
+```rust
+use leptatui::prelude::*;
+
+let inline = TuiStyle::new()
+    .display(Display::Flex)
+    .size(LayoutSize::new(
+        Dimension::from(Length::percent(100.0)),
+        Dimension::from(Length::vh(50.0)),
+    ))
+    .gap(Axes::all(Length::cells(1.0)))
+    .overflow(Axes::new(Overflow::Hidden, Overflow::Auto));
+
+let panel = view! {
+    <Div style={inline}>
+        <Text>"Typed layout values"</Text>
+    </Div>
+};
+# let _ = panel;
+```
+
+The public layout properties and their value types are:
+
+| Properties | Public value types |
+| --- | --- |
+| `display`, `box_sizing`, `overflow` | `Display`, `BoxSizing`, `Axes<Overflow>` |
+| `size`, `min_size`, `max_size`, `aspect_ratio` | `LayoutSize<Dimension>`, `f32` |
+| `margin`, `padding`, `gap` | `Edges<LengthAuto>`, `TuiSpacing`, `Axes<Length>` |
+| `flex_direction`, `flex_wrap` | `FlexDirection`, `FlexWrap` |
+| `flex_basis`, `flex_grow`, `flex_shrink` | `Dimension`, `f32` |
+| `align_items`, `align_self`, `align_content` | `AlignItems`, `AlignSelf`, `AlignContent` |
+| `justify_content`, `justify_items`, `justify_self` | `JustifyContent`, `JustifyItems`, `JustifySelf` |
+| `grid_template_rows`, `grid_template_columns` | `Vec<GridTemplateTrack>` |
+| `grid_auto_rows`, `grid_auto_columns`, `grid_auto_flow` | `Vec<GridTrackSize>`, `GridAutoFlow` |
+| `grid_row`, `grid_column` | `GridLine` |
+| `position`, `inset`, `z_index` | `Position`, `Edges<LengthAuto>`, `ZIndex` |
+
+`Length` supports terminal cells, containing-block percentages, and `vw`,
+`vh`, `vmin`, and `vmax` terminal viewport units. `Dimension` adds `Auto`,
+`MinContent`, `MaxContent`, and `FitContent`. General box dimensions currently
+treat min-content and max-content like auto, and fit-content like its contained
+length; grid track sizing supports its intrinsic variants directly. Non-finite
+values are sanitized before reaching layout. Negative `Length` and factor
+values are clamped to zero, while non-positive aspect ratios fall back to
+automatic sizing.
+
+### Layout Conformance Matrix
+
+The layout contract is protected by public-API integration tests that retain
+terminal geometry and, where painting matters, compare complete rendered rows.
+This matrix is the index for the supported property groups and the edge cases
+that must remain covered:
+
+| Contract | Properties and behavior | Edge-case coverage | Executable coverage |
+| --- | --- | --- | --- |
+| Flow and visibility | `display`, block flow, source ordering, `Display::None` | Automatic sizes, nested blocks, transparent boundaries, hidden subtrees | `cargo test -p leptatui --test view suite::layout::block_flow` |
+| Box geometry | `box_sizing`, `size`, `min_size`, `max_size`, `aspect_ratio`, `margin`, `padding` | Content/border boxes, percentages, viewport units, invalid ratios, zero-sized boxes, cumulative rounding | `cargo test -p leptatui --test view suite::layout::box_model`<br>`cargo test -p leptatui --test view suite::layout::sizing` |
+| Intrinsic measurement | Automatic dimensions and measured leaf/container contributions | Wrapped text, trailing newlines, component boundaries, nested/replaced views | `cargo test -p leptatui --test view suite::layout::measurement` |
+| Overflow | `overflow` on both axes, retained viewport and clip geometry | Visible/hidden/clip/scroll/auto, conditional gutters, nested clips, wheel/focus scrolling, reconciliation | `cargo test -p leptatui --test view suite::layout::overflow` |
+| Flexbox | `flex_direction`, `flex_wrap`, `flex_basis`, `flex_grow`, `flex_shrink`, `gap`, flex alignment | Reversed axes, wrapped lines, intrinsic bases, constraints, zero-sized items, odd remainders, terminal resize | `cargo test -p leptatui --test flexbox_conformance`<br>`cargo test -p leptatui --test view suite::layout::flex` |
+| Grid sizing | Templates, automatic tracks, `minmax()`, repeats, fractions, `gap`, grid alignment | Intrinsic and nested grids, percentage/auto/fraction mixes, empty repeated tracks, cumulative rounding, terminal resize | `cargo test -p leptatui --test grid_sizing_conformance` |
+| Grid placement | `grid_row`, `grid_column`, `grid_auto_flow` | Signed lines, forward/backward spans, implicit tracks, collisions, sparse/dense row and column flow | `cargo test -p leptatui --test grid_placement_conformance` |
+| Positioning and stacking | `position`, `inset`, `z_index` | Static/relative/absolute/fixed/sticky, containing blocks, percentage resize, nested scrollports, clipping, atomic stacking contexts | `cargo test -p leptatui --test positioning_conformance` |
+| Responsive recomputation | Viewport units, media queries, retained geometry rebuilds | Narrow/wide breakpoints, repeated resize, flex/grid reflow | `cargo test -p leptatui --test view suite::layout::responsive`<br>`cargo test -p leptatui --test flexbox_conformance responsive`<br>`cargo test -p leptatui --test grid_sizing_conformance responsive` |
+
+The performance suite exercises the same public render path for cold layout
+construction, intrinsic measurement, resize recomputation, deep trees, and
+large flex/grid collections. Record a machine-local Criterion baseline before
+making layout changes:
+
+```sh
+cargo bench -p leptatui --bench layout -- --save-baseline phase-18
+```
+
+Compare a later run on the same machine and toolchain:
+
+```sh
+cargo bench -p leptatui --bench layout -- --baseline phase-18
+```
+
+Criterion stores named baselines below the ignored `target/criterion`
+directory. Timings are intentionally not committed because terminal backend,
+host, power, and toolchain differences make cross-machine measurements
+incomparable.
+
+### Div and Box Geometry
+
+`Div` is the generic multi-child layout container. It defaults to
+`Display::Block`, so direct children stack vertically in source order.
+`Block` is a bordered single-child container that participates in the same
+computed layout. Use `Div` for structure and `Block` when the container itself
+needs Ratatui border chrome. `Display::Flex` and `Display::Grid` change how a
+container places direct children; `Display::None` removes the entire subtree
+from measurement, painting, focus, and input.
+
+Every visible styleable view retains a `LayoutGeometry` after the root layout
+pass. `border_box` includes content, padding, and borders; `padding_box`
+excludes borders; `content_box` excludes borders and padding; `viewport`
+subtracts scrollbar gutters; and `clip` records the accumulated ancestor
+clip. `BoxSizing::ContentBox` applies authored sizes to the content box, while
+`BoxSizing::BorderBox` includes padding and borders in those sizes. Margins
+remain outside the retained border box.
+
+Layout is calculated with floating-point values and then retained as terminal
+cell rectangles. Siblings and tracks are rounded cumulatively, preserving
+contiguous edges and assigning the final remainder to the sequence instead of
+rounding every item independently.
+
+Run the block flow, box sizing, and rounding example:
+
+```sh
+cargo run --example block_layout
+```
+
+### Overflow Contract
+
+Overflow is configured independently for the horizontal and vertical axes.
+Without an authored value, layout uses visible horizontal overflow and
+automatic vertical overflow.
+
+- `Overflow::Visible` paints outside the content viewport without clipping or
+  scrolling.
+- `Overflow::Hidden` clips excess content and retains programmatic,
+  keyboard, focus, and wheel scrolling.
+- `Overflow::Clip` clips without creating a scroll container.
+- `Overflow::Scroll` always enables scrolling and reserves a one-cell terminal
+  scrollbar gutter.
+- `Overflow::Auto` clips, scrolls, and reserves a gutter only when direct child
+  geometry exceeds the available axis.
+
+Scroll ranges are derived from direct layout children; visible overflow inside
+a child does not enlarge its parent's range. Nested clips compose during
+painting and hit testing. Pointer wheel events target the frontmost
+overflowing box under the pointer and bubble to an ancestor at a boundary.
+Vertical scrolling also supports Up/Down, `j`/`k`, Page Up/Page Down,
+Ctrl-U/Ctrl-D, `gg`, and `G`. Focus traversal scrolls controls into view.
+
+Run the nested two-axis overflow example:
+
+```sh
+cargo run --example nested_overflow
+```
+
 ### Flexbox Contract
 
 Set `display: Display::Flex` on a container to lay out its direct children on
@@ -474,6 +624,12 @@ after their context's background but before normal-flow content, while
 positive layers paint afterward. Pointer targeting follows the resulting
 paint order.
 
+Run the static, relative, absolute, fixed, sticky, and stacking example:
+
+```sh
+cargo run --example positioning_showcase
+```
+
 ### Grid Contract
 
 Set `display: Display::Grid` on a container to lay out its direct children in
@@ -511,6 +667,24 @@ Run the responsive dashboard example:
 ```sh
 cargo run --example responsive_grid
 ```
+
+### Supported CSS Differences
+
+Leptatui implements a deliberately typed, terminal-specific subset of
+web-style layout. Terminal cells are the absolute unit, all edges are physical
+rather than writing-mode-relative, and no DOM, CSS parser, cascade origins,
+animations, floats, multicolumn layout, or browser compatibility layer are
+provided. Styles are authored through Rust builders and `stylesheet!`; the
+underlying layout engine remains private.
+
+Padding and borders are integral terminal cells, scrollbars occupy a cell
+gutter, text measurement uses terminal display width, and painting is clipped
+to the terminal buffer. Fixed boxes use the terminal viewport rather than a
+browser visual viewport. Sticky boxes clamp inside the nearest Leptatui
+scrollport. Z-index affects positioned boxes only, and pointer targeting
+follows the final terminal paint order. The current API is the supported
+contract; superseded row/column splitters and height-only layout paths are not
+retained as aliases.
 
 Reusable declaration groups can be declared with `@mixin` and expanded in rule
 bodies with `@include`.

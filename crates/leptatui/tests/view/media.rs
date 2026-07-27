@@ -169,7 +169,7 @@ fn image_fallback_text_inherits_parent_text_style() -> Result<()> {
     Ok(())
 }
 
-/// Verifies stylesheet image size controls image minimum height.
+/// Verifies stylesheet image size controls the image's intrinsic size.
 ///
 /// # Example Under Test
 ///
@@ -181,9 +181,9 @@ fn image_fallback_text_inherits_parent_text_style() -> Result<()> {
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The image minimum height is the stylesheet-declared image height.
+/// - The image height is the stylesheet-declared intrinsic height.
 #[test]
-fn image_stylesheet_size_controls_min_height() -> Result<()> {
+fn image_stylesheet_size_controls_intrinsic_size() -> Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = image("missing.png").with_classes("thumbnail");
@@ -191,14 +191,15 @@ fn image_stylesheet_size_controls_min_height() -> Result<()> {
         StyleSelector::class("thumbnail"),
         TuiStyle::new().image_size(TuiSize::new(6, 3)),
     );
-    let mut min_height = 0;
+    let mut min_height = 0.0;
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = ctx.__with_stylesheet(&stylesheet, |ctx| intrinsic_height(&view, ctx));
+        min_height =
+            ctx.__with_stylesheet(&stylesheet, |ctx| measure_view_in_area(&view, ctx).height);
     })?;
 
-    assert_eq!(min_height, 3);
+    assert_eq!(min_height, 3.0);
 
     Ok(())
 }

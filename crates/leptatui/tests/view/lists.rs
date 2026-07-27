@@ -144,13 +144,13 @@ fn semantic_lists_handle_narrow_and_zero_width_content() -> Result<()> {
     ])
     .with_inline_style(TuiStyle::new().display(Display::Flex));
     let mut split = Terminal::new(TestBackend::new(1, 1))?;
-    let mut min_height = 0;
+    let mut min_height = 0.0;
     split.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = intrinsic_height(&split_view, &mut ctx);
+        min_height = measure_view_in_area(&split_view, &mut ctx).height;
     })?;
     draw_view(&mut split, &split_view)?;
-    assert!(min_height >= 1);
+    assert!(min_height >= 1.0);
 
     Ok(())
 }

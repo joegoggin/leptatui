@@ -16,8 +16,8 @@ use crate::view::{AnyView, IntoViews, StyleMetadata, View, ViewType};
 use crate::{
     LayoutSize,
     app::{AppControl, Result},
-    component::{FocusedControl, KeyControl, LayoutPhase, RenderCtx},
-    view::core::layout::{prepare_layout, render_fixed_descendants},
+    component::{FocusedControl, KeyControl, RenderCtx},
+    view::core::layout::render_with_layout,
 };
 
 /// Shared callback invoked when a form is submitted or canceled.
@@ -182,15 +182,9 @@ fn form_action_control(action: &Option<FormAction>) -> KeyControl {
 
 impl View for FormView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
-        if is_layout_root || self.metadata.layout_geometry().is_none() {
-            prepare_layout(self, ctx);
-        }
-        render_container(&self.children, &self.metadata, ctx)?;
-        if is_layout_root {
-            render_fixed_descendants(self, ctx)?;
-        }
-        Ok(())
+        render_with_layout(self, ctx, |ctx| {
+            render_container(&self.children, &self.metadata, ctx)
+        })
     }
 
     fn measure(

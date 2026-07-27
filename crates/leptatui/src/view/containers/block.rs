@@ -5,15 +5,12 @@ use crate::view::containers::layout::render::{
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    measurement::{AvailableSpace, measure_view_height, sanitize_cells},
+    measurement::{AvailableSpace, measure_view, sanitize_cells},
     render::{VerticalSpan, resolve_style, vertical_border_rows, vertical_padding_rows},
 };
 use crate::view::{AnyView, IntoView, StyleMetadata, View, ViewType};
 use crate::{
-    Borders, LayoutSize,
-    app::Result,
-    component::{LayoutPhase, RenderCtx},
-    view::core::layout::{prepare_layout, render_fixed_descendants},
+    Borders, LayoutSize, app::Result, component::RenderCtx, view::core::layout::render_with_layout,
 };
 
 /// Bordered container around one child.
@@ -43,15 +40,9 @@ pub fn block(child: impl IntoView) -> BlockView {
 
 impl View for BlockView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
-        if is_layout_root || self.metadata.layout_geometry().is_none() {
-            prepare_layout(self, ctx);
-        }
-        render_container_with_default_borders(&self.children, &self.metadata, Borders::ALL, ctx)?;
-        if is_layout_root {
-            render_fixed_descendants(self, ctx)?;
-        }
-        Ok(())
+        render_with_layout(self, ctx, |ctx| {
+            render_container_with_default_borders(&self.children, &self.metadata, Borders::ALL, ctx)
+        })
     }
 
     fn measure(
@@ -65,20 +56,20 @@ impl View for BlockView {
             .width
             .or_else(|| available_space.width.definite())
             .map_or(0.0, sanitize_cells);
-        let child_height = self.children.first().map_or(0, |child| {
+        let child_height = self.children.first().map_or(0.0, |child| {
             ctx.with_area_inherited_style_and_selector_ancestor(
                 ctx.area(),
                 style.inherited_values(),
                 self.metadata.clone(),
-                |ctx| measure_view_height(child.as_view(), ctx),
+                |ctx| measure_view(child.as_view(), ctx).height,
             )
         });
         let natural_height = child_height
-            .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-            .saturating_add(vertical_padding_rows(style.padding));
+            + f32::from(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+            + f32::from(vertical_padding_rows(style.padding));
         let height = known_dimensions
             .height
-            .map_or(f32::from(natural_height), sanitize_cells);
+            .map_or_else(|| sanitize_cells(natural_height), sanitize_cells);
         LayoutSize::new(width, height)
     }
 
