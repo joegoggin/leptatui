@@ -69,11 +69,6 @@ pub(super) fn render_children(
         .collect::<Vec<_>>();
     paint_order
         .sort_by_key(|(stacking_level, source_index, _, _, _)| (*stacking_level, *source_index));
-    parent_metadata.set_child_paint_order(
-        paint_order
-            .iter()
-            .map(|(_, source_index, _, _, _)| *source_index),
-    );
 
     for (_, _, position, insets, child) in paint_order {
         if child
@@ -92,23 +87,14 @@ pub(super) fn render_children(
             ctx,
         );
         let full_area = geometry.border_box;
-        let normal_left = i32::from(full_area.x) - i32::from(offsets.x);
-        let normal_top = i32::from(full_area.y) - i32::from(offsets.y);
-        let (shifted_left, shifted_top) = if position == Position::Sticky {
-            ctx.sticky_scrollport()
-                .map_or((normal_left, normal_top), |scrollport| {
-                    sticky_position(
-                        normal_left,
-                        normal_top,
-                        full_area,
-                        scrollport,
-                        insets,
-                        ctx.viewport_size(),
-                    )
-                })
-        } else {
-            (normal_left, normal_top)
-        };
+        let (shifted_left, shifted_top) = positioned_child_origin(
+            full_area,
+            offsets,
+            position,
+            ctx.sticky_scrollport(),
+            insets,
+            ctx.viewport_size(),
+        );
         let shifted_right = shifted_left.saturating_add(i32::from(full_area.width));
         let shifted_bottom = shifted_top.saturating_add(i32::from(full_area.height));
         let visible_top = shifted_top.max(i32::from(options.clip.y));
@@ -173,7 +159,7 @@ pub(super) fn render_children(
 ///
 /// A [`tuple`](prim@tuple) containing positioning, stacking category, and
 /// inset edges.
-fn child_paint_style(
+pub(super) fn child_paint_style(
     child: &AnyView,
     ctx: &RenderCtx<'_, '_>,
 ) -> (Position, StackingLevel, Edges<LengthAuto>) {
@@ -188,6 +174,39 @@ fn child_paint_style(
     let position = style.position.unwrap_or_default();
     let stacking_level = StackingLevel::new(position, style.z_index.unwrap_or_default());
     (position, stacking_level, style.inset.unwrap_or_default())
+}
+
+/// Returns one child's final painted origin after scrolling and sticky constraints.
+///
+/// # Arguments
+///
+/// * `area` — Retained unscrolled child border box.
+/// * `offsets` — Parent horizontal and vertical scroll offsets.
+/// * `position` — Resolved child positioning behavior.
+/// * `sticky_scrollport` — Nearest scrollport constraining sticky descendants.
+/// * `insets` — Resolved child inset edges.
+/// * `viewport` — Terminal viewport used by viewport-relative lengths.
+///
+/// # Returns
+///
+/// A tuple containing signed final x and y terminal coordinates.
+pub(super) fn positioned_child_origin(
+    area: Rect,
+    offsets: Axes<u16>,
+    position: Position,
+    sticky_scrollport: Option<StickyScrollport>,
+    insets: Edges<LengthAuto>,
+    viewport: ViewportSize,
+) -> (i32, i32) {
+    let normal_left = i32::from(area.x) - i32::from(offsets.x);
+    let normal_top = i32::from(area.y) - i32::from(offsets.y);
+    if position == Position::Sticky {
+        sticky_scrollport.map_or((normal_left, normal_top), |scrollport| {
+            sticky_position(normal_left, normal_top, area, scrollport, insets, viewport)
+        })
+    } else {
+        (normal_left, normal_top)
+    }
 }
 
 /// Returns a sticky box's constrained painted origin.
@@ -319,7 +338,7 @@ fn resolve_sticky_inset(
 /// # Returns
 ///
 /// A [`crate::LayoutGeometry`] translated with its accumulated clip intact.
-fn translated_geometry(
+pub(super) fn translated_geometry(
     geometry: crate::LayoutGeometry,
     left: i32,
     top: i32,

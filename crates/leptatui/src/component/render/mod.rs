@@ -18,6 +18,8 @@ mod image;
 mod layout;
 mod target;
 
+use std::{cell::Cell, rc::Rc};
+
 use leptos::prelude::{GetUntracked, ReadSignal};
 use ratatui::{
     Frame,
@@ -60,6 +62,8 @@ pub struct RenderCtx<'frame, 'buffer> {
     terminal_images: TerminalImageSupport,
     /// Mapping from local render coordinates to terminal hit-test coordinates.
     hit_mapper: HitMapper,
+    /// Shared counter assigning global back-to-front paint ordinals.
+    paint_sequence: Rc<Cell<u64>>,
     /// Transient computed-layout state inherited by child contexts.
     layout_state: LayoutState,
     /// Nearest scrollport constraining sticky descendants.
@@ -141,6 +145,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             selector_ancestors: Vec::new(),
             terminal_images: context::use_context::<TerminalImageSupport>().unwrap_or_default(),
             hit_mapper: HitMapper::identity(),
+            paint_sequence: Rc::new(Cell::new(0)),
             layout_state: LayoutState::default(),
             sticky_scrollport: Some(area.into()),
         }
@@ -276,6 +281,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             selector_ancestors,
             terminal_images: self.terminal_images.clone(),
             hit_mapper: self.hit_mapper.clone(),
+            paint_sequence: Rc::clone(&self.paint_sequence),
             layout_state: self.layout_state.clone(),
             sticky_scrollport: self.sticky_scrollport,
         }
@@ -339,7 +345,24 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     ///
     /// * `metadata` — View metadata that receives the mapped hit area.
     pub(crate) fn record_metadata_hit_area(&self, metadata: &StyleMetadata) {
-        metadata.set_hit_area(self.map_hit_area(self.geometry.border_box));
+        let area = self.map_hit_area(self.geometry.border_box);
+        metadata.set_hit_area(area);
+        if area.is_some() {
+            metadata.set_paint_order(self.next_paint_order());
+        }
+    }
+
+    /// Appends one mapped hit area and records its global paint ordinal.
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` — View metadata receiving the hit area and paint ordinal.
+    /// * `area` — Rectangle expressed in current local render coordinates.
+    pub(crate) fn push_metadata_hit_area(&self, metadata: &StyleMetadata, area: Rect) {
+        if let Some(area) = self.map_hit_area(area) {
+            metadata.push_hit_area(area);
+            metadata.set_paint_order(self.next_paint_order());
+        }
     }
 
     /// Maps a local render rectangle into terminal hit-test coordinates.
@@ -354,6 +377,17 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
     /// the area is empty, outside the clip, or cannot be represented.
     pub(crate) fn map_hit_area(&self, area: Rect) -> Option<Rect> {
         self.hit_mapper.map(area.intersection(self.geometry.clip))
+    }
+
+    /// Returns the next global paint ordinal for the current root render.
+    ///
+    /// # Returns
+    ///
+    /// A `u64` ordered after every previously recorded visible paint.
+    fn next_paint_order(&self) -> u64 {
+        let next = self.paint_sequence.get().saturating_add(1);
+        self.paint_sequence.set(next);
+        next
     }
 
     /// Sets the terminal cursor position for this render pass.

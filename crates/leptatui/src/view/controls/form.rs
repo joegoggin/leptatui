@@ -9,7 +9,6 @@ use crate::view::containers::layout::render::{
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    events::scroll_overflowing_at_position_in_paint_order,
     measurement::AvailableSpace,
     render::VerticalSpan,
 };
@@ -276,28 +275,6 @@ impl View for FormView {
                 .children
                 .iter()
                 .any(AnyView::__has_overflowing_scroll_target)
-    }
-
-    fn __scroll_overflowing_at_position(
-        &mut self,
-        column: u16,
-        row: u16,
-        delta: crate::Axes<i16>,
-    ) -> bool {
-        let paint_order = self.metadata.child_paint_order();
-        if scroll_overflowing_at_position_in_paint_order(
-            &mut self.children,
-            &paint_order,
-            column,
-            row,
-            delta,
-        ) {
-            return true;
-        }
-        if self.metadata.contains_hit_position(column, row) {
-            return self.metadata.scroll_by(delta);
-        }
-        false
     }
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {

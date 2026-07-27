@@ -108,6 +108,7 @@ impl RenderCtx<'_, '_> {
                     },
                     target_area,
                 ),
+                paint_sequence: std::rc::Rc::clone(&self.paint_sequence),
                 layout_state: self.layout_state.for_assigned_area(),
                 sticky_scrollport: local_sticky_scrollport(
                     self.sticky_scrollport,

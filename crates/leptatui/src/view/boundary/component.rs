@@ -196,14 +196,15 @@ impl ComponentView {
     ///
     /// # Returns
     ///
-    /// An [`Option`] containing the flattened index under the position.
+    /// An [`Option`] containing the flattened index and global paint ordinal
+    /// of the frontmost control under the position.
     #[doc(hidden)]
     pub(crate) fn focusable_index_at_position_inner(
         &self,
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
+    ) -> Option<(usize, u64)> {
         self.with_component(|component| {
             component.__focusable_index_at_position_inner(column, row, index)
         })
@@ -527,7 +528,7 @@ impl View for ComponentView {
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
+    ) -> Option<(usize, u64)> {
         self.focusable_index_at_position_inner(column, row, index)
     }
 
@@ -578,6 +579,19 @@ impl View for ComponentView {
         delta: crate::Axes<i16>,
     ) -> bool {
         self.scroll_overflowing_at_position(column, row, delta)
+    }
+
+    fn __scroll_target_at_position(
+        &self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> Option<u64> {
+        self.with_component(|component| component.__scroll_target_at_position(column, row, delta))
+    }
+
+    fn __scroll_target_by_paint_order(&mut self, order: u64, delta: crate::Axes<i16>) -> bool {
+        self.with_component_mut(|component| component.__scroll_target_by_paint_order(order, delta))
     }
 
     fn __set_scroll_to_top_key_pending(&self, pending: bool) -> bool {

@@ -281,14 +281,15 @@ impl AnyView {
     ///
     /// # Returns
     ///
-    /// An [`Option`] containing the flattened index under the position.
+    /// An [`Option`] containing the flattened index and global paint ordinal
+    /// of the frontmost control under the position.
     #[doc(hidden)]
     pub fn __focusable_index_at_position_inner(
         &self,
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
+    ) -> Option<(usize, u64)> {
         if self.is_layout_hidden() {
             return None;
         }
@@ -456,6 +457,48 @@ impl AnyView {
         }
         self.inner
             .__scroll_overflowing_at_position(column, row, delta)
+    }
+
+    /// Returns the frontmost painted scroll target that can consume a delta.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// An optional `u64` containing the target's global paint ordinal.
+    #[doc(hidden)]
+    pub fn __scroll_target_at_position(
+        &self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> Option<u64> {
+        if self.is_layout_hidden() {
+            return None;
+        }
+        self.inner.__scroll_target_at_position(column, row, delta)
+    }
+
+    /// Scrolls the view whose latest paint ordinal matches one target.
+    ///
+    /// # Arguments
+    ///
+    /// * `order` — Global paint ordinal selected during read-only hit testing.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the selected target changed offsets.
+    #[doc(hidden)]
+    pub fn __scroll_target_by_paint_order(&mut self, order: u64, delta: crate::Axes<i16>) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
+        self.inner.__scroll_target_by_paint_order(order, delta)
     }
 
     /// Stores the pending first key of the `gg` sequence in the stored subtree.

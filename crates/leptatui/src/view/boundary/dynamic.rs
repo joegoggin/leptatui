@@ -186,7 +186,7 @@ impl View for DynamicView {
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
+    ) -> Option<(usize, u64)> {
         self.with_current_view(|child| {
             child.__focusable_index_at_position_inner(column, row, index)
         })
@@ -237,6 +237,19 @@ impl View for DynamicView {
         self.with_current_view_mut(|child| {
             child.__scroll_overflowing_at_position(column, row, delta)
         })
+    }
+
+    fn __scroll_target_at_position(
+        &self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> Option<u64> {
+        self.with_current_view(|child| child.__scroll_target_at_position(column, row, delta))
+    }
+
+    fn __scroll_target_by_paint_order(&mut self, order: u64, delta: crate::Axes<i16>) -> bool {
+        self.with_current_view_mut(|child| child.__scroll_target_by_paint_order(order, delta))
     }
 
     fn __set_scroll_to_top_key_pending(&self, pending: bool) -> bool {
