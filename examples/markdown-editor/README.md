@@ -1,9 +1,9 @@
 # Markdown Editor
 
-The Markdown editor is a standalone Leptatui workspace application. This first
-phase establishes the application boundary, validates its browsing root, and
-renders a minimal terminal shell for the explorer, preview, and editor features
-added by later phases.
+The Markdown editor is a standalone Leptatui workspace application. It validates
+an anchored browsing root and renders a safe explorer containing directories
+and Markdown files. Selection, preview, and editor controls are added by later
+phases.
 
 ## Run
 
@@ -16,19 +16,25 @@ cargo run -p markdown-editor -- [ROOT]
 When `ROOT` is omitted, the application uses the current directory. The path is
 canonicalized and verified as a directory before Leptatui starts its managed
 terminal session. Missing paths and regular files fail with a path-specific
-startup error.
+startup error. Explorer discovery follows symlinks only when their canonical
+targets remain below the configured root. Broken and escaping symlinks are
+hidden, and directory-read failures render as recoverable errors.
 
-Press `q` to exit the initial application shell.
+The explorer lists directories before case-insensitive `.md` and `.markdown`
+files using deterministic name ordering. Press `q` to exit the application
+shell.
 
 ## Architecture
 
 - `cli` parses the optional browsing root and resolves the current-directory
   default.
-- `domain` contains application-owned values such as the validated workspace.
-- `filesystem` validates paths and will own anchored Markdown discovery.
+- `domain` contains the validated workspace, explorer entries, listings, and
+  recoverable state.
+- `filesystem` validates paths and owns anchored Markdown discovery.
 - `editor_process` reserves the external-editor process boundary.
-- `controller` assembles services and owns application state.
-- `ui` converts controller state into Leptatui views and input handling.
+- `controller` assembles services and preserves the last valid listing across
+  navigation failures.
+- `ui` renders current, empty, and error explorer states as Leptatui views.
 
 The binary entry point only coordinates parsing, controller initialization, and
 terminal startup so application behavior remains in focused modules.

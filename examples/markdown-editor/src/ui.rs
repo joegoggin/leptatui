@@ -1,12 +1,15 @@
 //! Leptatui views and input handling for the Markdown editor.
 //!
-//! The initial shell proves that validated controller state reaches the
-//! terminal. Explorer, preview, responsive layout, and editor controls will
-//! extend this module in later phases.
+//! The shell presents safe directory discovery from the application controller.
+//! Selection, Markdown preview, responsive panes, and editor controls extend
+//! this view in later phases.
 
 use leptatui::prelude::*;
 
-use crate::controller::Controller;
+use crate::{
+    controller::Controller,
+    domain::{ExplorerEntry, ExplorerEntryKind, ExplorerState},
+};
 
 /// Creates the root Markdown editor view.
 ///
@@ -37,6 +40,7 @@ pub(crate) fn app_view(controller: Controller) -> impl IntoView {
 #[component]
 fn MarkdownEditor(controller: Controller) -> impl IntoView {
     let root = controller.workspace().root().display().to_string();
+    let explorer = render_explorer(controller.explorer());
 
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
@@ -59,6 +63,15 @@ fn MarkdownEditor(controller: Controller) -> impl IntoView {
         }
 
         .root => { fg: Color::LightGreen }
+        .directory => { fg: Color::LightCyan }
+        .explorer-heading => {
+            fg: Color::White,
+            modifier: Modifier::BOLD
+        }
+        .directory-entry => { fg: Color::LightBlue }
+        .markdown-entry => { fg: Color::White }
+        .empty => { fg: Color::DarkGray }
+        .error => { fg: Color::LightRed }
         .help => { fg: Color::Gray }
 
         @media (max-width: 60) {
@@ -74,8 +87,69 @@ fn MarkdownEditor(controller: Controller) -> impl IntoView {
             <Div>
                 <Text class="title">"Markdown editor"</Text>
                 <Text class="root">{format!("Root: {root}")}</Text>
-                <Text class="help">"Explorer and preview coming next | q quit"</Text>
+                {explorer}
+                <Text class="help">"Selection and preview coming next | q quit"</Text>
             </Div>
         </Block>
     }
+}
+
+/// Renders the current directory listing and recoverable error state.
+///
+/// # Arguments
+///
+/// * `explorer` — Controller-owned explorer state to present.
+///
+/// # Returns
+///
+/// A [`View`] containing the current directory, entries, and optional error.
+fn render_explorer(explorer: &ExplorerState) -> AnyView {
+    let mut rows = vec![
+        text(format!("Directory: {}", explorer.directory().display()))
+            .with_classes("directory")
+            .into_view(),
+        text("Explorer")
+            .with_classes("explorer-heading")
+            .into_view(),
+    ];
+
+    if explorer.entries().is_empty() {
+        rows.push(
+            text("No directories or Markdown files")
+                .with_classes("empty")
+                .into_view(),
+        );
+    } else {
+        rows.extend(explorer.entries().iter().map(render_explorer_entry));
+    }
+
+    if let Some(error) = explorer.error() {
+        rows.push(
+            text(format!("Error: {error}"))
+                .with_classes("error")
+                .into_view(),
+        );
+    }
+
+    div(rows).with_classes("explorer").into_view()
+}
+
+/// Renders one directory or Markdown explorer row.
+///
+/// # Arguments
+///
+/// * `entry` — Safe discovered entry to display.
+///
+/// # Returns
+///
+/// A [`View`] containing a kind marker and lossy display name.
+fn render_explorer_entry(entry: &ExplorerEntry) -> AnyView {
+    let (marker, class) = match entry.kind() {
+        ExplorerEntryKind::Directory => ("[D]", "directory-entry"),
+        ExplorerEntryKind::Markdown => ("[M]", "markdown-entry"),
+    };
+
+    text(format!("{marker} {}", entry.name().to_string_lossy()))
+        .with_classes(class)
+        .into_view()
 }
