@@ -287,8 +287,8 @@ impl StyleMetadata {
     /// # Returns
     ///
     /// An [`Option<TuiStyle>`] containing the inline style override.
-    pub const fn inline_style(&self) -> Option<TuiStyle> {
-        self.inline_style
+    pub fn inline_style(&self) -> Option<TuiStyle> {
+        self.inline_style.clone()
     }
 
     /// Returns whether this view currently matches `:focus`.

@@ -98,7 +98,7 @@ impl StyleDeclarations {
                 if let Some(declaration) = &style.$field
                     && matches(declaration.important)
                 {
-                    self.$setter(declaration.value, declaration.important);
+                    self.$setter(declaration.value.clone(), declaration.important);
                 }
             };
         }
@@ -124,6 +124,10 @@ impl StyleDeclarations {
         overlay_layout!(justify_self, set_justify_self);
         overlay_layout!(justify_content, set_justify_content);
         overlay_layout!(grid_auto_flow, set_grid_auto_flow);
+        overlay_layout!(grid_template_rows, set_grid_template_rows);
+        overlay_layout!(grid_template_columns, set_grid_template_columns);
+        overlay_layout!(grid_auto_rows, set_grid_auto_rows);
+        overlay_layout!(grid_auto_columns, set_grid_auto_columns);
         overlay_layout!(grid_row, set_grid_row);
         overlay_layout!(grid_column, set_grid_column);
         overlay_layout!(position, set_position);

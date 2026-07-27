@@ -74,6 +74,10 @@ pub(super) enum StyleValueKind {
     JustifyContent,
     /// Grid automatic-flow behavior.
     GridAutoFlow,
+    /// Explicit grid row or column template.
+    GridTemplateTracks,
+    /// Automatic grid row or column sizing functions.
+    GridAutoTracks,
     /// Grid row or column placement.
     GridLine,
     /// Positioning scheme.
@@ -174,6 +178,10 @@ fn expand_imported_variable(
         StyleValueKind::JustifySelf => quote! { #module.expect_justify_self(#name) },
         StyleValueKind::JustifyContent => quote! { #module.expect_justify_content(#name) },
         StyleValueKind::GridAutoFlow => quote! { #module.expect_grid_auto_flow(#name) },
+        StyleValueKind::GridTemplateTracks => {
+            quote! { #module.expect_grid_template_tracks(#name) }
+        }
+        StyleValueKind::GridAutoTracks => quote! { #module.expect_grid_auto_tracks(#name) },
         StyleValueKind::GridLine => quote! { #module.expect_grid_line(#name) },
         StyleValueKind::Position => quote! { #module.expect_position(#name) },
         StyleValueKind::ZIndex => quote! { #module.expect_z_index(#name) },

@@ -13,7 +13,7 @@ fn main() {
             on_input={|_| AppControl::Continue}
             class="field primary"
             id="notes"
-            style={style}
+            style={style.clone()}
         />
     };
 

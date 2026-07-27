@@ -22,7 +22,7 @@ fn image_builder_stores_source_alt_and_selector_metadata() {
         .alt("Project logo")
         .with_id("logo")
         .with_classes("media primary")
-        .with_inline_style(style);
+        .with_inline_style(style.clone());
 
     assert_eq!(view.source(), &ImageSource::Path("assets/logo.png".into()));
     assert_eq!(view.alt_text(), Some("Project logo"));

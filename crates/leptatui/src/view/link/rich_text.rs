@@ -560,7 +560,7 @@ impl InlineLink {
 pub(crate) fn resolved_rich_text(
     content: &RichText,
     metadata: &StyleMetadata,
-    style: TuiStyle,
+    style: &TuiStyle,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Text<'static> {
     let mut text = content.text.clone();

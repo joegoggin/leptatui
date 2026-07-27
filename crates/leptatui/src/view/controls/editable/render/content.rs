@@ -46,7 +46,7 @@ pub(super) fn input_paragraph<'a>(
 ) -> Paragraph<'a> {
     let paragraph = selection.map_or_else(
         || Paragraph::new(value),
-        |selection| Paragraph::new(selected_text_lines(value, selection, style)),
+        |selection| Paragraph::new(selected_text_lines(value, selection, &style)),
     );
 
     paragraph
@@ -76,7 +76,7 @@ pub(super) fn text_area_paragraph<'a>(
 ) -> Paragraph<'a> {
     let paragraph = selection.map_or_else(
         || Paragraph::new(value),
-        |selection| Paragraph::new(selected_text_lines(value, selection, style)),
+        |selection| Paragraph::new(selected_text_lines(value, selection, &style)),
     );
 
     paragraph
@@ -99,7 +99,7 @@ pub(super) fn text_area_paragraph<'a>(
 fn selected_text_lines<'a>(
     value: &'a str,
     selection: Range<usize>,
-    style: TuiStyle,
+    style: &TuiStyle,
 ) -> Vec<Line<'a>> {
     let mut lines = Vec::new();
     let mut line_start = 0usize;

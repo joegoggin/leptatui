@@ -25,6 +25,10 @@ fn style_module_stores_typed_variables_and_mixins() {
     let control = StyleDeclarations::new()
         .foreground(Color::Black)
         .padding(TuiSpacing::uniform(1));
+    let template_tracks = vec![GridTemplateTrack::from(GridTrackSize::from(
+        Length::cells(3.0),
+    ))];
+    let auto_tracks = vec![GridTrackSize::from(Fraction::new(1.0))];
     let module = StyleModule::new()
         .variable("fg", Color::Black)
         .variable("surface", theme_color("surface"))
@@ -53,6 +57,8 @@ fn style_module_stores_typed_variables_and_mixins() {
         .variable("justify_self", JustifySelf::Center)
         .variable("justify_content", JustifyContent::SpaceEvenly)
         .variable("grid_auto_flow", GridAutoFlow::ColumnDense)
+        .variable("grid_template_tracks", template_tracks.clone())
+        .variable("grid_auto_tracks", auto_tracks.clone())
         .variable(
             "grid_line",
             GridLine::new(GridPlacement::line(1), GridPlacement::span(2)),
@@ -126,6 +132,14 @@ fn style_module_stores_typed_variables_and_mixins() {
     assert_eq!(
         module.expect_grid_auto_flow("grid_auto_flow"),
         GridAutoFlow::ColumnDense
+    );
+    assert_eq!(
+        module.expect_grid_template_tracks("grid_template_tracks"),
+        template_tracks
+    );
+    assert_eq!(
+        module.expect_grid_auto_tracks("grid_auto_tracks"),
+        auto_tracks
     );
     assert_eq!(
         module.expect_grid_line("grid_line"),
@@ -305,7 +319,7 @@ fn stylesheet_macro_imports_variables_and_mixins() {
     let expected = Stylesheet::new()
         .rule(
             StyleSelector::class("submit"),
-            button_base
+            button_base.clone()
                 .foreground(Color::Black)
                 .background(Color::White),
         )

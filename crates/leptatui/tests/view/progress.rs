@@ -24,7 +24,7 @@ fn progress_bar_builder_stores_value_label_and_selector_metadata() {
         .label("Loading")
         .with_id("upload")
         .with_classes("meter primary")
-        .with_inline_style(style);
+        .with_inline_style(style.clone());
 
     assert_eq!(view.value(), 0.5);
     assert_eq!(view.label_text(), Some("Loading"));

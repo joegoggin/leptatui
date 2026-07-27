@@ -11,7 +11,7 @@ fn main() {
             on_cancel={|| AppControl::Exit}
             class="form primary"
             id="profile"
-            style={style}
+            style={style.clone()}
         >
             <Input
                 value="Ada"

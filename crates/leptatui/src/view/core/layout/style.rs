@@ -1,22 +1,29 @@
 //! Conversion from resolved Leptatui layout styles to Taffy styles.
+//!
+//! # Modules
+//!
+//! - [`grid`] — Grid track, template, placement, and automatic-flow conversion.
 
 use taffy::{
-    geometry::{Line as TaffyLine, Point as TaffyPoint, Rect as TaffyRect, Size as TaffySize},
+    geometry::{Point as TaffyPoint, Rect as TaffyRect, Size as TaffySize},
     style::{
         AlignContent as TaffyAlignContent, AlignItems as TaffyAlignItems,
         AlignSelf as TaffyAlignSelf, BoxSizing as TaffyBoxSizing, Dimension as TaffyDimension,
         Display as TaffyDisplay, FlexDirection as TaffyFlexDirection, FlexWrap as TaffyFlexWrap,
-        GridAutoFlow as TaffyGridAutoFlow, GridPlacement as TaffyGridPlacement,
         JustifyContent as TaffyJustifyContent, LengthPercentage, LengthPercentageAuto,
         Overflow as TaffyOverflow, Position as TaffyPosition, Style as TaffyStyle,
     },
 };
 
+mod grid;
+
+use grid::{map_grid_auto_flow, map_grid_line, map_grid_template, map_grid_tracks};
+
 use crate::view::core::measurement::sanitize_cells;
 use crate::{
     AlignContent, AlignItems, AlignSelf, Borders, BoxSizing, Dimension, Display, FlexDirection,
-    FlexWrap, GridAutoFlow, GridLine, GridPlacement, JustifyContent, JustifyItems, JustifySelf,
-    LayoutSize, Length, LengthAuto, Overflow, Position, TuiStyle, View, ViewportSize,
+    FlexWrap, JustifyContent, JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto, Overflow,
+    Position, TuiStyle, View, ViewportSize,
     view::{BlockView, ButtonView, CodeBlockView, InputView, TextAreaView},
 };
 
@@ -53,7 +60,7 @@ pub(super) fn synthetic_root_style(available: ViewportSize) -> TaffyStyle {
 /// A [`TaffyStyle`] containing equivalent engine-owned layout values.
 pub(super) fn to_taffy_style(
     view: &dyn View,
-    style: TuiStyle,
+    style: &TuiStyle,
     viewport: ViewportSize,
 ) -> TaffyStyle {
     let display = style.display.unwrap_or(Display::Block);
@@ -113,6 +120,22 @@ pub(super) fn to_taffy_style(
         justify_items: style.justify_items.map(map_justify_items),
         justify_self: style.justify_self.and_then(map_justify_self),
         justify_content: style.justify_content.map(map_justify_content),
+        grid_template_rows: map_grid_template(
+            style.grid_template_rows.as_deref().unwrap_or_default(),
+            viewport,
+        ),
+        grid_template_columns: map_grid_template(
+            style.grid_template_columns.as_deref().unwrap_or_default(),
+            viewport,
+        ),
+        grid_auto_rows: map_grid_tracks(
+            style.grid_auto_rows.as_deref().unwrap_or_default(),
+            viewport,
+        ),
+        grid_auto_columns: map_grid_tracks(
+            style.grid_auto_columns.as_deref().unwrap_or_default(),
+            viewport,
+        ),
         grid_auto_flow: map_grid_auto_flow(style.grid_auto_flow.unwrap_or_default()),
         grid_row: map_grid_line(style.grid_row.unwrap_or_default()),
         grid_column: map_grid_line(style.grid_column.unwrap_or_default()),
@@ -521,59 +544,6 @@ fn map_justify_content(value: JustifyContent) -> TaffyJustifyContent {
         JustifyContent::SpaceBetween => TaffyJustifyContent::SPACE_BETWEEN,
         JustifyContent::SpaceAround => TaffyJustifyContent::SPACE_AROUND,
         JustifyContent::SpaceEvenly => TaffyJustifyContent::SPACE_EVENLY,
-    }
-}
-
-/// Converts automatic grid placement flow.
-///
-/// # Arguments
-///
-/// * `value` — Public automatic-flow mode to convert.
-///
-/// # Returns
-///
-/// A [`TaffyGridAutoFlow`] with matching axis and density.
-fn map_grid_auto_flow(value: GridAutoFlow) -> TaffyGridAutoFlow {
-    match value {
-        GridAutoFlow::Row => TaffyGridAutoFlow::Row,
-        GridAutoFlow::Column => TaffyGridAutoFlow::Column,
-        GridAutoFlow::RowDense => TaffyGridAutoFlow::RowDense,
-        GridAutoFlow::ColumnDense => TaffyGridAutoFlow::ColumnDense,
-    }
-}
-
-/// Converts both placements for one grid axis.
-///
-/// # Arguments
-///
-/// * `value` — Public start and end placements to convert.
-///
-/// # Returns
-///
-/// A [`TaffyLine`] containing both converted placements.
-fn map_grid_line(value: GridLine) -> TaffyLine<TaffyGridPlacement> {
-    TaffyLine {
-        start: map_grid_placement(value.start),
-        end: map_grid_placement(value.end),
-    }
-}
-
-/// Converts one grid edge placement.
-///
-/// # Arguments
-///
-/// * `value` — Public grid placement to convert.
-///
-/// # Returns
-///
-/// A [`TaffyGridPlacement`] containing automatic, line, or span placement.
-fn map_grid_placement(value: GridPlacement) -> TaffyGridPlacement {
-    match value {
-        GridPlacement::Auto | GridPlacement::Line(0) | GridPlacement::Span(0) => {
-            TaffyGridPlacement::Auto
-        }
-        GridPlacement::Line(line) => TaffyGridPlacement::Line(line.into()),
-        GridPlacement::Span(span) => TaffyGridPlacement::Span(span),
     }
 }
 

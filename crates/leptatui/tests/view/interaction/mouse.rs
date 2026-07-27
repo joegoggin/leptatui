@@ -340,7 +340,7 @@ fn horizontal_clipping_maps_partial_child_hit_coordinates() -> Result<()> {
         ))
         .flex_shrink(0.0);
     let mut view = div([
-        button("First").with_inline_style(child_style),
+        button("First").with_inline_style(child_style.clone()),
         button("Second").with_inline_style(child_style),
     ])
     .with_inline_style(

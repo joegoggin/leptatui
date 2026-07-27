@@ -26,6 +26,19 @@ fn layout_variables() -> StyleModule {
         $justify_self: JustifySelf::Center;
         $justify_content: JustifyContent::SpaceEvenly;
         $grid_auto_flow: GridAutoFlow::ColumnDense;
+        $grid_template: vec![
+            GridTemplateTrack::from(GridTrackSize::from(Length::cells(4.0))),
+            GridTemplateTrack::repeat(
+                GridRepeat::count(2),
+                vec![GridTrackSize::from(Fraction::new(1.0))],
+            ),
+        ];
+        $grid_auto_tracks: vec![
+            GridTrackSize::minmax(
+                GridMinTrackSize::MinContent,
+                GridMaxTrackSize::MaxContent,
+            ),
+        ];
         $grid_line: GridLine::new(GridPlacement::line(2), GridPlacement::span(3));
         $position: Position::Absolute;
         $inset: Edges::symmetric(LengthAuto::Auto, Length::cells(4.0).into());
@@ -60,6 +73,10 @@ fn main() {
             justify_self: layout.$justify_self,
             justify_content: layout.$justify_content,
             grid_auto_flow: layout.$grid_auto_flow,
+            grid_template_rows: layout.$grid_template,
+            grid_template_columns: layout.$grid_template,
+            grid_auto_rows: layout.$grid_auto_tracks,
+            grid_auto_columns: layout.$grid_auto_tracks,
             grid_row: layout.$grid_line,
             grid_column: layout.$grid_line,
             position: layout.$position,
@@ -82,6 +99,13 @@ fn main() {
         Some(Axes::new(Overflow::Hidden, Overflow::Auto))
     );
     assert_eq!(resolved.aspect_ratio, Some(1.5));
+    assert_eq!(resolved.grid_template_rows.as_ref().map(Vec::len), Some(2));
+    assert_eq!(
+        resolved.grid_template_columns.as_ref().map(Vec::len),
+        Some(2)
+    );
+    assert_eq!(resolved.grid_auto_rows.as_ref().map(Vec::len), Some(1));
+    assert_eq!(resolved.grid_auto_columns.as_ref().map(Vec::len), Some(1));
     assert_eq!(resolved.position, Some(Position::Absolute));
     assert_eq!(resolved.z_index, Some(ZIndex::Integer(7)));
 }

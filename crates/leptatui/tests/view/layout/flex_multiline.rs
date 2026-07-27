@@ -149,8 +149,8 @@ fn odd_flex_remainders_round_cumulatively_without_overflow() -> Result<()> {
             Dimension::from(Length::cells(1.0)),
         ));
     let root = div((
-        text("A").with_inline_style(child_style),
-        text("B").with_inline_style(child_style),
+        text("A").with_inline_style(child_style.clone()),
+        text("B").with_inline_style(child_style.clone()),
         text("C").with_inline_style(child_style),
     ))
     .with_inline_style(

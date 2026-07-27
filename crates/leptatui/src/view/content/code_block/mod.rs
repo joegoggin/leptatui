@@ -167,7 +167,7 @@ fn wrapped_code_text(
     lines: &[Line<'static>],
     line_numbers: bool,
     width: u16,
-    style: TuiStyle,
+    style: &TuiStyle,
 ) -> Text<'static> {
     let digits = lines.len().max(1).to_string().len();
     let gutter_width = if line_numbers {
@@ -215,7 +215,7 @@ fn wrapped_code_text(
 fn code_block_layout(
     highlighted_lines: &[Line<'static>],
     line_numbers: bool,
-    style: TuiStyle,
+    style: &TuiStyle,
     area: Rect,
 ) -> (Text<'static>, u16) {
     let inner = style
@@ -303,20 +303,20 @@ fn render_code_block_view(
     let background = style
         .background
         .unwrap_or_else(|| syntax_theme.background());
-    let mut content_style = style;
+    let mut content_style = style.clone();
     content_style.background = Some(background);
     let geometry = ctx.active_layout_geometry(metadata);
     let area = geometry.map_or_else(|| ctx.area(), |geometry| geometry.border_box);
     let (content, required_height) =
-        code_block_layout(highlighted_lines, line_numbers, content_style, area);
-    let mut visible_style = style;
+        code_block_layout(highlighted_lines, line_numbers, &content_style, area);
+    let mut visible_style = style.clone();
     if area.height < required_height {
         let mut borders = style.borders.unwrap_or(Borders::ALL);
         borders.remove(Borders::BOTTOM);
         visible_style.borders = Some(borders);
     }
     visible_style.background = None;
-    let mut background_area_style = visible_style;
+    let mut background_area_style = visible_style.clone();
     background_area_style.padding = None;
     let background_area = geometry.map_or_else(
         || {
@@ -409,7 +409,7 @@ impl View for CodeBlockView {
         let natural_height = code_block_layout(
             &self.highlighted_lines,
             self.line_numbers,
-            style,
+            &style,
             Rect::new(0, 0, cells_to_u16(width), u16::MAX),
         )
         .1;

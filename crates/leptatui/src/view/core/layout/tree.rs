@@ -247,7 +247,7 @@ fn build_view(
 
         let node = tree
             .new_leaf_with_context(
-                to_taffy_style(view, TuiStyle::new(), ctx.viewport_size()),
+                to_taffy_style(view, &TuiStyle::new(), ctx.viewport_size()),
                 path.clone(),
             )
             .expect("transient custom-view leaf should be valid");
@@ -266,8 +266,8 @@ fn build_view(
         return Vec::new();
     }
 
-    let children = build_children_with_style(view, path, resolved, ctx, tree, nodes);
-    let style = to_taffy_style(view, resolved, ctx.viewport_size());
+    let children = build_children_with_style(view, path, &resolved, ctx, tree, nodes);
+    let style = to_taffy_style(view, &resolved, ctx.viewport_size());
     let node = if children.is_empty() {
         tree.new_leaf_with_context(style, path.clone())
             .expect("transient layout leaf should be valid")
@@ -339,7 +339,7 @@ fn build_children(
 fn build_children_with_style(
     view: &dyn View,
     path: &LayoutPath,
-    style: TuiStyle,
+    style: &TuiStyle,
     ctx: &mut RenderCtx<'_, '_>,
     tree: &mut TaffyTree<LayoutPath>,
     nodes: &mut Vec<LayoutNode>,

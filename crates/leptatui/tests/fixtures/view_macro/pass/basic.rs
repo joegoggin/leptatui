@@ -9,7 +9,7 @@ use leptatui::prelude::*;
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
     let view = view! {
-        <Block class="card active" id="main" style={style}>
+        <Block class="card active" id="main" style={style.clone()}>
             <Text class={"label"}>"hello"</Text>
         </Block>
     };

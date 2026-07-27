@@ -13,7 +13,7 @@ fn main() {
 
     let view = view! {
         <Div>
-            <H1 class="title primary" id="guide" style={heading_style}>"Guide"</H1>
+            <H1 class="title primary" id="guide" style={heading_style.clone()}>"Guide"</H1>
             <H2>"Overview"</H2>
             <H3>"Details"</H3>
             <H4>"Examples"</H4>
@@ -24,7 +24,7 @@ fn main() {
                 src={markdown_path.clone()}
                 class={markdown_class}
                 id={markdown_id}
-                style={markdown_style}
+                style={markdown_style.clone()}
                 line_numbers=true
                 syntax_theme={SyntaxTheme::Light}
             />

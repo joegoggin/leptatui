@@ -92,13 +92,24 @@ fn tui_style_builds_a_block_with_border_configuration() {
 ///
 /// # Assertions
 ///
-/// - Every phase-13 layout builder stores its typed value.
+/// - Every public layout builder stores its typed value.
 /// - The preferred aspect ratio retains its floating-point value.
 /// - Flex growth and shrink factors retain floating-point values.
 /// - Layout properties are removed from inherited descendant values.
 #[test]
 fn tui_style_stores_layout_properties_without_inheriting_them() {
     let grid_line = GridLine::new(GridPlacement::line(1), GridPlacement::span(2));
+    let grid_template = vec![
+        GridTemplateTrack::from(GridTrackSize::from(Length::cells(2.0))),
+        GridTemplateTrack::repeat(
+            GridRepeat::count(2),
+            vec![GridTrackSize::from(Fraction::new(1.0))],
+        ),
+    ];
+    let grid_auto_tracks = vec![GridTrackSize::minmax(
+        GridMinTrackSize::MinContent,
+        GridMaxTrackSize::MaxContent,
+    )];
     let length = Length::cells(2.0);
     let style = TuiStyle::new()
         .display(Display::Flex)
@@ -125,6 +136,10 @@ fn tui_style_stores_layout_properties_without_inheriting_them() {
         .justify_self(JustifySelf::Center)
         .justify_content(JustifyContent::SpaceEvenly)
         .grid_auto_flow(GridAutoFlow::RowDense)
+        .grid_template_rows(grid_template.clone())
+        .grid_template_columns(grid_template.clone())
+        .grid_auto_rows(grid_auto_tracks.clone())
+        .grid_auto_columns(grid_auto_tracks.clone())
         .grid_row(grid_line)
         .grid_column(grid_line)
         .position(Position::Absolute)
@@ -170,6 +185,10 @@ fn tui_style_stores_layout_properties_without_inheriting_them() {
     assert_eq!(style.justify_self, Some(JustifySelf::Center));
     assert_eq!(style.justify_content, Some(JustifyContent::SpaceEvenly));
     assert_eq!(style.grid_auto_flow, Some(GridAutoFlow::RowDense));
+    assert_eq!(style.grid_template_rows, Some(grid_template.clone()));
+    assert_eq!(style.grid_template_columns, Some(grid_template));
+    assert_eq!(style.grid_auto_rows, Some(grid_auto_tracks.clone()));
+    assert_eq!(style.grid_auto_columns, Some(grid_auto_tracks));
     assert_eq!(style.grid_row, Some(grid_line));
     assert_eq!(style.grid_column, Some(grid_line));
     assert_eq!(style.position, Some(Position::Absolute));

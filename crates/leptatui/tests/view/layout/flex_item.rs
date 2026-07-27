@@ -238,7 +238,7 @@ fn flex_shrink_distributes_negative_free_space() -> Result<()> {
         .flex_basis(Dimension::from(Length::cells(4.0)))
         .flex_shrink(1.0);
     let root = div((
-        text("A").with_inline_style(child_style),
+        text("A").with_inline_style(child_style.clone()),
         text("B").with_inline_style(child_style),
     ))
     .with_inline_style(

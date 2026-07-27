@@ -7,9 +7,9 @@ use ratatui::{style::Style, widgets::Block};
 
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
-    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
-    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, TuiSize, TuiSpacing,
-    ZIndex,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, GridTemplateTrack,
+    GridTrackSize, JustifyContent, JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto,
+    Modifier, Overflow, Position, TuiSize, TuiSpacing, ZIndex,
 };
 
 macro_rules! layout_style_builders {
@@ -33,7 +33,7 @@ macro_rules! layout_style_builders {
 }
 
 /// Reusable style values for terminal UI elements.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TuiStyle {
     /// Text foreground color.
     pub foreground: Option<Color>,
@@ -91,6 +91,14 @@ pub struct TuiStyle {
     pub justify_content: Option<JustifyContent>,
     /// Automatic grid item placement behavior.
     pub grid_auto_flow: Option<GridAutoFlow>,
+    /// Explicit row track template.
+    pub grid_template_rows: Option<Vec<GridTemplateTrack>>,
+    /// Explicit column track template.
+    pub grid_template_columns: Option<Vec<GridTemplateTrack>>,
+    /// Sizing functions cycled across automatically created rows.
+    pub grid_auto_rows: Option<Vec<GridTrackSize>>,
+    /// Sizing functions cycled across automatically created columns.
+    pub grid_auto_columns: Option<Vec<GridTrackSize>>,
     /// Grid row start and end placement.
     pub grid_row: Option<GridLine>,
     /// Grid column start and end placement.
@@ -150,6 +158,10 @@ impl TuiStyle {
             justify_self: None,
             justify_content: None,
             grid_auto_flow: None,
+            grid_template_rows: None,
+            grid_template_columns: None,
+            grid_auto_rows: None,
+            grid_auto_columns: None,
             grid_row: None,
             grid_column: None,
             position: None,
@@ -317,6 +329,62 @@ impl TuiStyle {
         (z_index, ZIndex, "the positioned stacking level"),
     );
 
+    /// Sets the explicit row track template.
+    ///
+    /// # Arguments
+    ///
+    /// * `tracks` — Owned explicit row template components.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] with the row template applied.
+    pub fn grid_template_rows(mut self, tracks: Vec<GridTemplateTrack>) -> Self {
+        self.grid_template_rows = Some(tracks);
+        self
+    }
+
+    /// Sets the explicit column track template.
+    ///
+    /// # Arguments
+    ///
+    /// * `tracks` — Owned explicit column template components.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] with the column template applied.
+    pub fn grid_template_columns(mut self, tracks: Vec<GridTemplateTrack>) -> Self {
+        self.grid_template_columns = Some(tracks);
+        self
+    }
+
+    /// Sets the sizing functions cycled across automatically created rows.
+    ///
+    /// # Arguments
+    ///
+    /// * `tracks` — Owned automatic row sizing functions.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] with the automatic row sizes applied.
+    pub fn grid_auto_rows(mut self, tracks: Vec<GridTrackSize>) -> Self {
+        self.grid_auto_rows = Some(tracks);
+        self
+    }
+
+    /// Sets the sizing functions cycled across automatically created columns.
+    ///
+    /// # Arguments
+    ///
+    /// * `tracks` — Owned automatic column sizing functions.
+    ///
+    /// # Returns
+    ///
+    /// A [`TuiStyle`] with the automatic column sizes applied.
+    pub fn grid_auto_columns(mut self, tracks: Vec<GridTrackSize>) -> Self {
+        self.grid_auto_columns = Some(tracks);
+        self
+    }
+
     /// Returns the style values inherited by descendant views.
     ///
     /// Foreground color and text modifiers inherit across view boundaries.
@@ -324,7 +392,7 @@ impl TuiStyle {
     /// # Returns
     ///
     /// A [`TuiStyle`] containing inheritable values from this style.
-    pub const fn inherited_values(self) -> Self {
+    pub fn inherited_values(&self) -> Self {
         Self {
             foreground: self.foreground,
             background: None,
@@ -354,6 +422,10 @@ impl TuiStyle {
             justify_self: None,
             justify_content: None,
             grid_auto_flow: None,
+            grid_template_rows: None,
+            grid_template_columns: None,
+            grid_auto_rows: None,
+            grid_auto_columns: None,
             grid_row: None,
             grid_column: None,
             position: None,
@@ -367,7 +439,7 @@ impl TuiStyle {
     /// # Returns
     ///
     /// A [`Style`] value containing configured colors and modifiers.
-    pub fn to_ratatui_style(self) -> Style {
+    pub fn to_ratatui_style(&self) -> Style {
         let mut style = Style::new();
 
         if let Some(color) = self.foreground {
@@ -392,7 +464,7 @@ impl TuiStyle {
     /// # Returns
     ///
     /// A [`Block`] value containing configured style, borders, and padding.
-    pub fn to_block(self) -> Block<'static> {
+    pub fn to_block(&self) -> Block<'static> {
         self.to_block_with_default_borders(Borders::NONE)
     }
 
@@ -406,7 +478,7 @@ impl TuiStyle {
     /// # Returns
     ///
     /// A [`Block`] value containing configured style, borders, and padding.
-    pub(crate) fn to_block_with_default_borders(self, default_borders: Borders) -> Block<'static> {
+    pub(crate) fn to_block_with_default_borders(&self, default_borders: Borders) -> Block<'static> {
         Block::new()
             .style(self.to_ratatui_style())
             .borders(self.borders.unwrap_or(default_borders))

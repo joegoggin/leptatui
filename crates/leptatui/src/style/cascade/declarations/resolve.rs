@@ -47,7 +47,7 @@ impl StyleDeclarations {
         macro_rules! resolve_layout {
             ($field:ident) => {
                 if let Some(declaration) = &self.$field {
-                    style = style.$field(declaration.value);
+                    style = style.$field(declaration.value.clone());
                 }
             };
         }
@@ -73,6 +73,10 @@ impl StyleDeclarations {
         resolve_layout!(justify_self);
         resolve_layout!(justify_content);
         resolve_layout!(grid_auto_flow);
+        resolve_layout!(grid_template_rows);
+        resolve_layout!(grid_template_columns);
+        resolve_layout!(grid_auto_rows);
+        resolve_layout!(grid_auto_columns);
         resolve_layout!(grid_row);
         resolve_layout!(grid_column);
         resolve_layout!(position);
@@ -153,6 +157,10 @@ impl From<TuiStyle> for StyleDeclarations {
         convert_layout!(justify_self);
         convert_layout!(justify_content);
         convert_layout!(grid_auto_flow);
+        convert_layout!(grid_template_rows);
+        convert_layout!(grid_template_columns);
+        convert_layout!(grid_auto_rows);
+        convert_layout!(grid_auto_columns);
         convert_layout!(grid_row);
         convert_layout!(grid_column);
         convert_layout!(position);

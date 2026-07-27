@@ -26,7 +26,8 @@ pub use cascade::{
 pub use foundation::{ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, theme_color};
 pub use layout::{
     AlignContent, AlignItems, AlignSelf, Axes, BoxSizing, Dimension, Display, Edges, FlexDirection,
-    FlexWrap, Fraction, GridAutoFlow, GridLine, GridPlacement, JustifyContent, JustifyItems,
-    JustifySelf, LayoutSize, Length, LengthAuto, Overflow, Position, ZIndex,
+    FlexWrap, Fraction, GridAutoFlow, GridLine, GridMaxTrackSize, GridMinTrackSize, GridPlacement,
+    GridRepeat, GridTemplateTrack, GridTrackSize, JustifyContent, JustifyItems, JustifySelf,
+    LayoutSize, Length, LengthAuto, Overflow, Position, ZIndex,
 };
 pub use style_module::{StyleModule, StyleValue};

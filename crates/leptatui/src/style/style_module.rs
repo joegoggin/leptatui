@@ -8,9 +8,9 @@ use std::collections::BTreeMap;
 
 use super::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
-    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, JustifyContent, JustifyItems,
-    JustifySelf, LayoutSize, Length, LengthAuto, Modifier, Overflow, Position, StyleDeclarations,
-    ThemeValue, TuiSize, TuiSpacing, ZIndex,
+    Display, Edges, FlexDirection, FlexWrap, GridAutoFlow, GridLine, GridTemplateTrack,
+    GridTrackSize, JustifyContent, JustifyItems, JustifySelf, LayoutSize, Length, LengthAuto,
+    Modifier, Overflow, Position, StyleDeclarations, ThemeValue, TuiSize, TuiSpacing, ZIndex,
 };
 
 /// A typed value stored in a reusable stylesheet module.
@@ -62,6 +62,10 @@ pub enum StyleValue {
     JustifyContent(JustifyContent),
     /// Grid automatic-flow behavior.
     GridAutoFlow(GridAutoFlow),
+    /// Explicit grid row or column template.
+    GridTemplateTracks(Vec<GridTemplateTrack>),
+    /// Automatic grid row or column sizing functions.
+    GridAutoTracks(Vec<GridTrackSize>),
     /// Grid row or column placement.
     GridLine(GridLine),
     /// Positioning scheme.
@@ -97,6 +101,8 @@ impl StyleValue {
             Self::JustifySelf(_) => "justify_self",
             Self::JustifyContent(_) => "justify_content",
             Self::GridAutoFlow(_) => "grid_auto_flow",
+            Self::GridTemplateTracks(_) => "grid_template_tracks",
+            Self::GridAutoTracks(_) => "grid_auto_tracks",
             Self::GridLine(_) => "grid_line",
             Self::Position(_) => "position",
             Self::ZIndex(_) => "z_index",
@@ -249,6 +255,12 @@ impl_style_value_conversion!(JustifyItems, JustifyItems, "a justify-items");
 impl_style_value_conversion!(JustifySelf, JustifySelf, "a justify-self");
 impl_style_value_conversion!(JustifyContent, JustifyContent, "a justify-content");
 impl_style_value_conversion!(GridAutoFlow, GridAutoFlow, "a grid-auto-flow");
+impl_style_value_conversion!(
+    Vec<GridTemplateTrack>,
+    GridTemplateTracks,
+    "a grid-template-track list"
+);
+impl_style_value_conversion!(Vec<GridTrackSize>, GridAutoTracks, "a grid-auto-track list");
 impl_style_value_conversion!(GridLine, GridLine, "a grid-line");
 impl_style_value_conversion!(Position, Position, "a position");
 impl_style_value_conversion!(ZIndex, ZIndex, "a z-index");
@@ -273,7 +285,7 @@ macro_rules! style_value_getter {
         #[doc = concat!("A [`", stringify!($type), "`] value for the stored variable.")]
         pub fn $method(&self, name: &str) -> $type {
             match self.expect_value(name) {
-                StyleValue::$variant(value) => *value,
+                StyleValue::$variant(value) => value.clone(),
                 value => panic!(
                     "stylesheet module variable `${name}` is {}, expected {}",
                     value.kind(),
@@ -536,6 +548,18 @@ impl StyleModule {
         GridAutoFlow,
         GridAutoFlow,
         "grid_auto_flow"
+    );
+    style_value_getter!(
+        expect_grid_template_tracks,
+        GridTemplateTracks,
+        Vec<GridTemplateTrack>,
+        "grid_template_tracks"
+    );
+    style_value_getter!(
+        expect_grid_auto_tracks,
+        GridAutoTracks,
+        Vec<GridTrackSize>,
+        "grid_auto_tracks"
     );
     style_value_getter!(expect_grid_line, GridLine, GridLine, "grid_line");
     style_value_getter!(expect_position, Position, Position, "position");
