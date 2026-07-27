@@ -12,26 +12,10 @@ use ratatui::layout::Rect;
 
 mod support;
 
-use support::{render_component, render_view, rendered_lines};
-
-/// Returns a definite border-box size for a grid fixture.
-///
-/// # Arguments
-///
-/// * `width` — Fixture width in terminal cells.
-/// * `height` — Fixture height in terminal cells.
-///
-/// # Returns
-///
-/// A [`TuiStyle`] containing the requested border-box dimensions.
-fn fixture_size(width: f32, height: f32) -> TuiStyle {
-    TuiStyle::new()
-        .box_sizing(BoxSizing::BorderBox)
-        .size(LayoutSize::new(
-            Dimension::from(Length::cells(width)),
-            Dimension::from(Length::cells(height)),
-        ))
-}
+use support::{
+    fixed_grid_track, fixture_size, render_component, render_view, rendered_lines,
+    retained_child_rects,
+};
 
 /// Creates one explicit track from a public track-sizing value.
 ///
@@ -55,10 +39,6 @@ fn track(size: GridTrackSize) -> GridTemplateTrack {
 /// # Returns
 ///
 /// A [`GridTemplateTrack`] containing the fixed size.
-fn fixed_track(cells: f32) -> GridTemplateTrack {
-    track(GridTrackSize::from(Length::cells(cells)))
-}
-
 /// Creates one fractionally sized explicit track.
 ///
 /// # Arguments
@@ -70,30 +50,6 @@ fn fixed_track(cells: f32) -> GridTemplateTrack {
 /// A [`GridTemplateTrack`] containing the fractional weight.
 fn fractional_track(fraction: f32) -> GridTemplateTrack {
     track(GridTrackSize::from(Fraction::new(fraction)))
-}
-
-/// Returns every retained child border box from a division root.
-///
-/// # Arguments
-///
-/// * `root` — Erased division view containing retained child geometry.
-///
-/// # Returns
-///
-/// A [`Vec`] containing child rectangles in source order.
-fn retained_child_rects(root: &AnyView) -> Vec<Rect> {
-    root.downcast_ref::<DivView>()
-        .expect("fixture root should be a DivView")
-        .child_views()
-        .iter()
-        .map(|child| {
-            child
-                .style_metadata()
-                .and_then(StyleMetadata::layout_geometry)
-                .expect("fixture child should retain layout geometry")
-                .border_box
-        })
-        .collect()
 }
 
 /// Verifies intrinsic tracks use terminal text min-content and max-content widths.
@@ -124,7 +80,7 @@ fn intrinsic_tracks_use_terminal_text_contributions() -> Result<()> {
                     track(GridTrackSize::MaxContent),
                     fractional_track(1.0),
                 ])
-                .grid_template_rows(vec![fixed_track(2.0)]),
+                .grid_template_rows(vec![fixed_grid_track(2.0)]),
         )
         .into_view();
 
@@ -170,11 +126,11 @@ fn fractions_and_gaps_share_only_unreserved_space() -> Result<()> {
                 .display(Display::Grid)
                 .overflow(Axes::all(Overflow::Visible))
                 .grid_template_columns(vec![
-                    fixed_track(2.0),
+                    fixed_grid_track(2.0),
                     fractional_track(1.0),
                     fractional_track(2.0),
                 ])
-                .grid_template_rows(vec![fixed_track(1.0), fractional_track(1.0)])
+                .grid_template_rows(vec![fixed_grid_track(1.0), fractional_track(1.0)])
                 .gap(Axes::all(Length::cells(1.0))),
         )
         .into_view();
@@ -250,7 +206,7 @@ fn minmax_tracks_and_item_constraints_clamp_grid_items() -> Result<()> {
                     )),
                     fractional_track(1.0),
                 ])
-                .grid_template_rows(vec![fixed_track(3.0)]),
+                .grid_template_rows(vec![fixed_grid_track(3.0)]),
         )
         .into_view();
 
@@ -302,8 +258,8 @@ fn container_and_item_alignment_position_tracks_and_children() -> Result<()> {
         fixture_size(13.0, 9.0)
             .display(Display::Grid)
             .overflow(Axes::all(Overflow::Visible))
-            .grid_template_columns(vec![fixed_track(2.0), fixed_track(2.0)])
-            .grid_template_rows(vec![fixed_track(2.0), fixed_track(2.0)])
+            .grid_template_columns(vec![fixed_grid_track(2.0), fixed_grid_track(2.0)])
+            .grid_template_rows(vec![fixed_grid_track(2.0), fixed_grid_track(2.0)])
             .gap(Axes::all(Length::cells(1.0)))
             .justify_content(JustifyContent::End)
             .align_content(AlignContent::Center)
@@ -356,7 +312,7 @@ fn nested_grid_contributes_intrinsic_track_geometry() -> Result<()> {
                 track(GridTrackSize::MaxContent),
                 track(GridTrackSize::MaxContent),
             ])
-            .grid_template_rows(vec![fixed_track(1.0)])
+            .grid_template_rows(vec![fixed_grid_track(1.0)])
             .gap(Axes::new(Length::cells(1.0), Length::cells(0.0))),
     );
     let root = div((nested, text("X")))
@@ -368,7 +324,7 @@ fn nested_grid_contributes_intrinsic_track_geometry() -> Result<()> {
                     track(GridTrackSize::MaxContent),
                     fractional_track(1.0),
                 ])
-                .grid_template_rows(vec![fixed_track(1.0)]),
+                .grid_template_rows(vec![fixed_grid_track(1.0)]),
         )
         .into_view();
 
@@ -431,7 +387,7 @@ fn grid_rebuilds_fractional_geometry_after_terminal_resize() -> Result<()> {
                 ))
                 .overflow(Axes::all(Overflow::Visible))
                 .grid_template_columns(vec![fractional_track(1.0), fractional_track(2.0)])
-                .grid_template_rows(vec![fixed_track(1.0)])
+                .grid_template_rows(vec![fixed_grid_track(1.0)])
                 .gap(Axes::new(Length::cells(1.0), Length::cells(0.0))),
         )
         .into_view();
@@ -489,7 +445,7 @@ fn mixed_templates_expand_percentage_auto_repeat_and_fraction_tracks() -> Result
                     track(GridTrackSize::Auto),
                     fractional_track(1.0),
                 ])
-                .grid_template_rows(vec![fixed_track(1.0)]),
+                .grid_template_rows(vec![fixed_grid_track(1.0)]),
         )
         .into_view();
 
@@ -537,7 +493,7 @@ fn fractional_tracks_round_cumulatively_to_the_container_edge() -> Result<()> {
                     fractional_track(1.0),
                     fractional_track(1.0),
                 ])
-                .grid_template_rows(vec![fixed_track(1.0)]),
+                .grid_template_rows(vec![fixed_grid_track(1.0)]),
         )
         .into_view();
 

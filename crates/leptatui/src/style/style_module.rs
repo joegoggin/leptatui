@@ -285,30 +285,6 @@ macro_rules! style_value_getter {
         #[doc = concat!("A [`", stringify!($type), "`] value for the stored variable.")]
         pub fn $method(&self, name: &str) -> $type {
             match self.expect_value(name) {
-                StyleValue::$variant(value) => *value,
-                value => panic!(
-                    "stylesheet module variable `${name}` is {}, expected {}",
-                    value.kind(),
-                    $expected
-                ),
-            }
-        }
-    };
-}
-
-macro_rules! style_value_clone_getter {
-    ($method:ident, $variant:ident, $type:ty, $expected:literal) => {
-        #[doc = concat!("Returns a stored ", $expected, " variable or panics with a stylesheet-oriented message.")]
-        ///
-        /// # Arguments
-        ///
-        /// * `name` — Variable name without the `$` prefix.
-        ///
-        /// # Returns
-        ///
-        #[doc = concat!("A cloned [`", stringify!($type), "`] value for the stored variable.")]
-        pub fn $method(&self, name: &str) -> $type {
-            match self.expect_value(name) {
                 StyleValue::$variant(value) => value.clone(),
                 value => panic!(
                     "stylesheet module variable `${name}` is {}, expected {}",
@@ -573,13 +549,13 @@ impl StyleModule {
         GridAutoFlow,
         "grid_auto_flow"
     );
-    style_value_clone_getter!(
+    style_value_getter!(
         expect_grid_template_tracks,
         GridTemplateTracks,
         Vec<GridTemplateTrack>,
         "grid_template_tracks"
     );
-    style_value_clone_getter!(
+    style_value_getter!(
         expect_grid_auto_tracks,
         GridAutoTracks,
         Vec<GridTrackSize>,

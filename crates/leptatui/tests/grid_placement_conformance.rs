@@ -10,7 +10,7 @@ use ratatui::layout::Rect;
 
 mod support;
 
-use support::{render_view, rendered_lines};
+use support::{fixed_grid_track, fixture_size, render_view, rendered_lines, retained_child_rects};
 
 /// One grid item used by a placement fixture.
 struct GridItemFixture {
@@ -36,38 +36,6 @@ struct GridFixture {
     expected_rects: Vec<Rect>,
     /// Complete terminal rows expected after painting.
     expected_rows: Vec<&'static str>,
-}
-
-/// Returns a definite border-box size for a conformance fixture.
-///
-/// # Arguments
-///
-/// * `width` — Width in terminal cells.
-/// * `height` — Height in terminal cells.
-///
-/// # Returns
-///
-/// A [`TuiStyle`] containing the requested border-box size.
-fn fixture_size(width: f32, height: f32) -> TuiStyle {
-    TuiStyle::new()
-        .box_sizing(BoxSizing::BorderBox)
-        .size(LayoutSize::new(
-            Dimension::from(Length::cells(width)),
-            Dimension::from(Length::cells(height)),
-        ))
-}
-
-/// Creates a fixed grid track measured in terminal cells.
-///
-/// # Arguments
-///
-/// * `cells` — Track size in terminal cells.
-///
-/// # Returns
-///
-/// A [`GridTemplateTrack`] containing the fixed size.
-fn fixed_track(cells: f32) -> GridTemplateTrack {
-    GridTemplateTrack::from(GridTrackSize::from(Length::cells(cells)))
 }
 
 /// Creates a source-ordered grid item fixture.
@@ -107,8 +75,8 @@ fn grid_container(
     fixture_size(width, height)
         .display(Display::Grid)
         .overflow(Axes::all(Overflow::Visible))
-        .grid_template_columns(columns.iter().copied().map(fixed_track).collect())
-        .grid_template_rows(rows.iter().copied().map(fixed_track).collect())
+        .grid_template_columns(columns.iter().copied().map(fixed_grid_track).collect())
+        .grid_template_rows(rows.iter().copied().map(fixed_grid_track).collect())
         .grid_auto_flow(flow)
 }
 
@@ -397,30 +365,6 @@ fn fixture_view(fixture: &GridFixture) -> AnyView {
     div(children)
         .with_inline_style(fixture.container_style.clone())
         .into_view()
-}
-
-/// Returns retained child rectangles from an erased grid container.
-///
-/// # Arguments
-///
-/// * `root` — Erased division view rendered by the conformance fixture.
-///
-/// # Returns
-///
-/// A [`Vec`] containing child border boxes in source order.
-fn retained_child_rects(root: &AnyView) -> Vec<Rect> {
-    root.downcast_ref::<DivView>()
-        .expect("fixture root should be a DivView")
-        .child_views()
-        .iter()
-        .map(|child| {
-            child
-                .style_metadata()
-                .and_then(StyleMetadata::layout_geometry)
-                .expect("fixture child should retain layout geometry")
-                .border_box
-        })
-        .collect()
 }
 
 /// Verifies explicit lines, spans, implicit tracks, and collisions retain terminal geometry.

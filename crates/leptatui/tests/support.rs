@@ -4,8 +4,11 @@
 use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use leptatui::{RenderCtx, Result, View};
-use ratatui::{Terminal, backend::TestBackend};
+use leptatui::{
+    AnyView, BoxSizing, ContainerView, Dimension, DivView, GridTemplateTrack, GridTrackSize,
+    LayoutSize, Length, RenderCtx, Result, StyleMetadata, TuiStyle, View,
+};
+use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 use tokio::{task::yield_now, time::timeout};
 
 /// Creates a key-press event for a key code.
@@ -19,6 +22,62 @@ use tokio::{task::yield_now, time::timeout};
 /// An [`Event`] containing the key press.
 pub(crate) fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+}
+
+/// Returns a definite border-box size for a conformance fixture.
+///
+/// # Arguments
+///
+/// * `width` — Width in terminal cells.
+/// * `height` — Height in terminal cells.
+///
+/// # Returns
+///
+/// A [`TuiStyle`] containing the requested border-box size.
+pub(crate) fn fixture_size(width: f32, height: f32) -> TuiStyle {
+    TuiStyle::new()
+        .box_sizing(BoxSizing::BorderBox)
+        .size(LayoutSize::new(
+            Dimension::from(Length::cells(width)),
+            Dimension::from(Length::cells(height)),
+        ))
+}
+
+/// Creates a fixed grid track measured in terminal cells.
+///
+/// # Arguments
+///
+/// * `cells` — Track size in terminal cells.
+///
+/// # Returns
+///
+/// A [`GridTemplateTrack`] containing the fixed size.
+pub(crate) fn fixed_grid_track(cells: f32) -> GridTemplateTrack {
+    GridTemplateTrack::from(GridTrackSize::from(Length::cells(cells)))
+}
+
+/// Returns retained child rectangles from an erased layout container.
+///
+/// # Arguments
+///
+/// * `root` — Erased division view rendered by a conformance fixture.
+///
+/// # Returns
+///
+/// A [`Vec`] containing child border boxes in source order.
+pub(crate) fn retained_child_rects(root: &AnyView) -> Vec<Rect> {
+    root.downcast_ref::<DivView>()
+        .expect("fixture root should be a DivView")
+        .child_views()
+        .iter()
+        .map(|child| {
+            child
+                .style_metadata()
+                .and_then(StyleMetadata::layout_geometry)
+                .expect("fixture child should retain layout geometry")
+                .border_box
+        })
+        .collect()
 }
 
 /// Renders a component into a test backend.
