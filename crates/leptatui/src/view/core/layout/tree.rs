@@ -43,6 +43,8 @@ struct BuiltNodes {
     in_flow: Vec<NodeId>,
     /// Absolute nodes waiting for the nearest positioned containing block.
     absolute: Vec<NodeId>,
+    /// Fixed nodes waiting for the terminal viewport containing block.
+    fixed: Vec<NodeId>,
 }
 
 impl BuiltNodes {
@@ -54,6 +56,7 @@ impl BuiltNodes {
     fn append(&mut self, mut other: Self) {
         self.in_flow.append(&mut other.in_flow);
         self.absolute.append(&mut other.absolute);
+        self.fixed.append(&mut other.fixed);
     }
 
     /// Returns all nodes captured by the current containing block.
@@ -64,6 +67,17 @@ impl BuiltNodes {
     fn into_containing_block_children(mut self) -> Vec<NodeId> {
         self.in_flow.append(&mut self.absolute);
         self.in_flow
+    }
+
+    /// Returns all non-fixed nodes captured by the root containing block.
+    ///
+    /// # Returns
+    ///
+    /// A [`tuple`](prim@tuple) containing root flow nodes followed by absolute
+    /// roots and the fixed nodes assigned to the viewport root.
+    fn into_root_children(mut self) -> (Vec<NodeId>, Vec<NodeId>) {
+        self.in_flow.append(&mut self.absolute);
+        (self.in_flow, self.fixed)
     }
 }
 
@@ -87,32 +101,99 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
         &mut nodes,
     );
     let has_root_absolute_nodes = !built.absolute.is_empty();
-    let roots = if has_root_absolute_nodes {
-        built.into_containing_block_children()
-    } else {
-        built.in_flow
-    };
+    let (roots, fixed) = built.into_root_children();
 
-    if roots.is_empty() {
+    if roots.is_empty() && fixed.is_empty() {
         ctx.set_layout_phase(LayoutPhase::Paint);
         return;
     }
 
     let available = ViewportSize::from(ctx.area());
     let clamp_root_to_area = roots.len() == 1 && !has_root_absolute_nodes;
-    let root_node = if clamp_root_to_area {
-        roots[0]
-    } else {
-        tree.new_with_children(synthetic_root_style(available), &roots)
-            .expect("transient layout roots should form a valid Taffy tree")
-    };
+    let root_node = (!roots.is_empty()).then(|| {
+        if clamp_root_to_area {
+            roots[0]
+        } else {
+            tree.new_with_children(synthetic_root_style(available), &roots)
+                .expect("transient layout roots should form a valid Taffy tree")
+        }
+    });
+    let fixed_root = (!fixed.is_empty()).then(|| {
+        tree.new_with_children(synthetic_root_style(available), &fixed)
+            .expect("fixed layout roots should form a valid Taffy tree")
+    });
 
     ctx.set_layout_phase(LayoutPhase::Measure);
-    compute_layout(&mut tree, root_node, available, root, ctx);
-    while promote_overflowing_auto_nodes(&mut tree, &nodes) {
+    if let Some(root_node) = root_node {
         compute_layout(&mut tree, root_node, available, root, ctx);
+        while promote_overflowing_auto_nodes(&mut tree, &nodes) {
+            compute_layout(&mut tree, root_node, available, root, ctx);
+        }
+
+        constrain_root_overflow(&mut tree, root_node, available, root, ctx, &nodes);
+    }
+    if let Some(fixed_root) = fixed_root {
+        compute_layout(&mut tree, fixed_root, available, root, ctx);
+        while promote_overflowing_auto_nodes(&mut tree, &nodes) {
+            compute_layout(&mut tree, fixed_root, available, root, ctx);
+        }
     }
 
+    let retained_nodes = nodes
+        .into_iter()
+        .map(|node| (node.node, (node.path, node.overflow)))
+        .collect::<HashMap<_, _>>();
+    let area = ctx.area();
+    if let Some(root_node) = root_node {
+        retain_geometry(
+            &tree,
+            root_node,
+            (f32::from(area.x), f32::from(area.y)),
+            &retained_nodes,
+            root,
+            ctx,
+            RetentionBounds {
+                clamp_to_area: clamp_root_to_area,
+                inherited_clip: area,
+            },
+        );
+    }
+    if let Some(fixed_root) = fixed_root {
+        retain_geometry(
+            &tree,
+            fixed_root,
+            (f32::from(area.x), f32::from(area.y)),
+            &retained_nodes,
+            root,
+            ctx,
+            RetentionBounds {
+                clamp_to_area: false,
+                inherited_clip: area,
+            },
+        );
+    }
+
+    ctx.set_layout_phase(LayoutPhase::Paint);
+}
+
+/// Constrains an overflowing layout root to its terminal viewport.
+///
+/// # Arguments
+///
+/// * `tree` — Computed transient Taffy tree.
+/// * `root_node` — Normal-flow root whose overflow may require constraints.
+/// * `available` — Terminal viewport dimensions.
+/// * `root` — Rendered Leptatui root used to resolve layout paths.
+/// * `ctx` — Render context used to reproduce traversal scopes.
+/// * `nodes` — Leptatui node records containing authored overflow behavior.
+fn constrain_root_overflow(
+    tree: &mut TaffyTree<LayoutPath>,
+    root_node: NodeId,
+    available: ViewportSize,
+    root: &dyn View,
+    ctx: &mut RenderCtx<'_, '_>,
+    nodes: &[LayoutNode],
+) {
     let root_path = nodes
         .iter()
         .find(|layout_node| layout_node.node == root_node)
@@ -129,52 +210,34 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
         && !matches!(root_overflow.x, Overflow::Clip | Overflow::Visible);
     let constrain_y = root_layout.size.height > f32::from(available.height)
         && !matches!(root_overflow.y, Overflow::Clip | Overflow::Visible);
-    if root_has_layout_children && (constrain_x || constrain_y) {
-        let mut style = tree
-            .style(root_node)
-            .expect("computed root style should remain available")
-            .clone();
-        if constrain_x {
-            style.size.width = TaffyDimension::length(f32::from(available.width));
-        }
-        if constrain_y {
-            style.size.height = TaffyDimension::length(f32::from(available.height));
-        }
-        if constrain_x && root_overflow.x != Overflow::Hidden {
-            style.overflow.x = TaffyOverflow::Scroll;
-            style.scrollbar_width = 1.0;
-        }
-        if constrain_y && root_overflow.y != Overflow::Hidden {
-            style.overflow.y = TaffyOverflow::Scroll;
-            style.scrollbar_width = 1.0;
-        }
-        tree.set_style(root_node, style)
-            .expect("computed root style should remain mutable");
-        compute_layout(&mut tree, root_node, available, root, ctx);
-        while promote_overflowing_auto_nodes(&mut tree, &nodes) {
-            compute_layout(&mut tree, root_node, available, root, ctx);
-        }
+    if !root_has_layout_children || (!constrain_x && !constrain_y) {
+        return;
     }
 
-    let retained_nodes = nodes
-        .into_iter()
-        .map(|node| (node.node, (node.path, node.overflow)))
-        .collect::<HashMap<_, _>>();
-    let area = ctx.area();
-    retain_geometry(
-        &tree,
-        root_node,
-        (f32::from(area.x), f32::from(area.y)),
-        &retained_nodes,
-        root,
-        ctx,
-        RetentionBounds {
-            clamp_to_area: clamp_root_to_area,
-            inherited_clip: area,
-        },
-    );
-
-    ctx.set_layout_phase(LayoutPhase::Paint);
+    let mut style = tree
+        .style(root_node)
+        .expect("computed root style should remain available")
+        .clone();
+    if constrain_x {
+        style.size.width = TaffyDimension::length(f32::from(available.width));
+    }
+    if constrain_y {
+        style.size.height = TaffyDimension::length(f32::from(available.height));
+    }
+    if constrain_x && root_overflow.x != Overflow::Hidden {
+        style.overflow.x = TaffyOverflow::Scroll;
+        style.scrollbar_width = 1.0;
+    }
+    if constrain_y && root_overflow.y != Overflow::Hidden {
+        style.overflow.y = TaffyOverflow::Scroll;
+        style.scrollbar_width = 1.0;
+    }
+    tree.set_style(root_node, style)
+        .expect("computed root style should remain mutable");
+    compute_layout(tree, root_node, available, root, ctx);
+    while promote_overflowing_auto_nodes(tree, nodes) {
+        compute_layout(tree, root_node, available, root, ctx);
+    }
 }
 
 /// Computes one Taffy layout pass with Leptatui intrinsic measurement.
@@ -305,6 +368,7 @@ fn build_view(
         return BuiltNodes {
             in_flow: vec![node],
             absolute: Vec::new(),
+            fixed: Vec::new(),
         };
     };
 
@@ -317,10 +381,16 @@ fn build_view(
 
     let position = resolved.position.unwrap_or_default();
     let built_children = build_children_with_style(view, path, &resolved, ctx, tree, nodes);
+    let mut escaped_fixed = built_children.fixed;
+    let layout_children = BuiltNodes {
+        in_flow: built_children.in_flow,
+        absolute: built_children.absolute,
+        fixed: Vec::new(),
+    };
     let (children, escaped_absolute) = if is_root || position != crate::Position::Static {
-        (built_children.into_containing_block_children(), Vec::new())
+        (layout_children.into_containing_block_children(), Vec::new())
     } else {
-        (built_children.in_flow, built_children.absolute)
+        (layout_children.in_flow, layout_children.absolute)
     };
     let style = to_taffy_style(view, &resolved, ctx.viewport_size());
     let node = if children.is_empty() {
@@ -337,15 +407,24 @@ fn build_view(
             .overflow
             .unwrap_or_else(|| Axes::new(Overflow::Visible, Overflow::Auto)),
     });
-    if !is_root && matches!(position, crate::Position::Absolute | crate::Position::Fixed) {
+    if !is_root && position == crate::Position::Fixed {
+        escaped_fixed.insert(0, node);
+        BuiltNodes {
+            in_flow: Vec::new(),
+            absolute: Vec::new(),
+            fixed: escaped_fixed,
+        }
+    } else if !is_root && position == crate::Position::Absolute {
         BuiltNodes {
             in_flow: Vec::new(),
             absolute: vec![node],
+            fixed: escaped_fixed,
         }
     } else {
         BuiltNodes {
             in_flow: vec![node],
             absolute: escaped_absolute,
+            fixed: escaped_fixed,
         }
     }
 }

@@ -52,23 +52,28 @@ pub(super) fn render_children(
         .iter()
         .enumerate()
         .map(|(source_index, child)| {
-            let stacking_level = ctx.with_area_inherited_style_and_selector_ancestor(
+            let (position, stacking_level) = ctx.with_area_inherited_style_and_selector_ancestor(
                 options.content_area,
                 inherited_style.clone(),
                 parent_metadata.clone(),
-                |child_ctx| child_stacking_level(child, child_ctx),
+                |child_ctx| child_paint_style(child, child_ctx),
             );
-            (stacking_level, source_index, child)
+            (stacking_level, source_index, position, child)
         })
         .collect::<Vec<_>>();
-    paint_order.sort_by_key(|(stacking_level, source_index, _)| (*stacking_level, *source_index));
-    parent_metadata
-        .set_child_paint_order(paint_order.iter().map(|(_, source_index, _)| *source_index));
+    paint_order
+        .sort_by_key(|(stacking_level, source_index, _, _)| (*stacking_level, *source_index));
+    parent_metadata.set_child_paint_order(
+        paint_order
+            .iter()
+            .map(|(_, source_index, _, _)| *source_index),
+    );
 
-    for (_, _, child) in paint_order {
+    for (_, _, position, child) in paint_order {
         if child
             .style_metadata()
             .is_some_and(StyleMetadata::is_layout_hidden)
+            || position == Position::Fixed
         {
             continue;
         }
@@ -132,7 +137,7 @@ pub(super) fn render_children(
     Ok(())
 }
 
-/// Returns the authored stacking level for one positioned child.
+/// Returns the authored positioning and stacking level for one child.
 ///
 /// # Arguments
 ///
@@ -141,19 +146,20 @@ pub(super) fn render_children(
 ///
 /// # Returns
 ///
-/// An `i32` stacking level, with static and automatic children at level zero.
-fn child_stacking_level(child: &AnyView, ctx: &RenderCtx<'_, '_>) -> i32 {
+/// A [`tuple`](prim@tuple) containing positioning and stacking level, with
+/// static and automatic children at level zero.
+fn child_paint_style(child: &AnyView, ctx: &RenderCtx<'_, '_>) -> (Position, i32) {
     let Some(metadata) = child.style_metadata() else {
-        return 0;
+        return (Position::Static, 0);
     };
     let style = resolve_style(metadata, ctx);
-    if style.position.unwrap_or_default() == Position::Static {
-        return 0;
-    }
-    match style.z_index.unwrap_or_default() {
+    let position = style.position.unwrap_or_default();
+    let stacking_level = match style.z_index.unwrap_or_default() {
+        _ if position == Position::Static => 0,
         ZIndex::Auto => 0,
         ZIndex::Integer(level) => level,
-    }
+    };
+    (position, stacking_level)
 }
 
 /// Renders visible horizontal and vertical scrollbars.

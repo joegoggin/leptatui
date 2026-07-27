@@ -154,6 +154,25 @@ pub trait View: Any {
         }
     }
 
+    /// Visits materialized children without resetting persistent render scopes.
+    ///
+    /// The default matches [`View::__visit_layout_children`]. Structural
+    /// boundaries override this hook when post-paint traversal must preserve
+    /// context captured during the completed render.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Render context carrying stylesheet and component scopes.
+    /// * `visitor` — Callback invoked for each retained logical child.
+    #[doc(hidden)]
+    fn __visit_retained_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        self.__visit_layout_children(ctx, visitor);
+    }
+
     /// Returns whether this view contributes children without generating a box.
     ///
     /// # Returns

@@ -467,6 +467,14 @@ impl View for ComponentView {
         self.with_reset_component(|component| visitor(component, ctx));
     }
 
+    fn __visit_retained_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        self.with_component(|component| visitor(component, ctx));
+    }
+
     fn __is_layout_transparent(&self) -> bool {
         true
     }

@@ -642,7 +642,8 @@ impl AnyView {
     /// Returns [`crate::Error::Io`] if concrete rendering performs terminal
     /// I/O that fails.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        if ctx.layout_phase() == LayoutPhase::Inactive {
+        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
+        if is_layout_root {
             prepare_layout(self.as_view(), ctx);
         }
         self.inner.__clear_hit_areas();
@@ -654,14 +655,21 @@ impl AnyView {
                 let geometry = metadata
                     .layout_geometry()
                     .expect("styled views should retain geometry before painting");
-                return ctx.with_layout_geometry(geometry, metadata, |ctx| {
+                ctx.with_layout_geometry(geometry, metadata, |ctx| {
                     ctx.record_metadata_hit_area(metadata);
                     self.as_view().render(ctx)
-                });
+                })?;
+            } else {
+                ctx.record_metadata_hit_area(metadata);
+                self.as_view().render(ctx)?;
             }
-            ctx.record_metadata_hit_area(metadata);
+        } else {
+            self.as_view().render(ctx)?;
         }
-        self.as_view().render(ctx)
+        if is_layout_root {
+            super::layout::render_fixed_descendants(self.as_view(), ctx)?;
+        }
+        Ok(())
     }
 
     /// Returns the intrinsic size of the stored node.

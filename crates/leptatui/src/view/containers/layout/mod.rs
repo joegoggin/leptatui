@@ -18,7 +18,7 @@ use crate::{
     LayoutSize,
     app::Result,
     component::{LayoutPhase, RenderCtx},
-    view::core::layout::prepare_layout,
+    view::core::layout::{prepare_layout, render_fixed_descendants},
 };
 
 /// Generic block container with shared scrolling behavior.
@@ -48,11 +48,15 @@ pub fn div(children: impl IntoViews) -> DivView {
 
 impl View for DivView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        if ctx.layout_phase() == LayoutPhase::Inactive || self.metadata.layout_geometry().is_none()
-        {
+        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
+        if is_layout_root || self.metadata.layout_geometry().is_none() {
             prepare_layout(self, ctx);
         }
-        render_container(&self.children, &self.metadata, ctx)
+        render_container(&self.children, &self.metadata, ctx)?;
+        if is_layout_root {
+            render_fixed_descendants(self, ctx)?;
+        }
+        Ok(())
     }
 
     fn measure(

@@ -6,16 +6,19 @@
 //!
 //! # Modules
 //!
+//! - [`fixed`] — Deferred viewport-level painting for fixed descendants.
 //! - [`geometry`] — Retained terminal geometry conversion and assignment.
 //! - [`measure`] — View measurement and logical-path traversal.
 //! - [`style`] — Leptatui-to-Taffy style conversion.
 //! - [`tree`] — Layout-tree construction, computation, and orchestration.
 
+mod fixed;
 mod geometry;
 mod measure;
 mod style;
 mod tree;
 
+pub(crate) use fixed::render_fixed_descendants;
 pub(crate) use geometry::descendant_clip_rect;
 pub(crate) use tree::prepare_layout;
 

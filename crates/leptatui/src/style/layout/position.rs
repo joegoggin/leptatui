@@ -10,9 +10,7 @@ pub enum Position {
     Relative,
     /// Leaves normal flow and uses the nearest positioned containing block.
     Absolute,
-    /// Currently behaves like [`Position::Absolute`].
-    ///
-    /// Terminal-viewport anchoring is not yet implemented.
+    /// Leaves normal flow and uses the terminal viewport as its containing block.
     Fixed,
     /// Currently behaves like [`Position::Relative`].
     ///
