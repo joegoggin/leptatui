@@ -7,7 +7,7 @@ use crate::{Axes, Position, component::RenderCtx};
 use super::{
     establishes_scrollport,
     geometry::{child_geometry, container_content_area},
-    paint::{child_paint_style, positioned_child_origin, translated_geometry},
+    positioning::{child_paint_style, positioned_child_origin, translated_geometry},
 };
 
 /// Focused descendant bounds relative to a container content box.

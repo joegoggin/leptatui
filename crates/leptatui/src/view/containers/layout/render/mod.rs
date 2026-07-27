@@ -9,11 +9,13 @@
 //! - [`geometry`] — Retained child geometry resolution and translation.
 //! - [`measure`] — Intrinsic container measurement.
 //! - [`paint`] — Ordered child painting, clipping, and scrollbars.
+//! - [`positioning`] — Positioned style resolution and sticky translation.
 
 mod focus;
 mod geometry;
 mod measure;
 mod paint;
+mod positioning;
 
 pub(crate) use focus::focused_control_span_for_container;
 pub(crate) use measure::measure_container;
