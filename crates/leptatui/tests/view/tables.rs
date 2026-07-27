@@ -195,10 +195,10 @@ fn semantic_table_shrinks_columns_and_wraps_unicode_cells() -> Result<()> {
         table_cell("界界"),
     ])])]);
     let mut terminal = Terminal::new(TestBackend::new(9, 4))?;
-    let mut min_height = 0;
+    let mut min_height = 0.0;
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = intrinsic_height(&view, &mut ctx);
+        min_height = measure_view_in_area(&view, &mut ctx).height;
     })?;
 
     draw_view(&mut terminal, &view)?;
@@ -211,7 +211,7 @@ fn semantic_table_shrinks_columns_and_wraps_unicode_cells() -> Result<()> {
     assert_eq!(cell_symbol(&terminal, 5, 1, 9), "界");
     assert_eq!(cell_symbol(&terminal, 5, 2, 9), "界");
     assert_eq!(cell_symbol(&terminal, 0, 3, 9), "└");
-    assert_eq!(min_height, 4);
+    assert_eq!(min_height, 4.0);
 
     Ok(())
 }
@@ -283,15 +283,15 @@ fn semantic_table_clips_columns_and_handles_zero_width() -> Result<()> {
 
     for width in 0..=2 {
         let mut terminal = Terminal::new(TestBackend::new(width, 1))?;
-        let mut min_height = 1;
+        let mut min_height = 1.0;
         let mut render_result = Ok(());
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            min_height = intrinsic_height(&view, &mut ctx);
+            min_height = measure_view_in_area(&view, &mut ctx).height;
             render_result = view.render(&mut ctx);
         })?;
         render_result?;
-        assert_eq!(min_height, 0);
+        assert_eq!(min_height, 0.0);
     }
 
     Ok(())

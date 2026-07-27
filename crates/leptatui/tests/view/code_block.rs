@@ -197,15 +197,15 @@ fn code_block_background_fills_interior_and_honors_authored_override() -> Result
 /// - Syntax-colored source continues onto later visual rows.
 /// - The following document child begins after the code block's bottom border.
 #[test]
-fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_height() -> Result<()> {
+fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_size() -> Result<()> {
     let code = code_block("let value = true;").language("rust");
     let mut measured = Terminal::new(TestBackend::new(10, 8))?;
-    let mut code_height = 0;
+    let mut code_height = 0.0;
     measured.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        code_height = intrinsic_height(&code, &mut ctx);
+        code_height = measure_view_in_area(&code, &mut ctx).height;
     })?;
-    assert_eq!(code_height, 5);
+    assert_eq!(code_height, 5.0);
 
     let document = div((code, text("End")));
     let mut terminal = Terminal::new(TestBackend::new(10, 6))?;
@@ -238,12 +238,12 @@ fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_height() -> Result<
 fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()> {
     let empty = code_block("");
     let mut empty_terminal = Terminal::new(TestBackend::new(4, 3))?;
-    let mut empty_height = 0;
+    let mut empty_height = 0.0;
     empty_terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        empty_height = intrinsic_height(&empty, &mut ctx);
+        empty_height = measure_view_in_area(&empty, &mut ctx).height;
     })?;
-    assert_eq!(empty_height, 3);
+    assert_eq!(empty_height, 3.0);
 
     let unicode = code_block("界界A");
     let mut unicode_terminal = Terminal::new(TestBackend::new(5, 4))?;
@@ -258,7 +258,7 @@ fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()>
         let mut render_result = Ok(());
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            let _ = intrinsic_height(&view, &mut ctx);
+            let _ = measure_view_in_area(&view, &mut ctx);
             render_result = view.render(&mut ctx);
         })?;
         render_result?;
@@ -296,17 +296,17 @@ fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()>
 fn code_block_height_saturates_beyond_terminal_row_limit() -> Result<()> {
     let view = code_block("\n".repeat(usize::from(u16::MAX)));
     let mut terminal = Terminal::new(TestBackend::new(4, 1))?;
-    let mut min_height = 0;
+    let mut min_height = 0.0;
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = intrinsic_height(&view, &mut ctx);
+        min_height = measure_view_in_area(&view, &mut ctx).height;
         render_result = view.render(&mut ctx);
     })?;
     render_result?;
 
-    assert_eq!(min_height, u16::MAX);
+    assert_eq!(min_height, f32::from(u16::MAX));
 
     Ok(())
 }

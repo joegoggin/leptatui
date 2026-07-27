@@ -1,9 +1,7 @@
 //! Semantic table container view.
 
 use super::{
-    render::{
-        focused_link_span_for_table_view, intrinsic_height_for_table_view, render_table_view,
-    },
+    render::{focused_link_span_for_table_view, measure_table_view, render_table_view},
     table_cell::TableCellView,
     table_row::TableRowView,
     table_section::TableSectionView,
@@ -71,12 +69,12 @@ impl View for TableView {
             width: cells_to_u16(layout_width),
             ..ctx.area()
         };
-        let natural_height = ctx.with_area(area, |ctx| {
-            intrinsic_height_for_table_view(&self.children, &self.metadata, ctx)
+        let natural_size = ctx.with_area(area, |ctx| {
+            measure_table_view(&self.children, &self.metadata, ctx)
         });
         let height = known_dimensions
             .height
-            .map_or(f32::from(natural_height), sanitize_cells);
+            .map_or_else(|| sanitize_cells(natural_size.height), sanitize_cells);
         LayoutSize::new(width, height)
     }
 

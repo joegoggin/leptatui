@@ -114,25 +114,25 @@ fn cell_modifiers(terminal: &Terminal<TestBackend>, x: u16, y: u16, width: u16) 
     let index = usize::from(y) * usize::from(width) + usize::from(x);
     terminal.backend().buffer().content()[index].modifier
 }
-/// Measures a view's intrinsic height at the current test viewport width.
+
+/// Measures a view at the current test viewport.
 ///
 /// # Arguments
 ///
-/// * `view` — View whose two-axis measurement supplies the height.
+/// * `view` — View whose two-axis measurement is requested.
 /// * `ctx` — Rendering context containing the test viewport.
 ///
 /// # Returns
 ///
-/// A saturated `u16` intrinsic height.
-fn intrinsic_height(view: &dyn View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+/// A [`LayoutSize`] containing the measured width and height.
+fn measure_view_in_area(view: &dyn View, ctx: &mut RenderCtx<'_, '_>) -> LayoutSize<f32> {
     let area = ctx.area();
-    let measured = view.measure(
+    view.measure(
         LayoutSize::new(Some(f32::from(area.width)), None),
         LayoutSize::new(
             AvailableSpace::Definite(f32::from(area.width)),
             AvailableSpace::Definite(f32::from(area.height)),
         ),
         ctx,
-    );
-    measured.height.clamp(0.0, f32::from(u16::MAX)).floor() as u16
+    )
 }

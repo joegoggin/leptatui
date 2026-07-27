@@ -1,8 +1,6 @@
 //! Ordered and unordered semantic list view.
 
-use super::render::{
-    focused_control_span_for_list_view, intrinsic_height_for_list_view, render_list_view,
-};
+use super::render::{focused_control_span_for_list_view, measure_list_view, render_list_view};
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
     measurement::{AvailableSpace, cells_to_u16, resolve_intrinsic_axis, sanitize_cells},
@@ -141,12 +139,12 @@ impl View for ListView {
             width: cells_to_u16(layout_width),
             ..ctx.area()
         };
-        let natural_height = ctx.with_area(area, |ctx| {
-            intrinsic_height_for_list_view(&self.children, start, &self.metadata, ctx)
+        let natural_size = ctx.with_area(area, |ctx| {
+            measure_list_view(&self.children, start, &self.metadata, ctx)
         });
         let height = known_dimensions
             .height
-            .map_or(f32::from(natural_height), sanitize_cells);
+            .map_or_else(|| sanitize_cells(natural_size.height), sanitize_cells);
         LayoutSize::new(width, height)
     }
 

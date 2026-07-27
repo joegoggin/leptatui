@@ -123,34 +123,33 @@ pub(crate) fn measure_fixed(
     )
 }
 
-/// Measures a view's intrinsic height at the current rendering width.
+/// Measures a view at the current rendering area.
 ///
 /// # Arguments
 ///
-/// * `view` — View whose two-axis measurement supplies the height.
+/// * `view` — View whose intrinsic terminal-cell dimensions are requested.
 /// * `ctx` — Rendering context containing the current available area.
 ///
 /// # Returns
 ///
-/// A saturated `u16` height measured through [`View::measure`].
-pub(crate) fn measure_view_height(view: &dyn View, ctx: &mut RenderCtx<'_, '_>) -> u16 {
+/// A [`LayoutSize`] containing the view's two-axis measurement.
+pub(crate) fn measure_view(view: &dyn View, ctx: &mut RenderCtx<'_, '_>) -> LayoutSize<f32> {
     if view
         .style_metadata()
         .is_some_and(crate::StyleMetadata::is_layout_hidden)
     {
-        return 0;
+        return LayoutSize::all(0.0);
     }
 
     let area = ctx.area();
-    let measured = view.measure(
+    view.measure(
         LayoutSize::new(Some(f32::from(area.width)), None),
         LayoutSize::new(
             AvailableSpace::Definite(f32::from(area.width)),
             AvailableSpace::Definite(f32::from(area.height)),
         ),
         ctx,
-    );
-    cells_to_u16(measured.height)
+    )
 }
 
 /// Measures word-wrapped rich text without painting it.

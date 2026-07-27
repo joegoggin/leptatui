@@ -1,4 +1,4 @@
-/// Verifies flex-row minimum height uses the tallest child.
+/// Verifies flex-row intrinsic size uses the tallest child.
 ///
 /// # Example Under Test
 ///
@@ -10,26 +10,26 @@
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The flex row reports the tallest child's intrinsic height.
+/// - The flex row reports the available width and tallest child height.
 #[test]
-fn flex_row_min_height_uses_tallest_child() -> Result<()> {
+fn flex_row_intrinsic_size_uses_tallest_child() -> Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = div(vec![text("Hello World"), text("Side")])
         .with_inline_style(TuiStyle::new().display(Display::Flex));
-    let mut min_height = 0;
+    let mut measured = LayoutSize::all(0.0);
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = intrinsic_height(&view, &mut ctx);
+        measured = measure_view_in_area(&view, &mut ctx);
     })?;
 
-    assert_eq!(min_height, 1);
+    assert_eq!(measured, LayoutSize::new(12.0, 1.0));
 
     Ok(())
 }
 
-/// Verifies text-area minimum height counts trailing newline rows.
+/// Verifies text-area intrinsic size counts trailing newline rows.
 ///
 /// # Example Under Test
 ///
@@ -40,25 +40,25 @@ fn flex_row_min_height_uses_tallest_child() -> Result<()> {
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The text area minimum height includes the trailing blank line and border.
+/// - The text area size includes the available width, trailing blank line, and border.
 #[test]
-fn text_area_min_height_counts_trailing_newline() -> Result<()> {
+fn text_area_intrinsic_size_counts_trailing_newline() -> Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("Ada\n");
-    let mut min_height = 0;
+    let mut measured = LayoutSize::all(0.0);
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = intrinsic_height(&view, &mut ctx);
+        measured = measure_view_in_area(&view, &mut ctx);
     })?;
 
-    assert_eq!(min_height, 4);
+    assert_eq!(measured, LayoutSize::new(8.0, 4.0));
 
     Ok(())
 }
 
-/// Verifies component boundaries backed by [`View`] report wrapped view height.
+/// Verifies component boundaries report the wrapped view's two-axis size.
 ///
 /// # Example Under Test
 ///
@@ -69,25 +69,25 @@ fn text_area_min_height_counts_trailing_newline() -> Result<()> {
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The component boundary reports the wrapped column's three-row height.
+/// - The component boundary reports the available width and wrapped three-row height.
 ///
 /// # Why
 ///
-/// Parent layouts use component minimum heights to decide whether children need
-/// fixed height or overflow scrolling.
+/// Parent layouts use component measurements to resolve child geometry and
+/// overflow.
 #[test]
-fn component_view_min_height_uses_wrapped_view_height() -> Result<()> {
+fn component_view_intrinsic_size_uses_wrapped_view_size() -> Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = component(div([text("One"), text("Two"), text("Three")]));
-    let mut min_height = 0;
+    let mut measured = LayoutSize::all(0.0);
 
     terminal.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = intrinsic_height(view.as_view(), &mut ctx);
+        measured = measure_view_in_area(view.as_view(), &mut ctx);
     })?;
 
-    assert_eq!(min_height, 3);
+    assert_eq!(measured, LayoutSize::new(12.0, 3.0));
 
     Ok(())
 }

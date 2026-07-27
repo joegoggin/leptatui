@@ -6,15 +6,27 @@ use ratatui::{
 };
 
 use crate::view::core::{
-    measurement::measure_view_height,
+    measurement::{cells_to_u16, measure_view, sanitize_cells},
     render::{VerticalSpan, focused_control_span_for_view, resolve_style},
 };
 use crate::view::{AnyView, ListItemView, ListView, StyleMetadata};
-use crate::{TuiStyle, app::Result, component::RenderCtx};
+use crate::{LayoutSize, TuiStyle, app::Result, component::RenderCtx};
 
 /// Horizontal indentation applied to each recursively nested list.
 const LIST_NEST_INDENT: u16 = 2;
 
+/// Returns the focused descendant span inside a semantic list.
+///
+/// # Arguments
+///
+/// * `items` — List item views to inspect in source order.
+/// * `ordered_start` — First decimal marker, or [`None`] for hyphen markers.
+/// * `metadata` — Selector metadata for the list container.
+/// * `ctx` — Rendering context containing the list's assigned area.
+///
+/// # Returns
+///
+/// An [`Option`] containing the focused descendant's vertical span.
 pub(crate) fn focused_control_span_for_list_view(
     items: &[AnyView],
     ordered_start: Option<usize>,
@@ -33,7 +45,7 @@ pub(crate) fn focused_control_span_for_list_view(
             let mut row = 0u32;
 
             for item in items {
-                let item_height = intrinsic_height_for_list_item(item, marker_width, ctx);
+                let item_height = cells_to_u16(measure_list_item(item, marker_width, ctx).height);
                 let item_area = Rect {
                     height: item_height,
                     ..area
@@ -104,8 +116,9 @@ fn focused_control_span_for_list_item_children(
     for child in children {
         let indent = list_item_child_indent(child, marker_width);
         let child_base = horizontal_inset(area, indent);
-        let child_height =
-            ctx.with_area(child_base, |ctx| measure_view_height(child.as_view(), ctx));
+        let child_height = ctx.with_area(child_base, |ctx| {
+            cells_to_u16(measure_view(child.as_view(), ctx).height)
+        });
         let child_area = Rect {
             height: child_height,
             ..child_base
@@ -171,7 +184,8 @@ pub(crate) fn render_list_view(
                     break;
                 }
 
-                let height = intrinsic_height_for_list_item(item, marker_width, ctx).min(remaining);
+                let height =
+                    cells_to_u16(measure_list_item(item, marker_width, ctx).height).min(remaining);
                 let item_area = Rect { y, height, ..area };
                 ctx.with_area(item_area, |ctx| {
                     render_marked_list_item(item, marker, marker_width, ctx)
@@ -322,7 +336,9 @@ fn render_list_item_children(
         let indent = list_item_child_indent(child, marker_width);
         let child_base = horizontal_inset(Rect { y, ..area }, indent);
         let height = ctx
-            .with_area(child_base, |ctx| measure_view_height(child.as_view(), ctx))
+            .with_area(child_base, |ctx| {
+                cells_to_u16(measure_view(child.as_view(), ctx).height)
+            })
             .min(remaining);
         if height == 0 {
             continue;
@@ -339,7 +355,7 @@ fn render_list_item_children(
     Ok(())
 }
 
-/// Returns the minimum render height for one marked list item.
+/// Measures one marked list item.
 ///
 /// # Arguments
 ///
@@ -349,12 +365,12 @@ fn render_list_item_children(
 ///
 /// # Returns
 ///
-/// A [`u16`] height including a marker-only row for empty items.
-fn intrinsic_height_for_list_item(
+/// A [`LayoutSize`] including a marker-only row for empty items.
+fn measure_list_item(
     item: &AnyView,
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
-) -> u16 {
+) -> LayoutSize<f32> {
     if let Some(item) = item.downcast_ref::<ListItemView>() {
         let style = resolve_style(&item.metadata, ctx);
         let area = ctx.area();
@@ -362,14 +378,14 @@ fn intrinsic_height_for_list_item(
             area,
             style.inherited_values(),
             item.metadata.clone(),
-            |ctx| intrinsic_height_for_list_item_children(&item.children, marker_width, ctx),
+            |ctx| measure_list_item_children(&item.children, marker_width, ctx),
         );
     }
 
-    intrinsic_height_for_list_item_children(std::slice::from_ref(item), marker_width, ctx)
+    measure_list_item_children(std::slice::from_ref(item), marker_width, ctx)
 }
 
-/// Returns the intrinsic height of an ordered or unordered list.
+/// Measures the content of an ordered or unordered list.
 ///
 /// # Arguments
 ///
@@ -380,13 +396,13 @@ fn intrinsic_height_for_list_item(
 ///
 /// # Returns
 ///
-/// A [`u16`] sum of all item heights.
-pub(crate) fn intrinsic_height_for_list_view(
+/// A [`LayoutSize`] containing the widest item and stacked item height.
+pub(crate) fn measure_list_view(
     items: &[AnyView],
     ordered_start: Option<usize>,
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
-) -> u16 {
+) -> LayoutSize<f32> {
     let style = resolve_style(metadata, ctx);
     let (_, marker_width) = list_markers(items.len(), ordered_start);
     let area = ctx.area();
@@ -398,13 +414,18 @@ pub(crate) fn intrinsic_height_for_list_view(
         |ctx| {
             items
                 .iter()
-                .map(|item| intrinsic_height_for_list_item(item, marker_width, ctx))
-                .fold(0, u16::saturating_add)
+                .map(|item| measure_list_item(item, marker_width, ctx))
+                .fold(LayoutSize::all(0.0_f32), |measured, item| {
+                    LayoutSize::new(
+                        measured.width.max(item.width),
+                        sanitize_cells(measured.height + item.height),
+                    )
+                })
         },
     )
 }
 
-/// Returns the stacked height of blocks inside one marked list item.
+/// Measures the stacked blocks inside one marked list item.
 ///
 /// # Arguments
 ///
@@ -414,22 +435,31 @@ pub(crate) fn intrinsic_height_for_list_view(
 ///
 /// # Returns
 ///
-/// A [`u16`] height of at least one row for the item marker.
-fn intrinsic_height_for_list_item_children(
+/// A [`LayoutSize`] with at least one row reserved for the item marker.
+fn measure_list_item_children(
     children: &[AnyView],
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
-) -> u16 {
+) -> LayoutSize<f32> {
     let area = ctx.area();
-    children
+    let measured = children
         .iter()
         .map(|child| {
             let indent = list_item_child_indent(child, marker_width);
             let child_area = horizontal_inset(area, indent);
-            ctx.with_area(child_area, |ctx| measure_view_height(child.as_view(), ctx))
+            let measured = ctx.with_area(child_area, |ctx| measure_view(child.as_view(), ctx));
+            LayoutSize::new(
+                sanitize_cells(measured.width + f32::from(indent)),
+                measured.height,
+            )
         })
-        .fold(0, u16::saturating_add)
-        .max(1)
+        .fold(LayoutSize::all(0.0_f32), |measured, child| {
+            LayoutSize::new(
+                measured.width.max(child.width),
+                sanitize_cells(measured.height + child.height),
+            )
+        });
+    LayoutSize::new(measured.width, measured.height.max(1.0))
 }
 
 /// Returns the horizontal offset for a list-item child block.

@@ -93,7 +93,7 @@ fn heading_rendering_preserves_rich_text_styles_and_hanging_indent() -> Result<(
 /// - Each marker contains one `#` per heading level with no leading indentation.
 /// - Both heading rows begin after the complete marker gutter.
 #[test]
-fn semantic_text_variants_wrap_and_report_intrinsic_height() -> Result<()> {
+fn semantic_text_variants_wrap_and_report_intrinsic_size() -> Result<()> {
     let headings = [
         (h1("One Two"), 1),
         (h2("One Two"), 2),
@@ -107,14 +107,14 @@ fn semantic_text_variants_wrap_and_report_intrinsic_height() -> Result<()> {
         let content_x = level + 1;
         let width = content_x + 4;
         let mut terminal = Terminal::new(TestBackend::new(width, 2))?;
-        let mut min_height = 0;
+        let mut min_height = 0.0;
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            min_height = intrinsic_height(&view, &mut ctx);
+            min_height = measure_view_in_area(&view, &mut ctx).height;
         })?;
         draw_view(&mut terminal, &view)?;
 
-        assert_eq!(min_height, 2);
+        assert_eq!(min_height, 2.0);
         for marker_x in 0..level {
             assert_eq!(cell_symbol(&terminal, marker_x, 0, width), "#");
         }
@@ -145,23 +145,23 @@ fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
     for width in 0..=8 {
         let view = h6("Heading");
         let mut terminal = Terminal::new(TestBackend::new(width, 2))?;
-        let mut min_height = 0;
+        let mut min_height = 0.0;
         let mut render_result = Ok(());
         terminal.draw(|frame| {
             let mut ctx = RenderCtx::new(frame);
-            min_height = intrinsic_height(&view, &mut ctx);
+            min_height = measure_view_in_area(&view, &mut ctx).height;
             render_result = view.render(&mut ctx);
         })?;
         render_result?;
 
         if width == 0 {
-            assert_eq!(min_height, 0);
+            assert_eq!(min_height, 0.0);
         } else {
-            assert!(min_height >= 1);
+            assert!(min_height >= 1.0);
             assert_eq!(cell_symbol(&terminal, 0, 0, width), "#");
         }
         if (1..=7).contains(&width) {
-            assert!(min_height > 1);
+            assert!(min_height > 1.0);
             assert_eq!(cell_symbol(&terminal, 0, 1, width), "H");
         }
         if width >= 6 {
@@ -204,7 +204,7 @@ fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()>
     Ok(())
 }
 
-/// Verifies semantic text clips overflow and tolerates zero-width split areas.
+/// Verifies semantic text clips overflow and tolerates zero-width flex items.
 ///
 /// # Example Under Test
 ///
@@ -216,10 +216,10 @@ fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()>
 /// # Assertions
 ///
 /// - Content beyond the one-row render area is clipped.
-/// - Rendering a row that assigns zero width to one child succeeds.
-/// - The narrow row reports a one-row minimum height.
+/// - Rendering a flex row that assigns zero width to one child succeeds.
+/// - The narrow row reports a one-row intrinsic size.
 #[test]
-fn semantic_text_clips_overflow_and_handles_zero_width_splits() -> Result<()> {
+fn semantic_text_clips_overflow_and_handles_zero_width_flex_items() -> Result<()> {
     let mut clipped = Terminal::new(TestBackend::new(4, 1))?;
     draw_view(&mut clipped, &paragraph("One Two"))?;
     assert_eq!(symbol_position(&clipped, "O", 4), (0, 0));
@@ -228,13 +228,13 @@ fn semantic_text_clips_overflow_and_handles_zero_width_splits() -> Result<()> {
     let narrow_view = div([paragraph("A"), paragraph("B")])
         .with_inline_style(TuiStyle::new().display(Display::Flex));
     let mut narrow = Terminal::new(TestBackend::new(1, 1))?;
-    let mut min_height = 0;
+    let mut min_height = 0.0;
     narrow.draw(|frame| {
         let mut ctx = RenderCtx::new(frame);
-        min_height = intrinsic_height(&narrow_view, &mut ctx);
+        min_height = measure_view_in_area(&narrow_view, &mut ctx).height;
     })?;
     draw_view(&mut narrow, &narrow_view)?;
-    assert_eq!(min_height, 1);
+    assert_eq!(min_height, 1.0);
 
     Ok(())
 }

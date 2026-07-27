@@ -5,7 +5,7 @@ use crate::view::containers::layout::render::{
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    measurement::{AvailableSpace, measure_view_height, sanitize_cells},
+    measurement::{AvailableSpace, measure_view, sanitize_cells},
     render::{VerticalSpan, resolve_style, vertical_border_rows, vertical_padding_rows},
 };
 use crate::view::{AnyView, IntoView, StyleMetadata, View, ViewType};
@@ -56,20 +56,20 @@ impl View for BlockView {
             .width
             .or_else(|| available_space.width.definite())
             .map_or(0.0, sanitize_cells);
-        let child_height = self.children.first().map_or(0, |child| {
+        let child_height = self.children.first().map_or(0.0, |child| {
             ctx.with_area_inherited_style_and_selector_ancestor(
                 ctx.area(),
                 style.inherited_values(),
                 self.metadata.clone(),
-                |ctx| measure_view_height(child.as_view(), ctx),
+                |ctx| measure_view(child.as_view(), ctx).height,
             )
         });
         let natural_height = child_height
-            .saturating_add(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
-            .saturating_add(vertical_padding_rows(style.padding));
+            + f32::from(vertical_border_rows(style.borders.unwrap_or(Borders::ALL)))
+            + f32::from(vertical_padding_rows(style.padding));
         let height = known_dimensions
             .height
-            .map_or(f32::from(natural_height), sanitize_cells);
+            .map_or_else(|| sanitize_cells(natural_height), sanitize_cells);
         LayoutSize::new(width, height)
     }
 

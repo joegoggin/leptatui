@@ -1,4 +1,4 @@
-//! Semantic table drawing and intrinsic height calculation.
+//! Semantic table drawing and content measurement.
 
 use ratatui::{
     layout::Rect,
@@ -12,6 +12,7 @@ use super::{
     },
 };
 use crate::{
+    LayoutSize,
     app::Result,
     component::RenderCtx,
     view::{
@@ -239,7 +240,7 @@ fn clear_table_link_scroll_requests(sections: &[AnyView]) {
     }
 }
 
-/// Returns the intrinsic height of a semantic table.
+/// Measures the resolved content of a semantic table.
 ///
 /// # Arguments
 ///
@@ -249,21 +250,26 @@ fn clear_table_link_scroll_requests(sections: &[AnyView]) {
 ///
 /// # Returns
 ///
-/// A [`u16`] height including horizontal row boundaries.
-pub(in crate::view::containers::tables) fn intrinsic_height_for_table_view(
+/// A [`LayoutSize`] including column and row boundaries.
+pub(in crate::view::containers::tables) fn measure_table_view(
     sections: &[AnyView],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
-) -> u16 {
+) -> LayoutSize<f32> {
     let ResolvedTableLayout { rows, widths, .. } = resolve_table_layout(sections, metadata, ctx);
     if widths.is_empty() || rows.is_empty() {
-        return 0;
+        return LayoutSize::all(0.0);
     }
 
-    rows.iter().map(|row| table_row_height(row, &widths)).fold(
+    let width = widths.iter().copied().fold(
+        u16::try_from(widths.len().saturating_add(1)).unwrap_or(u16::MAX),
+        u16::saturating_add,
+    );
+    let height = rows.iter().map(|row| table_row_height(row, &widths)).fold(
         u16::try_from(rows.len().saturating_add(1)).unwrap_or(u16::MAX),
         u16::saturating_add,
-    )
+    );
+    LayoutSize::new(f32::from(width), f32::from(height))
 }
 
 /// Returns the focused linked table row's vertical span.
