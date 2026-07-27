@@ -25,7 +25,7 @@ mod reconciliation;
 pub(crate) use boundary::component::{ComponentView, component_factory};
 pub use boundary::{
     component::component,
-    dynamic::{DynamicView, dynamic},
+    dynamic::{DynamicView, dynamic, keyed},
 };
 pub use containers::{
     block::{BlockView, block},

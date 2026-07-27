@@ -266,6 +266,8 @@ pub(crate) struct PreviewState {
     source: Option<String>,
     /// Most recent read or decoding failure.
     error: Option<String>,
+    /// Monotonic invalidation key for retained preview views.
+    revision: u64,
 }
 
 impl PreviewState {
@@ -279,6 +281,7 @@ impl PreviewState {
             path: None,
             source: None,
             error: None,
+            revision: 0,
         }
     }
 
@@ -309,6 +312,15 @@ impl PreviewState {
         self.error.as_deref()
     }
 
+    /// Returns the current preview invalidation revision.
+    ///
+    /// # Returns
+    ///
+    /// A [`u64`] that changes whenever preview contents are replaced.
+    pub(crate) const fn revision(&self) -> u64 {
+        self.revision
+    }
+
     /// Replaces the preview with a loaded Markdown document.
     ///
     /// # Arguments
@@ -319,6 +331,7 @@ impl PreviewState {
         self.path = Some(path);
         self.source = Some(source);
         self.error = None;
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// Replaces the preview body with a recoverable file error.
@@ -331,5 +344,6 @@ impl PreviewState {
         self.path = Some(path);
         self.source = None;
         self.error = Some(error);
+        self.revision = self.revision.wrapping_add(1);
     }
 }

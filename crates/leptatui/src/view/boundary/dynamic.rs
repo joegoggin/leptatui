@@ -22,15 +22,38 @@ pub struct DynamicView {
 /// Deferred dynamic view state shared by cloned dynamic boundaries.
 struct DynamicViewInner {
     child: Box<dyn Fn() -> AnyView>,
+    should_refresh: Box<dyn Fn() -> bool>,
+    reconcile_on_refresh: bool,
     current: RefCell<Option<AnyView>>,
 }
 
 impl DynamicView {
     /// Creates a dynamic view boundary from a child-producing closure.
     pub(crate) fn new(child: impl Fn() -> AnyView + 'static) -> Self {
+        Self::new_with_invalidation(child, || true, true)
+    }
+
+    /// Creates a dynamic boundary with explicit invalidation behavior.
+    ///
+    /// # Arguments
+    ///
+    /// * `child` — Callback building a replacement child.
+    /// * `should_refresh` — Callback deciding whether to replace an existing child.
+    /// * `reconcile_on_refresh` — Whether replacement children retain compatible state.
+    ///
+    /// # Returns
+    ///
+    /// A [`DynamicView`] governed by the supplied invalidation callbacks.
+    fn new_with_invalidation(
+        child: impl Fn() -> AnyView + 'static,
+        should_refresh: impl Fn() -> bool + 'static,
+        reconcile_on_refresh: bool,
+    ) -> Self {
         Self {
             inner: Rc::new(DynamicViewInner {
                 child: Box::new(child),
+                should_refresh: Box::new(should_refresh),
+                reconcile_on_refresh,
                 current: RefCell::new(None),
             }),
         }
@@ -86,12 +109,19 @@ impl DynamicView {
         )
     }
 
-    /// Rebuilds the child view and reconciles compatible state from the previous child.
+    /// Rebuilds an invalidated child and optionally reconciles compatible state.
     fn refresh(&self) {
+        let should_refresh = (self.inner.should_refresh)();
+        if self.inner.current.borrow().is_some() && !should_refresh {
+            return;
+        }
+
         let mut next = (self.inner.child)();
         let mut current = self.inner.current.borrow_mut();
 
-        if let Some(previous) = current.as_ref() {
+        if self.inner.reconcile_on_refresh
+            && let Some(previous) = current.as_ref()
+        {
             next.reconcile_from(previous);
         }
 
@@ -309,4 +339,39 @@ where
     V: IntoView,
 {
     DynamicView::new(move || child().into_view())
+}
+
+/// Creates a deferred child that rebuilds only when its key changes.
+///
+/// The current child remains mounted while consecutive keys compare equal.
+/// A different key replaces the retained child and resets its local view state.
+///
+/// # Arguments
+///
+/// * `key` — Callback returning the current invalidation key.
+/// * `child` — Callback building the child for a new key.
+///
+/// # Returns
+///
+/// A [`DynamicView`] that retains its child across equal keys.
+pub fn keyed<K, V>(key: impl Fn() -> K + 'static, child: impl Fn() -> V + 'static) -> DynamicView
+where
+    K: PartialEq + 'static,
+    V: IntoView,
+{
+    let current_key = RefCell::new(None::<K>);
+    DynamicView::new_with_invalidation(
+        move || child().into_view(),
+        move || {
+            let next_key = key();
+            let mut current_key = current_key.borrow_mut();
+            if current_key.as_ref() == Some(&next_key) {
+                false
+            } else {
+                *current_key = Some(next_key);
+                true
+            }
+        },
+        false,
+    )
 }

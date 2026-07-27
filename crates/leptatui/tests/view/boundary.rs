@@ -160,6 +160,59 @@ fn compares_dynamic_views_by_identity() {
     assert_ne!(first, second);
 }
 
+/// Verifies keyed dynamic children rebuild only after key changes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// key = 0
+/// draw
+/// draw
+/// key = 1
+/// draw
+/// ```
+///
+/// # Assertions
+///
+/// - The first draw constructs and renders the initial child.
+/// - A second draw with the same key reuses the existing child.
+/// - Changing the key constructs and renders one replacement child.
+///
+/// # Why
+///
+/// Expensive view factories such as Markdown parsing should not rerun for
+/// unrelated redraws.
+#[test]
+fn keyed_views_rebuild_children_only_when_keys_change() -> Result<()> {
+    let key = Rc::new(Cell::new(0_u8));
+    let builds = Rc::new(Cell::new(0_u8));
+    let key_reader = Rc::clone(&key);
+    let child_key = Rc::clone(&key);
+    let child_builds = Rc::clone(&builds);
+    let view = keyed(
+        move || key_reader.get(),
+        move || {
+            child_builds.set(child_builds.get().saturating_add(1));
+            text(format!("Key {}", child_key.get()))
+        },
+    );
+    let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(builds.get(), 1);
+    assert!(rendered_text(&terminal).contains("Key 0"));
+
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(builds.get(), 1);
+
+    key.set(1);
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(builds.get(), 2);
+    assert!(rendered_text(&terminal).contains("Key 1"));
+
+    Ok(())
+}
+
 /// Verifies editable control reconciliation retains shared runtime state.
 ///
 /// # Example Under Test

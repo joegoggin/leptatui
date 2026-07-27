@@ -31,8 +31,12 @@ use super::support::{TestTree, draw_editor, rendered_lines, rendered_position};
 /// - The initial selected row is `alpha.md`.
 /// - `Down` moves the selected marker to `beta.md`.
 /// - `Enter` opens and renders `beta.md`.
-/// - `PageDown` is handled and changes the overflowing preview viewport.
-/// - `r` is handled without closing the open preview.
+/// - `PageDown` scrolls the preview even when the explorer also overflows.
+/// - `r` reloads and renders changed Markdown without closing the preview.
+///
+/// # Why
+///
+/// Keyboard scrolling should target the Markdown preview before the explorer.
 #[test]
 fn editor_keys_drive_selection_preview_reload_and_scroll() -> leptatui::Result<()> {
     let tree = TestTree::new("editor-keys");
@@ -41,8 +45,15 @@ fn editor_keys_drive_selection_preview_reload_and_scroll() -> leptatui::Result<(
     let beta_source = (0..24)
         .map(|index| format!("## Beta line {index}\n"))
         .collect::<String>();
-    fs::write(tree.root().join("beta.md"), beta_source)
-        .expect("the long Markdown file should be created");
+    let beta_path = tree.root().join("beta.md");
+    fs::write(&beta_path, beta_source).expect("the long Markdown file should be created");
+    for index in 0..24 {
+        fs::write(
+            tree.root().join(format!("extra-{index:02}.md")),
+            format!("# Extra {index}"),
+        )
+        .expect("each extra Markdown file should be created");
+    }
     let controller = Rc::new(RefCell::new(
         Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
             .expect("the workspace should initialize"),
@@ -80,14 +91,20 @@ fn editor_keys_drive_selection_preview_reload_and_scroll() -> leptatui::Result<(
         KeyControl::Handled
     );
     draw_editor(&mut terminal, &view)?;
-    assert_ne!(rendered_lines(&terminal), before_scroll);
+    let after_scroll = rendered_lines(&terminal);
+    assert_ne!(after_scroll, before_scroll);
+    assert!(!after_scroll.join("\n").contains("Beta line 0"));
 
+    fs::write(&beta_path, "# Reloaded Beta")
+        .expect("the Markdown file should be updated before reload");
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))?,
         KeyControl::Handled
     );
     draw_editor(&mut terminal, &view)?;
-    assert!(rendered_lines(&terminal).join("\n").contains("Open: "));
+    let reloaded = rendered_lines(&terminal).join("\n");
+    assert!(reloaded.contains("Open: "));
+    assert!(reloaded.contains("Reloaded Beta"));
 
     Ok(())
 }

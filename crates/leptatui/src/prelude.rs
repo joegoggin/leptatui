@@ -45,7 +45,7 @@ pub use crate::{
     TextualView, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, View, ViewType,
     ViewportSize, VimMode, ZIndex, block, button, code_block,
     context::{expect_context, provide_context, use_context},
-    create_action, create_resource, div, form, h1, h2, h3, h4, h5, h6, image, input, link,
+    create_action, create_resource, div, form, h1, h2, h3, h4, h5, h6, image, input, keyed, link,
     list_item, markdown, markdown_file, markdown_file_with_options, markdown_with_options,
     ordered_list, paragraph, progress_bar, provide_route, table, table_body, table_cell,
     table_head, table_row, text, text_area, theme_color, unordered_list, use_key_event,

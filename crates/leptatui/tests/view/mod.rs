@@ -24,7 +24,7 @@ use leptatui::{
     RenderCtx, Result, StyleDeclarations, StyleMetadata, StyleSelector, Stylesheet, SyntaxTheme,
     TableCellView, TableRowView, TableSectionView, TextAreaView, TuiSize, TuiSpacing, TuiStyle,
     View, ViewType, VimMode, ZIndex, block, button, code_block, component, div, dynamic, form, h1,
-    h2, h3, h4, h5, h6, image, input, link, list_item, markdown, ordered_list, paragraph,
+    h2, h3, h4, h5, h6, image, input, keyed, link, list_item, markdown, ordered_list, paragraph,
     progress_bar, table, table_body, table_cell, table_head, table_row, text, text_area,
     unordered_list,
     view::{Line, Span, Text},

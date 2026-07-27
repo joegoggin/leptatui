@@ -54,6 +54,12 @@ fn MarkdownEditor(
     edit_requested: Rc<Cell<bool>>,
 ) -> impl IntoView {
     let event_controller = Rc::clone(&controller);
+    let preview_key_controller = Rc::clone(&controller);
+    let preview_view_controller = Rc::clone(&controller);
+    let preview = keyed(
+        move || preview_key_controller.borrow().preview().revision(),
+        move || render_preview(preview_view_controller.borrow().preview()),
+    );
 
     use_key_event(KeyEventKind::Press, move |key| {
         let plain_key = key.modifiers == KeyModifiers::NONE;
@@ -118,6 +124,7 @@ fn MarkdownEditor(
         .path-context => { fg: Color::LightGreen }
         .workspace => {
             display: Display::Flex,
+            flex_direction: FlexDirection::RowReverse,
             flex_basis: Dimension::from(Length::cells(0.0)),
             flex_grow: 1.0,
             gap: Axes::new(Length::cells(1.0), Length::cells(0.0)),
@@ -170,7 +177,7 @@ fn MarkdownEditor(
                 padding: TuiSpacing::ZERO
             }
             .workspace => {
-                flex_direction: FlexDirection::Column,
+                flex_direction: FlexDirection::ColumnReverse,
                 gap: Axes::new(Length::cells(0.0), Length::cells(1.0))
             }
             .explorer-pane => {
@@ -187,7 +194,7 @@ fn MarkdownEditor(
 
     view! {
         <Block class="editor-shell">
-            {move || render_editor(controller.borrow().clone())}
+            {move || render_editor(&controller.borrow(), preview.clone())}
         </Block>
     }
 }
@@ -196,12 +203,13 @@ fn MarkdownEditor(
 ///
 /// # Arguments
 ///
-/// * `controller` — Controller snapshot read from shared session state.
+/// * `controller` — Controller state read from the shared session.
+/// * `preview` — Keyed Markdown preview retained until its revision changes.
 ///
 /// # Returns
 ///
 /// An [`AnyView`] containing path context, responsive panes, and control help.
-fn render_editor(controller: Controller) -> AnyView {
+fn render_editor(controller: &Controller, preview: DynamicView) -> AnyView {
     let root = controller.workspace().root();
     let directory = relative_path(root, controller.explorer().directory());
     let open_path = controller
@@ -209,7 +217,6 @@ fn render_editor(controller: Controller) -> AnyView {
         .path()
         .map_or_else(|| String::from("none"), |path| relative_path(root, path));
     let explorer = render_explorer(controller.explorer());
-    let preview = render_preview(controller.preview());
 
     view! {
         <Div class="editor-layout">
@@ -218,8 +225,8 @@ fn render_editor(controller: Controller) -> AnyView {
             <Text class="path-context">{format!("Directory: {directory}")}</Text>
             <Text class="path-context">{format!("Open: {open_path}")}</Text>
             <Div class="workspace">
-                <Block class="explorer-pane">{explorer}</Block>
                 <Block class="preview-pane">{preview}</Block>
+                <Block class="explorer-pane">{explorer}</Block>
             </Div>
             <Text class="help">
                 "↑/k ↓/j | Enter open | ←/h parent | PgUp/Dn | e edit | r reload | q quit"

@@ -3,7 +3,7 @@
 //! # Modules
 //!
 //! - [`component`] — Stored application component boundaries.
-//! - [`dynamic`] — Deferred view factories reevaluated during rendering.
+//! - [`dynamic`] — Deferred and keyed view factories evaluated during rendering.
 
 pub(crate) mod component;
 pub(crate) mod dynamic;
