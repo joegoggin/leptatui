@@ -36,6 +36,37 @@ struct LayoutNode {
     overflow: Axes<Overflow>,
 }
 
+/// Taffy nodes produced while mirroring one logical view subtree.
+#[derive(Default)]
+struct BuiltNodes {
+    /// Nodes that participate in their immediate layout parent's normal flow.
+    in_flow: Vec<NodeId>,
+    /// Absolute nodes waiting for the nearest positioned containing block.
+    absolute: Vec<NodeId>,
+}
+
+impl BuiltNodes {
+    /// Appends another mirrored subtree to its matching layout categories.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` — Mirrored nodes produced by the next logical child.
+    fn append(&mut self, mut other: Self) {
+        self.in_flow.append(&mut other.in_flow);
+        self.absolute.append(&mut other.absolute);
+    }
+
+    /// Returns all nodes captured by the current containing block.
+    ///
+    /// # Returns
+    ///
+    /// A [`Vec`] containing normal-flow nodes followed by absolute descendants.
+    fn into_containing_block_children(mut self) -> Vec<NodeId> {
+        self.in_flow.append(&mut self.absolute);
+        self.in_flow
+    }
+}
+
 /// Builds, computes, rounds, and stores one root layout snapshot.
 ///
 /// # Arguments
@@ -47,7 +78,20 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
 
     let mut tree = TaffyTree::<LayoutPath>::new();
     let mut nodes = Vec::new();
-    let roots = build_view(root, &LayoutPath(Vec::new()), ctx, &mut tree, &mut nodes);
+    let built = build_view(
+        root,
+        &LayoutPath(Vec::new()),
+        true,
+        ctx,
+        &mut tree,
+        &mut nodes,
+    );
+    let has_root_absolute_nodes = !built.absolute.is_empty();
+    let roots = if has_root_absolute_nodes {
+        built.into_containing_block_children()
+    } else {
+        built.in_flow
+    };
 
     if roots.is_empty() {
         ctx.set_layout_phase(LayoutPhase::Paint);
@@ -55,7 +99,7 @@ pub(crate) fn prepare_layout(root: &dyn View, ctx: &mut RenderCtx<'_, '_>) {
     }
 
     let available = ViewportSize::from(ctx.area());
-    let clamp_root_to_area = roots.len() == 1;
+    let clamp_root_to_area = roots.len() == 1 && !has_root_absolute_nodes;
     let root_node = if clamp_root_to_area {
         roots[0]
     } else {
@@ -226,20 +270,22 @@ fn promote_overflowing_auto_nodes(tree: &mut TaffyTree<LayoutPath>, nodes: &[Lay
 ///
 /// * `view` — Current view being inspected.
 /// * `path` — Logical path from the rendered root to `view`.
+/// * `is_root` — Whether this view is the rendered layout root.
 /// * `ctx` — Render context used for style and boundary resolution.
 /// * `tree` — Transient Taffy tree receiving visible boxes.
 /// * `nodes` — Mapping records retained for geometry assignment.
 ///
 /// # Returns
 ///
-/// A [`Vec`] containing the Taffy nodes exposed to the layout parent.
+/// A [`BuiltNodes`] value separating normal-flow and escaped absolute nodes.
 fn build_view(
     view: &dyn View,
     path: &LayoutPath,
+    is_root: bool,
     ctx: &mut RenderCtx<'_, '_>,
     tree: &mut TaffyTree<LayoutPath>,
     nodes: &mut Vec<LayoutNode>,
-) -> Vec<NodeId> {
+) -> BuiltNodes {
     let Some(metadata) = view.style_metadata() else {
         if view.__is_layout_transparent() {
             return build_children(view, path, ctx, tree, nodes);
@@ -256,17 +302,26 @@ fn build_view(
             path: path.clone(),
             overflow: Axes::new(Overflow::Visible, Overflow::Visible),
         });
-        return vec![node];
+        return BuiltNodes {
+            in_flow: vec![node],
+            absolute: Vec::new(),
+        };
     };
 
     metadata.clear_layout_geometry();
     let resolved = ctx.resolve_style(metadata);
     if resolved.display == Some(Display::None) {
         mark_hidden(view, ctx);
-        return Vec::new();
+        return BuiltNodes::default();
     }
 
-    let children = build_children_with_style(view, path, &resolved, ctx, tree, nodes);
+    let position = resolved.position.unwrap_or_default();
+    let built_children = build_children_with_style(view, path, &resolved, ctx, tree, nodes);
+    let (children, escaped_absolute) = if is_root || position != crate::Position::Static {
+        (built_children.into_containing_block_children(), Vec::new())
+    } else {
+        (built_children.in_flow, built_children.absolute)
+    };
     let style = to_taffy_style(view, &resolved, ctx.viewport_size());
     let node = if children.is_empty() {
         tree.new_leaf_with_context(style, path.clone())
@@ -282,7 +337,17 @@ fn build_view(
             .overflow
             .unwrap_or_else(|| Axes::new(Overflow::Visible, Overflow::Auto)),
     });
-    vec![node]
+    if !is_root && matches!(position, crate::Position::Absolute | crate::Position::Fixed) {
+        BuiltNodes {
+            in_flow: Vec::new(),
+            absolute: vec![node],
+        }
+    } else {
+        BuiltNodes {
+            in_flow: vec![node],
+            absolute: escaped_absolute,
+        }
+    }
 }
 
 /// Builds logical children for a structural boundary.
@@ -297,22 +362,23 @@ fn build_view(
 ///
 /// # Returns
 ///
-/// A [`Vec`] containing the visible child node identifiers.
+/// A [`BuiltNodes`] value containing visible normal-flow and absolute nodes.
 fn build_children(
     view: &dyn View,
     path: &LayoutPath,
     ctx: &mut RenderCtx<'_, '_>,
     tree: &mut TaffyTree<LayoutPath>,
     nodes: &mut Vec<LayoutNode>,
-) -> Vec<NodeId> {
-    let mut children = Vec::new();
+) -> BuiltNodes {
+    let mut children = BuiltNodes::default();
     let mut index = 0usize;
     view.__visit_layout_children(ctx, &mut |child, child_ctx| {
         let mut child_path = path.0.clone();
         child_path.push(index);
-        children.extend(build_view(
+        children.append(build_view(
             child.as_view(),
             &LayoutPath(child_path),
+            false,
             child_ctx,
             tree,
             nodes,
@@ -335,7 +401,7 @@ fn build_children(
 ///
 /// # Returns
 ///
-/// A [`Vec`] containing the visible child node identifiers.
+/// A [`BuiltNodes`] value containing visible normal-flow and absolute nodes.
 fn build_children_with_style(
     view: &dyn View,
     path: &LayoutPath,
@@ -343,12 +409,12 @@ fn build_children_with_style(
     ctx: &mut RenderCtx<'_, '_>,
     tree: &mut TaffyTree<LayoutPath>,
     nodes: &mut Vec<LayoutNode>,
-) -> Vec<NodeId> {
+) -> BuiltNodes {
     let metadata = view
         .style_metadata()
         .expect("styled layout node should retain metadata")
         .clone();
-    let mut children = Vec::new();
+    let mut children = BuiltNodes::default();
     let area = ctx.area();
     ctx.with_area_inherited_style_and_selector_ancestor(
         area,
