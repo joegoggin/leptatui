@@ -1948,6 +1948,7 @@ dependencies = [
  "clap",
  "leptatui",
  "ratatui",
+ "shlex",
  "tokio",
 ]
 

@@ -24,6 +24,14 @@ The explorer lists directories before case-insensitive `.md` and `.markdown`
 files using deterministic name ordering. The first entry in each non-empty
 directory is selected automatically, and selection stops at listing boundaries.
 
+Editing uses the first non-empty `VISUAL` or `EDITOR` environment value and
+falls back to `vi`. Values can contain shell-word quoted arguments, such as
+`VISUAL="nvim -f"`, but are executed directly without shell expansion,
+pipelines, or functions. The application restores raw mode, mouse capture, and
+the alternate screen before running the resolved editor command with `--` and
+the absolute document path. After the editor exits successfully, the TUI starts
+again with the same explorer context and reloads the open document from disk.
+
 ## Controls
 
 - `Up` or `k` — Select the previous explorer entry.
@@ -32,6 +40,7 @@ directory is selected automatically, and selection stops at listing boundaries.
 - `Left` or `h` — Return to the parent directory without crossing the root.
 - `Page Up` or `Page Down` — Scroll the Markdown preview.
 - `Ctrl-U`, `Ctrl-D`, `gg`, or `G` — Use Vim-style preview scrolling.
+- `e` — Edit the open Markdown file in the configured terminal editor.
 - `r` — Reload the open Markdown file.
 - `q` — Exit the application.
 
@@ -40,7 +49,9 @@ and open document relative to it. Terminals wider than 60 columns place the
 explorer beside the preview; narrower terminals stack the panes. File-read,
 missing-file, and invalid UTF-8 errors replace the preview body with a
 recoverable diagnostic. Explorer navigation remains available, and `r` retries
-the same path after the problem is corrected.
+the same path after the problem is corrected. Invalid editor configuration, a
+missing editor executable, or a non-zero editor exit is also shown as a
+recoverable preview error; `e` retries the same open path.
 
 ## Architecture
 
@@ -49,10 +60,13 @@ the same path after the problem is corrected.
 - `domain` contains the validated workspace, explorer entries, listings, and
   recoverable state.
 - `filesystem` validates paths and owns anchored Markdown discovery.
-- `editor_process` reserves the external-editor process boundary.
+- `editor_process` resolves, parses, and launches the configured editor through
+  injectable environment and process boundaries.
 - `controller` assembles services, applies selection and activation commands,
-  and preserves recoverable explorer and preview state.
+  edits and reloads documents, and preserves recoverable explorer and preview
+  state.
 - `ui` renders responsive explorer and semantic Markdown preview views.
 
-The binary entry point only coordinates parsing, controller initialization, and
-terminal startup so application behavior remains in focused modules.
+The binary entry point coordinates parsing, controller initialization, and
+repeated managed terminal sessions so external editing happens only after
+terminal restoration.

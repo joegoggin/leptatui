@@ -22,8 +22,8 @@ pub(crate) struct Controller {
     preview: PreviewState,
     /// Filesystem service used for anchored explorer transitions.
     filesystem: FileSystem,
-    /// Process service retained for future external-editor transitions.
-    _editor_process: EditorProcess,
+    /// Process service used to launch the editor outside the managed terminal.
+    editor_process: EditorProcess,
 }
 
 impl Controller {
@@ -36,7 +36,7 @@ impl Controller {
     ///
     /// * `requested_root` — User-selected or current-directory root.
     /// * `filesystem` — Service used to validate and canonicalize the root.
-    /// * `editor_process` — Service reserved for external editor operations.
+    /// * `editor_process` — Service used for external editor operations.
     ///
     /// # Returns
     ///
@@ -57,7 +57,7 @@ impl Controller {
             preview: PreviewState::new(),
             workspace,
             filesystem,
-            _editor_process: editor_process,
+            editor_process,
         };
         controller.browse_root();
 
@@ -141,6 +141,29 @@ impl Controller {
         true
     }
 
+    /// Edits and reloads the currently open Markdown preview.
+    ///
+    /// The caller invokes this method only after Leptatui has restored the
+    /// terminal. A successful editor exit reloads the document from disk.
+    /// Launch and exit failures replace the preview body with a recoverable
+    /// error while retaining the path for retry.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether a preview path was available to edit.
+    pub(crate) fn edit_preview(&mut self) -> bool {
+        let Some(path) = self.preview.path().map(Path::to_path_buf) else {
+            return false;
+        };
+
+        match self.editor_process.edit(&path) {
+            Ok(()) => self.open_preview(&path),
+            Err(error) => self.preview.record_error(path, error.to_string()),
+        }
+
+        true
+    }
+
     /// Navigates to a requested directory within the workspace.
     ///
     /// A failed transition records its error while preserving the last valid
@@ -177,10 +200,6 @@ impl Controller {
     /// # Returns
     ///
     /// A boolean indicating whether the explorer moved to its parent.
-    #[allow(
-        dead_code,
-        reason = "selection controls will call this anchored transition in the next phase"
-    )]
     pub(crate) fn browse_parent(&mut self) -> bool {
         if self.explorer.directory() == self.workspace.root() {
             return false;

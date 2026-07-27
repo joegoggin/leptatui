@@ -5,11 +5,13 @@
 //! responsive test-backend rendering.
 
 use std::{
+    cell::{Cell, RefCell},
     env,
     ffi::OsString,
-    fs,
+    fs, io,
     path::{Path, PathBuf},
-    process,
+    process::{self, Command},
+    rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -21,10 +23,101 @@ use crate::{
     cli::Cli,
     controller::Controller,
     domain::{ExplorerEntry, ExplorerEntryKind},
-    editor_process::EditorProcess,
+    editor_process::{EditorProcess, EnvironmentReader, ProcessLauncher},
     filesystem::FileSystem,
     ui::app_view,
 };
+
+/// Program and argument values captured from one process launch.
+type RecordedCommand = (OsString, Vec<OsString>);
+
+/// Result returned by one injected process launch.
+#[derive(Clone, Copy, Debug)]
+enum TestLaunchOutcome {
+    /// Reports a successful child exit.
+    Success,
+    /// Reports a non-zero child exit.
+    NonZero,
+    /// Reports a missing executable.
+    NotFound,
+}
+
+/// Injectable launcher that records commands and supplies deterministic exits.
+#[derive(Clone, Debug)]
+struct RecordingLauncher {
+    /// Commands received by the launcher in call order.
+    commands: Rc<RefCell<Vec<RecordedCommand>>>,
+    /// Outcome returned for each launch.
+    outcome: TestLaunchOutcome,
+    /// Optional file replacement performed during a successful edit.
+    replacement: Option<(PathBuf, String)>,
+}
+
+/// Injectable environment containing optional editor configuration.
+#[derive(Clone, Debug, Default)]
+struct TestEnvironment {
+    /// Value returned for `VISUAL`.
+    visual: Option<OsString>,
+    /// Value returned for `EDITOR`.
+    editor: Option<OsString>,
+}
+
+impl EnvironmentReader for TestEnvironment {
+    /// Returns a configured test environment value.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — Environment variable name requested by the editor service.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option`] containing the configured test value.
+    fn var_os(&self, name: &str) -> Option<OsString> {
+        match name {
+            "VISUAL" => self.visual.clone(),
+            "EDITOR" => self.editor.clone(),
+            _ => None,
+        }
+    }
+}
+
+impl ProcessLauncher for RecordingLauncher {
+    /// Records and resolves one prepared command without spawning a process.
+    ///
+    /// # Arguments
+    ///
+    /// * `command` — Prepared editor command whose program and arguments are
+    ///   captured.
+    ///
+    /// # Returns
+    ///
+    /// A boolean matching the configured test outcome.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] for the missing-executable outcome or if a
+    /// configured replacement cannot be written.
+    fn success(&self, command: &mut Command) -> io::Result<bool> {
+        self.commands.borrow_mut().push((
+            command.get_program().to_os_string(),
+            command.get_args().map(OsString::from).collect(),
+        ));
+
+        match self.outcome {
+            TestLaunchOutcome::Success => {
+                if let Some((path, source)) = &self.replacement {
+                    fs::write(path, source)?;
+                }
+                Ok(true)
+            }
+            TestLaunchOutcome::NonZero => Ok(false),
+            TestLaunchOutcome::NotFound => Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "injected missing editor executable",
+            )),
+        }
+    }
+}
 
 /// Temporary directory tree removed automatically after an explorer test.
 #[derive(Debug)]
@@ -899,6 +992,300 @@ fn preview_invalid_utf8_is_recoverable() {
     assert!(error.to_lowercase().contains("valid utf-8"));
 }
 
+/// Verifies `VISUAL` takes precedence and quoted arguments are parsed safely.
+///
+/// # Example Under Test
+///
+/// ```text
+/// VISUAL="custom-editor --wait --option 'two words'"
+/// EDITOR=ignored-editor
+/// ```
+///
+/// # Assertions
+///
+/// - The injected launcher reports a successful edit.
+/// - The program comes from `VISUAL`, not `EDITOR`.
+/// - Quoted words remain one argument without invoking a shell.
+/// - One `--` separator precedes the absolute Markdown path.
+#[test]
+fn editor_process_prefers_visual_and_parses_arguments() {
+    let tree = TestTree::new("editor-command");
+    let markdown = tree.root().join("-guide with spaces.md");
+    fs::write(&markdown, "# Guide").expect("the Markdown file should be created");
+    let absolute_markdown =
+        fs::canonicalize(&markdown).expect("the Markdown file should canonicalize");
+    let commands = Rc::new(RefCell::new(Vec::new()));
+    let process = EditorProcess::with_services(
+        RecordingLauncher {
+            commands: Rc::clone(&commands),
+            outcome: TestLaunchOutcome::Success,
+            replacement: None,
+        },
+        TestEnvironment {
+            visual: Some(OsString::from("custom-editor --wait --option 'two words'")),
+            editor: Some(OsString::from("ignored-editor")),
+        },
+    );
+
+    process
+        .edit(&absolute_markdown)
+        .expect("the injected editor launch should succeed");
+
+    assert_eq!(
+        commands.borrow().as_slice(),
+        [(
+            OsString::from("custom-editor"),
+            vec![
+                OsString::from("--wait"),
+                OsString::from("--option"),
+                OsString::from("two words"),
+                OsString::from("--"),
+                absolute_markdown.into_os_string()
+            ]
+        )]
+    );
+}
+
+/// Verifies `EDITOR` and `vi` provide deterministic fallback commands.
+///
+/// # Example Under Test
+///
+/// ```text
+/// VISUAL="   " EDITOR="configured-editor --wait --"
+/// VISUAL unset, EDITOR unset
+/// ```
+///
+/// # Assertions
+///
+/// - A whitespace-only `VISUAL` value is skipped in favor of `EDITOR`.
+/// - An existing trailing `--` separator is not duplicated.
+/// - Unset editor variables fall back to `vi`.
+/// - Both commands receive the same canonical absolute path.
+#[test]
+fn editor_process_uses_editor_then_vi_fallback() {
+    let tree = TestTree::new("editor-fallbacks");
+    let markdown = tree.root().join("guide.md");
+    fs::write(&markdown, "# Guide").expect("the Markdown file should be created");
+    let absolute_markdown =
+        fs::canonicalize(&markdown).expect("the Markdown file should canonicalize");
+    let commands = Rc::new(RefCell::new(Vec::new()));
+    let launcher = RecordingLauncher {
+        commands: Rc::clone(&commands),
+        outcome: TestLaunchOutcome::Success,
+        replacement: None,
+    };
+    let configured = EditorProcess::with_services(
+        launcher.clone(),
+        TestEnvironment {
+            visual: Some(OsString::from("   ")),
+            editor: Some(OsString::from("configured-editor --wait --")),
+        },
+    );
+    let fallback = EditorProcess::with_services(launcher, TestEnvironment::default());
+
+    configured
+        .edit(&absolute_markdown)
+        .expect("the configured editor should succeed");
+    fallback
+        .edit(&absolute_markdown)
+        .expect("the fallback editor should succeed");
+
+    assert_eq!(
+        commands.borrow().as_slice(),
+        [
+            (
+                OsString::from("configured-editor"),
+                vec![
+                    OsString::from("--wait"),
+                    OsString::from("--"),
+                    absolute_markdown.clone().into_os_string()
+                ]
+            ),
+            (
+                OsString::from("vi"),
+                vec![OsString::from("--"), absolute_markdown.into_os_string()]
+            )
+        ]
+    );
+}
+
+/// Verifies malformed editor configuration fails without running a shell.
+///
+/// # Example Under Test
+///
+/// ```text
+/// VISUAL="editor 'unterminated"
+/// ```
+///
+/// # Assertions
+///
+/// - Editing returns an invalid-input error identifying `VISUAL`.
+/// - No process command reaches the injected launcher.
+#[test]
+fn editor_process_rejects_malformed_configuration() {
+    let tree = TestTree::new("editor-malformed");
+    let markdown = tree.root().join("guide.md");
+    fs::write(&markdown, "# Guide").expect("the Markdown file should be created");
+    let commands = Rc::new(RefCell::new(Vec::new()));
+    let process = EditorProcess::with_services(
+        RecordingLauncher {
+            commands: Rc::clone(&commands),
+            outcome: TestLaunchOutcome::Success,
+            replacement: None,
+        },
+        TestEnvironment {
+            visual: Some(OsString::from("editor 'unterminated")),
+            editor: None,
+        },
+    );
+
+    let error = process
+        .edit(&markdown)
+        .expect_err("malformed editor configuration should fail");
+
+    assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    assert!(error.to_string().contains("VISUAL"));
+    assert!(commands.borrow().is_empty());
+}
+
+/// Verifies a successful external edit reloads content without moving context.
+///
+/// # Example Under Test
+///
+/// ```text
+/// workspace/docs/beta.md = "# Before"
+/// configured-editor -- /absolute/workspace/docs/beta.md
+/// workspace/docs/beta.md = "# After"
+/// ```
+///
+/// # Assertions
+///
+/// - Directory activation and file opening succeed.
+/// - The injected edit succeeds and replaces the preview source from disk.
+/// - The explorer directory and selected index remain unchanged.
+/// - The preview retains the same canonical absolute path without an error.
+#[test]
+fn editor_success_reloads_preview_and_preserves_browsing_context() {
+    let tree = TestTree::new("editor-success");
+    let docs = tree.root().join("docs");
+    let alpha = docs.join("alpha.md");
+    let beta = docs.join("beta.md");
+    fs::create_dir(&docs).expect("the docs directory should be created");
+    fs::write(&alpha, "# Alpha").expect("the first Markdown file should be created");
+    fs::write(&beta, "# Before").expect("the edited Markdown file should be created");
+    let canonical_beta =
+        fs::canonicalize(&beta).expect("the edited Markdown file should canonicalize");
+    let commands = Rc::new(RefCell::new(Vec::new()));
+    let editor_process = EditorProcess::with_services(
+        RecordingLauncher {
+            commands,
+            outcome: TestLaunchOutcome::Success,
+            replacement: Some((canonical_beta.clone(), String::from("# After"))),
+        },
+        TestEnvironment {
+            visual: Some(OsString::from("configured-editor")),
+            editor: None,
+        },
+    );
+    let mut controller = Controller::initialize(tree.root(), FileSystem::new(), editor_process)
+        .expect("the workspace should initialize");
+
+    assert!(controller.activate_selected());
+    controller.select_next();
+    assert!(controller.activate_selected());
+    let expected_directory = controller.explorer().directory().to_path_buf();
+    let expected_selection = controller.explorer().selection();
+
+    assert!(controller.edit_preview());
+    assert_eq!(controller.preview().path(), Some(canonical_beta.as_path()));
+    assert_eq!(controller.preview().source(), Some("# After"));
+    assert_eq!(controller.preview().error(), None);
+    assert_eq!(controller.explorer().directory(), expected_directory);
+    assert_eq!(controller.explorer().selection(), expected_selection);
+}
+
+/// Verifies editor launch and exit failures become recoverable preview errors.
+///
+/// # Example Under Test
+///
+/// ```text
+/// configured editor missing
+/// configured editor exits non-zero
+/// VISUAL contains malformed quoting
+/// ```
+///
+/// # Assertions
+///
+/// - Every editor attempt finds an open preview path.
+/// - Each failure removes stale source and renders a contextual error.
+/// - Configuration, missing-executable, and non-zero diagnostics remain
+///   distinguishable.
+/// - The absolute preview path is retained so editing can be retried.
+#[test]
+fn editor_failures_are_visible_and_retain_the_open_path() {
+    for (label, outcome, visual, editor, expected_error, path_in_error) in [
+        (
+            "editor-missing",
+            TestLaunchOutcome::NotFound,
+            None,
+            Some("configured-editor"),
+            "failed to launch editor 'configured-editor'",
+            true,
+        ),
+        (
+            "editor-non-zero",
+            TestLaunchOutcome::NonZero,
+            None,
+            Some("configured-editor"),
+            "editor 'configured-editor' exited with a non-zero status",
+            true,
+        ),
+        (
+            "editor-malformed",
+            TestLaunchOutcome::Success,
+            Some("editor 'unterminated"),
+            None,
+            "VISUAL contains malformed shell-word quoting",
+            false,
+        ),
+    ] {
+        let tree = TestTree::new(label);
+        let markdown = tree.root().join("guide.md");
+        fs::write(&markdown, "# Guide").expect("the Markdown file should be created");
+        let canonical_markdown =
+            fs::canonicalize(&markdown).expect("the Markdown file should canonicalize");
+        let editor_process = EditorProcess::with_services(
+            RecordingLauncher {
+                commands: Rc::new(RefCell::new(Vec::new())),
+                outcome,
+                replacement: None,
+            },
+            TestEnvironment {
+                visual: visual.map(OsString::from),
+                editor: editor.map(OsString::from),
+            },
+        );
+        let mut controller = Controller::initialize(tree.root(), FileSystem::new(), editor_process)
+            .expect("the workspace should initialize");
+        assert!(controller.activate_selected());
+
+        assert!(controller.edit_preview());
+        assert_eq!(
+            controller.preview().path(),
+            Some(canonical_markdown.as_path())
+        );
+        assert_eq!(controller.preview().source(), None);
+        let error = controller
+            .preview()
+            .error()
+            .expect("the editor failure should be visible");
+        assert!(error.contains(expected_error));
+        if path_in_error {
+            assert!(error.contains(&canonical_markdown.display().to_string()));
+        }
+    }
+}
+
 /// Verifies interactive keys update selection, preview, reload, and scrolling.
 ///
 /// # Example Under Test
@@ -927,14 +1314,17 @@ fn editor_keys_drive_selection_preview_reload_and_scroll() -> leptatui::Result<(
         .collect::<String>();
     fs::write(tree.root().join("beta.md"), beta_source)
         .expect("the long Markdown file should be created");
-    let controller = Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-        .expect("the workspace should initialize");
-    let mut view = app_view(controller);
+    let controller = Rc::new(RefCell::new(
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the workspace should initialize"),
+    ));
+    let mut view = app_view(controller, Rc::new(Cell::new(false)));
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
 
     draw_editor(&mut terminal, &view)?;
     let initial_render = rendered_lines(&terminal).join("\n");
     assert!(initial_render.contains("> [M] alpha.md"));
+    assert!(initial_render.contains("e edit"));
     assert!(initial_render.contains("q quit"));
 
     assert_eq!(
@@ -973,6 +1363,60 @@ fn editor_keys_drive_selection_preview_reload_and_scroll() -> leptatui::Result<(
     Ok(())
 }
 
+/// Verifies the edit key exits only to edit an open preview.
+///
+/// # Example Under Test
+///
+/// ```text
+/// e
+/// Enter
+/// e
+/// ```
+///
+/// # Assertions
+///
+/// - `e` is handled without exiting when no preview is open.
+/// - `Enter` opens the selected Markdown document.
+/// - `e` then requests editing and exits the managed TUI loop.
+/// - `q` exits without setting a separate edit request.
+#[test]
+fn editor_edit_key_requests_an_external_session_only_for_an_open_preview() -> leptatui::Result<()> {
+    let tree = TestTree::new("editor-edit-key");
+    fs::write(tree.root().join("guide.md"), "# Guide")
+        .expect("the Markdown file should be created");
+    let controller = Rc::new(RefCell::new(
+        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
+            .expect("the workspace should initialize"),
+    ));
+    let edit_requested = Rc::new(Cell::new(false));
+    let mut view = app_view(Rc::clone(&controller), Rc::clone(&edit_requested));
+
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    assert!(!edit_requested.get());
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
+        KeyControl::Exit
+    );
+    assert!(edit_requested.get());
+
+    let quit_requested = Rc::new(Cell::new(false));
+    let mut quit_view = app_view(controller, Rc::clone(&quit_requested));
+    assert_eq!(
+        quit_view.handle_key_event(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))?,
+        KeyControl::Exit
+    );
+    assert!(!quit_requested.get());
+
+    Ok(())
+}
+
 /// Verifies the workspace switches from side-by-side to stacked panes.
 ///
 /// # Example Under Test
@@ -997,7 +1441,10 @@ fn editor_renders_wide_and_narrow_pane_layouts() -> leptatui::Result<()> {
         Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
             .expect("the wide controller should initialize");
     assert!(wide_controller.activate_selected());
-    let wide_view = app_view(wide_controller);
+    let wide_view = app_view(
+        Rc::new(RefCell::new(wide_controller)),
+        Rc::new(Cell::new(false)),
+    );
     let mut wide_terminal = Terminal::new(TestBackend::new(100, 30))?;
     draw_editor(&mut wide_terminal, &wide_view)?;
     let (_, wide_explorer_row) =
@@ -1015,7 +1462,10 @@ fn editor_renders_wide_and_narrow_pane_layouts() -> leptatui::Result<()> {
         Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
             .expect("the narrow controller should initialize");
     assert!(narrow_controller.activate_selected());
-    let narrow_view = app_view(narrow_controller);
+    let narrow_view = app_view(
+        Rc::new(RefCell::new(narrow_controller)),
+        Rc::new(Cell::new(false)),
+    );
     let mut narrow_terminal = Terminal::new(TestBackend::new(50, 30))?;
     draw_editor(&mut narrow_terminal, &narrow_view)?;
     let (_, narrow_explorer_row) =

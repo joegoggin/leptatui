@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 clap = { version = "=4.6.1", features = ["derive"] }
 leptatui = { path = "../../crates/leptatui" }
+shlex = "=2.0.1"
 tokio = { version = "1.52.3", default-features = false, features = [
     "macros",
     "rt",

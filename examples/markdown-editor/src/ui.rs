@@ -1,8 +1,13 @@
 //! Leptatui views and input handling for the Markdown editor.
 //!
-//! The application keeps explorer navigation in a reactive controller signal
-//! and rebuilds its selected row, Markdown preview, errors, and responsive
-//! pane layout after keyboard commands.
+//! The application keeps explorer navigation in shared controller state and
+//! rebuilds its selected row, Markdown preview, errors, and responsive pane
+//! layout after keyboard commands.
+
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use leptatui::prelude::*;
 
@@ -15,15 +20,20 @@ use crate::{
 ///
 /// # Arguments
 ///
-/// * `controller` — Initialized application state and service boundaries.
+/// * `controller` — Shared application state retained across TUI sessions.
+/// * `edit_requested` — Shared flag set when the open preview should be edited.
 ///
 /// # Returns
 ///
 /// A Leptatui view containing the interactive Markdown editor.
-pub(crate) fn app_view(controller: Controller) -> impl View + IntoView {
+pub(crate) fn app_view(
+    controller: Rc<RefCell<Controller>>,
+    edit_requested: Rc<Cell<bool>>,
+) -> impl View + IntoView {
     MarkdownEditor::with_props(
         MarkdownEditorProps::builder()
             .controller(controller)
+            .edit_requested(edit_requested)
             .build(),
     )
 }
@@ -32,44 +42,50 @@ pub(crate) fn app_view(controller: Controller) -> impl View + IntoView {
 ///
 /// # Arguments
 ///
-/// * `controller` — Initialized application state and service boundaries.
+/// * `controller` — Shared application state retained across TUI sessions.
+/// * `edit_requested` — Shared flag set when the open preview should be edited.
 ///
 /// # Returns
 ///
 /// A responsive view that handles explorer, preview, reload, and exit commands.
 #[component]
-fn MarkdownEditor(controller: Controller) -> impl IntoView {
-    let controller = RwSignal::new(controller);
+fn MarkdownEditor(
+    controller: Rc<RefCell<Controller>>,
+    edit_requested: Rc<Cell<bool>>,
+) -> impl IntoView {
+    let event_controller = Rc::clone(&controller);
 
     use_key_event(KeyEventKind::Press, move |key| {
         let plain_key = key.modifiers == KeyModifiers::NONE;
 
         match key.code {
             KeyCode::Char('q') if plain_key => KeyControl::Exit,
+            KeyCode::Char('e') if plain_key => {
+                if event_controller.borrow().preview().path().is_some() {
+                    edit_requested.set(true);
+                    KeyControl::Exit
+                } else {
+                    KeyControl::Handled
+                }
+            }
             KeyCode::Up | KeyCode::Char('k') if plain_key => {
-                controller.update(Controller::select_previous);
+                event_controller.borrow_mut().select_previous();
                 KeyControl::Handled
             }
             KeyCode::Down | KeyCode::Char('j') if plain_key => {
-                controller.update(Controller::select_next);
+                event_controller.borrow_mut().select_next();
                 KeyControl::Handled
             }
             KeyCode::Enter if plain_key => {
-                controller.update(|controller| {
-                    controller.activate_selected();
-                });
+                event_controller.borrow_mut().activate_selected();
                 KeyControl::Handled
             }
             KeyCode::Left | KeyCode::Char('h') if plain_key => {
-                controller.update(|controller| {
-                    controller.browse_parent();
-                });
+                event_controller.borrow_mut().browse_parent();
                 KeyControl::Handled
             }
             KeyCode::Char('r') if plain_key => {
-                controller.update(|controller| {
-                    controller.reload_preview();
-                });
+                event_controller.borrow_mut().reload_preview();
                 KeyControl::Handled
             }
             _ => KeyControl::Pass,
@@ -171,7 +187,7 @@ fn MarkdownEditor(controller: Controller) -> impl IntoView {
 
     view! {
         <Block class="editor-shell">
-            {move || render_editor(controller.get_untracked())}
+            {move || render_editor(controller.borrow().clone())}
         </Block>
     }
 }
@@ -180,7 +196,7 @@ fn MarkdownEditor(controller: Controller) -> impl IntoView {
 ///
 /// # Arguments
 ///
-/// * `controller` — Controller snapshot read from the reactive signal.
+/// * `controller` — Controller snapshot read from shared session state.
 ///
 /// # Returns
 ///
@@ -206,7 +222,7 @@ fn render_editor(controller: Controller) -> AnyView {
                 <Block class="preview-pane">{preview}</Block>
             </Div>
             <Text class="help">
-                "↑/k ↓/j | Enter open | ←/h parent | PgUp/Dn scroll | r reload | q quit"
+                "↑/k ↓/j | Enter open | ←/h parent | PgUp/Dn | e edit | r reload | q quit"
             </Text>
         </Div>
     }
