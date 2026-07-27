@@ -62,6 +62,60 @@ pub struct RenderCtx<'frame, 'buffer> {
     hit_mapper: HitMapper,
     /// Transient computed-layout state inherited by child contexts.
     layout_state: LayoutState,
+    /// Nearest scrollport constraining sticky descendants.
+    sticky_scrollport: Option<StickyScrollport>,
+}
+
+/// Signed scrollport geometry inherited by sticky descendants.
+#[derive(Clone, Copy)]
+pub(crate) struct StickyScrollport {
+    /// Horizontal start coordinate in the current render target.
+    pub(crate) x: i32,
+    /// Vertical start coordinate in the current render target.
+    pub(crate) y: i32,
+    /// Horizontal scrollport size.
+    pub(crate) width: u16,
+    /// Vertical scrollport size.
+    pub(crate) height: u16,
+}
+
+impl StickyScrollport {
+    /// Returns this scrollport translated into a child target.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset` — Signed horizontal and vertical target translation.
+    ///
+    /// # Returns
+    ///
+    /// A [`StickyScrollport`] with its origin translated by `offset`.
+    pub(crate) fn translated(self, offset: (i32, i32)) -> Self {
+        Self {
+            x: self.x.saturating_add(offset.0),
+            y: self.y.saturating_add(offset.1),
+            ..self
+        }
+    }
+}
+
+impl From<Rect> for StickyScrollport {
+    /// Creates signed sticky constraint geometry from a terminal rectangle.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Terminal rectangle supplying the origin and dimensions.
+    ///
+    /// # Returns
+    ///
+    /// A [`StickyScrollport`] containing the rectangle geometry.
+    fn from(value: Rect) -> Self {
+        Self {
+            x: i32::from(value.x),
+            y: i32::from(value.y),
+            width: value.width,
+            height: value.height,
+        }
+    }
 }
 
 impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
@@ -88,6 +142,7 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             terminal_images: context::use_context::<TerminalImageSupport>().unwrap_or_default(),
             hit_mapper: HitMapper::identity(),
             layout_state: LayoutState::default(),
+            sticky_scrollport: Some(area.into()),
         }
     }
 
@@ -222,7 +277,39 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
             terminal_images: self.terminal_images.clone(),
             hit_mapper: self.hit_mapper.clone(),
             layout_state: self.layout_state.clone(),
+            sticky_scrollport: self.sticky_scrollport,
         }
+    }
+
+    /// Returns the nearest scrollport constraining sticky descendants.
+    ///
+    /// # Returns
+    ///
+    /// An optional [`StickyScrollport`] in current target coordinates.
+    pub(crate) const fn sticky_scrollport(&self) -> Option<StickyScrollport> {
+        self.sticky_scrollport
+    }
+
+    /// Renders with a replacement nearest sticky scrollport.
+    ///
+    /// # Arguments
+    ///
+    /// * `scrollport` — Scrollport inherited by nested child contexts.
+    /// * `render` — Closure rendered with the replacement scrollport.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
+    pub(crate) fn with_sticky_scrollport<R>(
+        &mut self,
+        scrollport: Option<StickyScrollport>,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let previous = self.sticky_scrollport;
+        self.sticky_scrollport = scrollport;
+        let result = render(self);
+        self.sticky_scrollport = previous;
+        result
     }
 
     /// Returns the style declarations inherited by the current view.

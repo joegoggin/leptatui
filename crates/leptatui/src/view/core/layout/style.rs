@@ -88,7 +88,7 @@ pub(super) fn to_taffy_style(
             0.0
         },
         position: map_position(position),
-        inset: if position == Position::Static {
+        inset: if matches!(position, Position::Static | Position::Sticky) {
             TaffyRect::auto()
         } else {
             map_auto_edges(style.inset.unwrap_or_default(), viewport)

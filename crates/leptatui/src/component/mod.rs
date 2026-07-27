@@ -23,7 +23,7 @@ pub use contract::FocusedControl;
 #[doc(hidden)]
 pub use key::{__with_key_handler_registry, KeyHandlerRegistry};
 pub use key::{KeyControl, use_key_event};
-pub(crate) use render::LayoutPhase;
 pub use render::RenderCtx;
+pub(crate) use render::{LayoutPhase, StickyScrollport};
 #[doc(hidden)]
 pub use stylesheet::{__register_stylesheet, __with_stylesheet_registry, StylesheetRegistry};

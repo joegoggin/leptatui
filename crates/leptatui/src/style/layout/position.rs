@@ -12,9 +12,8 @@ pub enum Position {
     Absolute,
     /// Leaves normal flow and uses the terminal viewport as its containing block.
     Fixed,
-    /// Currently behaves like [`Position::Relative`].
-    ///
-    /// Scroll-container clamping is not yet implemented.
+    /// Participates in normal flow and clamps to authored insets while its
+    /// nearest scrollport moves.
     Sticky,
 }
 

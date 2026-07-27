@@ -134,14 +134,37 @@ pub(crate) fn render_container_with_default_borders(
     }
 
     let offsets = metadata.scroll_offsets();
-    render_children(
-        children,
-        offsets,
-        style.inherited_values(),
-        metadata,
-        paint_options,
-        ctx,
-    )?;
+    let sticky_scrollport = if establishes_scrollport(overflow) {
+        Some(viewport.into())
+    } else {
+        ctx.sticky_scrollport()
+    };
+    ctx.with_sticky_scrollport(sticky_scrollport, |ctx| {
+        render_children(
+            children,
+            offsets,
+            style.inherited_values(),
+            metadata,
+            paint_options,
+            ctx,
+        )
+    })?;
     render_scrollbars(offsets, maximum, content_area, viewport, gutters, ctx);
     Ok(())
+}
+
+/// Returns whether authored overflow creates a sticky scrollport.
+///
+/// # Arguments
+///
+/// * `overflow` — Resolved horizontal and vertical overflow behavior.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether sticky descendants use this container's
+/// viewport.
+fn establishes_scrollport(overflow: Axes<Overflow>) -> bool {
+    [overflow.x, overflow.y]
+        .into_iter()
+        .any(|axis| matches!(axis, Overflow::Auto | Overflow::Hidden | Overflow::Scroll))
 }
