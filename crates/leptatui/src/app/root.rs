@@ -10,7 +10,7 @@ use crate::{
     AnyView, StyleMetadata, View,
     component::{FocusedControl, RenderCtx},
     context,
-    view::core::layout::{prepare_layout, render_fixed_descendants},
+    view::core::layout::render_with_layout,
 };
 
 use super::{AppControl, Result};
@@ -126,23 +126,7 @@ where
     fn render(&mut self, frame: &mut Frame<'_>) -> Result<()> {
         context::hooks::__with_context_scope(|| {
             let mut ctx = RenderCtx::new(frame);
-            prepare_layout(self, &mut ctx);
-            View::__clear_hit_areas(self);
-            if let Some(metadata) = View::style_metadata(self) {
-                if metadata.is_layout_hidden() {
-                    return Ok(());
-                }
-                let geometry = metadata
-                    .layout_geometry()
-                    .expect("styled app roots should retain geometry before painting");
-                ctx.with_layout_geometry(geometry, metadata, |ctx| {
-                    ctx.record_metadata_hit_area(metadata);
-                    View::render(self, ctx)
-                })?;
-            } else {
-                View::render(self, &mut ctx)?;
-            }
-            render_fixed_descendants(self, &mut ctx)
+            render_with_layout(self, &mut ctx, |ctx| View::render(self, ctx))
         })
     }
 

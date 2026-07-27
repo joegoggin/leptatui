@@ -19,8 +19,7 @@ use super::{
     render::resolve_style,
 };
 use crate::MarkdownView;
-use crate::component::LayoutPhase;
-use crate::view::core::layout::prepare_layout;
+use crate::view::core::layout::render_with_layout;
 use crate::view::media::image::{ImageSource, image_render_area};
 use crate::view::reconciliation::reconcile_views;
 use crate::view::{
@@ -686,36 +685,7 @@ impl AnyView {
     /// Returns [`crate::Error::Io`] if concrete rendering performs terminal
     /// I/O that fails.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
-        if is_layout_root {
-            prepare_layout(self.as_view(), ctx);
-        }
-        if !ctx.is_stacking_path_traversal() {
-            self.inner.__clear_hit_areas();
-        }
-        if let Some(metadata) = self.inner.style_metadata() {
-            if metadata.is_layout_hidden() {
-                return Ok(());
-            }
-            if ctx.honors_layout_geometry() {
-                let geometry = metadata
-                    .layout_geometry()
-                    .expect("styled views should retain geometry before painting");
-                ctx.with_layout_geometry(geometry, metadata, |ctx| {
-                    ctx.record_metadata_hit_area(metadata);
-                    self.as_view().render(ctx)
-                })?;
-            } else {
-                ctx.record_metadata_hit_area(metadata);
-                self.as_view().render(ctx)?;
-            }
-        } else {
-            self.as_view().render(ctx)?;
-        }
-        if is_layout_root {
-            super::layout::render_fixed_descendants(self.as_view(), ctx)?;
-        }
-        Ok(())
+        render_with_layout(self.as_view(), ctx, |ctx| self.as_view().render(ctx))
     }
 
     /// Returns the intrinsic size of the stored node.

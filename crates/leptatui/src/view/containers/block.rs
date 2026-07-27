@@ -10,10 +10,7 @@ use crate::view::core::{
 };
 use crate::view::{AnyView, IntoView, StyleMetadata, View, ViewType};
 use crate::{
-    Borders, LayoutSize,
-    app::Result,
-    component::{LayoutPhase, RenderCtx},
-    view::core::layout::{prepare_layout, render_fixed_descendants},
+    Borders, LayoutSize, app::Result, component::RenderCtx, view::core::layout::render_with_layout,
 };
 
 /// Bordered container around one child.
@@ -43,15 +40,9 @@ pub fn block(child: impl IntoView) -> BlockView {
 
 impl View for BlockView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
-        if is_layout_root || self.metadata.layout_geometry().is_none() {
-            prepare_layout(self, ctx);
-        }
-        render_container_with_default_borders(&self.children, &self.metadata, Borders::ALL, ctx)?;
-        if is_layout_root {
-            render_fixed_descendants(self, ctx)?;
-        }
-        Ok(())
+        render_with_layout(self, ctx, |ctx| {
+            render_container_with_default_borders(&self.children, &self.metadata, Borders::ALL, ctx)
+        })
     }
 
     fn measure(

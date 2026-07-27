@@ -519,6 +519,103 @@ fn layout_tree_rebuilds_viewport_geometry_on_resize() -> Result<()> {
     Ok(())
 }
 
+/// Verifies styleable standard views receive the shared computed outer box.
+///
+/// # Example Under Test
+///
+/// ```text
+/// div([
+///   text, paragraph, heading, code block, block, list, table, form,
+///   button, input, text area, image, link, progress bar
+/// ])
+/// each child = 8x5 border-box with one-cell padding and all borders
+/// ```
+///
+/// # Assertions
+///
+/// - Every standard view retains an `8x5` border box from computed layout.
+/// - Source-order block flow places each view immediately after its predecessor.
+/// - Every content box uses the authored border and padding insets.
+///
+/// # Why
+///
+/// Standard widgets may keep specialized content rendering, but their outer
+/// geometry must remain owned by the shared layout engine.
+#[test]
+fn styleable_standard_views_share_computed_outer_geometry() -> Result<()> {
+    let outer_style = || {
+        crate::support::fixture_size(8.0, 5.0)
+            .borders(Borders::ALL)
+            .padding(TuiSpacing::uniform(1))
+    };
+    let children = vec![
+        text("text").with_inline_style(outer_style()).into_view(),
+        paragraph("paragraph")
+            .with_inline_style(outer_style())
+            .into_view(),
+        h1("heading").with_inline_style(outer_style()).into_view(),
+        code_block("code")
+            .with_inline_style(outer_style())
+            .into_view(),
+        block(text("block"))
+            .with_inline_style(outer_style())
+            .into_view(),
+        unordered_list([list_item([paragraph("list")])])
+            .with_inline_style(outer_style())
+            .into_view(),
+        table([table_body([table_row([table_cell("table")])])])
+            .with_inline_style(outer_style())
+            .into_view(),
+        form([text("form")])
+            .with_inline_style(outer_style())
+            .into_view(),
+        button("button")
+            .with_inline_style(outer_style())
+            .into_view(),
+        input("input").with_inline_style(outer_style()).into_view(),
+        text_area("area")
+            .with_inline_style(outer_style())
+            .into_view(),
+        image("missing.png")
+            .alt("image")
+            .with_inline_style(outer_style())
+            .into_view(),
+        link("link", "#inactive")
+            .with_inline_style(outer_style())
+            .into_view(),
+        progress_bar(0.5)
+            .label("progress")
+            .with_inline_style(outer_style())
+            .into_view(),
+    ];
+    let view_count = children.len();
+    let root = div(children);
+    let mut terminal = Terminal::new(TestBackend::new(
+        10,
+        u16::try_from(view_count.saturating_mul(5)).unwrap_or(u16::MAX),
+    ))?;
+
+    draw_view(&mut terminal, &root)?;
+
+    for (index, child) in root.child_views().iter().enumerate() {
+        let geometry = child
+            .style_metadata()
+            .and_then(StyleMetadata::layout_geometry)
+            .expect("standard view should retain computed geometry");
+        let y = u16::try_from(index.saturating_mul(5)).unwrap_or(u16::MAX);
+        assert_eq!(
+            geometry.border_box,
+            ratatui::layout::Rect::new(0, y, 8, 5)
+        );
+        assert_eq!(
+            geometry.content_box,
+            ratatui::layout::Rect::new(2, y.saturating_add(2), 4, 1)
+        );
+    }
+
+    Ok(())
+}
+
 /// Verifies hidden subtrees are omitted from painting and focus traversal.
 ///
 /// # Example Under Test
