@@ -220,8 +220,8 @@ pub struct StyleMetadata {
     content_extent: Cell<LayoutSize<u16>>,
     /// Terminal-coordinate hit areas recorded during the latest render.
     hit_areas: RefCell<Vec<Rect>>,
-    /// Direct child indexes in latest-rendered back-to-front paint order.
-    child_paint_order: RefCell<Vec<usize>>,
+    /// Global ordinal assigned by the latest visible paint operation.
+    paint_order: Cell<Option<u64>>,
     /// Rounded geometry from the latest root layout pass.
     layout_state: Cell<LayoutState>,
 }
@@ -250,7 +250,7 @@ impl StyleMetadata {
             max_scroll_offsets: Cell::new(Axes::all(0)),
             content_extent: Cell::new(LayoutSize::all(0)),
             hit_areas: RefCell::new(Vec::new()),
-            child_paint_order: RefCell::new(Vec::new()),
+            paint_order: Cell::new(None),
             layout_state: Cell::new(LayoutState::Uncomputed),
         }
     }
@@ -510,7 +510,7 @@ impl StyleMetadata {
     /// Clears all last-rendered hit areas.
     pub(crate) fn clear_hit_areas(&self) {
         self.hit_areas.borrow_mut().clear();
-        self.child_paint_order.borrow_mut().clear();
+        self.paint_order.set(None);
     }
 
     /// Replaces last-rendered hit areas with one optional area.
@@ -542,24 +542,38 @@ impl StyleMetadata {
         }
     }
 
-    /// Stores direct child indexes in back-to-front paint order.
+    /// Stores the global ordinal of the latest visible paint operation.
     ///
     /// # Arguments
     ///
-    /// * `order` — Source indexes ordered from the first painted child to the last.
-    pub(crate) fn set_child_paint_order(&self, order: impl IntoIterator<Item = usize>) {
-        let mut child_paint_order = self.child_paint_order.borrow_mut();
-        child_paint_order.clear();
-        child_paint_order.extend(order);
+    /// * `order` — Monotonically increasing frame paint ordinal.
+    pub(crate) fn set_paint_order(&self, order: u64) {
+        self.paint_order.set(Some(order));
     }
 
-    /// Returns direct child indexes in latest-rendered back-to-front paint order.
+    /// Returns the global ordinal from the latest visible paint operation.
     ///
     /// # Returns
     ///
-    /// A [`Vec`] containing source indexes from the first painted child to the last.
-    pub(crate) fn child_paint_order(&self) -> Vec<usize> {
-        self.child_paint_order.borrow().clone()
+    /// An optional `u64` ordinal, or [`None`] when the view was not visible.
+    pub(crate) fn paint_order(&self) -> Option<u64> {
+        self.paint_order.get()
+    }
+
+    /// Returns whether one scroll delta would change the retained offsets.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether [`scroll_by`](Self::scroll_by) would move.
+    pub(crate) fn can_scroll_by(&self, delta: Axes<i16>) -> bool {
+        let current = self.scroll_offsets.get();
+        let maximum = self.max_scroll_offsets.get();
+        current.x != offset_by(current.x, maximum.x, delta.x)
+            || current.y != offset_by(current.y, maximum.y, delta.y)
     }
 
     /// Stores whether a `g` key is waiting for a second `g`.

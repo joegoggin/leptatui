@@ -152,7 +152,7 @@ impl View for LinkView {
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
+    ) -> Option<(usize, u64)> {
         if !self.target.is_actionable() {
             return None;
         }
@@ -160,7 +160,7 @@ impl View for LinkView {
         *index = index.saturating_add(1);
         self.metadata
             .contains_hit_position(column, row)
-            .then_some(current)
+            .then(|| self.metadata.paint_order().map(|order| (current, order)))?
     }
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {

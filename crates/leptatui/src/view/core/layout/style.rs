@@ -64,6 +64,7 @@ pub(super) fn to_taffy_style(
     viewport: ViewportSize,
 ) -> TaffyStyle {
     let display = style.display.unwrap_or(Display::Block);
+    let position = style.position.unwrap_or_default();
     let flex_direction = style.flex_direction.unwrap_or_default();
     let borders = style.borders.unwrap_or_else(|| default_borders(view));
     let padding = style.padding.unwrap_or_default();
@@ -86,8 +87,12 @@ pub(super) fn to_taffy_style(
         } else {
             0.0
         },
-        position: map_position(style.position.unwrap_or_default()),
-        inset: map_auto_edges(style.inset.unwrap_or_default(), viewport),
+        position: map_position(position),
+        inset: if matches!(position, Position::Static | Position::Sticky) {
+            TaffyRect::auto()
+        } else {
+            map_auto_edges(style.inset.unwrap_or_default(), viewport)
+        },
         size: map_dimensions(style.size.unwrap_or_default(), viewport),
         min_size: map_dimensions(style.min_size.unwrap_or_default(), viewport),
         max_size: map_dimensions(style.max_size.unwrap_or_default(), viewport),

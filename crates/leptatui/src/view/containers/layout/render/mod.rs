@@ -9,11 +9,13 @@
 //! - [`geometry`] — Retained child geometry resolution and translation.
 //! - [`measure`] — Intrinsic container measurement.
 //! - [`paint`] — Ordered child painting, clipping, and scrollbars.
+//! - [`positioning`] — Positioned style resolution and sticky translation.
 
 mod focus;
 mod geometry;
 mod measure;
 mod paint;
+mod positioning;
 
 pub(crate) use focus::focused_control_span_for_container;
 pub(crate) use measure::measure_container;
@@ -90,12 +92,15 @@ pub(crate) fn render_container_with_default_borders(
         }
     }
 
+    let traversing_stacking_path = ctx.is_stacking_path_traversal();
     let style = resolve_style(metadata, ctx);
-    ctx.record_metadata_hit_area(metadata);
     let geometry = ctx.layout_geometry();
-    ctx.with_area(geometry.border_box, |ctx| {
-        ctx.render_widget(style.to_block_with_default_borders(default_borders));
-    });
+    if !traversing_stacking_path {
+        ctx.record_metadata_hit_area(metadata);
+        ctx.with_area(geometry.border_box, |ctx| {
+            ctx.render_widget(style.to_block_with_default_borders(default_borders));
+        });
+    }
 
     let (content_area, layout_offset) = container_content_area(metadata, ctx);
     let overflow = style
@@ -113,7 +118,9 @@ pub(crate) fn render_container_with_default_borders(
         layout_offset,
     };
 
-    if let Some(bounds) = focused_control_bounds_for_container(children, metadata, ctx) {
+    if !traversing_stacking_path
+        && let Some(bounds) = focused_control_bounds_for_container(children, metadata, ctx)
+    {
         let scroll_to_anchor = children.iter().any(AnyView::__has_scroll_to_anchor_request);
         if scroll_to_anchor {
             metadata.set_scroll_offset(
@@ -134,14 +141,39 @@ pub(crate) fn render_container_with_default_borders(
     }
 
     let offsets = metadata.scroll_offsets();
-    render_children(
-        children,
-        offsets,
-        style.inherited_values(),
-        metadata,
-        paint_options,
-        ctx,
-    )?;
-    render_scrollbars(offsets, maximum, content_area, viewport, gutters, ctx);
+    let sticky_scrollport = if establishes_scrollport(overflow) {
+        Some(viewport.into())
+    } else {
+        ctx.sticky_scrollport()
+    };
+    ctx.with_sticky_scrollport(sticky_scrollport, |ctx| {
+        render_children(
+            children,
+            offsets,
+            style.inherited_values(),
+            metadata,
+            paint_options,
+            ctx,
+        )
+    })?;
+    if !traversing_stacking_path {
+        render_scrollbars(offsets, maximum, content_area, viewport, gutters, ctx);
+    }
     Ok(())
+}
+
+/// Returns whether authored overflow creates a sticky scrollport.
+///
+/// # Arguments
+///
+/// * `overflow` — Resolved horizontal and vertical overflow behavior.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether sticky descendants use this container's
+/// viewport.
+fn establishes_scrollport(overflow: Axes<Overflow>) -> bool {
+    [overflow.x, overflow.y]
+        .into_iter()
+        .any(|axis| matches!(axis, Overflow::Auto | Overflow::Hidden | Overflow::Scroll))
 }

@@ -262,10 +262,8 @@ impl RichText {
                 width: segment.end.saturating_sub(segment.start),
                 height: 1,
             };
-            if let Some(hit_area) = ctx.map_hit_area(hit_area)
-                && let Some(link) = self.links.get(segment.link)
-            {
-                link.metadata.push_hit_area(hit_area);
+            if let Some(link) = self.links.get(segment.link) {
+                ctx.push_metadata_hit_area(&link.metadata, hit_area);
             }
         }
     }
@@ -282,24 +280,29 @@ impl RichText {
     ///
     /// # Returns
     ///
-    /// An [`Option`] containing the flattened index under the position.
+    /// An [`Option`] containing the flattened index and global paint ordinal
+    /// of the frontmost link under the position.
     pub(crate) fn focusable_index_at_position(
         &self,
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
+    ) -> Option<(usize, u64)> {
+        let mut frontmost = None;
         for link in &self.links {
             if !link.target.is_actionable() {
                 continue;
             }
             let current = *index;
             *index = index.saturating_add(1);
-            if link.metadata.contains_hit_position(column, row) {
-                return Some(current);
+            if link.metadata.contains_hit_position(column, row)
+                && let Some(order) = link.metadata.paint_order()
+                && frontmost.is_none_or(|(_, current_order)| order > current_order)
+            {
+                frontmost = Some((current, order));
             }
         }
-        None
+        frontmost
     }
 
     /// Reconciles retained focus and hit-test state for matching links.
@@ -613,7 +616,7 @@ macro_rules! impl_rich_text_view {
             column: u16,
             row: u16,
             index: &mut usize,
-        ) -> Option<usize> {
+        ) -> Option<(usize, u64)> {
             self.content.focusable_index_at_position(column, row, index)
         }
 

@@ -10,7 +10,7 @@ use crate::{
     view::AnyView,
 };
 
-use super::{RenderCtx, target::RenderTarget};
+use super::{RenderCtx, StickyScrollport, target::RenderTarget};
 
 impl RenderCtx<'_, '_> {
     /// Renders a view into an offscreen buffer and copies a clipped rectangle.
@@ -108,7 +108,16 @@ impl RenderCtx<'_, '_> {
                     },
                     target_area,
                 ),
+                paint_sequence: std::rc::Rc::clone(&self.paint_sequence),
                 layout_state: self.layout_state.for_assigned_area(),
+                sticky_scrollport: local_sticky_scrollport(
+                    self.sticky_scrollport,
+                    source,
+                    target_area,
+                ),
+                defer_positioned_descendants: self.defer_positioned_descendants,
+                stacking_path: self.stacking_path.clone(),
+                stacking_endpoint_defers: self.stacking_endpoint_defers,
             };
             view.as_view().render(&mut buffer_ctx)?;
         }
@@ -146,4 +155,27 @@ impl RenderCtx<'_, '_> {
 
         Ok(())
     }
+}
+
+/// Converts an inherited scrollport into offscreen-buffer coordinates.
+///
+/// # Arguments
+///
+/// * `scrollport` — Scrollport expressed in the parent target coordinates.
+/// * `source` — First child-local coordinate copied from the buffer.
+/// * `target` — Parent-coordinate destination receiving the copied region.
+///
+/// # Returns
+///
+/// An optional [`StickyScrollport`] in buffer coordinates.
+fn local_sticky_scrollport(
+    scrollport: Option<StickyScrollport>,
+    source: Position,
+    target: Rect,
+) -> Option<StickyScrollport> {
+    let scrollport = scrollport?;
+    Some(scrollport.translated((
+        i32::from(source.x).saturating_sub(i32::from(target.x)),
+        i32::from(source.y).saturating_sub(i32::from(target.y)),
+    )))
 }

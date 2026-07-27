@@ -138,13 +138,18 @@ impl View for InputView {
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
+    ) -> Option<(usize, u64)> {
         let current = *index;
         *index = index.saturating_add(1);
         self.model
             .metadata
             .contains_hit_position(column, row)
-            .then_some(current)
+            .then(|| {
+                self.model
+                    .metadata
+                    .paint_order()
+                    .map(|order| (current, order))
+            })?
     }
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {

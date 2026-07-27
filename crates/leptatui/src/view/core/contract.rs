@@ -154,6 +154,25 @@ pub trait View: Any {
         }
     }
 
+    /// Visits materialized children without resetting persistent render scopes.
+    ///
+    /// The default matches [`View::__visit_layout_children`]. Structural
+    /// boundaries override this hook when post-paint traversal must preserve
+    /// context captured during the completed render.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Render context carrying stylesheet and component scopes.
+    /// * `visitor` — Callback invoked for each retained logical child.
+    #[doc(hidden)]
+    fn __visit_retained_children(
+        &self,
+        ctx: &mut RenderCtx<'_, '_>,
+        visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
+    ) {
+        self.__visit_layout_children(ctx, visitor);
+    }
+
     /// Returns whether this view contributes children without generating a box.
     ///
     /// # Returns
@@ -310,29 +329,24 @@ pub trait View: Any {
     ///
     /// # Returns
     ///
-    /// An [`Option`] containing the flattened index under the position.
+    /// An [`Option`] containing the flattened index and global paint ordinal
+    /// of the frontmost control under the position.
     #[doc(hidden)]
     fn __focusable_index_at_position_inner(
         &self,
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
-        if let Some(metadata) = self.style_metadata() {
-            let paint_order = metadata.child_paint_order();
-            if !paint_order.is_empty() {
-                return super::events::focusable_index_at_position_in_paint_order(
-                    self.children(),
-                    &paint_order,
-                    column,
-                    row,
-                    index,
-                );
+    ) -> Option<(usize, u64)> {
+        let mut frontmost = None;
+        for child in self.children() {
+            if let Some(candidate) = child.__focusable_index_at_position_inner(column, row, index)
+                && frontmost.is_none_or(|(_, order)| candidate.1 > order)
+            {
+                frontmost = Some(candidate);
             }
         }
-        self.children()
-            .iter()
-            .find_map(|child| child.__focusable_index_at_position_inner(column, row, index))
+        frontmost
     }
 
     /// Returns the focused control span inside this node.
@@ -454,7 +468,8 @@ pub trait View: Any {
     #[doc(hidden)]
     fn __focus_control_at_position(&mut self, column: u16, row: u16) -> bool {
         let mut index = 0;
-        let Some(target) = self.__focusable_index_at_position_inner(column, row, &mut index) else {
+        let Some((target, _)) = self.__focusable_index_at_position_inner(column, row, &mut index)
+        else {
             return false;
         };
         let mut index = 0;
@@ -480,9 +495,62 @@ pub trait View: Any {
         row: u16,
         delta: crate::Axes<i16>,
     ) -> bool {
+        let Some(order) = self.__scroll_target_at_position(column, row, delta) else {
+            return false;
+        };
+        self.__scroll_target_by_paint_order(order, delta)
+    }
+
+    /// Returns the frontmost painted scroll target that can consume a delta.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// An optional `u64` containing the target's global paint ordinal.
+    #[doc(hidden)]
+    fn __scroll_target_at_position(
+        &self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> Option<u64> {
+        let own = self.style_metadata().and_then(|metadata| {
+            (metadata.contains_hit_position(column, row) && metadata.can_scroll_by(delta))
+                .then(|| metadata.paint_order())
+                .flatten()
+        });
+        self.children()
+            .iter()
+            .filter_map(|child| child.__scroll_target_at_position(column, row, delta))
+            .chain(own)
+            .max()
+    }
+
+    /// Scrolls the view whose latest paint ordinal matches one target.
+    ///
+    /// # Arguments
+    ///
+    /// * `order` — Global paint ordinal selected during read-only hit testing.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the selected target changed offsets.
+    #[doc(hidden)]
+    fn __scroll_target_by_paint_order(&mut self, order: u64, delta: crate::Axes<i16>) -> bool {
+        if let Some(metadata) = self.style_metadata()
+            && metadata.paint_order() == Some(order)
+        {
+            return metadata.scroll_by(delta);
+        }
         self.children_mut()
             .iter_mut()
-            .any(|child| child.__scroll_overflowing_at_position(column, row, delta))
+            .any(|child| child.__scroll_target_by_paint_order(order, delta))
     }
 
     /// Stores the pending first key of the `gg` sequence in this subtree.

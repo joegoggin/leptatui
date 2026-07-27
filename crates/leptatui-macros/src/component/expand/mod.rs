@@ -281,7 +281,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 column: u16,
                 row: u16,
                 index: &mut usize,
-            ) -> ::core::option::Option<usize> {
+            ) -> ::core::option::Option<(usize, u64)> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;
 
@@ -432,6 +432,35 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
                 __leptatui_owner.with(|| {
                     __leptatui_view.__scroll_overflowing_at_position(column, row, delta)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __scroll_target_at_position(
+                &self,
+                column: u16,
+                row: u16,
+                delta: #leptatui::Axes<i16>,
+            ) -> ::core::option::Option<u64> {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__scroll_target_at_position(column, row, delta)
+                })
+            }
+
+            #[doc(hidden)]
+            fn __scroll_target_by_paint_order(
+                &mut self,
+                order: u64,
+                delta: #leptatui::Axes<i16>,
+            ) -> bool {
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.__scroll_target_by_paint_order(order, delta)
                 })
             }
 

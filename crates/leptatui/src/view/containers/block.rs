@@ -5,7 +5,6 @@ use crate::view::containers::layout::render::{
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    events::scroll_overflowing_at_position_in_paint_order,
     measurement::{AvailableSpace, measure_view_height, sanitize_cells},
     render::{VerticalSpan, resolve_style, vertical_border_rows, vertical_padding_rows},
 };
@@ -14,7 +13,7 @@ use crate::{
     Borders, LayoutSize,
     app::Result,
     component::{LayoutPhase, RenderCtx},
-    view::core::layout::prepare_layout,
+    view::core::layout::{prepare_layout, render_fixed_descendants},
 };
 
 /// Bordered container around one child.
@@ -44,11 +43,15 @@ pub fn block(child: impl IntoView) -> BlockView {
 
 impl View for BlockView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        if ctx.layout_phase() == LayoutPhase::Inactive || self.metadata.layout_geometry().is_none()
-        {
+        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
+        if is_layout_root || self.metadata.layout_geometry().is_none() {
             prepare_layout(self, ctx);
         }
-        render_container_with_default_borders(&self.children, &self.metadata, Borders::ALL, ctx)
+        render_container_with_default_borders(&self.children, &self.metadata, Borders::ALL, ctx)?;
+        if is_layout_root {
+            render_fixed_descendants(self, ctx)?;
+        }
+        Ok(())
     }
 
     fn measure(
@@ -134,28 +137,6 @@ impl View for BlockView {
                 .children
                 .iter()
                 .any(AnyView::__has_overflowing_scroll_target)
-    }
-
-    fn __scroll_overflowing_at_position(
-        &mut self,
-        column: u16,
-        row: u16,
-        delta: crate::Axes<i16>,
-    ) -> bool {
-        let paint_order = self.metadata.child_paint_order();
-        if scroll_overflowing_at_position_in_paint_order(
-            &mut self.children,
-            &paint_order,
-            column,
-            row,
-            delta,
-        ) {
-            return true;
-        }
-        if self.metadata.contains_hit_position(column, row) {
-            return self.metadata.scroll_by(delta);
-        }
-        false
     }
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {

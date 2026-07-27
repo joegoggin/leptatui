@@ -1,10 +1,14 @@
 //! Focused-descendant discovery and scroll adjustment.
 
-use crate::component::RenderCtx;
 use crate::view::core::render::{VerticalSpan, focused_control_span_for_view, resolve_style};
 use crate::view::{AnyView, StyleMetadata};
+use crate::{Axes, Position, component::RenderCtx};
 
-use super::geometry::{child_geometry, container_content_area};
+use super::{
+    establishes_scrollport,
+    geometry::{child_geometry, container_content_area},
+    positioning::{child_paint_style, positioned_child_origin, translated_geometry},
+};
 
 /// Focused descendant bounds relative to a container content box.
 #[derive(Clone, Copy)]
@@ -59,6 +63,16 @@ pub(super) fn focused_control_bounds_for_container(
 ) -> Option<FocusBounds> {
     let style = resolve_style(metadata, ctx);
     let (content_area, layout_offset) = container_content_area(metadata, ctx);
+    let offsets = metadata.scroll_offsets();
+    let sticky_scrollport = if establishes_scrollport(
+        style
+            .overflow
+            .unwrap_or_else(|| Axes::new(crate::Overflow::Visible, crate::Overflow::Auto)),
+    ) {
+        Some(ctx.layout_geometry().viewport.into())
+    } else {
+        ctx.sticky_scrollport()
+    };
     ctx.with_area_inherited_style_and_selector_ancestor(
         content_area,
         style.inherited_values(),
@@ -73,20 +87,32 @@ pub(super) fn focused_control_bounds_for_container(
                         .filter(|child| !child.__has_scroll_to_anchor_request()),
                 )
                 .find_map(|child| {
-                    let child_area = child_geometry(
+                    let (position, _, insets, _) = child_paint_style(child, ctx);
+                    if position == Position::Fixed {
+                        return None;
+                    }
+                    let geometry = child_geometry(
                         child,
                         content_area,
                         ctx.layout_geometry().clip,
                         layout_offset,
                         ctx,
-                    )
-                    .border_box;
-                    let x_offset = u32::from(child_area.x.saturating_sub(content_area.x));
-                    let y_offset = u32::from(child_area.y.saturating_sub(content_area.y));
-                    ctx.with_area(child_area, |ctx| {
+                    );
+                    let (left, top) = positioned_child_origin(
+                        geometry.border_box,
+                        offsets,
+                        position,
+                        sticky_scrollport,
+                        insets,
+                        ctx.viewport_size(),
+                    );
+                    let geometry = translated_geometry(geometry, left, top);
+                    let x_offset = content_offset(left, content_area.x, offsets.x);
+                    let y_offset = content_offset(top, content_area.y, offsets.y);
+                    with_child_geometry(child, geometry, ctx, |ctx| {
                         focused_or_anchor_span_for_view(child, ctx).map(|span| FocusBounds {
                             left: x_offset,
-                            right: x_offset.saturating_add(u32::from(child_area.width)),
+                            right: x_offset.saturating_add(u32::from(geometry.border_box.width)),
                             top: span.top.saturating_add(y_offset),
                             bottom: span.bottom.saturating_add(y_offset),
                         })
@@ -94,6 +120,50 @@ pub(super) fn focused_control_bounds_for_container(
                 })
         },
     )
+}
+
+/// Converts one final terminal coordinate back into parent content coordinates.
+///
+/// # Arguments
+///
+/// * `position` — Signed final terminal coordinate on one axis.
+/// * `content_start` — Parent content-box start on the same axis.
+/// * `scroll_offset` — Parent scroll offset on the same axis.
+///
+/// # Returns
+///
+/// A `u32` content coordinate suitable for retained scroll calculations.
+fn content_offset(position: i32, content_start: u16, scroll_offset: u16) -> u32 {
+    let offset = position
+        .saturating_sub(i32::from(content_start))
+        .saturating_add(i32::from(scroll_offset))
+        .max(0);
+    u32::try_from(offset).unwrap_or(u32::MAX)
+}
+
+/// Runs focused-descendant discovery with one child's final painted geometry.
+///
+/// # Arguments
+///
+/// * `child` — Child view searched for focused or anchor content.
+/// * `geometry` — Final translated geometry assigned to the child.
+/// * `ctx` — Parent render context reproducing style ancestry.
+/// * `find` — Callback performing focused-descendant discovery.
+///
+/// # Returns
+///
+/// An `R` value returned by `find`.
+fn with_child_geometry<R>(
+    child: &AnyView,
+    geometry: crate::LayoutGeometry,
+    ctx: &mut RenderCtx<'_, '_>,
+    find: impl FnOnce(&mut RenderCtx<'_, '_>) -> R,
+) -> R {
+    if let Some(metadata) = child.style_metadata() {
+        ctx.with_layout_geometry(geometry, metadata, find)
+    } else {
+        ctx.with_area(geometry.border_box, find)
+    }
 }
 
 /// Moves the horizontal offset just enough to reveal focused bounds.

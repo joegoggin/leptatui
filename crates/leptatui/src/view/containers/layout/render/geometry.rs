@@ -165,7 +165,7 @@ pub(super) fn container_content_area(
 /// # Returns
 ///
 /// A rectangle whose origin is clamped to terminal coordinate bounds.
-fn translate_rect(area: Rect, offset: (i32, i32)) -> Rect {
+pub(super) fn translate_rect(area: Rect, offset: (i32, i32)) -> Rect {
     Rect {
         x: u16::try_from((i32::from(area.x) + offset.0).clamp(0, i32::from(u16::MAX)))
             .unwrap_or(u16::MAX),

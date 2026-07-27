@@ -9,7 +9,6 @@ use crate::view::containers::layout::render::{
 };
 use crate::view::core::{
     capabilities::{impl_container_view, impl_styled_view},
-    events::scroll_overflowing_at_position_in_paint_order,
     measurement::AvailableSpace,
     render::VerticalSpan,
 };
@@ -18,7 +17,7 @@ use crate::{
     LayoutSize,
     app::{AppControl, Result},
     component::{FocusedControl, KeyControl, LayoutPhase, RenderCtx},
-    view::core::layout::prepare_layout,
+    view::core::layout::{prepare_layout, render_fixed_descendants},
 };
 
 /// Shared callback invoked when a form is submitted or canceled.
@@ -183,11 +182,15 @@ fn form_action_control(action: &Option<FormAction>) -> KeyControl {
 
 impl View for FormView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        if ctx.layout_phase() == LayoutPhase::Inactive || self.metadata.layout_geometry().is_none()
-        {
+        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
+        if is_layout_root || self.metadata.layout_geometry().is_none() {
             prepare_layout(self, ctx);
         }
-        render_container(&self.children, &self.metadata, ctx)
+        render_container(&self.children, &self.metadata, ctx)?;
+        if is_layout_root {
+            render_fixed_descendants(self, ctx)?;
+        }
+        Ok(())
     }
 
     fn measure(
@@ -272,28 +275,6 @@ impl View for FormView {
                 .children
                 .iter()
                 .any(AnyView::__has_overflowing_scroll_target)
-    }
-
-    fn __scroll_overflowing_at_position(
-        &mut self,
-        column: u16,
-        row: u16,
-        delta: crate::Axes<i16>,
-    ) -> bool {
-        let paint_order = self.metadata.child_paint_order();
-        if scroll_overflowing_at_position_in_paint_order(
-            &mut self.children,
-            &paint_order,
-            column,
-            row,
-            delta,
-        ) {
-            return true;
-        }
-        if self.metadata.contains_hit_position(column, row) {
-            return self.metadata.scroll_by(delta);
-        }
-        false
     }
 
     fn __focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {

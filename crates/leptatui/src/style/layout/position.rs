@@ -10,23 +10,23 @@ pub enum Position {
     Relative,
     /// Leaves normal flow and uses the nearest positioned containing block.
     Absolute,
-    /// Currently behaves like [`Position::Absolute`].
-    ///
-    /// Terminal-viewport anchoring is not yet implemented.
+    /// Leaves normal flow and uses the terminal viewport as its containing block.
     Fixed,
-    /// Currently behaves like [`Position::Relative`].
-    ///
-    /// Scroll-container clamping is not yet implemented.
+    /// Participates in normal flow and clamps to authored insets while its
+    /// nearest scrollport moves.
     Sticky,
 }
 
 /// Stacking level applied to a positioned layout box.
+///
+/// Static boxes ignore this value. An explicit integer on a positioned box
+/// establishes a local stacking context, including an integer value of zero.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ZIndex {
-    /// Uses source-order stacking without an explicit integer level.
+    /// Uses the positioned automatic layer in source order.
     #[default]
     Auto,
-    /// Uses the contained signed stacking level.
+    /// Uses the contained signed stacking level and establishes a context.
     Integer(i32),
 }
 

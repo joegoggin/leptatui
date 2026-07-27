@@ -281,14 +281,15 @@ impl AnyView {
     ///
     /// # Returns
     ///
-    /// An [`Option`] containing the flattened index under the position.
+    /// An [`Option`] containing the flattened index and global paint ordinal
+    /// of the frontmost control under the position.
     #[doc(hidden)]
     pub fn __focusable_index_at_position_inner(
         &self,
         column: u16,
         row: u16,
         index: &mut usize,
-    ) -> Option<usize> {
+    ) -> Option<(usize, u64)> {
         if self.is_layout_hidden() {
             return None;
         }
@@ -456,6 +457,48 @@ impl AnyView {
         }
         self.inner
             .__scroll_overflowing_at_position(column, row, delta)
+    }
+
+    /// Returns the frontmost painted scroll target that can consume a delta.
+    ///
+    /// # Arguments
+    ///
+    /// * `column` — Zero-based terminal column to hit test.
+    /// * `row` — Zero-based terminal row to hit test.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// An optional `u64` containing the target's global paint ordinal.
+    #[doc(hidden)]
+    pub fn __scroll_target_at_position(
+        &self,
+        column: u16,
+        row: u16,
+        delta: crate::Axes<i16>,
+    ) -> Option<u64> {
+        if self.is_layout_hidden() {
+            return None;
+        }
+        self.inner.__scroll_target_at_position(column, row, delta)
+    }
+
+    /// Scrolls the view whose latest paint ordinal matches one target.
+    ///
+    /// # Arguments
+    ///
+    /// * `order` — Global paint ordinal selected during read-only hit testing.
+    /// * `delta` — Signed horizontal and vertical cell deltas.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the selected target changed offsets.
+    #[doc(hidden)]
+    pub fn __scroll_target_by_paint_order(&mut self, order: u64, delta: crate::Axes<i16>) -> bool {
+        if self.is_layout_hidden() {
+            return false;
+        }
+        self.inner.__scroll_target_by_paint_order(order, delta)
     }
 
     /// Stores the pending first key of the `gg` sequence in the stored subtree.
@@ -627,7 +670,8 @@ impl AnyView {
     /// Renders the stored concrete node.
     ///
     /// Prior hit areas are cleared before the current root metadata and
-    /// concrete node are rendered.
+    /// concrete node are rendered. Intermediate stacking-path traversal keeps
+    /// hit areas recorded by the box's earlier shell paint.
     ///
     /// # Arguments
     ///
@@ -642,10 +686,13 @@ impl AnyView {
     /// Returns [`crate::Error::Io`] if concrete rendering performs terminal
     /// I/O that fails.
     pub fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        if ctx.layout_phase() == LayoutPhase::Inactive {
+        let is_layout_root = ctx.layout_phase() == LayoutPhase::Inactive;
+        if is_layout_root {
             prepare_layout(self.as_view(), ctx);
         }
-        self.inner.__clear_hit_areas();
+        if !ctx.is_stacking_path_traversal() {
+            self.inner.__clear_hit_areas();
+        }
         if let Some(metadata) = self.inner.style_metadata() {
             if metadata.is_layout_hidden() {
                 return Ok(());
@@ -654,14 +701,21 @@ impl AnyView {
                 let geometry = metadata
                     .layout_geometry()
                     .expect("styled views should retain geometry before painting");
-                return ctx.with_layout_geometry(geometry, metadata, |ctx| {
+                ctx.with_layout_geometry(geometry, metadata, |ctx| {
                     ctx.record_metadata_hit_area(metadata);
                     self.as_view().render(ctx)
-                });
+                })?;
+            } else {
+                ctx.record_metadata_hit_area(metadata);
+                self.as_view().render(ctx)?;
             }
-            ctx.record_metadata_hit_area(metadata);
+        } else {
+            self.as_view().render(ctx)?;
         }
-        self.as_view().render(ctx)
+        if is_layout_root {
+            super::layout::render_fixed_descendants(self.as_view(), ctx)?;
+        }
+        Ok(())
     }
 
     /// Returns the intrinsic size of the stored node.
