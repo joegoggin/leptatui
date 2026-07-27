@@ -1,36 +1,50 @@
 # Markdown Editor
 
-The Markdown editor is a standalone Leptatui workspace application. It validates
-an anchored browsing root and renders a safe explorer containing directories
-and Markdown files. Keyboard selection opens directories or renders UTF-8
-Markdown in a scrollable preview without allowing navigation outside the root.
+The Markdown editor is a standalone Leptatui reference application. It combines
+an anchored filesystem explorer, semantic Markdown preview, responsive terminal
+layout, recoverable errors, and restored-terminal editing behind focused project
+layers.
 
-## Run
+## Prerequisites
 
-Pass zero or one directory as the browsing root:
+- A current stable Rust toolchain with Cargo.
+- An interactive terminal supported by Leptatui's Crossterm backend.
+- A terminal editor for the optional edit command. The application uses the
+  first non-empty `VISUAL` or `EDITOR` value and otherwise falls back to `vi`.
+
+Neovim is one supported choice:
 
 ```sh
-cargo run -p markdown-editor -- [ROOT]
+export VISUAL="nvim -f"
 ```
 
-When `ROOT` is omitted, the application uses the current directory. The path is
-canonicalized and verified as a directory before Leptatui starts its managed
-terminal session. Missing paths and regular files fail with a path-specific
-startup error. Explorer discovery follows symlinks only when their canonical
-targets remain below the configured root. Broken and escaping symlinks are
-hidden, and directory-read failures render as recoverable errors.
+The explorer and preview remain fully usable when no editor is configured; an
+editor is launched only after pressing `e` with a Markdown document open.
 
-The explorer lists directories before case-insensitive `.md` and `.markdown`
-files using deterministic name ordering. The first entry in each non-empty
-directory is selected automatically, and selection stops at listing boundaries.
+## Start the Application
 
-Editing uses the first non-empty `VISUAL` or `EDITOR` environment value and
-falls back to `vi`. Values can contain shell-word quoted arguments, such as
-`VISUAL="nvim -f"`, but are executed directly without shell expansion,
-pipelines, or functions. The application restores raw mode, mouse capture, and
-the alternate screen before running the resolved editor command with `--` and
-the absolute document path. After the editor exits successfully, the TUI starts
-again with the same explorer context and reloads the open document from disk.
+Run from the current directory:
+
+```sh
+cargo run -p markdown-editor
+```
+
+Or provide an explicit browsing root:
+
+```sh
+cargo run -p markdown-editor -- examples/markdown-editor
+```
+
+Pass `--help` after Cargo's separator to inspect the CLI:
+
+```sh
+cargo run -p markdown-editor -- --help
+```
+
+The command accepts zero or one positional `ROOT`. An omitted root resolves to
+the process current directory. Before terminal startup, the path is
+canonicalized and verified as a directory; missing paths, regular files, and
+additional positional arguments fail without entering managed terminal mode.
 
 ## Controls
 
@@ -44,29 +58,65 @@ again with the same explorer context and reloads the open document from disk.
 - `r` — Reload the open Markdown file.
 - `q` — Exit the application.
 
-The header keeps the canonical root visible while showing the current directory
-and open document relative to it. Terminals wider than 60 columns place the
-explorer beside the preview; narrower terminals stack the panes. File-read,
-missing-file, and invalid UTF-8 errors replace the preview body with a
-recoverable diagnostic. Explorer navigation remains available, and `r` retries
-the same path after the problem is corrected. Invalid editor configuration, a
-missing editor executable, or a non-zero editor exit is also shown as a
-recoverable preview error; `e` retries the same open path.
+## Filesystem and Failure Behavior
 
-## Architecture
+The explorer lists directories before case-insensitive `.md` and `.markdown`
+files using deterministic name ordering. The first entry in each non-empty
+directory is selected automatically, and selection stops at listing boundaries.
 
-- `cli` parses the optional browsing root and resolves the current-directory
-  default.
-- `domain` contains the validated workspace, explorer entries, listings, and
+Explorer discovery follows symlinks only when their canonical targets remain
+below the configured root. Broken and escaping symlinks are hidden. Failed
+directory reads preserve the last valid listing and render a recoverable error.
+
+File-read, missing-file, and invalid UTF-8 errors replace the preview body with
+a diagnostic while leaving explorer navigation available. Pressing `r` retries
+the same document after the problem is corrected.
+
+Editor values can contain shell-word quoted arguments, such as
+`VISUAL="nvim -f"`, but they are executed directly without shell expansion,
+pipelines, or functions. Invalid configuration, a missing executable, or a
+non-zero exit becomes a recoverable preview error; pressing `e` retries the same
+open path.
+
+## Responsive Layout
+
+The header keeps the canonical root visible and shows the current directory and
+open document relative to it. Terminals wider than 60 columns place the explorer
+beside the preview. At 60 columns or narrower, the panes stack vertically and
+reduce decorative spacing so both remain usable.
+
+## Architecture and Data Flow
+
+- `cli` parses the optional root and resolves the current-directory default.
+- `domain` owns the validated workspace, explorer entries, listings, and
   recoverable state.
-- `filesystem` validates paths and owns anchored Markdown discovery.
+- `filesystem` validates paths and performs anchored Markdown discovery and
+  reads.
 - `editor_process` resolves, parses, and launches the configured editor through
   injectable environment and process boundaries.
-- `controller` assembles services, applies selection and activation commands,
-  edits and reloads documents, and preserves recoverable explorer and preview
-  state.
-- `ui` renders responsive explorer and semantic Markdown preview views.
+- `controller` coordinates filesystem and editor services while applying
+  selection, navigation, preview, reload, and edit transitions.
+- `ui` maps keyboard input to controller transitions and renders responsive
+  explorer and semantic Markdown views.
+- `main` validates startup, runs managed terminal sessions, and invokes the
+  external editor only after Leptatui restores raw mode, mouse capture, and the
+  alternate screen.
 
-The binary entry point coordinates parsing, controller initialization, and
-repeated managed terminal sessions so external editing happens only after
-terminal restoration.
+The normal data flow is CLI root → validated workspace → safe directory listing
+→ controller transition → rendered explorer or preview. Editing temporarily
+exits the managed TUI, appends `--` and the canonical document path to the
+resolved editor command, then starts a new TUI session with the same controller.
+A successful editor exit reloads the document from disk without moving the
+explorer selection.
+
+## Verification
+
+The package's tests use temporary filesystem trees, injectable editor services,
+and Ratatui's test backend, so filesystem, controller, editor, and representative
+rendering behavior do not require an interactive terminal.
+
+```sh
+cargo test -p markdown-editor
+cargo clippy -p markdown-editor --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc -p markdown-editor --no-deps
+```
