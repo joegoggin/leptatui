@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use leptatui::prelude::*;
 
 use crate::{
+    hooks::use_workspace,
     pages::viewer_location,
     services::{DirectoryListing, ExplorerEntryKind, FileSystem, Workspace},
 };
@@ -22,8 +23,9 @@ use super::components::{ExplorerContent, ExplorerContentProps};
 /// An Explorer page component.
 #[component]
 pub(crate) fn ExplorerPage() -> impl IntoView {
-    let workspace = expect_context::<Workspace>();
-    let filesystem = expect_context::<FileSystem>();
+    let workspace_context = use_workspace();
+    let workspace = workspace_context.workspace;
+    let filesystem = workspace_context.filesystem;
     let root = workspace.root().to_path_buf();
     let (initial_listing, initial_error) = match filesystem.list_directory(&workspace, &root) {
         Ok(listing) => (listing, None),

@@ -104,12 +104,13 @@ spacing is reduced.
 ## Architecture and Data Flow
 
 - `cli` contains command-line parsing and browsing-root selection.
-- `hooks::use_files` exposes one shared signal bundle for recent files and the
-  external-editor handoff that cross page or managed-terminal boundaries.
+- `hooks` exposes two domain contexts: `use_workspace()` supplies the validated
+  workspace and filesystem service, while `use_files()` supplies recent-file
+  signals, persistence, and the external-editor handoff.
 - `services` contains anchored filesystem access, persistent recent-file
   storage, external editor process boundaries, and filesystem result values.
 - `app` owns the application shell and declares `/`, `/files`, and
-  `/view/*path`, providing shared services and the file signal bundle.
+  `/view/*path`, providing only the workspace and file domain contexts.
 - `pages` organizes each routed feature around a `page` module with co-located
   state and child components. Explorer owns its listing, selection, and error
   signals; Viewer derives its document from the route and owns its reload
@@ -119,19 +120,19 @@ spacing is reduced.
   external editor only after Leptatui restores raw mode, mouse capture, and the
   alternate screen.
 
-The normal data flow is CLI root → validated workspace context → page-owned
+The normal data flow is CLI root → `use_workspace()` context → page-owned
 Explorer signals → encoded Viewer route → `<Markdown />` Viewer. Successful
-Viewer route resolution updates the recent-file signals returned by
-`use_files()`. Editing writes the route-derived path to the hook's edit-request
-signal, temporarily exits the managed TUI, appends `--` and the path to the
-resolved editor command, then starts a new Viewer session. Path-associated
-editor failures use the same shared signal bundle so the rebuilt Viewer can
+Viewer route resolution updates and persists recent-file values through
+`use_files()`. Editing writes the route-derived path to the file context's
+edit-request signal, temporarily exits the managed TUI, appends `--` and the
+path to the resolved editor command, then starts a new Viewer session.
+Path-associated editor failures use the same context so the rebuilt Viewer can
 display them.
 
 ## Verification
 
-The package's tests use temporary filesystem trees, page-owned signals, the
-shared file hook, injectable editor services, and Ratatui's test backend, so
+The package's tests use temporary filesystem trees, page-owned signals, the two
+domain hooks, injectable editor services, and Ratatui's test backend, so
 filesystem, editor, and representative rendering behavior do not require an
 interactive terminal.
 

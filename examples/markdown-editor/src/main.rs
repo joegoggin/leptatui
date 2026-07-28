@@ -22,7 +22,7 @@ use leptatui::prelude::{App, GetUntracked, Owner, Set};
 use crate::{
     app::app_view_at_path,
     cli::Cli,
-    hooks::{EditorFailure, Files},
+    hooks::{EditorFailure, Files, WorkspaceContext},
     pages::viewer_location,
     services::{EditorProcess, FileSystem, RecentFilesStore},
 };
@@ -48,17 +48,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let workspace = filesystem.validate_root(&requested_root)?;
     let (recent_paths, stored_paths, recent_error) =
         recent_files_store.load_for_workspace(filesystem, &workspace);
-    let files = owner.with(|| Files::new(recent_paths, stored_paths, recent_error));
+    let workspace_context = WorkspaceContext::new(workspace, filesystem);
+    let files =
+        owner.with(|| Files::new(recent_paths, stored_paths, recent_error, recent_files_store));
     let mut initial_path = String::from("/");
 
     loop {
         files.edit_request.set(None);
         let view = owner.with(|| {
             app_view_at_path(
-                workspace.clone(),
-                files,
-                filesystem,
-                recent_files_store.clone(),
+                workspace_context.clone(),
+                files.clone(),
                 initial_path.clone(),
             )
         });
@@ -75,6 +75,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 message: error.to_string(),
             })),
         }
-        initial_path = viewer_location(workspace.root(), &path);
+        initial_path = viewer_location(workspace_context.root(), &path);
     }
 }

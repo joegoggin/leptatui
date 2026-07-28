@@ -16,24 +16,18 @@ use ratatui::{Terminal, backend::TestBackend};
 
 use crate::{
     app::{app_view, app_view_at_path},
-    hooks::Files,
-    services::{
-        EnvironmentReader, ExplorerEntry, FileSystem, ProcessLauncher, RecentFilesStore, Workspace,
-    },
+    hooks::{Files, WorkspaceContext},
+    services::{EnvironmentReader, ExplorerEntry, FileSystem, ProcessLauncher, RecentFilesStore},
 };
 
 /// Shared-context fixture that keeps its signal owner alive.
 pub(super) struct TestContexts {
     /// Owner backing every arena-allocated shared file signal.
     _owner: Owner,
-    /// Validated workspace context.
-    pub(super) workspace: Workspace,
-    /// File-related signals provided through the shared hook.
+    /// Validated workspace resources provided through the shared hook.
+    pub(super) workspace: WorkspaceContext,
+    /// File-related signals and persistence provided through the shared hook.
     pub(super) files: Files,
-    /// Filesystem service context.
-    pub(super) filesystem: FileSystem,
-    /// Recent-file persistence service context.
-    pub(super) recent_files_store: RecentFilesStore,
 }
 
 impl TestContexts {
@@ -55,7 +49,7 @@ impl TestContexts {
     /// # Arguments
     ///
     /// * `root` — Workspace root used to initialize the signals.
-    /// * `recent_files_store` — Persistence service retained by the fixture.
+    /// * `recent_files_store` — Persistence service bundled with file signals.
     ///
     /// # Returns
     ///
@@ -68,14 +62,14 @@ impl TestContexts {
             .expect("the workspace should initialize");
         let (recent_paths, stored_paths, recent_error) =
             recent_files_store.load_for_workspace(filesystem, &workspace);
-        let files = owner.with(|| Files::new(recent_paths, stored_paths, recent_error));
+        let workspace = WorkspaceContext::new(workspace, filesystem);
+        let files =
+            owner.with(|| Files::new(recent_paths, stored_paths, recent_error, recent_files_store));
 
         Self {
             _owner: owner,
             workspace,
             files,
-            filesystem,
-            recent_files_store,
         }
     }
 
@@ -85,12 +79,7 @@ impl TestContexts {
     ///
     /// An [`AnyView`] using this fixture's shared values.
     pub(super) fn view(&self) -> AnyView {
-        app_view(
-            self.workspace.clone(),
-            self.files,
-            self.filesystem,
-            self.recent_files_store.clone(),
-        )
+        app_view(self.workspace.clone(), self.files.clone())
     }
 
     /// Creates an application view starting at an explicit route.
@@ -103,13 +92,7 @@ impl TestContexts {
     ///
     /// An [`AnyView`] using this fixture's shared values.
     pub(super) fn view_at(&self, path: impl Into<String>) -> AnyView {
-        app_view_at_path(
-            self.workspace.clone(),
-            self.files,
-            self.filesystem,
-            self.recent_files_store.clone(),
-            path,
-        )
+        app_view_at_path(self.workspace.clone(), self.files.clone(), path)
     }
 }
 

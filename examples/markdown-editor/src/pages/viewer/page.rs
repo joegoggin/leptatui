@@ -6,9 +6,9 @@ use leptatui::prelude::*;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 use crate::{
-    hooks::{Files, use_files},
+    hooks::{Files, use_files, use_workspace},
     pages::shared::{relative_path, routed_page_style},
-    services::{FileSystem, RECENT_FILE_LIMIT, RecentFilesStore, Workspace},
+    services::{FileSystem, RECENT_FILE_LIMIT, Workspace},
 };
 
 use super::components::{ViewerDocument, ViewerDocumentProps};
@@ -43,9 +43,9 @@ const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
 /// A Viewer page component.
 #[component]
 pub(crate) fn ViewerPage() -> impl IntoView {
-    let workspace = expect_context::<Workspace>();
-    let filesystem = expect_context::<FileSystem>();
-    let recent_files_store = expect_context::<RecentFilesStore>();
+    let workspace_context = use_workspace();
+    let workspace = workspace_context.workspace;
+    let filesystem = workspace_context.filesystem;
     let files = use_files();
     let route_params = use_params_map();
     let revision = RwSignal::new(0_u64);
@@ -53,9 +53,11 @@ pub(crate) fn ViewerPage() -> impl IntoView {
     let home_navigate = use_navigate();
     let explorer_navigate = use_navigate();
     let document_workspace = workspace.clone();
-    let document_store = recent_files_store.clone();
+    let document_files = files.clone();
     let shortcut_workspace = workspace.clone();
     let header_workspace = workspace.clone();
+    let edit_request = files.edit_request;
+    let editor_failure = files.editor_failure;
     let document = keyed(
         move || {
             (
@@ -71,11 +73,10 @@ pub(crate) fn ViewerPage() -> impl IntoView {
             let path = synchronize_route(
                 &document_workspace,
                 filesystem,
-                &document_store,
-                files,
+                &document_files,
                 route_params,
             );
-            let editor_error = matching_editor_error(files, path.as_deref());
+            let editor_error = matching_editor_error(&document_files, path.as_deref());
 
             view! {
                 <ViewerDocument path=path editor_error=editor_error />
@@ -92,14 +93,14 @@ pub(crate) fn ViewerPage() -> impl IntoView {
         match key.code {
             KeyCode::Char('e') => {
                 if let Some(path) = requested_path(&shortcut_workspace, route_params) {
-                    files.edit_request.set(Some(path));
+                    edit_request.set(Some(path));
                     KeyControl::Exit
                 } else {
                     KeyControl::Handled
                 }
             }
             KeyCode::Char('r') => {
-                files.editor_failure.set(None);
+                editor_failure.set(None);
                 revision.update(|revision| *revision = revision.wrapping_add(1));
                 KeyControl::Handled
             }
@@ -195,8 +196,7 @@ fn requested_path(workspace: &Workspace, params: Memo<ParamsMap>) -> Option<Path
 ///
 /// * `workspace` — Workspace bounding the route path.
 /// * `filesystem` — Service used to validate the route path.
-/// * `recent_files_store` — Service used to persist recent-file changes.
-/// * `files` — Shared recent-file and editor handoff signals.
+/// * `files` — Shared recent-file signals and persistence service.
 /// * `params` — Active route parameters.
 ///
 /// # Returns
@@ -205,8 +205,7 @@ fn requested_path(workspace: &Workspace, params: Memo<ParamsMap>) -> Option<Path
 fn synchronize_route(
     workspace: &Workspace,
     filesystem: FileSystem,
-    recent_files_store: &RecentFilesStore,
-    files: Files,
+    files: &Files,
     params: Memo<ParamsMap>,
 ) -> Option<PathBuf> {
     let requested = requested_path(workspace, params)?;
@@ -222,7 +221,7 @@ fn synchronize_route(
                 entries.insert(0, canonical.clone());
                 entries.truncate(RECENT_FILE_LIMIT);
             });
-            save_recent_files(recent_files_store, files);
+            save_recent_files(files);
             Some(canonical)
         }
         Err(_) => {
@@ -232,7 +231,7 @@ fn synchronize_route(
             files
                 .stored_recent_files
                 .update(|entries| entries.retain(|entry| entry != &requested));
-            save_recent_files(recent_files_store, files);
+            save_recent_files(files);
             Some(requested)
         }
     }
@@ -242,11 +241,11 @@ fn synchronize_route(
 ///
 /// # Arguments
 ///
-/// * `recent_files_store` — Service used to write the ordering.
 /// * `files` — Shared recent-file signals to read and update.
-fn save_recent_files(recent_files_store: &RecentFilesStore, files: Files) {
+fn save_recent_files(files: &Files) {
     let entries = files.stored_recent_files.get_untracked();
-    let error = recent_files_store
+    let error = files
+        .recent_files_store
         .save(&entries)
         .err()
         .map(|error| error.to_string());
@@ -263,7 +262,7 @@ fn save_recent_files(recent_files_store: &RecentFilesStore, files: Files) {
 /// # Returns
 ///
 /// An optional contextual editor error.
-fn matching_editor_error(files: Files, path: Option<&Path>) -> Option<String> {
+fn matching_editor_error(files: &Files, path: Option<&Path>) -> Option<String> {
     files.editor_failure.with_untracked(|failure| {
         failure
             .as_ref()

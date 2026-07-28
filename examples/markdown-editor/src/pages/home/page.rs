@@ -2,7 +2,10 @@
 
 use leptatui::prelude::*;
 
-use crate::{hooks::use_files, pages::shared::routed_page_style, services::Workspace};
+use crate::{
+    hooks::{use_files, use_workspace},
+    pages::shared::routed_page_style,
+};
 
 use super::components::{RecentFilesList, RecentFilesListProps};
 
@@ -15,7 +18,7 @@ use super::components::{RecentFilesList, RecentFilesListProps};
 pub(crate) fn HomePage() -> impl IntoView {
     let shortcut_navigate = use_navigate();
     let button_navigate = use_navigate();
-    let workspace = expect_context::<Workspace>();
+    let workspace = use_workspace().workspace;
     let files = use_files();
 
     use_key_event(KeyEventKind::Press, move |key| {

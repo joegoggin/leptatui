@@ -3,51 +3,39 @@
 use leptatui::prelude::*;
 
 use crate::{
-    hooks::Files,
+    hooks::{Files, WorkspaceContext},
     pages::{ExplorerPage, HomePage, NotFoundPage, ViewerPage},
-    services::{FileSystem, RecentFilesStore, Workspace},
 };
 
 /// Creates the root Markdown editor view.
 ///
 /// # Arguments
 ///
-/// * `workspace` — Validated workspace shared by routed pages.
-/// * `files` — File-related signals shared across routed pages.
-/// * `filesystem` — Anchored filesystem service.
-/// * `recent_files_store` — Persistent recent-file service.
+/// * `workspace` — Validated workspace resources shared by routed pages.
+/// * `files` — File-related signals and persistence shared by routed pages.
 ///
 /// # Returns
 ///
 /// A routed Leptatui view starting on Home.
 #[cfg(test)]
-pub(crate) fn app_view(
-    workspace: Workspace,
-    files: Files,
-    filesystem: FileSystem,
-    recent_files_store: RecentFilesStore,
-) -> AnyView {
-    app_view_at_path(workspace, files, filesystem, recent_files_store, "/")
+pub(crate) fn app_view(workspace: WorkspaceContext, files: Files) -> AnyView {
+    app_view_at_path(workspace, files, "/")
 }
 
 /// Creates the root Markdown editor view at an explicit path.
 ///
 /// # Arguments
 ///
-/// * `workspace` — Validated workspace shared by routed pages.
-/// * `files` — File-related signals shared across routed pages.
-/// * `filesystem` — Anchored filesystem service.
-/// * `recent_files_store` — Persistent recent-file service.
+/// * `workspace` — Validated workspace resources shared by routed pages.
+/// * `files` — File-related signals and persistence shared by routed pages.
 /// * `initial_path` — Location shown when the managed session starts.
 ///
 /// # Returns
 ///
 /// A routed Leptatui view starting on `initial_path`.
 pub(crate) fn app_view_at_path(
-    workspace: Workspace,
+    workspace: WorkspaceContext,
     files: Files,
-    filesystem: FileSystem,
-    recent_files_store: RecentFilesStore,
     initial_path: impl Into<String>,
 ) -> AnyView {
     let initial_path = initial_path.into();
@@ -56,8 +44,6 @@ pub(crate) fn app_view_at_path(
         <MarkdownEditor
             workspace=workspace
             files=files
-            filesystem=filesystem
-            recent_files_store=recent_files_store
             initial_path=initial_path
         />
     }
@@ -67,10 +53,8 @@ pub(crate) fn app_view_at_path(
 ///
 /// # Arguments
 ///
-/// * `workspace` — Validated workspace shared by routed pages.
-/// * `files` — File-related signals shared across routed pages.
-/// * `filesystem` — Anchored filesystem service.
-/// * `recent_files_store` — Persistent recent-file service.
+/// * `workspace` — Validated workspace resources shared by routed pages.
+/// * `files` — File-related signals and persistence shared by routed pages.
 /// * `initial_path` — First location for the current TUI session.
 ///
 /// # Returns
@@ -78,16 +62,12 @@ pub(crate) fn app_view_at_path(
 /// A routed application shell.
 #[component]
 fn MarkdownEditor(
-    workspace: Workspace,
+    workspace: WorkspaceContext,
     files: Files,
-    filesystem: FileSystem,
-    recent_files_store: RecentFilesStore,
     initial_path: String,
 ) -> impl IntoView {
     provide_context(workspace);
     provide_context(files);
-    provide_context(filesystem);
-    provide_context(recent_files_store);
 
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') && key.modifiers == KeyModifiers::NONE {
