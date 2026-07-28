@@ -113,8 +113,10 @@ spacing is reduced.
 - `controller` coordinates filesystem, recent-file, and editor services while
   applying selection, navigation, open, view invalidation, and edit
   transitions.
-- `ui` declares `/`, `/files`, and `/view/*path` routes and renders Home, File
-  Explorer, and a Viewer backed by the existing `<Markdown />` component.
+- `ui` keeps the application shell and shared presentation helpers separate
+  from page-focused `home`, `explorer`, `viewer`, and `not_found` modules. The
+  shell declares `/`, `/files`, and `/view/*path`, and Viewer delegates document
+  rendering to the existing `<Markdown />` component.
 - `main` validates startup, runs managed terminal sessions, and invokes the
   external editor only after Leptatui restores raw mode, mouse capture, and the
   alternate screen.
