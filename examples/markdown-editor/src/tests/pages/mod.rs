@@ -6,18 +6,12 @@
 //! - [`home`] — Home workflow and recent-file behavior.
 //! - [`viewer`] — Viewer editing, reload, diagnostics, and Markdown history.
 
-use std::{
-    cell::{Cell, RefCell},
-    fs,
-    rc::Rc,
-};
+use std::fs;
 
-use leptatui::prelude::{KeyCode, KeyControl, KeyEvent, KeyModifiers};
+use leptatui::prelude::{GetUntracked, KeyCode, KeyControl, KeyEvent, KeyModifiers, Set};
 use ratatui::{Terminal, backend::TestBackend};
 
-use crate::{app::app_view, core::Controller, services::EditorProcess, services::FileSystem};
-
-use super::support::{TestTree, draw_editor, rendered_lines};
+use super::support::{TestContexts, TestTree, draw_editor, rendered_lines};
 
 mod explorer;
 mod home;

@@ -8,4 +8,4 @@
 mod components;
 mod page;
 
-pub(crate) use page::{ExplorerPage, ExplorerPageProps};
+pub(crate) use page::ExplorerPage;

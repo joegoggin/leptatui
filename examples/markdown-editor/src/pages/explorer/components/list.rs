@@ -2,7 +2,7 @@
 
 use leptatui::prelude::*;
 
-use crate::core::ExplorerState;
+use crate::services::DirectoryListing;
 
 use super::{ExplorerEntryRow, ExplorerEntryRowProps};
 
@@ -10,16 +10,22 @@ use super::{ExplorerEntryRow, ExplorerEntryRowProps};
 ///
 /// # Arguments
 ///
-/// * `state` — Current explorer snapshot.
+/// * `listing` — Current directory listing snapshot.
+/// * `selection` — Current selected entry index.
+/// * `error` — Current recoverable navigation error.
 ///
 /// # Returns
 ///
 /// A directory listing component.
 #[component]
-pub(in crate::pages::explorer) fn ExplorerList(state: ExplorerState) -> impl IntoView {
+pub(in crate::pages::explorer) fn ExplorerList(
+    listing: DirectoryListing,
+    selection: Option<usize>,
+    error: Option<String>,
+) -> impl IntoView {
     let mut rows = Vec::new();
 
-    if state.entries().is_empty() {
+    if listing.entries().is_empty() {
         rows.push(
             view! {
                 <Text class="empty">"No directories or Markdown files"</Text>
@@ -28,23 +34,21 @@ pub(in crate::pages::explorer) fn ExplorerList(state: ExplorerState) -> impl Int
         );
     } else {
         rows.extend(
-            state
+            listing
                 .entries()
                 .iter()
                 .cloned()
                 .enumerate()
                 .map(|(index, entry)| {
-                    let selected = state.selection() == Some(index);
-
                     view! {
-                        <ExplorerEntryRow entry=entry selected=selected />
+                        <ExplorerEntryRow entry=entry selected={selection == Some(index)} />
                     }
                     .into_view()
                 }),
         );
     }
 
-    if let Some(error) = state.error() {
+    if let Some(error) = error {
         rows.push(
             view! {
                 <Text class="error">{format!("Error: {error}")}</Text>

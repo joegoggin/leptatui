@@ -2,12 +2,7 @@
 
 use std::{ffi::OsString, fs};
 
-use crate::{
-    core::Controller,
-    core::{ExplorerEntry, ExplorerEntryKind},
-    services::EditorProcess,
-    services::FileSystem,
-};
+use crate::services::{ExplorerEntry, ExplorerEntryKind, FileSystem};
 
 use super::support::{TestTree, explorer_entry_names, temporary_path};
 
@@ -64,7 +59,7 @@ fn explorer_rejects_regular_file_as_root() {
     fs::remove_file(&root).expect("the temporary file should be removed");
 }
 
-/// Verifies controller initialization rejects a missing root before UI startup.
+/// Verifies workspace validation rejects a missing root before UI startup.
 ///
 /// # Example Under Test
 ///
@@ -74,19 +69,20 @@ fn explorer_rejects_regular_file_as_root() {
 ///
 /// # Assertions
 ///
-/// - Controller initialization fails with `NotFound`.
+/// - Workspace validation fails with `NotFound`.
 /// - The diagnostic contains the missing path.
 ///
 /// # Why
 ///
-/// The binary must complete controller initialization before constructing the
+/// The binary must complete workspace validation before constructing the
 /// Leptatui app, preventing invalid roots from entering managed terminal mode.
 #[test]
 fn explorer_rejects_missing_root_before_ui_startup() {
     let root = temporary_path("missing-root");
 
-    let error = Controller::initialize(&root, FileSystem::new(), EditorProcess::new())
-        .expect_err("a missing root should fail controller initialization");
+    let error = FileSystem::new()
+        .validate_root(&root)
+        .expect_err("a missing root should fail workspace validation");
 
     assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
     assert!(error.to_string().contains(&root.display().to_string()));
@@ -151,7 +147,7 @@ fn explorer_lists_directories_before_case_insensitive_markdown_files() {
     );
 }
 
-/// Verifies an empty directory produces a successful empty explorer state.
+/// Verifies an empty directory produces a successful empty listing.
 ///
 /// # Example Under Test
 ///
@@ -161,25 +157,28 @@ fn explorer_lists_directories_before_case_insensitive_markdown_files() {
 ///
 /// # Assertions
 ///
-/// - Controller initialization succeeds.
+/// - Workspace validation succeeds.
 /// - The current directory is the canonical root.
-/// - The explorer contains no entries, selection, or error.
+/// - The listing contains no entries.
 #[test]
 fn explorer_represents_empty_directory_without_an_error() {
     let tree = TestTree::new("empty-listing");
     let expected =
         fs::canonicalize(tree.root()).expect("the temporary directory should canonicalize");
 
-    let controller = Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-        .expect("an empty root should initialize the controller");
+    let filesystem = FileSystem::new();
+    let workspace = filesystem
+        .validate_root(tree.root())
+        .expect("the empty root should validate");
+    let listing = filesystem
+        .list_directory(&workspace, tree.root())
+        .expect("the empty root should list successfully");
 
-    assert_eq!(controller.explorer().directory(), expected);
-    assert!(controller.explorer().entries().is_empty());
-    assert_eq!(controller.explorer().selection(), None);
-    assert_eq!(controller.explorer().error(), None);
+    assert_eq!(listing.directory(), expected);
+    assert!(listing.entries().is_empty());
 }
 
-/// Verifies parent navigation reaches but never crosses the workspace root.
+/// Verifies nested and parent directories can be listed within the workspace.
 ///
 /// # Example Under Test
 ///
@@ -190,9 +189,8 @@ fn explorer_represents_empty_directory_without_an_error() {
 ///
 /// # Assertions
 ///
-/// - Navigation into the nested directory succeeds.
-/// - Parent navigation returns to the canonical root.
-/// - A second parent request is a no-op at the root.
+/// - The nested directory lists successfully.
+/// - Its parent resolves to and lists the canonical workspace root.
 #[test]
 fn explorer_parent_navigation_stops_at_root() {
     let tree = TestTree::new("parent-boundary");
@@ -201,19 +199,25 @@ fn explorer_parent_navigation_stops_at_root() {
     let canonical_root =
         fs::canonicalize(tree.root()).expect("the temporary directory should canonicalize");
 
-    let mut controller =
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize");
-
-    assert!(controller.browse(&nested));
-    assert_ne!(controller.explorer().directory(), canonical_root);
-    assert!(controller.browse_parent());
-    assert_eq!(controller.explorer().directory(), canonical_root);
-    assert!(!controller.browse_parent());
-    assert_eq!(controller.explorer().directory(), canonical_root);
+    let filesystem = FileSystem::new();
+    let workspace = filesystem
+        .validate_root(tree.root())
+        .expect("the workspace should validate");
+    let nested_listing = filesystem
+        .list_directory(&workspace, &nested)
+        .expect("the nested directory should list");
+    assert_ne!(nested_listing.directory(), canonical_root);
+    let parent = nested_listing
+        .directory()
+        .parent()
+        .expect("the nested directory should have a parent");
+    let parent_listing = filesystem
+        .list_directory(&workspace, parent)
+        .expect("the workspace root should list");
+    assert_eq!(parent_listing.directory(), canonical_root);
 }
 
-/// Verifies failed navigation preserves the last valid listing.
+/// Verifies missing-directory discovery returns a contextual error.
 ///
 /// # Example Under Test
 ///
@@ -227,34 +231,29 @@ fn explorer_parent_navigation_stops_at_root() {
 ///
 /// # Assertions
 ///
-/// - Navigation reports failure.
-/// - The root directory, entries, and selection remain current.
+/// - Root discovery succeeds before the failed request.
+/// - Missing-directory discovery reports failure.
 /// - The error identifies the missing path and failed resolution.
 #[test]
 fn explorer_missing_path_preserves_listing_and_records_error() {
     let tree = TestTree::new("missing-navigation");
     fs::create_dir(tree.root().join("docs")).expect("the docs directory should be created");
     let missing = tree.root().join("missing");
-    let mut controller =
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize");
-    let expected_directory = controller.explorer().directory().to_path_buf();
-    let expected_entries = controller.explorer().entries().to_vec();
-    let expected_selection = controller.explorer().selection();
-
-    assert!(!controller.browse(&missing));
-    assert_eq!(controller.explorer().directory(), expected_directory);
-    assert_eq!(controller.explorer().entries(), expected_entries);
-    assert_eq!(controller.explorer().selection(), expected_selection);
-    let error = controller
-        .explorer()
-        .error()
-        .expect("failed navigation should record an error");
-    assert!(error.contains("failed to resolve directory"));
-    assert!(error.contains(&missing.display().to_string()));
+    let filesystem = FileSystem::new();
+    let workspace = filesystem
+        .validate_root(tree.root())
+        .expect("the workspace should validate");
+    filesystem
+        .list_directory(&workspace, tree.root())
+        .expect("the root listing should succeed");
+    let error = filesystem
+        .list_directory(&workspace, &missing)
+        .expect_err("the missing directory should fail");
+    assert!(error.to_string().contains("failed to resolve directory"));
+    assert!(error.to_string().contains(&missing.display().to_string()));
 }
 
-/// Verifies explicit out-of-root navigation is rejected without losing state.
+/// Verifies explicit out-of-root discovery is rejected.
 ///
 /// # Example Under Test
 ///
@@ -265,30 +264,23 @@ fn explorer_missing_path_preserves_listing_and_records_error() {
 ///
 /// # Assertions
 ///
-/// - Navigation to the existing outside directory fails.
-/// - The explorer remains at the workspace root.
+/// - Discovery of the existing outside directory fails.
 /// - The error explains that the target lies outside the browsing root.
 #[test]
 fn explorer_rejects_out_of_root_navigation() {
     let tree = TestTree::new("contained-root");
     let outside = TestTree::new("outside-root");
-    let mut controller =
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize");
-    let expected_directory = controller.explorer().directory().to_path_buf();
-
-    assert!(!controller.browse(outside.root()));
-    assert_eq!(controller.explorer().directory(), expected_directory);
-    assert!(
-        controller
-            .explorer()
-            .error()
-            .expect("out-of-root navigation should record an error")
-            .contains("outside browsing root")
-    );
+    let filesystem = FileSystem::new();
+    let workspace = filesystem
+        .validate_root(tree.root())
+        .expect("the workspace should validate");
+    let error = filesystem
+        .list_directory(&workspace, outside.root())
+        .expect_err("the outside directory should be rejected");
+    assert!(error.to_string().contains("outside browsing root"));
 }
 
-/// Verifies requesting a regular file as a directory is recoverable.
+/// Verifies requesting a regular file as a directory returns an error.
 ///
 /// # Example Under Test
 ///
@@ -299,28 +291,21 @@ fn explorer_rejects_out_of_root_navigation() {
 ///
 /// # Assertions
 ///
-/// - Navigation to `guide.md` fails.
-/// - The last valid root listing remains available.
+/// - Directory discovery for `guide.md` fails.
 /// - The error identifies that the explorer target is not a directory.
 #[test]
 fn explorer_regular_file_navigation_is_recoverable() {
     let tree = TestTree::new("file-navigation");
     let markdown = tree.root().join("guide.md");
     fs::write(&markdown, "# Guide").expect("the Markdown file should be created");
-    let mut controller =
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize");
-    let expected_entries = controller.explorer().entries().to_vec();
-
-    assert!(!controller.browse(&markdown));
-    assert_eq!(controller.explorer().entries(), expected_entries);
-    assert!(
-        controller
-            .explorer()
-            .error()
-            .expect("file navigation should record an error")
-            .contains("not a directory")
-    );
+    let filesystem = FileSystem::new();
+    let workspace = filesystem
+        .validate_root(tree.root())
+        .expect("the workspace should validate");
+    let error = filesystem
+        .list_directory(&workspace, &markdown)
+        .expect_err("a Markdown file should not list as a directory");
+    assert!(error.to_string().contains("not a directory"));
 }
 
 /// Verifies in-root symlinks resolve to safe explorer targets.
@@ -449,25 +434,17 @@ fn explorer_unreadable_directory_is_recoverable() {
     fs::create_dir(&private).expect("the private directory should be created");
     fs::set_permissions(&private, fs::Permissions::from_mode(0o000))
         .expect("the private directory permissions should be removed");
-    let mut controller =
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize");
-    let expected_directory = controller.explorer().directory().to_path_buf();
-
-    let navigated = controller.browse(&private);
+    let filesystem = FileSystem::new();
+    let workspace = filesystem
+        .validate_root(tree.root())
+        .expect("the workspace should validate");
+    let result = filesystem.list_directory(&workspace, &private);
     fs::set_permissions(&private, fs::Permissions::from_mode(0o700))
         .expect("the private directory permissions should be restored");
 
-    if navigated {
+    let Err(error) = result else {
         return;
-    }
+    };
 
-    assert_eq!(controller.explorer().directory(), expected_directory);
-    assert!(
-        controller
-            .explorer()
-            .error()
-            .expect("the denied read should record an error")
-            .contains(&private.display().to_string())
-    );
+    assert!(error.to_string().contains(&private.display().to_string()));
 }

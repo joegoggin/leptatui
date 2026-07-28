@@ -2,7 +2,7 @@
 
 use leptatui::prelude::*;
 
-use crate::core::{ExplorerEntry, ExplorerEntryKind};
+use crate::services::{ExplorerEntry, ExplorerEntryKind};
 
 /// Renders one selected or unselected explorer entry.
 ///

@@ -2,7 +2,7 @@
 //!
 //! The store keeps a small versioned JSON document in the platform-local
 //! application-data directory. Tests can replace that location or disable
-//! persistence without changing controller behavior.
+//! persistence without changing reactive application behavior.
 
 use std::{
     fs, io,
@@ -12,8 +12,12 @@ use std::{
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
+use super::{FileSystem, Workspace};
+
 /// Current on-disk recent-file document version.
 const DOCUMENT_VERSION: u8 = 1;
+/// Maximum number of recent files retained by the application.
+pub(crate) const RECENT_FILE_LIMIT: usize = 10;
 
 /// Versioned recent-file document serialized to JSON.
 #[derive(Debug, Deserialize, Serialize)]
@@ -45,7 +49,7 @@ impl RecentFilesStore {
         Self { path }
     }
 
-    /// Creates a store that retains recent files only in controller memory.
+    /// Creates a store that retains recent files only in application memory.
     ///
     /// # Returns
     ///
@@ -113,6 +117,46 @@ impl RecentFilesStore {
         }
 
         Ok(document.entries.into_iter().map(PathBuf::from).collect())
+    }
+
+    /// Loads and filters recent paths for one workspace.
+    ///
+    /// # Arguments
+    ///
+    /// * `filesystem` — Service used to validate persisted Markdown paths.
+    /// * `workspace` — Active workspace used to filter visible paths.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing workspace-visible paths, the complete persisted
+    /// ordering, and an optional recoverable load error.
+    pub(crate) fn load_for_workspace(
+        &self,
+        filesystem: FileSystem,
+        workspace: &Workspace,
+    ) -> (Vec<PathBuf>, Vec<PathBuf>, Option<String>) {
+        let (stored_paths, error) = match self.load() {
+            Ok(paths) => (paths, None),
+            Err(error) => (Vec::new(), Some(error.to_string())),
+        };
+        let mut stored = Vec::new();
+        for path in stored_paths {
+            if !stored.contains(&path) {
+                stored.push(path);
+            }
+        }
+        stored.truncate(RECENT_FILE_LIMIT);
+
+        let mut visible = Vec::new();
+        for path in &stored {
+            if let Ok(canonical) = filesystem.validate_markdown(workspace, path)
+                && !visible.contains(&canonical)
+            {
+                visible.push(canonical);
+            }
+        }
+
+        (visible, stored, error)
     }
 
     /// Persists recent paths in most-recent-first order.

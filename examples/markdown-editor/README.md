@@ -55,7 +55,8 @@ between three component pages:
   Recent-file buttons open their documents directly in the Markdown Viewer.
 - **File Explorer** — Use `Up`/`k` and `Down`/`j` to select entries, `Enter` to
   enter a directory or open a Markdown file, `Left`/`h` to visit the parent
-  directory, and `Esc` to return Home.
+  directory, and `Esc` to return Home. Explorer state belongs to the active
+  page, so returning to File Explorer starts again at the workspace root.
 - **Markdown Viewer** — Use `Page Up`, `Page Down`, `Ctrl-U`, `Ctrl-D`, `gg`,
   or `G` to scroll; `e` to edit; `r` to reload; `h` for Home; and `b` to browse
   files. Focus a Markdown link and press `Enter` to activate it; `Shift-H` and
@@ -102,31 +103,37 @@ spacing is reduced.
 
 ## Architecture and Data Flow
 
-- `core` contains CLI parsing, domain state, and the controller that coordinates
-  selection, navigation, open, view invalidation, and edit transitions.
+- `cli` contains command-line parsing and browsing-root selection.
+- `hooks::use_files` exposes one shared signal bundle for recent files and the
+  external-editor handoff that cross page or managed-terminal boundaries.
 - `services` contains anchored filesystem access, persistent recent-file
-  storage, and external editor process boundaries.
+  storage, external editor process boundaries, and filesystem result values.
 - `app` owns the application shell and declares `/`, `/files`, and
-  `/view/*path`.
+  `/view/*path`, providing shared services and the file signal bundle.
 - `pages` organizes each routed feature around a `page` module with co-located
-  child components. Viewer delegates document rendering to the existing
-  `<Markdown />` component.
+  state and child components. Explorer owns its listing, selection, and error
+  signals; Viewer derives its document from the route and owns its reload
+  revision. Viewer delegates document rendering to the existing `<Markdown />`
+  component.
 - `main` validates startup, runs managed terminal sessions, and invokes the
   external editor only after Leptatui restores raw mode, mouse capture, and the
   alternate screen.
 
-The normal data flow is CLI root → validated workspace and recent paths → routed
-Home or Explorer action → controller path transition → `<Markdown />` Viewer.
-Editing temporarily exits the managed TUI, appends `--` and the canonical
-document path to the resolved editor command, then starts a new TUI session on
-Viewer with the same controller. A successful editor exit invalidates and
-rebuilds the Markdown view without moving the explorer selection.
+The normal data flow is CLI root → validated workspace context → page-owned
+Explorer signals → encoded Viewer route → `<Markdown />` Viewer. Successful
+Viewer route resolution updates the recent-file signals returned by
+`use_files()`. Editing writes the route-derived path to the hook's edit-request
+signal, temporarily exits the managed TUI, appends `--` and the path to the
+resolved editor command, then starts a new Viewer session. Path-associated
+editor failures use the same shared signal bundle so the rebuilt Viewer can
+display them.
 
 ## Verification
 
-The package's tests use temporary filesystem trees, injectable editor services,
-and Ratatui's test backend, so filesystem, controller, editor, and representative
-rendering behavior do not require an interactive terminal.
+The package's tests use temporary filesystem trees, page-owned signals, the
+shared file hook, injectable editor services, and Ratatui's test backend, so
+filesystem, editor, and representative rendering behavior do not require an
+interactive terminal.
 
 ```sh
 cargo test -p markdown-editor

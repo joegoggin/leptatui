@@ -1,26 +1,30 @@
 //! Path-backed Markdown content and editor diagnostics.
 
-use leptatui::prelude::*;
+use std::path::PathBuf;
 
-use crate::core::PreviewState;
+use leptatui::prelude::*;
 
 /// Renders an open path through the existing file-backed Markdown view.
 ///
 /// # Arguments
 ///
-/// * `preview` — Controller-owned document snapshot.
+/// * `path` — Canonical or requested document path.
+/// * `editor_error` — Recoverable external-editor diagnostic for `path`.
 ///
 /// # Returns
 ///
 /// A path-backed Markdown document, editor error, or empty hint.
 #[component]
-pub(in crate::pages::viewer) fn ViewerDocument(preview: PreviewState) -> impl IntoView {
-    let body = if let Some(error) = preview.editor_error() {
+pub(in crate::pages::viewer) fn ViewerDocument(
+    path: Option<PathBuf>,
+    editor_error: Option<String>,
+) -> impl IntoView {
+    let body = if let Some(error) = editor_error {
         view! {
             <Text class="error">{format!("Error: {error}")}</Text>
         }
         .into_view()
-    } else if let Some(path) = preview.path() {
+    } else if let Some(path) = path {
         view! {
             <Markdown src=path syntax_theme=SyntaxTheme::Dark line_numbers=true />
         }

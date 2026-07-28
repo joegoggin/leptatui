@@ -1,71 +1,76 @@
-//! Markdown editor application shell, routes, and global styling.
-
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+//! Markdown editor application shell, shared values, routes, and styling.
 
 use leptatui::prelude::*;
 
 use crate::{
-    core::Controller,
-    pages::{
-        ExplorerPage, ExplorerPageProps, HomePage, HomePageProps, NotFoundPage, ViewerPage,
-        ViewerPageProps,
-    },
+    hooks::Files,
+    pages::{ExplorerPage, HomePage, NotFoundPage, ViewerPage},
+    services::{FileSystem, RecentFilesStore, Workspace},
 };
 
 /// Creates the root Markdown editor view.
 ///
 /// # Arguments
 ///
-/// * `controller` — Shared application state retained across TUI sessions.
-/// * `edit_requested` — Shared flag set when the open preview should be edited.
+/// * `workspace` — Validated workspace shared by routed pages.
+/// * `files` — File-related signals shared across routed pages.
+/// * `filesystem` — Anchored filesystem service.
+/// * `recent_files_store` — Persistent recent-file service.
 ///
 /// # Returns
 ///
 /// A routed Leptatui view starting on Home.
 #[cfg(test)]
 pub(crate) fn app_view(
-    controller: Rc<RefCell<Controller>>,
-    edit_requested: Rc<Cell<bool>>,
+    workspace: Workspace,
+    files: Files,
+    filesystem: FileSystem,
+    recent_files_store: RecentFilesStore,
 ) -> AnyView {
-    app_view_at_path(controller, edit_requested, "/")
+    app_view_at_path(workspace, files, filesystem, recent_files_store, "/")
 }
 
 /// Creates the root Markdown editor view at an explicit path.
 ///
 /// # Arguments
 ///
-/// * `controller` — Shared application state retained across TUI sessions.
-/// * `edit_requested` — Shared flag set when the open preview should be edited.
-/// * `initial_path` — Location shown when this managed terminal session starts.
+/// * `workspace` — Validated workspace shared by routed pages.
+/// * `files` — File-related signals shared across routed pages.
+/// * `filesystem` — Anchored filesystem service.
+/// * `recent_files_store` — Persistent recent-file service.
+/// * `initial_path` — Location shown when the managed session starts.
 ///
 /// # Returns
 ///
 /// A routed Leptatui view starting on `initial_path`.
 pub(crate) fn app_view_at_path(
-    controller: Rc<RefCell<Controller>>,
-    edit_requested: Rc<Cell<bool>>,
+    workspace: Workspace,
+    files: Files,
+    filesystem: FileSystem,
+    recent_files_store: RecentFilesStore,
     initial_path: impl Into<String>,
 ) -> AnyView {
     let initial_path = initial_path.into();
 
     view! {
         <MarkdownEditor
-            controller=controller
-            edit_requested=edit_requested
+            workspace=workspace
+            files=files
+            filesystem=filesystem
+            recent_files_store=recent_files_store
             initial_path=initial_path
         />
     }
 }
 
-/// Provides routing, shared styling, and global application controls.
+/// Provides routing, shared styling, contexts, and global controls.
 ///
 /// # Arguments
 ///
-/// * `controller` — Shared application state.
-/// * `edit_requested` — Flag used to request a restored-terminal edit.
+/// * `workspace` — Validated workspace shared by routed pages.
+/// * `files` — File-related signals shared across routed pages.
+/// * `filesystem` — Anchored filesystem service.
+/// * `recent_files_store` — Persistent recent-file service.
 /// * `initial_path` — First location for the current TUI session.
 ///
 /// # Returns
@@ -73,14 +78,16 @@ pub(crate) fn app_view_at_path(
 /// A routed application shell.
 #[component]
 fn MarkdownEditor(
-    controller: Rc<RefCell<Controller>>,
-    edit_requested: Rc<Cell<bool>>,
+    workspace: Workspace,
+    files: Files,
+    filesystem: FileSystem,
+    recent_files_store: RecentFilesStore,
     initial_path: String,
 ) -> impl IntoView {
-    let home_controller = Rc::clone(&controller);
-    let explorer_controller = Rc::clone(&controller);
-    let viewer_controller = Rc::clone(&controller);
-    let viewer_edit_requested = Rc::clone(&edit_requested);
+    provide_context(workspace);
+    provide_context(files);
+    provide_context(filesystem);
+    provide_context(recent_files_store);
 
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') && key.modifiers == KeyModifiers::NONE {
@@ -187,33 +194,9 @@ fn MarkdownEditor(
         <Router initial_path=initial_path>
             <Block class="app-shell">
                 <Routes fallback=NotFoundPage>
-                    <Route
-                        path="/"
-                        view=move || {
-                            let controller = Rc::clone(&home_controller);
-
-                            view! { <HomePage controller=controller /> }
-                        }
-                    />
-                    <Route
-                        path="/files"
-                        view=move || {
-                            let controller = Rc::clone(&explorer_controller);
-
-                            view! { <ExplorerPage controller=controller /> }
-                        }
-                    />
-                    <Route
-                        path="/view/*path"
-                        view=move || {
-                            let controller = Rc::clone(&viewer_controller);
-                            let edit_requested = Rc::clone(&viewer_edit_requested);
-
-                            view! {
-                                <ViewerPage controller=controller edit_requested=edit_requested />
-                            }
-                        }
-                    />
+                    <Route path="/" view=HomePage />
+                    <Route path="/files" view=ExplorerPage />
+                    <Route path="/view/*path" view=ViewerPage />
                 </Routes>
             </Block>
         </Router>

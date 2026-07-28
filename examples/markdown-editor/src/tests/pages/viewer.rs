@@ -26,12 +26,8 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
     let tree = TestTree::new("viewer-edit-key");
     fs::write(tree.root().join("guide.md"), "# Guide")
         .expect("the Markdown file should be created");
-    let controller = Rc::new(RefCell::new(
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize"),
-    ));
-    let edit_requested = Rc::new(Cell::new(false));
-    let mut view = app_view(Rc::clone(&controller), Rc::clone(&edit_requested));
+    let contexts = TestContexts::new(tree.root());
+    let mut view = contexts.view();
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
     draw_editor(&mut terminal, &view)?;
 
@@ -39,7 +35,7 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
         KeyControl::Pass
     );
-    assert!(!edit_requested.get());
+    assert_eq!(contexts.files.edit_request.get_untracked(), None);
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE))?,
@@ -55,15 +51,15 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
         KeyControl::Exit
     );
-    assert!(edit_requested.get());
+    assert!(contexts.files.edit_request.get_untracked().is_some());
 
-    let quit_requested = Rc::new(Cell::new(false));
-    let mut quit_view = app_view(controller, Rc::clone(&quit_requested));
+    contexts.files.edit_request.set(None);
+    let mut quit_view = contexts.view();
     assert_eq!(
         quit_view.handle_key_event(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))?,
         KeyControl::Exit
     );
-    assert!(!quit_requested.get());
+    assert_eq!(contexts.files.edit_request.get_untracked(), None);
 
     Ok(())
 }
@@ -90,11 +86,8 @@ fn viewer_markdown_view_recovers_after_a_missing_file_returns() -> leptatui::Res
     let tree = TestTree::new("viewer-reload-recovery");
     let guide = tree.root().join("guide.md");
     fs::write(&guide, "# Original").expect("the Markdown file should be created");
-    let controller = Rc::new(RefCell::new(
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize"),
-    ));
-    let mut view = app_view(controller, Rc::new(Cell::new(false)));
+    let contexts = TestContexts::new(tree.root());
+    let mut view = contexts.view();
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
 
     draw_editor(&mut terminal, &view)?;
@@ -149,11 +142,8 @@ fn viewer_markdown_view_renders_invalid_utf8_diagnostics() -> leptatui::Result<(
     let tree = TestTree::new("viewer-invalid-utf8");
     let invalid = tree.root().join("invalid.md");
     fs::write(&invalid, [0xff, 0xfe, 0xfd]).expect("the invalid UTF-8 fixture should be created");
-    let controller = Rc::new(RefCell::new(
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize"),
-    ));
-    let mut view = app_view(controller, Rc::new(Cell::new(false)));
+    let contexts = TestContexts::new(tree.root());
+    let mut view = contexts.view();
     let mut terminal = Terminal::new(TestBackend::new(100, 18))?;
 
     draw_editor(&mut terminal, &view)?;
@@ -195,11 +185,8 @@ fn viewer_markdown_view_navigates_local_links_and_history() -> leptatui::Result<
         .expect("the root Markdown file should be created");
     fs::write(tree.root().join("next.md"), "# Linked document")
         .expect("the linked Markdown file should be created");
-    let controller = Rc::new(RefCell::new(
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize"),
-    ));
-    let mut view = app_view(controller, Rc::new(Cell::new(false)));
+    let contexts = TestContexts::new(tree.root());
+    let mut view = contexts.view();
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
 
     draw_editor(&mut terminal, &view)?;

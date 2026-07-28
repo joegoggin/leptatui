@@ -7,7 +7,6 @@
 //!
 //! - [`app`] — Application routing and responsive rendering.
 //! - [`cli`] — Command-line parsing and root selection.
-//! - [`controller`] — Explorer, preview, and edit state transitions.
 //! - [`editor_process`] — Editor configuration and process construction.
 //! - [`filesystem`] — Anchored discovery and filesystem failure behavior.
 //! - [`pages`] — Page-specific keyboard handling and rendering.
@@ -17,7 +16,6 @@
 
 mod app;
 mod cli;
-mod controller;
 mod editor_process;
 mod filesystem;
 mod pages;

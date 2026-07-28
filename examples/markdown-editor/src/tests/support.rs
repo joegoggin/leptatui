@@ -11,13 +11,107 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use leptatui::prelude::{AnyView, RenderCtx};
+use leptatui::prelude::{AnyView, Owner, RenderCtx};
 use ratatui::{Terminal, backend::TestBackend};
 
 use crate::{
-    core::ExplorerEntry,
-    services::{EnvironmentReader, ProcessLauncher},
+    app::{app_view, app_view_at_path},
+    hooks::Files,
+    services::{
+        EnvironmentReader, ExplorerEntry, FileSystem, ProcessLauncher, RecentFilesStore, Workspace,
+    },
 };
+
+/// Shared-context fixture that keeps its signal owner alive.
+pub(super) struct TestContexts {
+    /// Owner backing every arena-allocated shared file signal.
+    _owner: Owner,
+    /// Validated workspace context.
+    pub(super) workspace: Workspace,
+    /// File-related signals provided through the shared hook.
+    pub(super) files: Files,
+    /// Filesystem service context.
+    pub(super) filesystem: FileSystem,
+    /// Recent-file persistence service context.
+    pub(super) recent_files_store: RecentFilesStore,
+}
+
+impl TestContexts {
+    /// Initializes a memory-backed shared file hook for `root`.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` — Workspace root used to initialize the signals.
+    ///
+    /// # Returns
+    ///
+    /// A [`TestContexts`] retaining the shared file signals.
+    pub(super) fn new(root: &Path) -> Self {
+        Self::with_store(root, RecentFilesStore::memory())
+    }
+
+    /// Initializes shared file signals with an explicit recent-file store.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` — Workspace root used to initialize the signals.
+    /// * `recent_files_store` — Persistence service retained by the fixture.
+    ///
+    /// # Returns
+    ///
+    /// A [`TestContexts`] retaining the shared file signals.
+    pub(super) fn with_store(root: &Path, recent_files_store: RecentFilesStore) -> Self {
+        let owner = Owner::new();
+        let filesystem = FileSystem::new();
+        let workspace = filesystem
+            .validate_root(root)
+            .expect("the workspace should initialize");
+        let (recent_paths, stored_paths, recent_error) =
+            recent_files_store.load_for_workspace(filesystem, &workspace);
+        let files = owner.with(|| Files::new(recent_paths, stored_paths, recent_error));
+
+        Self {
+            _owner: owner,
+            workspace,
+            files,
+            filesystem,
+            recent_files_store,
+        }
+    }
+
+    /// Creates an application view starting on Home.
+    ///
+    /// # Returns
+    ///
+    /// An [`AnyView`] using this fixture's shared values.
+    pub(super) fn view(&self) -> AnyView {
+        app_view(
+            self.workspace.clone(),
+            self.files,
+            self.filesystem,
+            self.recent_files_store.clone(),
+        )
+    }
+
+    /// Creates an application view starting at an explicit route.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Initial router location.
+    ///
+    /// # Returns
+    ///
+    /// An [`AnyView`] using this fixture's shared values.
+    pub(super) fn view_at(&self, path: impl Into<String>) -> AnyView {
+        app_view_at_path(
+            self.workspace.clone(),
+            self.files,
+            self.filesystem,
+            self.recent_files_store.clone(),
+            path,
+        )
+    }
+}
 
 /// Program and argument values captured from one process launch.
 pub(super) type RecordedCommand = (OsString, Vec<OsString>);

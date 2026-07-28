@@ -8,4 +8,4 @@
 mod components;
 mod page;
 
-pub(crate) use page::{HomePage, HomePageProps};
+pub(crate) use page::HomePage;

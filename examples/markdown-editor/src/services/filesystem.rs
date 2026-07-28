@@ -6,14 +6,163 @@
 
 use std::{
     cmp::Ordering,
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fs, io,
     path::{Path, PathBuf},
 };
 
-use crate::core::{DirectoryListing, ExplorerEntry, ExplorerEntryKind, Workspace};
+/// Validated directory that anchors one Markdown editing session.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Workspace {
+    /// Canonical absolute directory that bounds application browsing.
+    root: PathBuf,
+}
 
-/// Filesystem operations available to the application controller.
+impl Workspace {
+    /// Creates a workspace from a validated canonical root.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` — Canonical absolute directory used as the browsing boundary.
+    ///
+    /// # Returns
+    ///
+    /// A [`Workspace`] anchored at the supplied directory.
+    fn new(root: PathBuf) -> Self {
+        Self { root }
+    }
+
+    /// Returns the canonical browsing root.
+    ///
+    /// # Returns
+    ///
+    /// A [`Path`] containing the workspace boundary.
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+}
+
+/// Kind of filesystem entry displayed by the Markdown explorer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExplorerEntryKind {
+    /// Directory that can become the explorer's current location.
+    Directory,
+    /// Markdown document that can be opened by the preview.
+    Markdown,
+}
+
+/// Safe filesystem entry discovered below a validated workspace root.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ExplorerEntry {
+    /// Name shown in the explorer for the directory entry.
+    name: OsString,
+    /// Canonical absolute path to the entry target.
+    path: PathBuf,
+    /// Application-level classification of the entry.
+    kind: ExplorerEntryKind,
+}
+
+impl ExplorerEntry {
+    /// Creates a discovered explorer entry.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — Filesystem name shown to the user.
+    /// * `path` — Canonical absolute target path.
+    /// * `kind` — Directory or Markdown classification.
+    ///
+    /// # Returns
+    ///
+    /// An [`ExplorerEntry`] containing the safe discovered target.
+    pub(crate) fn new(name: OsString, path: PathBuf, kind: ExplorerEntryKind) -> Self {
+        Self { name, path, kind }
+    }
+
+    /// Returns the filesystem name shown to the user.
+    ///
+    /// # Returns
+    ///
+    /// An [`OsStr`] containing the original directory-entry name.
+    pub(crate) fn name(&self) -> &OsStr {
+        &self.name
+    }
+
+    /// Returns the canonical explorer target.
+    ///
+    /// # Returns
+    ///
+    /// A [`Path`] containing the directory or Markdown file target.
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Returns the explorer entry classification.
+    ///
+    /// # Returns
+    ///
+    /// An [`ExplorerEntryKind`] identifying a directory or Markdown file.
+    pub(crate) const fn kind(&self) -> ExplorerEntryKind {
+        self.kind
+    }
+}
+
+/// Successful directory discovery below a workspace root.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct DirectoryListing {
+    /// Canonical directory represented by this listing.
+    directory: PathBuf,
+    /// Safe entries in display order.
+    entries: Vec<ExplorerEntry>,
+}
+
+impl DirectoryListing {
+    /// Creates a successful directory listing.
+    ///
+    /// # Arguments
+    ///
+    /// * `directory` — Canonical directory represented by the listing.
+    /// * `entries` — Safe entries in display order.
+    ///
+    /// # Returns
+    ///
+    /// A [`DirectoryListing`] containing the discovered directory data.
+    fn new(directory: PathBuf, entries: Vec<ExplorerEntry>) -> Self {
+        Self { directory, entries }
+    }
+
+    /// Creates an empty listing for a validated directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `directory` — Canonical directory represented by the empty listing.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`DirectoryListing`] for `directory`.
+    pub(crate) fn empty(directory: PathBuf) -> Self {
+        Self::new(directory, Vec::new())
+    }
+
+    /// Returns the listed directory.
+    ///
+    /// # Returns
+    ///
+    /// A [`Path`] containing the current explorer directory.
+    pub(crate) fn directory(&self) -> &Path {
+        &self.directory
+    }
+
+    /// Returns the ordered explorer entries.
+    ///
+    /// # Returns
+    ///
+    /// A slice of safe [`ExplorerEntry`] values.
+    pub(crate) fn entries(&self) -> &[ExplorerEntry] {
+        &self.entries
+    }
+}
+
+/// Filesystem operations available to page-owned application behavior.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct FileSystem;
 

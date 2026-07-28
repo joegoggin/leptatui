@@ -30,11 +30,8 @@ fn routed_pages_open_reload_and_remember_a_markdown_file() -> leptatui::Result<(
         .map(|index| format!("## Beta line {index}\n"))
         .collect::<String>();
     fs::write(&beta_path, beta_source).expect("the long Markdown file should be created");
-    let controller = Rc::new(RefCell::new(
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize"),
-    ));
-    let mut view = app_view(controller, Rc::new(Cell::new(false)));
+    let contexts = TestContexts::new(tree.root());
+    let mut view = contexts.view();
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
 
     draw_editor(&mut terminal, &view)?;

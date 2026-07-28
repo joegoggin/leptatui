@@ -13,5 +13,7 @@ mod recent_files;
 pub(crate) use editor_process::EditorProcess;
 #[cfg(test)]
 pub(crate) use editor_process::{EnvironmentReader, ProcessLauncher};
-pub(crate) use filesystem::FileSystem;
-pub(crate) use recent_files::RecentFilesStore;
+pub(crate) use filesystem::{
+    DirectoryListing, ExplorerEntry, ExplorerEntryKind, FileSystem, Workspace,
+};
+pub(crate) use recent_files::{RECENT_FILE_LIMIT, RecentFilesStore};

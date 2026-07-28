@@ -17,7 +17,7 @@ mod not_found;
 mod shared;
 mod viewer;
 
-pub(crate) use explorer::{ExplorerPage, ExplorerPageProps};
-pub(crate) use home::{HomePage, HomePageProps};
+pub(crate) use explorer::ExplorerPage;
+pub(crate) use home::HomePage;
 pub(crate) use not_found::NotFoundPage;
-pub(crate) use viewer::{ViewerPage, ViewerPageProps, viewer_location};
+pub(crate) use viewer::{ViewerPage, viewer_location};

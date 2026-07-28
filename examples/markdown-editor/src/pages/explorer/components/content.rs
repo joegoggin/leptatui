@@ -1,12 +1,10 @@
-//! Explorer page content and reactive directory listing.
-
-use std::{cell::RefCell, rc::Rc};
+//! Explorer page content rendered from page-owned signals.
 
 use leptatui::prelude::*;
 
 use crate::{
-    core::Controller,
     pages::shared::{relative_path, routed_page_style},
+    services::{DirectoryListing, Workspace},
 };
 
 use super::{ExplorerList, ExplorerListProps};
@@ -15,19 +13,24 @@ use super::{ExplorerList, ExplorerListProps};
 ///
 /// # Arguments
 ///
-/// * `controller` — Shared application state.
+/// * `workspace` — Validated workspace displayed by the page.
+/// * `listing` — Page-owned directory listing signal.
+/// * `selection` — Page-owned selected index signal.
+/// * `error` — Page-owned recoverable error signal.
 ///
 /// # Returns
 ///
 /// Explorer headings and the scrollable listing.
 #[component]
 pub(in crate::pages::explorer) fn ExplorerContent(
-    controller: Rc<RefCell<Controller>>,
+    workspace: Workspace,
+    listing: RwSignal<DirectoryListing>,
+    selection: RwSignal<Option<usize>>,
+    error: RwSignal<Option<String>>,
 ) -> impl IntoView {
     let home_navigate = use_navigate();
-    let root = controller.borrow().workspace().root().to_path_buf();
-    let directory_controller = Rc::clone(&controller);
-    let list_controller = Rc::clone(&controller);
+    let root = workspace.root().to_path_buf();
+    let directory_workspace = workspace.clone();
     let page_style = routed_page_style();
 
     view! {
@@ -35,21 +38,21 @@ pub(in crate::pages::explorer) fn ExplorerContent(
             <Text class="page-title">"File explorer"</Text>
             <Text class="path-context">{format!("Root: {}", root.display())}</Text>
             {move || {
-                let controller = directory_controller.borrow();
-                let directory = relative_path(
-                    controller.workspace().root(),
-                    controller.explorer().directory(),
-                );
+                let current = listing.get();
+                let directory =
+                    relative_path(directory_workspace.root(), current.directory());
                 view! {
                     <Text class="path-context">{format!("Directory: {directory}")}</Text>
                 }
             }}
             <Block class="page-content scroll-content">
                 {move || {
-                    let state = list_controller.borrow().explorer().clone();
-
                     view! {
-                        <ExplorerList state=state />
+                        <ExplorerList
+                            listing=listing.get()
+                            selection=selection.get()
+                            error=error.get()
+                        />
                     }
                 }}
             </Block>

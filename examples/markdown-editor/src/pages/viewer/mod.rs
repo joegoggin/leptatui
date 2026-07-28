@@ -8,4 +8,4 @@
 mod components;
 mod page;
 
-pub(crate) use page::{ViewerPage, ViewerPageProps, viewer_location};
+pub(crate) use page::{ViewerPage, viewer_location};
