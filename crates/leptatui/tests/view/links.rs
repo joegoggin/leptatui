@@ -41,7 +41,7 @@ fn link_builder_stores_rich_text_target_and_metadata() {
 /// - The default link style is underlined but not reversed.
 /// - The focused link style is both underlined and reversed.
 #[test]
-fn link_renders_default_and_focused_styles() -> Result<()> {
+fn link_renders_default_and_focused_styles() -> leptatui::app::Result<()> {
     let mut view = link("Guide", "https://example.com");
     let mut terminal = Terminal::new(TestBackend::new(8, 1))?;
     draw_view(&mut terminal, &view)?;
@@ -74,7 +74,7 @@ fn link_renders_default_and_focused_styles() -> Result<()> {
 /// - Focus moves to the missing filesystem target.
 /// - Activating that target returns a link-open error.
 #[test]
-fn link_focus_skips_fragments_and_propagates_open_errors() -> Result<()> {
+fn link_focus_skips_fragments_and_propagates_open_errors() -> leptatui::app::Result<()> {
     let missing = std::env::temp_dir().join(format!(
         "leptatui-missing-link-target-{}",
         std::process::id()
@@ -109,7 +109,7 @@ fn link_focus_skips_fragments_and_propagates_open_errors() -> Result<()> {
 /// - Reconciliation preserves focus when the link target is unchanged.
 /// - Reconciliation clears focus when the link target changes.
 #[test]
-fn link_reconciliation_retains_focus_only_for_matching_targets() -> Result<()> {
+fn link_reconciliation_retains_focus_only_for_matching_targets() -> leptatui::app::Result<()> {
     let mut previous = link("Guide", "https://example.com");
     previous.handle_key_event(key_event(KeyCode::Tab))?;
     assert_eq!(control_focuses(&previous), vec![true]);

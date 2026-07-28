@@ -20,7 +20,7 @@
 /// Controlled text-area edits can change child height and must keep the cursor
 /// visible inside overflowing parents.
 #[test]
-fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> Result<()> {
+fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> leptatui::app::Result<()> {
     let width = 12;
     let backend = TestBackend::new(width, 5);
     let mut terminal = Terminal::new(backend)?;
@@ -79,7 +79,7 @@ fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> Result<()> {
 /// Single-line inputs at movement boundaries should pass normal-mode movement
 /// intent to their overflowing parent form.
 #[test]
-fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> Result<()> {
+fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 5);
     let mut terminal = Terminal::new(backend)?;
     let mut input_view = input("Ada").with_focus(true);
@@ -132,7 +132,7 @@ fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> Result<()> {
 /// Multi-line text areas should only delegate normal-mode movement to the form
 /// after reaching their own vertical boundaries.
 #[test]
-fn normal_mode_text_area_boundary_keys_scroll_overflowing_form() -> Result<()> {
+fn normal_mode_text_area_boundary_keys_scroll_overflowing_form() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 5);
     let mut terminal = Terminal::new(backend)?;
     let mut text_area_view = text_area("one\ntwo").with_focus(true);
@@ -199,7 +199,7 @@ fn normal_mode_text_area_boundary_keys_scroll_overflowing_form() -> Result<()> {
 ///
 /// Component boundaries should preserve the built-in focus visibility behavior.
 #[test]
-fn tab_focus_scrolls_to_focused_button_inside_component_boundary() -> Result<()> {
+fn tab_focus_scrolls_to_focused_button_inside_component_boundary() -> leptatui::app::Result<()> {
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
@@ -236,7 +236,7 @@ fn tab_focus_scrolls_to_focused_button_inside_component_boundary() -> Result<()>
 /// - Focusing the wrapped link scrolls the Markdown view down one row.
 /// - The focused link is visible at the start of the viewport.
 #[test]
-fn focused_word_wrapped_markdown_link_scrolls_into_view() -> Result<()> {
+fn focused_word_wrapped_markdown_link_scrolls_into_view() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(10, 1))?;
     let mut view = markdown("123456 [Link](https://example.com)");
 

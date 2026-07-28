@@ -60,7 +60,7 @@ fn fractional_track(fraction: f32) -> GridTemplateTrack {
 /// - The fractional column consumes the remaining six cells.
 /// - Painted rows preserve the wrapped and unwrapped intrinsic content.
 #[test]
-fn intrinsic_tracks_use_terminal_text_contributions() -> Result<()> {
+fn intrinsic_tracks_use_terminal_text_contributions() -> leptatui::app::Result<()> {
     let root = div((text("AA BBB"), text("CC DDDD"), text("E")))
         .with_inline_style(
             fixture_size(16.0, 2.0)
@@ -110,7 +110,7 @@ fn intrinsic_tracks_use_terminal_text_contributions() -> Result<()> {
 /// - The second row begins after the reserved row gap.
 /// - Painted rows leave both gap axes empty.
 #[test]
-fn fractions_and_gaps_share_only_unreserved_space() -> Result<()> {
+fn fractions_and_gaps_share_only_unreserved_space() -> leptatui::app::Result<()> {
     let root = div((text("A"), text("B"), text("C"), text("D")))
         .with_inline_style(
             fixture_size(14.0, 3.0)
@@ -162,7 +162,7 @@ fn fractions_and_gaps_share_only_unreserved_space() -> Result<()> {
 /// - The first item remains capped at three by two cells.
 /// - The second item honors its two-cell minimum width and block-end alignment.
 #[test]
-fn minmax_tracks_and_item_constraints_clamp_grid_items() -> Result<()> {
+fn minmax_tracks_and_item_constraints_clamp_grid_items() -> leptatui::app::Result<()> {
     let first = text("A").with_inline_style(
         TuiStyle::new()
             .size(LayoutSize::new(
@@ -229,7 +229,7 @@ fn minmax_tracks_and_item_constraints_clamp_grid_items() -> Result<()> {
 /// - Self alignment overrides independently reposition the second and fourth items.
 /// - Painted labels occupy the aligned terminal cells.
 #[test]
-fn container_and_item_alignment_position_tracks_and_children() -> Result<()> {
+fn container_and_item_alignment_position_tracks_and_children() -> leptatui::app::Result<()> {
     let fixed_item = |label| text(label).with_inline_style(fixture_size(1.0, 1.0));
     let root = div((
         fixed_item("A"),
@@ -295,7 +295,7 @@ fn container_and_item_alignment_position_tracks_and_children() -> Result<()> {
 /// - Nested children retain their two- and three-cell intrinsic rectangles.
 /// - Painting preserves the nested column gap and outer track boundary.
 #[test]
-fn nested_grid_contributes_intrinsic_track_geometry() -> Result<()> {
+fn nested_grid_contributes_intrinsic_track_geometry() -> leptatui::app::Result<()> {
     let nested = div((text("AB"), text("CDE"))).with_inline_style(
         TuiStyle::new()
             .display(Display::Grid)
@@ -366,7 +366,7 @@ fn nested_grid_contributes_intrinsic_track_geometry() -> Result<()> {
 /// - The narrow viewport recomputes the fractions as two and four cells.
 /// - Returning to the wide viewport replaces the retained narrow geometry.
 #[test]
-fn grid_rebuilds_fractional_geometry_after_terminal_resize() -> Result<()> {
+fn grid_rebuilds_fractional_geometry_after_terminal_resize() -> leptatui::app::Result<()> {
     let root = div((text("A"), text("B")))
         .with_inline_style(
             TuiStyle::new()
@@ -421,7 +421,8 @@ fn grid_rebuilds_fractional_geometry_after_terminal_resize() -> Result<()> {
 /// - The fractional column consumes the remaining eight cells.
 /// - Painted output records every resulting track boundary.
 #[test]
-fn mixed_templates_expand_percentage_auto_repeat_and_fraction_tracks() -> Result<()> {
+fn mixed_templates_expand_percentage_auto_repeat_and_fraction_tracks() -> leptatui::app::Result<()>
+{
     let root = div((text("A"), text("B"), text("C"), text("DDD"), text("E")))
         .with_inline_style(
             fixture_size(20.0, 1.0)
@@ -473,8 +474,8 @@ fn mixed_templates_expand_percentage_auto_repeat_and_fraction_tracks() -> Result
 /// - Auto-fit collapses the two empty tracks.
 /// - End alignment moves the remaining auto-fit tracks to the container end.
 #[test]
-fn automatic_repetitions_fill_and_collapse_empty_tracks() -> Result<()> {
-    let render = |repetition| -> Result<_> {
+fn automatic_repetitions_fill_and_collapse_empty_tracks() -> leptatui::app::Result<()> {
+    let render = |repetition| -> leptatui::app::Result<_> {
         let root = div((text("A"), text("B")))
             .with_inline_style(
                 fixture_size(8.0, 1.0)
@@ -519,7 +520,7 @@ fn automatic_repetitions_fill_and_collapse_empty_tracks() -> Result<()> {
 /// - The final item ends exactly at the ten-cell container edge.
 /// - Painted output records the rounded starting column of every item.
 #[test]
-fn fractional_tracks_round_cumulatively_to_the_container_edge() -> Result<()> {
+fn fractional_tracks_round_cumulatively_to_the_container_edge() -> leptatui::app::Result<()> {
     let root = div((text("A"), text("B"), text("C")))
         .with_inline_style(
             fixture_size(10.0, 1.0)
@@ -638,7 +639,8 @@ fn symbol_position(rows: &[String], symbol: &str) -> (usize, usize) {
 /// - Narrow rendering places activity below revenue after the media query applies.
 /// - Returning to the wide viewport restores the original panel positions.
 #[test]
-fn responsive_grid_recomputes_after_viewport_and_media_query_changes() -> Result<()> {
+fn responsive_grid_recomputes_after_viewport_and_media_query_changes() -> leptatui::app::Result<()>
+{
     let mut fixture = ResponsiveGridFixture::new();
 
     let wide = rendered_lines(&render_component(&mut fixture, 80, 6)?);

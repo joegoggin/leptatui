@@ -1,138 +1,107 @@
-//! Signal-backed async action state for terminal apps.
+//! Signal-backed asynchronous actions for terminal apps.
 //!
-//! Actions run POST-like asynchronous writes and expose the latest pending,
-//! input, and result state as a signal-friendly value.
+//! Actions mirror Leptos action semantics: the asynchronous handler can return
+//! any output type, including an application-owned [`std::result::Result`].
+//! Leptatui only manages pending, input, value, and version signals and
+//! requests terminal redraws when those signals change.
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use leptos::prelude::{
-    Get, GetUntracked, ReadSignal, Set, With, WithUntracked, WriteSignal, signal,
+use leptos::prelude::{Get, GetUntracked, ReadSignal, Set, Update, WriteSignal, signal};
+
+use crate::{
+    app::request_redraw,
+    executor::{LatestTask, init_tokio_executor},
 };
 
-use crate::app::request_redraw;
-use crate::executor::{LatestTask, init_tokio_executor};
+/// Boxed future returned by an action handler.
+type BoxActionFuture<O> = Pin<Box<dyn Future<Output = O> + Send>>;
+/// Shared asynchronous handler invoked for each dispatched input.
+type ActionHandler<I, O> = Arc<dyn Fn(&I) -> BoxActionFuture<O> + Send + Sync>;
 
-/// Boxed future returned by an action mutation handler.
-type BoxActionFuture<O, E> = Pin<Box<dyn Future<Output = std::result::Result<O, E>> + Send>>;
-/// Shared mutation handler invoked for each dispatched action input.
-type ActionHandler<I, O, E> = Arc<dyn Fn(I) -> BoxActionFuture<O, E> + Send + Sync>;
-
-/// Current state for an asynchronous mutation action.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActionState<I, O, E> {
-    /// Whether the latest dispatched mutation is still in flight.
-    pending: bool,
-    /// Most recent input passed to [`Action::dispatch`].
-    input: Option<I>,
-    /// Result produced by the most recent completed dispatch.
-    result: Option<std::result::Result<O, E>>,
-}
-
-impl<I, O, E> ActionState<I, O, E> {
-    /// Returns an idle action state with no input or result.
-    pub fn idle() -> Self {
-        Self {
-            pending: false,
-            input: None,
-            result: None,
-        }
-    }
-
-    /// Returns a pending action state for a dispatched input.
-    pub fn pending(input: I) -> Self {
-        Self {
-            pending: true,
-            input: Some(input),
-            result: None,
-        }
-    }
-
-    /// Returns a completed action state for a dispatched input and result.
-    pub fn completed(input: I, result: std::result::Result<O, E>) -> Self {
-        Self {
-            pending: false,
-            input: Some(input),
-            result: Some(result),
-        }
-    }
-
-    /// Returns whether the action is currently pending.
-    pub fn is_pending(&self) -> bool {
-        self.pending
-    }
-
-    /// Returns the latest dispatched input by reference.
-    pub fn input(&self) -> Option<&I> {
-        self.input.as_ref()
-    }
-
-    /// Returns the latest action result by reference.
-    pub fn result(&self) -> Option<&std::result::Result<O, E>> {
-        self.result.as_ref()
-    }
-
-    /// Returns the successful action output by reference.
-    pub fn value(&self) -> Option<&O> {
-        match self.result() {
-            Some(Ok(value)) => Some(value),
-            Some(Err(_)) | None => None,
-        }
-    }
-
-    /// Returns the action error by reference.
-    pub fn error(&self) -> Option<&E> {
-        match self.result() {
-            Some(Err(error)) => Some(error),
-            Some(Ok(_)) | None => None,
-        }
-    }
-}
-
-/// Reactive handle for an async mutation.
-pub struct Action<I, O, E> {
-    /// Signal containing the visible action state.
-    state: ReadSignal<ActionState<I, O, E>>,
-    /// Setter used by dispatch tasks to publish pending and completed states.
-    set_state: WriteSignal<ActionState<I, O, E>>,
-    /// Async mutation handler invoked for each dispatch.
-    handler: ActionHandler<I, O, E>,
-    /// Monotonic dispatch id used to ignore stale completions.
+/// Reactive handle for an asynchronous mutation.
+///
+/// The action stores the latest output without interpreting it. Applications
+/// represent recoverable failures with an output such as `Result<T, E>` and
+/// handle that result in their own components or contexts.
+pub struct Action<I, O> {
+    /// Signal indicating whether the latest dispatch is running.
+    pending: ReadSignal<bool>,
+    /// Setter for the pending signal.
+    set_pending: WriteSignal<bool>,
+    /// Signal containing the latest in-flight input.
+    input: ReadSignal<Option<I>>,
+    /// Setter for the input signal.
+    set_input: WriteSignal<Option<I>>,
+    /// Signal containing the latest completed output.
+    value: ReadSignal<Option<O>>,
+    /// Setter for the output signal.
+    set_value: WriteSignal<Option<O>>,
+    /// Signal containing the number of visible completions.
+    version: ReadSignal<usize>,
+    /// Setter for the completion-version signal.
+    set_version: WriteSignal<usize>,
+    /// Asynchronous handler invoked for each dispatch.
+    handler: ActionHandler<I, O>,
+    /// Monotonic dispatch identifier used to ignore stale completions.
     latest_dispatch: LatestTask,
 }
 
-impl<I, O, E> Clone for Action<I, O, E> {
-    /// Clones the action signal and mutation handles.
+impl<I, O> Clone for Action<I, O> {
+    /// Clones the action signals and shared handler.
     fn clone(&self) -> Self {
         Self {
-            state: self.state,
-            set_state: self.set_state,
+            pending: self.pending,
+            set_pending: self.set_pending,
+            input: self.input,
+            set_input: self.set_input,
+            value: self.value,
+            set_value: self.set_value,
+            version: self.version,
+            set_version: self.set_version,
             handler: Arc::clone(&self.handler),
             latest_dispatch: self.latest_dispatch.clone(),
         }
     }
 }
 
-impl<I, O, E> Action<I, O, E>
+impl<I, O> Action<I, O>
 where
     I: Clone + Send + Sync + 'static,
     O: Send + Sync + 'static,
-    E: Send + Sync + 'static,
 {
-    /// Creates an action from an async mutation handler.
+    /// Creates an action from an asynchronous mutation handler.
+    ///
+    /// # Arguments
+    ///
+    /// * `handler` — Function that receives a dispatched input by reference and
+    ///   returns the asynchronous output.
+    ///
+    /// # Returns
+    ///
+    /// An [`Action`] with idle pending, input, and value signals.
     pub fn new<F, Fut>(handler: F) -> Self
     where
-        F: Fn(I) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = std::result::Result<O, E>> + Send + 'static,
+        F: Fn(&I) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = O> + Send + 'static,
     {
         init_tokio_executor();
 
-        let (state, set_state) = signal(ActionState::idle());
-        let handler: ActionHandler<I, O, E> =
-            Arc::new(move |input| -> BoxActionFuture<O, E> { Box::pin(handler(input)) });
+        let (pending, set_pending) = signal(false);
+        let (input, set_input) = signal(None);
+        let (value, set_value) = signal(None);
+        let (version, set_version) = signal(0);
+        let handler: ActionHandler<I, O> = Arc::new(move |input| Box::pin(handler(input)));
 
         Self {
-            state,
-            set_state,
+            pending,
+            set_pending,
+            input,
+            set_input,
+            value,
+            set_value,
+            version,
+            set_version,
             handler,
             latest_dispatch: LatestTask::default(),
         }
@@ -140,121 +109,106 @@ where
 
     /// Dispatches the action with an input value.
     ///
-    /// The latest dispatch controls the visible action state. Older in-flight
-    /// tasks are not cancelled, but their completions are ignored if a newer
-    /// dispatch has started.
+    /// The latest dispatch controls the visible state. Older tasks may finish,
+    /// but their completions cannot replace the latest output.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Value passed to the asynchronous handler.
     ///
     /// # Panics
     ///
-    /// Panics if called outside a Tokio runtime, because dispatches are
-    /// scheduled with [`tokio::spawn`].
+    /// Panics if called outside a Tokio runtime.
     pub fn dispatch(&self, input: I) {
         let dispatch_id = self.latest_dispatch.next();
         let task_input = input.clone();
-        let completion_input = input.clone();
-        let _ = self.set_state.try_set(ActionState::pending(input));
+        let future = (self.handler)(&task_input);
+
+        let _ = self.set_input.try_set(Some(input));
+        let _ = self.set_pending.try_set(true);
         request_redraw();
 
-        let handler = Arc::clone(&self.handler);
         let latest_dispatch = self.latest_dispatch.clone();
-        let set_state = self.set_state;
+        let set_pending = self.set_pending;
+        let set_input = self.set_input;
+        let set_value = self.set_value;
+        let set_version = self.set_version;
 
         tokio::spawn(async move {
-            let result = handler(task_input).await;
+            let output = future.await;
 
             if latest_dispatch.is_current(dispatch_id) {
-                let _ = set_state.try_set(ActionState::completed(completion_input, result));
+                let _ = set_value.try_set(Some(output));
+                let _ = set_input.try_set(None);
+                let _ = set_pending.try_set(false);
+                set_version.update(|version| *version += 1);
                 request_redraw();
             }
         });
     }
 
-    /// Returns the read signal containing this action's state.
-    pub fn state(&self) -> ReadSignal<ActionState<I, O, E>> {
-        self.state
+    /// Clears the most recent completed output.
+    ///
+    /// Clearing does not cancel an in-flight dispatch or modify its input.
+    pub fn clear(&self) {
+        let _ = self.set_value.try_set(None);
+        request_redraw();
     }
 
-    /// Reads the current action state reactively by reference.
-    pub fn with<R>(&self, read: impl FnOnce(&ActionState<I, O, E>) -> R) -> R {
-        self.state.with(read)
+    /// Returns the signal indicating whether the latest dispatch is running.
+    ///
+    /// # Returns
+    ///
+    /// A [`ReadSignal<bool>`] containing the pending state.
+    pub fn pending(&self) -> ReadSignal<bool> {
+        self.pending
     }
 
-    /// Reads the current action state without tracking it.
-    pub fn with_untracked<R>(&self, read: impl FnOnce(&ActionState<I, O, E>) -> R) -> R {
-        self.state.with_untracked(read)
+    /// Returns the signal containing the latest in-flight input.
+    ///
+    /// # Returns
+    ///
+    /// A [`ReadSignal<Option<I>>`] that clears after the latest completion.
+    pub fn input(&self) -> ReadSignal<Option<I>> {
+        self.input
     }
 
-    /// Returns whether the action is currently pending.
+    /// Returns the signal containing the latest completed output.
+    ///
+    /// # Returns
+    ///
+    /// A [`ReadSignal<Option<O>>`] that retains its value during later
+    /// dispatches.
+    pub fn value(&self) -> ReadSignal<Option<O>> {
+        self.value
+    }
+
+    /// Returns the signal containing the visible completion count.
+    ///
+    /// # Returns
+    ///
+    /// A [`ReadSignal<usize>`] incremented after each latest completion.
+    pub fn version(&self) -> ReadSignal<usize> {
+        self.version
+    }
+
+    /// Returns whether the latest dispatch is running.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] containing the tracked pending state.
     pub fn is_pending(&self) -> bool {
-        self.with(ActionState::is_pending)
-    }
-}
-
-impl<I, O, E> Action<I, O, E>
-where
-    I: Clone + Send + Sync + 'static,
-    O: Clone + Send + Sync + 'static,
-    E: Clone + Send + Sync + 'static,
-{
-    /// Returns the current action state reactively.
-    pub fn get(&self) -> ActionState<I, O, E> {
-        self.state.get()
+        self.pending.get()
     }
 
-    /// Returns the current action state without tracking it.
-    pub fn get_untracked(&self) -> ActionState<I, O, E> {
-        self.state.get_untracked()
+    /// Returns whether the latest dispatch is running without tracking.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] containing the untracked pending state.
+    pub fn is_pending_untracked(&self) -> bool {
+        self.pending.get_untracked()
     }
-
-    /// Returns the latest dispatched input reactively.
-    pub fn input(&self) -> Option<I> {
-        self.with(|state| state.input().cloned())
-    }
-
-    /// Returns the latest dispatched input without tracking it.
-    pub fn input_untracked(&self) -> Option<I> {
-        self.with_untracked(|state| state.input().cloned())
-    }
-
-    /// Returns the latest action result reactively.
-    pub fn result(&self) -> Option<std::result::Result<O, E>> {
-        self.with(|state| state.result().cloned())
-    }
-
-    /// Returns the latest action result without tracking it.
-    pub fn result_untracked(&self) -> Option<std::result::Result<O, E>> {
-        self.with_untracked(|state| state.result().cloned())
-    }
-
-    /// Returns the successful action output, when available.
-    pub fn value(&self) -> Option<O> {
-        self.with(|state| state.value().cloned())
-    }
-
-    /// Returns the action error, when available.
-    pub fn error(&self) -> Option<E> {
-        self.with(|state| state.error().cloned())
-    }
-}
-
-/// Creates an action from an async mutation handler.
-///
-/// # Arguments
-///
-/// * `handler` — Async mutation handler to run for each dispatched input.
-///
-/// # Returns
-///
-/// An [`Action`] that exposes pending, input, and result state for the handler.
-pub fn create_action<I, O, E, F, Fut>(handler: F) -> Action<I, O, E>
-where
-    I: Clone + Send + Sync + 'static,
-    O: Send + Sync + 'static,
-    E: Send + Sync + 'static,
-    F: Fn(I) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = std::result::Result<O, E>> + Send + 'static,
-{
-    Action::new(handler)
 }
 
 #[cfg(test)]
@@ -265,7 +219,7 @@ mod tests {
         time::Duration,
     };
 
-    use leptos::prelude::Owner;
+    use leptos::prelude::{GetUntracked, Owner};
     use tokio::{sync::oneshot, task::yield_now, time::timeout};
 
     use crate::app::{redraw_test_lock, subscribe_redraws};
@@ -282,15 +236,15 @@ mod tests {
     /// # Example Under Test
     ///
     /// ```text
-    /// create_action(|input| async move { Ok(format!("{input}:saved")) })
+    /// Action::new(|input| async move { Ok(input) })
     /// action.dispatch(5)
     /// ```
     ///
     /// # Assertions
     ///
-    /// - The pending dispatch sends a redraw request.
-    /// - Completing the action successfully sends another redraw request.
-    /// - The action stores `Ok("5:saved")` as its latest result.
+    /// - Dispatching sends a redraw request.
+    /// - Successful completion sends another redraw request.
+    /// - The action stores `Ok("5:saved")` as its output value.
     #[tokio::test(flavor = "current_thread")]
     async fn successful_completion_requests_redraw() {
         assert_completion_requests_redraw(Ok(String::from("saved"))).await;
@@ -301,21 +255,21 @@ mod tests {
     /// # Example Under Test
     ///
     /// ```text
-    /// create_action(|_| async move { Err("offline") })
+    /// Action::new(|_| async move { Err("offline") })
     /// action.dispatch(5)
     /// ```
     ///
     /// # Assertions
     ///
-    /// - The pending dispatch sends a redraw request.
-    /// - Completing the action with an error sends another redraw request.
-    /// - The action stores `Err("offline")` as its latest result.
+    /// - Dispatching sends a redraw request.
+    /// - Failed completion sends another redraw request.
+    /// - The action stores `Err("offline")` as its output value.
     #[tokio::test(flavor = "current_thread")]
     async fn error_completion_requests_redraw() {
         assert_completion_requests_redraw(Err("offline")).await;
     }
 
-    /// Verifies action completion redraw behavior for one controlled response.
+    /// Verifies redraw behavior for one controlled action response.
     ///
     /// # Arguments
     ///
@@ -328,8 +282,9 @@ mod tests {
         let pending_for_action = Arc::clone(&pending);
         let mut redraws = subscribe_redraws();
 
-        let action: Action<i32, String, &'static str> = owner.with(|| {
-            create_action(move |input| {
+        let action: Action<i32, TestActionResult> = owner.with(|| {
+            Action::new(move |input| {
+                let input = *input;
                 let pending = Arc::clone(&pending_for_action);
 
                 async move {
@@ -356,10 +311,20 @@ mod tests {
             .expect("completion redraw request should arrive")
             .expect("redraw sender should stay available");
 
-        let result = action.result_untracked();
+        timeout(Duration::from_secs(1), async {
+            while action.value().get_untracked().is_none() {
+                yield_now().await;
+            }
+        })
+        .await
+        .expect("action output should be stored");
+
+        let result = action.value().get_untracked();
 
         match expected {
-            Ok(value) => assert_eq!(result, Some(Ok(format!("5:{value}")))),
+            Ok(value) => {
+                assert_eq!(result, Some(Ok(format!("5:{value}"))));
+            }
             Err(error) => assert_eq!(result, Some(Err(error))),
         }
     }
@@ -368,18 +333,18 @@ mod tests {
     ///
     /// # Arguments
     ///
-    /// * `pending` — Shared slot that stores the sender side of the action response.
+    /// * `pending` — Shared slot storing the action response sender.
     ///
     /// # Returns
     ///
-    /// A [`oneshot::Receiver`] awaited by the test action handler.
+    /// A [`oneshot::Receiver`] awaited by the test handler.
     fn insert_pending_action(pending: &PendingAction) -> oneshot::Receiver<TestActionResult> {
         let (sender, receiver) = oneshot::channel();
         *pending.lock().expect("pending action lock") = Some(sender);
         receiver
     }
 
-    /// Waits until the controlled action has registered its response sender.
+    /// Waits until the controlled action registers its response sender.
     ///
     /// # Arguments
     ///
@@ -394,12 +359,12 @@ mod tests {
         .expect("pending action should be registered");
     }
 
-    /// Sends the controlled action response to the pending task.
+    /// Sends a controlled response to the pending action.
     ///
     /// # Arguments
     ///
-    /// * `pending` — Shared slot containing the sender side of the action response.
-    /// * `response` — Result to deliver to the action handler.
+    /// * `pending` — Shared slot containing the response sender.
+    /// * `response` — Result delivered to the action handler.
     fn send_action_response(pending: &PendingAction, response: TestActionResult) {
         let sender = pending
             .lock()

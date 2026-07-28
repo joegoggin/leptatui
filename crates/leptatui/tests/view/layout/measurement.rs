@@ -12,7 +12,7 @@
 /// - The terminal draw call succeeds.
 /// - The flex row reports the available width and tallest child height.
 #[test]
-fn flex_row_intrinsic_size_uses_tallest_child() -> Result<()> {
+fn flex_row_intrinsic_size_uses_tallest_child() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = div(vec![text("Hello World"), text("Side")])
@@ -42,7 +42,7 @@ fn flex_row_intrinsic_size_uses_tallest_child() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The text area size includes the available width, trailing blank line, and border.
 #[test]
-fn text_area_intrinsic_size_counts_trailing_newline() -> Result<()> {
+fn text_area_intrinsic_size_counts_trailing_newline() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("Ada\n");
@@ -76,7 +76,7 @@ fn text_area_intrinsic_size_counts_trailing_newline() -> Result<()> {
 /// Parent layouts use component measurements to resolve child geometry and
 /// overflow.
 #[test]
-fn component_view_intrinsic_size_uses_wrapped_view_size() -> Result<()> {
+fn component_view_intrinsic_size_uses_wrapped_view_size() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = component(div([text("One"), text("Two"), text("Three")]));
@@ -109,7 +109,7 @@ fn component_view_intrinsic_size_uses_wrapped_view_size() -> Result<()> {
 /// - The second render succeeds.
 /// - The wrapped text row and later child become visible after scrolling.
 #[test]
-fn overflowing_column_scrolls_wrapped_text_rows() -> Result<()> {
+fn overflowing_column_scrolls_wrapped_text_rows() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(7, 2);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div(vec![text("Hello World"), text("Bottom")]);

@@ -110,16 +110,17 @@ spacing is reduced.
 - `services` contains anchored filesystem access, persistent recent-file
   storage, external editor process boundaries, restored-terminal session
   coordination, and filesystem result values.
-- `app` owns component-driven startup and the application shell. Its prop-free
-  root parses the CLI, initializes services and signals, provides typed
-  contexts, and declares `/`, `/files`, and `/view/*path`.
+- `contexts` owns shared notification state and user-facing feedback.
+- `app` owns the application shell, provides typed contexts, and declares `/`,
+  `/files`, and `/view/*path`.
 - `pages` organizes each routed feature around a `page` module with co-located
   state and child components. Explorer owns its listing, selection, and error
   signals; Viewer derives its document from the route and owns its reload
   revision. Viewer delegates document rendering to the existing `<Markdown />`
   component.
-- `main` only constructs `<AppRouter />` and passes that view to the async
-  Leptatui runner.
+- `main` uses `anyhow` to add startup and runtime context while it parses the
+  CLI, validates the workspace, initializes services and signals, constructs
+  `<AppRouter />`, and starts Leptatui.
 
 The normal data flow is CLI root → `use_workspace()` context → page-owned
 Explorer signals → encoded Viewer route → `<Markdown />` Viewer. Successful
@@ -128,7 +129,9 @@ Viewer route resolution updates and persists recent-file values through
 editor session, temporarily restores the terminal, appends `--` and the path to
 the resolved editor command, and resumes the same Viewer component. Completion
 updates the Viewer revision and path-associated failure signal so the mounted
-document reloads in place.
+document reloads in place. Recoverable failures retain their `anyhow` source
+chains in shared pointers until the page renders them inline or sends them
+through the notification context.
 
 ## Verification
 

@@ -3,7 +3,7 @@ struct MacroContextConsumer;
 
 impl View for MacroContextConsumer {
     /// Records the context label visible during render.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         *MACRO_CONTEXT_OBSERVED
             .lock()
             .expect("context observation lock should be available") =

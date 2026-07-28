@@ -18,7 +18,7 @@
 /// - Updating root-owned shared state repaints the active page without rerunning root setup.
 /// - A descendant component can navigate to counter and settings routes.
 #[test]
-fn generated_view_route_switches_pages_and_preserves_shared_state() -> Result<()> {
+fn generated_view_route_switches_pages_and_preserves_shared_state() -> leptatui::app::Result<()> {
     MACRO_ROUTE_ROOT_SETUP_RUNS.store(0, Ordering::SeqCst);
     MACRO_ROUTE_HOME_SETUP_RUNS.store(0, Ordering::SeqCst);
     MACRO_ROUTE_COUNTER_SETUP_RUNS.store(0, Ordering::SeqCst);
@@ -85,7 +85,7 @@ fn generated_view_route_switches_pages_and_preserves_shared_state() -> Result<()
 /// - The initial route renders the first prop value.
 /// - Navigating to another branch with the same component type renders the new prop value.
 #[test]
-fn generated_view_route_switch_rebuilds_same_type_component_with_new_props() -> Result<()> {
+fn generated_view_route_switch_rebuilds_same_type_component_with_new_props() -> leptatui::app::Result<()> {
     let mut component = MacroRoutePropSwitchRoot::new();
 
     let terminal = render_component(&mut component, 32, 4)?;

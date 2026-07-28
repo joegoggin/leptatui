@@ -20,7 +20,7 @@
 /// Generated component bodies run once under a stored Leptos owner whose
 /// context remains active while rendering the returned view tree.
 #[test]
-fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
+fn generated_component_providers_are_visible_to_descendants() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(16, 3);
     let mut terminal = Terminal::new(backend)?;
     let component = MacroContextProvider::new();
@@ -69,7 +69,7 @@ fn generated_component_providers_are_visible_to_descendants() -> Result<()> {
 /// Lazy component setup may run inside a temporary render scope, but provided
 /// values must remain attached to the component owner after that scope exits.
 #[test]
-fn lazy_generated_component_provider_context_survives_multiple_renders() -> Result<()> {
+fn lazy_generated_component_provider_context_survives_multiple_renders() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(16, 3);
     let mut terminal = Terminal::new(backend)?;
     let component = MacroLazyContextRoot::new();

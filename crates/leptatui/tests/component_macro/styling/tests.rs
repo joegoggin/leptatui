@@ -12,7 +12,7 @@
 /// - The component's text receives the foreground and background from the
 ///   local stylesheet.
 #[test]
-fn generated_component_stylesheet_styles_own_views() -> Result<()> {
+fn generated_component_stylesheet_styles_own_views() -> leptatui::app::Result<()> {
     let mut component = MacroStyledText::new();
     let terminal = render_component(&mut component, 16, 3)?;
 
@@ -38,7 +38,7 @@ fn generated_component_stylesheet_styles_own_views() -> Result<()> {
 /// - The generated component renders successfully.
 /// - Its locally hidden text is absent from the terminal.
 #[test]
-fn generated_component_layout_resolves_local_display_none() -> Result<()> {
+fn generated_component_layout_resolves_local_display_none() -> leptatui::app::Result<()> {
     let mut component = MacroHiddenLayoutChild::new();
     let terminal = render_component(&mut component, 16, 3)?;
 
@@ -60,7 +60,7 @@ fn generated_component_layout_resolves_local_display_none() -> Result<()> {
 /// - The styled sibling receives the shared class style.
 /// - The plain sibling has the same class but keeps default colors.
 #[test]
-fn generated_component_stylesheets_do_not_leak_to_siblings() -> Result<()> {
+fn generated_component_stylesheets_do_not_leak_to_siblings() -> leptatui::app::Result<()> {
     let mut component = MacroSiblingStyleRoot::new();
     let terminal = render_component(&mut component, 24, 3)?;
 
@@ -82,7 +82,7 @@ fn generated_component_stylesheets_do_not_leak_to_siblings() -> Result<()> {
 ///
 /// - A child component's text receives the parent component stylesheet.
 #[test]
-fn generated_component_stylesheets_apply_to_child_component_subtrees() -> Result<()> {
+fn generated_component_stylesheets_apply_to_child_component_subtrees() -> leptatui::app::Result<()> {
     let mut component = MacroParentStylesChild::new();
     let terminal = render_component(&mut component, 16, 3)?;
 
@@ -104,7 +104,7 @@ fn generated_component_stylesheets_apply_to_child_component_subtrees() -> Result
 ///
 /// - A child text rule overrides an equal-specificity parent text rule.
 #[test]
-fn generated_equal_specificity_child_stylesheet_wins_by_source_order() -> Result<()> {
+fn generated_equal_specificity_child_stylesheet_wins_by_source_order() -> leptatui::app::Result<()> {
     let mut component = MacroParentWithChildOverride::new();
     let terminal = render_component(&mut component, 16, 3)?;
 
@@ -126,7 +126,7 @@ fn generated_equal_specificity_child_stylesheet_wins_by_source_order() -> Result
 ///
 /// - A parent class rule overrides a lower-specificity child text rule.
 #[test]
-fn generated_higher_specificity_parent_stylesheet_overrides_child_stylesheet() -> Result<()> {
+fn generated_higher_specificity_parent_stylesheet_overrides_child_stylesheet() -> leptatui::app::Result<()> {
     let mut component = MacroParentSpecificityBeatsChild::new();
     let terminal = render_component(&mut component, 16, 3)?;
 
@@ -148,7 +148,7 @@ fn generated_higher_specificity_parent_stylesheet_overrides_child_stylesheet() -
 ///
 /// - A `theme_color(...)` declaration resolves from context during render.
 #[test]
-fn generated_component_stylesheet_resolves_theme_context() -> Result<()> {
+fn generated_component_stylesheet_resolves_theme_context() -> leptatui::app::Result<()> {
     let mut component = MacroThemedStylesheet::new();
     let terminal = render_component(&mut component, 16, 3)?;
 

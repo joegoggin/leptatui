@@ -111,7 +111,7 @@ fn recent_files_filter_invalid_and_out_of_workspace_paths() {
         contexts.files.recent_files.get_untracked(),
         [canonical_guide]
     );
-    assert_eq!(contexts.files.recent_files_error.get_untracked(), None);
+    assert!(contexts.files.recent_files_error.get_untracked().is_none());
 }
 
 /// Verifies persisted history retains entries belonging to other workspaces.
@@ -192,11 +192,12 @@ fn malformed_recent_data_recovers_after_a_successful_open() {
             .recent_files_error
             .get_untracked()
             .expect("the parse error should be retained")
+            .to_string()
             .contains("failed to parse recent files")
     );
 
     open(&contexts, &guide);
-    assert_eq!(contexts.files.recent_files_error.get_untracked(), None);
+    assert!(contexts.files.recent_files_error.get_untracked().is_none());
     assert_eq!(contexts.files.recent_files.get_untracked().len(), 1);
 
     let restored = TestContexts::with_store(tree.root(), store);
@@ -234,6 +235,7 @@ fn recent_write_failure_preserves_in_memory_history() {
             .recent_files_error
             .get_untracked()
             .expect("the write error should be retained")
+            .to_string()
             .contains("failed to create recent-files directory")
     );
 }

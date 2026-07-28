@@ -234,7 +234,7 @@ fn DemoWorkflowSettings() -> impl IntoView {
 /// - Theme changes remain visible after navigating away and back.
 /// - Every handled workflow key returns `AppControl::Continue`.
 #[test]
-fn multi_page_demo_routes_counter_and_theme_state() -> Result<()> {
+fn multi_page_demo_routes_counter_and_theme_state() -> leptatui::app::Result<()> {
     let mut component = DemoWorkflowRoot::new();
 
     let terminal = render_component(&mut component, 48, 6)?;

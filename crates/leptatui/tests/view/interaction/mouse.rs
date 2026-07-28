@@ -20,7 +20,7 @@ impl View for ClippedFocusPanel {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         ctx.render_view(&self.view)
     }
 
@@ -81,7 +81,7 @@ impl View for ClippedFocusPanel {
 
 impl View for MouseEventProbe {
     /// Renders the behavior-only probe without terminal output.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         Ok(())
     }
 
@@ -96,7 +96,7 @@ impl View for MouseEventProbe {
     }
 
     /// Records mouse events received through normal custom event dispatch.
-    fn on_event(&mut self, event: &Event) -> Result<AppControl> {
+    fn on_event(&mut self, event: &Event) -> leptatui::app::Result<AppControl> {
         if matches!(event, Event::Mouse(_)) {
             self.seen.set(true);
         }
@@ -119,7 +119,7 @@ impl View for MouseEventProbe {
 /// - A direct custom view receives the mouse event through `on_event`.
 /// - A custom view inside a component boundary receives the same mouse event.
 #[test]
-fn mouse_events_reach_custom_view_hooks() -> Result<()> {
+fn mouse_events_reach_custom_view_hooks() -> leptatui::app::Result<()> {
     let direct_seen = Rc::new(Cell::new(false));
     let mut direct = MouseEventProbe {
         seen: Rc::clone(&direct_seen),
@@ -151,7 +151,7 @@ fn mouse_events_reach_custom_view_hooks() -> Result<()> {
 /// - The first button remains unfocused.
 /// - The button beneath the pointer receives focus.
 #[test]
-fn mouse_move_focuses_button_under_pointer() -> Result<()> {
+fn mouse_move_focuses_button_under_pointer() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(20, 3))?;
     let mut view = div([button("One"), button("Two")])
         .with_inline_style(TuiStyle::new().display(Display::Flex));
@@ -177,7 +177,7 @@ fn mouse_move_focuses_button_under_pointer() -> Result<()> {
 /// - The click is handled without exiting the application.
 /// - The button action runs exactly once and the button receives focus.
 #[test]
-fn mouse_click_activates_button_under_pointer() -> Result<()> {
+fn mouse_click_activates_button_under_pointer() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
     let count = Rc::new(Cell::new(0));
     let count_for_button = Rc::clone(&count);
@@ -211,7 +211,7 @@ fn mouse_click_activates_button_under_pointer() -> Result<()> {
 /// - Scrolling down advances the column offset by one row.
 /// - Scrolling up restores the original offset.
 #[test]
-fn mouse_wheel_scrolls_overflowing_column_under_pointer() -> Result<()> {
+fn mouse_wheel_scrolls_overflowing_column_under_pointer() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(12, 2))?;
     let mut view = div([text("one"), text("two"), text("three")]);
 
@@ -242,7 +242,7 @@ fn mouse_wheel_scrolls_overflowing_column_under_pointer() -> Result<()> {
 /// - Further wheel input bubbles to the parent after the inner scroll boundary.
 /// - The parent scroll reveals the trailing button.
 #[test]
-fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> Result<()> {
+fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
     let inner = component(ConstrainedScrollPanel {
         view: div([
@@ -289,7 +289,7 @@ fn mouse_wheel_bubbles_from_inner_scroll_boundary_to_parent() -> Result<()> {
 /// Each offscreen render must retain its parent's clipping translation so
 /// nested controls record terminal coordinates instead of buffer-local rows.
 #[test]
-fn nested_clipped_views_compose_mouse_hit_coordinates() -> Result<()> {
+fn nested_clipped_views_compose_mouse_hit_coordinates() -> leptatui::app::Result<()> {
     let mut inner_terminal = Terminal::new(TestBackend::new(12, 3))?;
     let mut inner = div([button("Nested"), button("Later")]);
     draw_view(&mut inner_terminal, &inner)?;
@@ -332,7 +332,7 @@ fn nested_clipped_views_compose_mouse_hit_coordinates() -> Result<()> {
 /// Offscreen buffers must include the horizontal source offset when mapping
 /// clipped child hit areas back to terminal coordinates.
 #[test]
-fn horizontal_clipping_maps_partial_child_hit_coordinates() -> Result<()> {
+fn horizontal_clipping_maps_partial_child_hit_coordinates() -> leptatui::app::Result<()> {
     let child_style = TuiStyle::new()
         .size(LayoutSize::new(
             Dimension::from(Length::cells(8.0)),
@@ -390,7 +390,7 @@ fn horizontal_clipping_maps_partial_child_hit_coordinates() -> Result<()> {
 /// - A terminal cell outside the parent's viewport does not focus the link.
 /// - A cell inside the retained viewport focuses the same link.
 #[test]
-fn clipped_link_hit_area_uses_retained_geometry() -> Result<()> {
+fn clipped_link_hit_area_uses_retained_geometry() -> leptatui::app::Result<()> {
     let child = link("Wide", "https://example.com").with_inline_style(
         TuiStyle::new()
             .box_sizing(BoxSizing::BorderBox)
@@ -434,7 +434,7 @@ fn clipped_link_hit_area_uses_retained_geometry() -> Result<()> {
 /// - Scrolling and redrawing replaces it with the second button.
 /// - Pointer movement focuses the visible button instead of the hidden button.
 #[test]
-fn concrete_app_root_clears_offscreen_control_hit_areas() -> Result<()> {
+fn concrete_app_root_clears_offscreen_control_hit_areas() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
     let mut view = div((button("Hidden"), button("Visible")));
     let mut first_render_result = Ok(());
@@ -474,7 +474,7 @@ fn concrete_app_root_clears_offscreen_control_hit_areas() -> Result<()> {
 ///
 /// - The inline link beneath the pointer becomes the focused control.
 #[test]
-fn mouse_move_focuses_inline_markdown_link_under_pointer() -> Result<()> {
+fn mouse_move_focuses_inline_markdown_link_under_pointer() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(20, 3))?;
     let mut view = markdown("[Docs](https://example.com)");
 
@@ -499,7 +499,7 @@ fn mouse_move_focuses_inline_markdown_link_under_pointer() -> Result<()> {
 /// - The link wraps onto the second terminal row.
 /// - Moving over its wrapped segment focuses the link.
 #[test]
-fn mouse_move_focuses_word_wrapped_markdown_link() -> Result<()> {
+fn mouse_move_focuses_word_wrapped_markdown_link() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(10, 2))?;
     let mut view = markdown("123456 [Link](https://example.com)");
 

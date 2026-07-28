@@ -19,7 +19,7 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
     let (refresh, set_refresh) = signal(0_u64);
 
     let api_for_resource = api.clone();
-    let tickets = create_resource(
+    let tickets = Resource::new(
         move || refresh.get(),
         move |_| {
             let api = api_for_resource.clone();
@@ -30,7 +30,8 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
 
     let api_for_action = api.clone();
     let refresh_after_action = set_refresh;
-    let mutation = create_action(move |mutation: TicketMutation| {
+    let mutation = Action::new(move |mutation: &TicketMutation| {
+        let mutation = mutation.clone();
         let api = api_for_action.clone();
         let refresh_after_action = refresh_after_action;
 
@@ -125,11 +126,11 @@ fn TicketList() -> impl IntoView {
     let context = expect_context::<CrudContext>();
 
     dynamic(move || match context.tickets.get_untracked() {
-        ResourceState::Pending => text("Loading tickets from mock API...")
+        None => text("Loading tickets from mock API...")
             .with_classes("pending")
             .into_view(),
-        ResourceState::Ready(tickets) => render_ticket_list(tickets),
-        ResourceState::Error(error) => text(format!("Load error: {error}"))
+        Some(Ok(tickets)) => render_ticket_list(tickets),
+        Some(Err(error)) => text(format!("Load error: {error}"))
             .with_classes("error")
             .into_view(),
     })
@@ -144,7 +145,13 @@ fn TicketList() -> impl IntoView {
 fn MutationStatus() -> impl IntoView {
     let context = expect_context::<CrudContext>();
 
-    dynamic(move || render_mutation_status(context.mutation.get_untracked()))
+    dynamic(move || {
+        render_mutation_status(
+            context.mutation.is_pending_untracked(),
+            context.mutation.input().get_untracked(),
+            context.mutation.value().get_untracked(),
+        )
+    })
 }
 
 /// Renders button controls for demo mutations and reloads.
@@ -257,15 +264,21 @@ fn render_ticket(ticket: Ticket) -> AnyView {
 ///
 /// # Arguments
 ///
-/// * `state` — Current mutation action state.
+/// * `pending` — Whether the latest mutation is running.
+/// * `input` — Latest in-flight mutation input.
+/// * `value` — Most recent mutation result.
 ///
 /// # Returns
 ///
 /// A [`View`] describing the current mutation state.
-fn render_mutation_status(state: ActionState<TicketMutation, MutationResult, String>) -> AnyView {
-    if state.is_pending() {
-        let label = state
-            .input()
+fn render_mutation_status(
+    pending: bool,
+    input: Option<TicketMutation>,
+    value: Option<Result<MutationResult, String>>,
+) -> AnyView {
+    if pending {
+        let label = input
+            .as_ref()
             .map(TicketMutation::label)
             .unwrap_or("mutation");
 
@@ -274,7 +287,7 @@ fn render_mutation_status(state: ActionState<TicketMutation, MutationResult, Str
             .into_view();
     }
 
-    match state.result() {
+    match value {
         Some(Ok(result)) => text(format!("Last mutation: {}", result.label()))
             .with_classes("success")
             .into_view(),

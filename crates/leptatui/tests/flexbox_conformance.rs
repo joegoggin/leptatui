@@ -384,7 +384,7 @@ fn fixture_view(fixture: &FlexFixture) -> AnyView {
 /// - Every child retains the recorded source-ordered terminal rectangle.
 /// - Every terminal row exactly matches the fixture's recorded painted output.
 #[test]
-fn flexbox_conformance_matrix_records_geometry_and_painted_output() -> Result<()> {
+fn flexbox_conformance_matrix_records_geometry_and_painted_output() -> leptatui::app::Result<()> {
     for fixture in flex_fixtures() {
         let root = fixture_view(&fixture);
         let terminal = render_view(root.as_view(), fixture.width, fixture.height)?;
@@ -489,7 +489,7 @@ fn symbol_position(rows: &[String], symbol: &str) -> (usize, usize) {
 /// - Narrow navigation links occupy different rows.
 /// - Narrow sidebar content paints below the main content after the workspace stacks.
 #[test]
-fn responsive_flex_fixture_reflows_at_the_documented_breakpoint() -> Result<()> {
+fn responsive_flex_fixture_reflows_at_the_documented_breakpoint() -> leptatui::app::Result<()> {
     let mut wide_fixture = ResponsiveFlexFixture::new();
     let wide = rendered_lines(&render_component(&mut wide_fixture, 80, 8)?);
     let wide_docs = symbol_position(&wide, "Docs");

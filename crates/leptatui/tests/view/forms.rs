@@ -14,7 +14,7 @@
 /// - The form reports two focusable descendant controls.
 /// - Tab moves focus from the input to the button.
 #[test]
-fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
+fn renders_form_children_and_moves_focus_through_descendants() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 7);
     let mut terminal = Terminal::new(backend)?;
     let mut view = form((text("Title"), input("Ada"), button("Save")));
@@ -56,7 +56,7 @@ fn renders_form_children_and_moves_focus_through_descendants() -> Result<()> {
 /// - Moving focus back to the input switches it to normal mode.
 /// - Cursor and yank buffer state are preserved.
 #[test]
-fn focusing_editable_control_enters_normal_mode_without_resetting_state() -> Result<()> {
+fn focusing_editable_control_enters_normal_mode_without_resetting_state() -> leptatui::app::Result<()> {
     let mut input_view = input("Ada").with_focus(true);
     editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
     editable_state_mut(&mut input_view).set_cursor(1);
@@ -98,7 +98,7 @@ fn focusing_editable_control_enters_normal_mode_without_resetting_state() -> Res
 /// - The terminal draw call succeeds.
 /// - The rendered text cell inherits the form foreground color.
 #[test]
-fn form_type_styles_apply_to_descendants() -> Result<()> {
+fn form_type_styles_apply_to_descendants() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
     let view = form([text("Hi")]);
@@ -139,7 +139,7 @@ fn form_type_styles_apply_to_descendants() -> Result<()> {
 /// - Text-area edits follow the same controlled update and reconciliation path.
 /// - The focused text area receives focus stylesheet colors after reconciliation.
 #[test]
-fn controlled_form_reconciles_values_focus_and_rendering() -> Result<()> {
+fn controlled_form_reconciles_values_focus_and_rendering() -> leptatui::app::Result<()> {
     let name = Rc::new(RefCell::new(String::from("Ada")));
     let notes = Rc::new(RefCell::new(String::from("Notes")));
     let submits = Rc::new(Cell::new(0));
@@ -240,7 +240,7 @@ fn controlled_form_reconciles_values_focus_and_rendering() -> Result<()> {
 /// - Plain Enter inserts a newline when the text area is in insert mode.
 /// - Ctrl+Enter submits a form when the text area is focused.
 #[test]
-fn controlled_form_routes_submit_and_cancel_keys() -> Result<()> {
+fn controlled_form_routes_submit_and_cancel_keys() -> leptatui::app::Result<()> {
     let name = Rc::new(RefCell::new(String::from("Ada")));
     let notes = Rc::new(RefCell::new(String::from("Notes")));
     let submits = Rc::new(Cell::new(0));
@@ -322,7 +322,7 @@ fn controlled_form_routes_submit_and_cancel_keys() -> Result<()> {
 /// - Normal-mode text-area line deletion updates caller-owned state.
 /// - Reconciliation retains the linewise yank buffer for text-area undo.
 #[test]
-fn controlled_form_preserves_vim_state_across_reconciliation() -> Result<()> {
+fn controlled_form_preserves_vim_state_across_reconciliation() -> leptatui::app::Result<()> {
     let name = Rc::new(RefCell::new(String::from("abc")));
     let notes = Rc::new(RefCell::new(String::from("notes")));
     let submits = Rc::new(Cell::new(0));

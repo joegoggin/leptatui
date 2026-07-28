@@ -14,7 +14,7 @@
 /// - The callback receives `Ada!`.
 /// - The callback receives `Ada `.
 #[test]
-fn focused_input_emits_inserted_text_through_on_input() -> Result<()> {
+fn focused_input_emits_inserted_text_through_on_input() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_char = Rc::clone(&emitted);
     let mut char_view = input("Ada").with_focus(true).on_input(move |next| {
@@ -63,7 +63,7 @@ fn focused_input_emits_inserted_text_through_on_input() -> Result<()> {
 /// - No input value is emitted.
 /// - The input switches to normal mode with Esc-style cursor placement.
 #[test]
-fn focused_input_jk_returns_to_normal_mode_without_emitting_text() -> Result<()> {
+fn focused_input_jk_returns_to_normal_mode_without_emitting_text() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_input("Ada", &emitted);
 
@@ -100,7 +100,7 @@ fn focused_input_jk_returns_to_normal_mode_without_emitting_text() -> Result<()>
 /// - The following `x` emits both inserted characters.
 /// - The input remains in insert mode.
 #[test]
-fn focused_input_pending_j_inserts_with_next_non_escape_character() -> Result<()> {
+fn focused_input_pending_j_inserts_with_next_non_escape_character() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_input("Ada", &emitted);
 
@@ -136,7 +136,7 @@ fn focused_input_pending_j_inserts_with_next_non_escape_character() -> Result<()
 /// - The later `k` emits literal `jk`.
 /// - The input remains in insert mode.
 #[test]
-fn focused_input_slow_jk_inserts_literal_text() -> Result<()> {
+fn focused_input_slow_jk_inserts_literal_text() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_input("Ada", &emitted);
 
@@ -174,7 +174,7 @@ fn focused_input_slow_jk_inserts_literal_text() -> Result<()> {
 /// - Flushing emits literal `j`.
 /// - A second flush has nothing to emit.
 #[test]
-fn focused_input_idle_flush_emits_expired_pending_j() -> Result<()> {
+fn focused_input_idle_flush_emits_expired_pending_j() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_input("Ada", &emitted);
 
@@ -211,7 +211,7 @@ fn focused_input_idle_flush_emits_expired_pending_j() -> Result<()> {
 /// - The callback receives `Ad` after backspace.
 /// - The callback receives `Aa` after delete.
 #[test]
-fn focused_input_emits_deletions_through_on_input() -> Result<()> {
+fn focused_input_emits_deletions_through_on_input() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_backspace = Rc::clone(&emitted);
     let mut backspace_view = input("Ada").with_focus(true).on_input(move |next| {
@@ -263,7 +263,7 @@ fn focused_input_emits_deletions_through_on_input() -> Result<()> {
 /// - End moves the cursor to byte index `3`.
 /// - No input callback values are emitted.
 #[test]
-fn focused_input_cursor_keys_move_without_emitting_text() -> Result<()> {
+fn focused_input_cursor_keys_move_without_emitting_text() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_input = Rc::clone(&emitted);
     let mut view = input("Ada").with_focus(true).on_input(move |next| {
@@ -304,7 +304,7 @@ fn focused_input_cursor_keys_move_without_emitting_text() -> Result<()> {
 /// - Rendering still shows `Ada`.
 /// - The cell after the value remains blank.
 #[test]
-fn focused_input_without_callback_does_not_mutate_displayed_value() -> Result<()> {
+fn focused_input_without_callback_does_not_mutate_displayed_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let mut view = input("Ada").with_focus(true);

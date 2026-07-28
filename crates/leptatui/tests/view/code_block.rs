@@ -113,7 +113,7 @@ fn code_block_dark_and_light_themes_produce_distinct_colors() {
 /// - One-based numbers and the rule separator render on both logical lines.
 /// - Source content begins after the gutter.
 #[test]
-fn code_block_renders_language_title_and_line_number_gutter() -> Result<()> {
+fn code_block_renders_language_title_and_line_number_gutter() -> leptatui::app::Result<()> {
     let view = code_block("one\ntwo").language("txt").line_numbers(true);
     let mut terminal = Terminal::new(TestBackend::new(12, 4))?;
 
@@ -146,7 +146,7 @@ fn code_block_renders_language_title_and_line_number_gutter() -> Result<()> {
 /// - An authored background overrides the selected theme for unknown-language fallback code.
 /// - Border cells do not receive either syntax or authored interior backgrounds.
 #[test]
-fn code_block_background_fills_interior_and_honors_authored_override() -> Result<()> {
+fn code_block_background_fills_interior_and_honors_authored_override() -> leptatui::app::Result<()> {
     let padding = TuiSpacing::uniform(1);
     let dark = code_block("x")
         .language("rust")
@@ -197,7 +197,7 @@ fn code_block_background_fills_interior_and_honors_authored_override() -> Result
 /// - Syntax-colored source continues onto later visual rows.
 /// - The following document child begins after the code block's bottom border.
 #[test]
-fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_size() -> Result<()> {
+fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_size() -> leptatui::app::Result<()> {
     let code = code_block("let value = true;").language("rust");
     let mut measured = Terminal::new(TestBackend::new(10, 8))?;
     let mut code_height = 0.0;
@@ -235,7 +235,7 @@ fn code_block_wraps_highlighted_spans_and_reserves_intrinsic_size() -> Result<()
 /// - Zero and extremely narrow widths do not panic during measurement or rendering.
 /// - A two-row viewport clips the bottom border without failing.
 #[test]
-fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()> {
+fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> leptatui::app::Result<()> {
     let empty = code_block("");
     let mut empty_terminal = Terminal::new(TestBackend::new(4, 3))?;
     let mut empty_height = 0.0;
@@ -293,7 +293,7 @@ fn code_block_handles_empty_unicode_narrow_and_clipped_viewports() -> Result<()>
 /// Adding code-block borders to an already saturated content height must not
 /// panic in debug builds or wrap in release builds.
 #[test]
-fn code_block_height_saturates_beyond_terminal_row_limit() -> Result<()> {
+fn code_block_height_saturates_beyond_terminal_row_limit() -> leptatui::app::Result<()> {
     let view = code_block("\n".repeat(usize::from(u16::MAX)));
     let mut terminal = Terminal::new(TestBackend::new(4, 1))?;
     let mut min_height = 0.0;

@@ -9,7 +9,7 @@
 //! - `control` — App-loop control-flow decisions returned by roots.
 //! - `error` — Runtime error and result types.
 //! - `event` — Blocking Crossterm event polling helpers.
-//! - `handle` — Component-facing terminal suspension and exit-error requests.
+//! - `handle` — Component-facing terminal suspension requests.
 //! - `render` — Root drawing helpers.
 //! - `root` — Root adapter abstraction used by the app runner.
 //! - `terminal` — Managed terminal setup and cleanup.
@@ -26,6 +26,7 @@ mod wakeup;
 
 use std::time::Duration;
 
+use crate::executor::init_tokio_executor;
 use crate::{AnyView, IntoView};
 
 pub use control::AppControl;
@@ -130,9 +131,24 @@ where
     /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup
     /// fails. Returns [`Error::EventTask`] if the blocking event task fails.
     /// Returns [`Error::LinkOpen`] if an activated link cannot be opened.
-    /// Returns [`Error::Application`] if a component records an exit error
-    /// before requesting shutdown.
     pub async fn run(mut self) -> Result<()> {
+        init_tokio_executor();
+        tokio::task::LocalSet::new()
+            .run_until(async move { self.run_managed().await })
+            .await
+    }
+
+    /// Runs the managed terminal session inside the local task set.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] after terminal cleanup.
+    ///
+    /// # Errors
+    ///
+    /// Returns a runtime [`Error`] if terminal setup, rendering, input,
+    /// cleanup, event polling, or link activation fails.
+    async fn run_managed(&mut self) -> Result<()> {
         let mut session = TerminalSession::enter()?;
 
         let loop_result = self.run_loop(&mut session).await;
@@ -140,10 +156,6 @@ where
 
         loop_result?;
         restore_result?;
-
-        if let Some(error) = self.handle.take_exit_error() {
-            return Err(error);
-        }
 
         Ok(())
     }
@@ -163,8 +175,6 @@ where
     /// Returns [`Error::Io`] if drawing, event polling, or event reading fails.
     /// Returns [`Error::EventTask`] if the blocking event task fails.
     /// Returns [`Error::LinkOpen`] if an activated link cannot be opened.
-    /// Returns [`Error::Application`] after an exit request when a component
-    /// recorded an application failure.
     async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
         let mut redraw_requests = subscribe_redraws();
         let mut should_draw = true;

@@ -47,7 +47,7 @@ impl StyledView for Badge {
 }
 
 impl View for Badge {
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         let style = ctx.resolve_style(&self.metadata);
         ctx.render_widget(Paragraph::new(self.label.clone()).style(style.to_ratatui_style()));
         Ok(())
@@ -69,7 +69,7 @@ impl View for Badge {
         self
     }
 
-    fn on_key_event(&mut self, _key: KeyEvent) -> Result<KeyControl> {
+    fn on_key_event(&mut self, _key: KeyEvent) -> leptatui::app::Result<KeyControl> {
         self.key_presses.set(self.key_presses.get() + 1);
         Ok(KeyControl::Handled)
     }
@@ -93,7 +93,7 @@ impl View for Badge {
 /// - The custom view renders with the resolved color.
 /// - Public key-event hooks participate in subtree event traversal.
 #[test]
-fn custom_views_participate_in_the_full_view_protocol() -> Result<()> {
+fn custom_views_participate_in_the_full_view_protocol() -> leptatui::app::Result<()> {
     let key_presses = Rc::new(Cell::new(0));
     let badge = Badge::new("Custom", Rc::clone(&key_presses)).with_classes("status");
     let mut view = div((badge, text("Built in")));

@@ -6,7 +6,7 @@ use std::time::Duration;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
     AnyView, BoxSizing, ContainerView, Dimension, DivView, GridTemplateTrack, GridTrackSize,
-    LayoutSize, Length, RenderCtx, Result, StyleMetadata, TuiStyle, View,
+    LayoutSize, Length, RenderCtx, StyleMetadata, TuiStyle, View,
 };
 use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 use tokio::{task::yield_now, time::timeout};
@@ -99,7 +99,7 @@ pub(crate) fn render_component<C>(
     component: &mut C,
     width: u16,
     height: u16,
-) -> Result<Terminal<TestBackend>>
+) -> leptatui::app::Result<Terminal<TestBackend>>
 where
     C: View,
 {
@@ -128,7 +128,7 @@ where
 pub(crate) fn draw_component<C>(
     terminal: &mut Terminal<TestBackend>,
     component: &mut C,
-) -> Result<()>
+) -> leptatui::app::Result<()>
 where
     C: View,
 {
@@ -156,7 +156,10 @@ where
 /// # Errors
 ///
 /// Returns [`leptatui::Error::Io`] if terminal drawing or view rendering fails.
-pub(crate) fn draw_view(terminal: &mut Terminal<TestBackend>, view: &dyn View) -> Result<()> {
+pub(crate) fn draw_view(
+    terminal: &mut Terminal<TestBackend>,
+    view: &dyn View,
+) -> leptatui::app::Result<()> {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {
@@ -186,7 +189,7 @@ pub(crate) fn render_view(
     view: &dyn View,
     width: u16,
     height: u16,
-) -> Result<Terminal<TestBackend>> {
+) -> leptatui::app::Result<Terminal<TestBackend>> {
     let mut terminal = Terminal::new(TestBackend::new(width, height))?;
     draw_view(&mut terminal, view)?;
     Ok(terminal)

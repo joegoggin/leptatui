@@ -13,7 +13,7 @@ fn measure_view(
     view: &dyn View,
     known_dimensions: LayoutSize<Option<f32>>,
     available_space: LayoutSize<AvailableSpace>,
-) -> Result<LayoutSize<f32>> {
+) -> leptatui::app::Result<LayoutSize<f32>> {
     let mut terminal = Terminal::new(TestBackend::new(80, 24))?;
     let mut measured = LayoutSize::all(0.0);
     terminal.draw(|frame| {
@@ -34,7 +34,7 @@ struct MeasurementProbe {
 }
 
 impl View for MeasurementProbe {
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         self.render_count
             .set(self.render_count.get().saturating_add(1));
         Ok(())
@@ -79,7 +79,7 @@ impl View for MeasurementProbe {
 /// - The exact width overrides the probe's intrinsic width.
 /// - Measurement does not call the view's render method.
 #[test]
-fn custom_view_measurement_receives_constraints_without_rendering() -> Result<()> {
+fn custom_view_measurement_receives_constraints_without_rendering() -> leptatui::app::Result<()> {
     let render_count = Rc::new(Cell::new(0));
     let seen_known = Rc::new(RefCell::new(None));
     let seen_available = Rc::new(RefCell::new(None));
@@ -119,7 +119,7 @@ fn custom_view_measurement_receives_constraints_without_rendering() -> Result<()
 /// - A definite width between those bounds wraps without changing the constraint.
 /// - Exact zero dimensions are honored.
 #[test]
-fn text_measurement_supports_intrinsic_and_definite_constraints() -> Result<()> {
+fn text_measurement_supports_intrinsic_and_definite_constraints() -> leptatui::app::Result<()> {
     let view = text("wide word");
     let unknown = LayoutSize::all(None);
 
@@ -167,7 +167,7 @@ fn text_measurement_supports_intrinsic_and_definite_constraints() -> Result<()> 
 /// - Min-content width is the two-cell wide glyph.
 /// - Max-content width includes the glyph, space, and ASCII character.
 #[test]
-fn text_measurement_uses_unicode_terminal_width() -> Result<()> {
+fn text_measurement_uses_unicode_terminal_width() -> leptatui::app::Result<()> {
     let view = text("界 a");
     let unknown = LayoutSize::all(None);
 
@@ -206,7 +206,7 @@ fn text_measurement_uses_unicode_terminal_width() -> Result<()> {
 /// - Images honor configured terminal-cell dimensions.
 /// - Narrow code blocks wrap source while preserving their known width.
 #[test]
-fn specialized_leaf_views_measure_width_and_height() -> Result<()> {
+fn specialized_leaf_views_measure_width_and_height() -> leptatui::app::Result<()> {
     let unknown = LayoutSize::all(None);
     let max_content = LayoutSize::all(AvailableSpace::MaxContent);
     let button_size = measure_view(&button("Go"), unknown, max_content)?;
@@ -246,7 +246,7 @@ fn specialized_leaf_views_measure_width_and_height() -> Result<()> {
 /// - Max-content includes the marker gap and complete preferred line.
 /// - Min-content wrapping produces more rows than max-content.
 #[test]
-fn list_measurement_includes_markers_and_nested_content_widths() -> Result<()> {
+fn list_measurement_includes_markers_and_nested_content_widths() -> leptatui::app::Result<()> {
     let view = unordered_list([
         list_item([paragraph("short")]),
         list_item([paragraph("long word")]),
@@ -284,7 +284,7 @@ fn list_measurement_includes_markers_and_nested_content_widths() -> Result<()> {
 /// - Max-content uses each column's preferred hard-line width.
 /// - A narrow known width is retained and increases wrapped table height.
 #[test]
-fn table_measurement_supports_intrinsic_and_narrow_widths() -> Result<()> {
+fn table_measurement_supports_intrinsic_and_narrow_widths() -> leptatui::app::Result<()> {
     let view = table([table_body([table_row([
         table_cell("Name"),
         table_cell("Build status"),

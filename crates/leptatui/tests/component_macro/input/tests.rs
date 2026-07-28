@@ -20,7 +20,7 @@
 /// Generated components should support custom key maps without requiring a
 /// manual [`View`] implementation.
 #[test]
-fn generated_components_dispatch_registered_key_handlers() -> Result<()> {
+fn generated_components_dispatch_registered_key_handlers() -> leptatui::app::Result<()> {
     MACRO_BUTTON_PRESSES.store(0, Ordering::SeqCst);
 
     let backend = TestBackend::new(16, 3);
@@ -73,7 +73,7 @@ fn generated_components_dispatch_registered_key_handlers() -> Result<()> {
 /// - The repeat handler ignores press and release events.
 /// - The release handler ignores press and repeat events.
 #[test]
-fn generated_key_event_handlers_filter_by_event_kind() -> Result<()> {
+fn generated_key_event_handlers_filter_by_event_kind() -> leptatui::app::Result<()> {
     MACRO_REPEAT_KEY_PRESSES.store(0, Ordering::SeqCst);
     MACRO_RELEASE_KEY_PRESSES.store(0, Ordering::SeqCst);
 
@@ -127,7 +127,7 @@ fn generated_key_event_handlers_filter_by_event_kind() -> Result<()> {
 /// - Tab focuses the generated button view.
 /// - Enter activates the focused button.
 #[test]
-fn generated_components_run_default_button_keys_after_hook_pass() -> Result<()> {
+fn generated_components_run_default_button_keys_after_hook_pass() -> leptatui::app::Result<()> {
     MACRO_DEFAULT_BUTTON_PRESSES.store(0, Ordering::SeqCst);
 
     let mut component = MacroDefaultButtonRoot::new();
@@ -160,7 +160,7 @@ fn generated_components_run_default_button_keys_after_hook_pass() -> Result<()> 
 /// - The second Tab focuses the second wrapped button.
 /// - BackTab returns focus to the first wrapped button.
 #[test]
-fn generated_component_focus_crosses_sibling_component_boundaries() -> Result<()> {
+fn generated_component_focus_crosses_sibling_component_boundaries() -> leptatui::app::Result<()> {
     MACRO_FIRST_WRAPPED_BUTTON_PRESSES.store(0, Ordering::SeqCst);
     MACRO_SECOND_WRAPPED_BUTTON_PRESSES.store(0, Ordering::SeqCst);
 
@@ -226,7 +226,7 @@ fn generated_component_focus_crosses_sibling_component_boundaries() -> Result<()
 /// - The second activation invokes only the wrapped button callback.
 /// - Focus and activation events continue through the component root.
 #[test]
-fn generated_component_focus_mixes_static_and_component_buttons() -> Result<()> {
+fn generated_component_focus_mixes_static_and_component_buttons() -> leptatui::app::Result<()> {
     MACRO_MIXED_BUILTIN_BUTTON_PRESSES.store(0, Ordering::SeqCst);
     MACRO_MIXED_WRAPPED_BUTTON_PRESSES.store(0, Ordering::SeqCst);
 
@@ -272,7 +272,7 @@ fn generated_component_focus_mixes_static_and_component_buttons() -> Result<()> 
 /// - Tab is consumed by the hook.
 /// - Enter does not activate the button because focus did not move.
 #[test]
-fn generated_component_hook_can_override_default_tab_focus() -> Result<()> {
+fn generated_component_hook_can_override_default_tab_focus() -> leptatui::app::Result<()> {
     MACRO_DEFAULT_BUTTON_PRESSES.store(0, Ordering::SeqCst);
 
     let mut component = MacroTabOverrideButtonRoot::new();
@@ -305,7 +305,7 @@ fn generated_component_hook_can_override_default_tab_focus() -> Result<()> {
 /// - Tab uses the default focus behavior.
 /// - Enter is consumed by the hook before the focused button activates.
 #[test]
-fn generated_component_hook_can_override_default_enter_activation() -> Result<()> {
+fn generated_component_hook_can_override_default_enter_activation() -> leptatui::app::Result<()> {
     MACRO_DEFAULT_BUTTON_PRESSES.store(0, Ordering::SeqCst);
 
     let mut component = MacroEnterOverrideButtonRoot::new();

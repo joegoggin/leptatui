@@ -23,7 +23,7 @@ use super::*;
 /// Layout-transparent boundaries must forward the paint style of their
 /// materialized root instead of being classified as static normal flow.
 #[test]
-fn transparent_boundaries_preserve_positioned_stacking() -> Result<()> {
+fn transparent_boundaries_preserve_positioned_stacking() -> leptatui::app::Result<()> {
     let inset = cell_insets(Some(0.0), None, None, Some(0.0));
     let dynamic_high = dynamic(move || {
         text("H").with_inline_style(
@@ -72,7 +72,7 @@ fn transparent_boundaries_preserve_positioned_stacking() -> Result<()> {
 /// descendants must otherwise participate in the nearest explicit ancestor
 /// context.
 #[test]
-fn automatic_z_index_parent_does_not_trap_positioned_descendants() -> Result<()> {
+fn automatic_z_index_parent_does_not_trap_positioned_descendants() -> leptatui::app::Result<()> {
     let inset = cell_insets(Some(0.0), None, None, Some(0.0));
     let high = text("H").with_inline_style(
         fixture_size(1.0, 1.0)
@@ -126,7 +126,7 @@ fn automatic_z_index_parent_does_not_trap_positioned_descendants() -> Result<()>
 /// positioned descendant. Re-entry must retain interaction geometry recorded
 /// by the shell pass.
 #[test]
-fn promoted_descendant_replay_preserves_static_sibling_hit_area() -> Result<()> {
+fn promoted_descendant_replay_preserves_static_sibling_hit_area() -> leptatui::app::Result<()> {
     let parent_inset = cell_insets(Some(0.0), None, None, Some(0.0));
     let descendant_inset = cell_insets(Some(0.0), None, None, Some(6.0));
     let dynamic_parent = dynamic(move || {
@@ -175,7 +175,8 @@ fn promoted_descendant_replay_preserves_static_sibling_hit_area() -> Result<()> 
 /// - Larger positive levels paint over smaller levels regardless of source
 ///   order.
 #[test]
-fn positioned_layers_surround_normal_flow_and_break_ties_by_source_order() -> Result<()> {
+fn positioned_layers_surround_normal_flow_and_break_ties_by_source_order()
+-> leptatui::app::Result<()> {
     let inset = cell_insets(Some(0.0), None, None, Some(0.0));
     let root_style = fixture_size(1.0, 1.0)
         .position(Position::Relative)
@@ -255,7 +256,7 @@ fn positioned_layers_surround_normal_flow_and_break_ties_by_source_order() -> Re
 /// - Both static children occupy the same retained grid cell.
 /// - The later static child paints over the earlier child.
 #[test]
-fn overlapping_normal_flow_grid_items_paint_in_source_order() -> Result<()> {
+fn overlapping_normal_flow_grid_items_paint_in_source_order() -> leptatui::app::Result<()> {
     let placement = TuiStyle::new()
         .grid_row(GridLine::new(
             GridPlacement::line(1),
@@ -304,7 +305,7 @@ fn overlapping_normal_flow_grid_items_paint_in_source_order() -> Result<()> {
 /// - A negative descendant remains above a sibling behind its positive parent
 ///   context.
 #[test]
-fn explicit_nested_stacking_contexts_are_atomic_between_siblings() -> Result<()> {
+fn explicit_nested_stacking_contexts_are_atomic_between_siblings() -> leptatui::app::Result<()> {
     let inset = cell_insets(Some(0.0), None, None, Some(0.0));
     let root_style = fixture_size(1.0, 1.0).position(Position::Relative);
     let context = |label, parent_level, child_level| {
@@ -365,7 +366,8 @@ fn explicit_nested_stacking_contexts_are_atomic_between_siblings() -> Result<()>
 /// - The negative child paints over the parent's content background.
 /// - The child remains clipped at the parent's right border.
 #[test]
-fn negative_children_paint_over_context_background_without_escaping_clip() -> Result<()> {
+fn negative_children_paint_over_context_background_without_escaping_clip()
+-> leptatui::app::Result<()> {
     let child = div((text("XXXX"),)).with_inline_style(
         fixture_size(4.0, 1.0)
             .background(Color::Red)
@@ -407,7 +409,7 @@ fn negative_children_paint_over_context_background_without_escaping_clip() -> Re
 ///
 /// - The earlier higher-level fixed box paints over the later lower-level box.
 #[test]
-fn fixed_descendants_paint_in_viewport_stacking_order() -> Result<()> {
+fn fixed_descendants_paint_in_viewport_stacking_order() -> leptatui::app::Result<()> {
     let inset = cell_insets(Some(0.0), None, None, Some(0.0));
     let fixed = |label, level| {
         text(label).with_inline_style(
@@ -448,7 +450,7 @@ fn fixed_descendants_paint_in_viewport_stacking_order() -> Result<()> {
 /// Direct-child ordering cannot represent fixed descendants that escape an
 /// earlier logical branch and paint during the deferred viewport pass.
 #[test]
-fn pointer_targeting_uses_global_fixed_paint_order() -> Result<()> {
+fn pointer_targeting_uses_global_fixed_paint_order() -> leptatui::app::Result<()> {
     let inset = cell_insets(Some(0.0), None, None, Some(0.0));
     let fixed = button("Fixed").with_inline_style(
         fixture_size(6.0, 3.0)

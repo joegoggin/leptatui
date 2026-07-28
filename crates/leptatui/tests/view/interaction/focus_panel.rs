@@ -14,7 +14,7 @@ impl View for FocusPanel {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         ctx.render_view(&self.view)
     }
 
@@ -55,7 +55,7 @@ impl View for FocusPanel {
 
     /// Activates the focused control inside the child view, if any.
     #[doc(hidden)]
-    fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
+    fn __activate_focused_button(&self) -> leptatui::app::Result<Option<AppControl>> {
         self.view.__activate_focused_button()
     }
 
@@ -116,7 +116,7 @@ struct ConstrainedScrollPanel {
 }
 
 impl View for ConstrainedScrollPanel {
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         ctx.render_view(&self.view)
     }
 

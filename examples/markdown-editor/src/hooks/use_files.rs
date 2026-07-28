@@ -1,6 +1,6 @@
 //! Shared file signals and their required context hook.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use leptatui::prelude::{RwSignal, expect_context};
 
@@ -14,7 +14,7 @@ pub(crate) struct Files {
     /// Complete persisted recent-file ordering, including other workspaces.
     pub(crate) stored_recent_files: RwSignal<Vec<PathBuf>>,
     /// Recoverable recent-file load or save error.
-    pub(crate) recent_files_error: RwSignal<Option<String>>,
+    pub(crate) recent_files_error: RwSignal<Option<Arc<anyhow::Error>>>,
     /// Recoverable external-editor failure associated with one path.
     pub(crate) editor_failure: RwSignal<Option<EditorFailure>>,
     /// Persistence service for the complete recent-file ordering.
@@ -37,7 +37,7 @@ impl Files {
     pub(crate) fn new(
         recent_files: Vec<PathBuf>,
         stored_recent_files: Vec<PathBuf>,
-        recent_files_error: Option<String>,
+        recent_files_error: Option<Arc<anyhow::Error>>,
         recent_files_store: RecentFilesStore,
     ) -> Self {
         Self {
@@ -51,12 +51,12 @@ impl Files {
 }
 
 /// External-editor failure associated with one requested path.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub(crate) struct EditorFailure {
     /// Markdown path supplied to the editor.
     pub(crate) path: PathBuf,
-    /// Contextual editor launch or exit diagnostic.
-    pub(crate) message: String,
+    /// Shared editor launch or exit failure.
+    pub(crate) error: Arc<anyhow::Error>,
 }
 
 /// Returns the shared file signals from the nearest context.

@@ -66,7 +66,7 @@ fn Greeting() -> impl IntoView {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> leptatui::app::Result<()> {
     let view = view! { <Greeting /> };
     App::new(view).run().await
 }
@@ -983,7 +983,7 @@ fn Root() -> impl IntoView {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> leptatui::app::Result<()> {
     let view = view! { <Root /> };
     App::new(view).run().await
 }
@@ -1001,14 +1001,16 @@ example with shared counter and theme state.
 
 ## Resources And Actions
 
-Use `create_resource` for asynchronous reads keyed by reactive source state and
-`create_action` for POST-like mutations triggered by buttons or key handlers.
-Both helpers publish signal-backed state and request redraws when pending or
-completed work changes, so components can render loading, success, and error
-states from ordinary dynamic views.
+Use `Resource::new` for asynchronous reads keyed by reactive source state and
+`Action::new` for POST-like mutations triggered by buttons or key handlers.
+Both types publish signal-backed loading, input, and value state and request
+redraws when work changes. Fetchers and handlers can return any output type;
+application failures remain ordinary `Result<T, E>` values handled by
+components or contexts.
 
-Resources ignore stale completions from older source keys. Actions keep the
-latest dispatched input and ignore stale completions from older dispatches. A
+Resources retain their previous value while reloading and ignore stale
+completions from older source keys. Actions retain their previous output,
+expose the current input only while pending, and ignore stale completions. A
 common pattern is to keep a refresh signal in root context, key the resource
 from that signal, and increment it after a successful action.
 
@@ -1017,8 +1019,8 @@ use leptatui::prelude::*;
 
 #[derive(Clone)]
 struct Todos {
-    items: Resource<Vec<String>, String>,
-    create: Action<String, String, String>,
+    items: Resource<Result<Vec<String>, String>>,
+    create: Action<String, Result<String, String>>,
     refresh: WriteSignal<u64>,
 }
 
@@ -1034,12 +1036,13 @@ async fn create_todo(title: String) -> std::result::Result<String, String> {
 fn TodoApp() -> impl IntoView {
     let (refresh, set_refresh) = signal(0_u64);
 
-    let items = create_resource(
+    let items = Resource::new(
         move || refresh.get(),
         |_| async move { load_todos().await },
     );
 
-    let create = create_action(move |title: String| {
+    let create = Action::new(move |title: &String| {
+        let title = title.clone();
         let set_refresh = set_refresh;
 
         async move {
@@ -1068,9 +1071,9 @@ fn TodoList() -> impl IntoView {
     let todos = expect_context::<Todos>();
 
     dynamic(move || match todos.items.get_untracked() {
-        ResourceState::Pending => text("Loading todos..."),
-        ResourceState::Ready(items) => div(items.into_iter().map(text).collect::<Vec<_>>()),
-        ResourceState::Error(error) => text(format!("Load failed: {error}")),
+        Some(Ok(items)) => div(items.into_iter().map(text).collect::<Vec<_>>()),
+        Some(Err(error)) => text(format!("Load failed: {error}")),
+        None => text("Loading todos..."),
     })
 }
 

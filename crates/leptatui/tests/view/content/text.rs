@@ -12,7 +12,7 @@
 /// - The view render call succeeds.
 /// - The rendered buffer contains `Hello`.
 #[test]
-fn renders_block_and_text_views() -> Result<()> {
+fn renders_block_and_text_views() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(24, 5);
     let mut terminal = Terminal::new(backend)?;
     let mut render_result = Ok(());
@@ -53,7 +53,7 @@ fn renders_block_and_text_views() -> Result<()> {
 /// - The rendered `H` cell has a yellow foreground.
 /// - The rendered `H` cell has a blue background.
 #[test]
-fn renders_text_with_resolved_stylesheet_style() -> Result<()> {
+fn renders_text_with_resolved_stylesheet_style() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text("Hi").with_classes("accent");
@@ -101,7 +101,7 @@ fn renders_text_with_resolved_stylesheet_style() -> Result<()> {
 /// - `Hello` starts on the first row.
 /// - `World` starts on the second row.
 #[test]
-fn text_wraps_to_available_render_width() -> Result<()> {
+fn text_wraps_to_available_render_width() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(6, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text("Hello World");
@@ -180,7 +180,7 @@ fn semantic_text_builders_store_rich_text_and_metadata() {
 /// - H1 through H6 use Markdown-style `#` markers and no underline modifier.
 /// - Paragraph has no default modifier.
 #[test]
-fn semantic_text_views_render_default_modifiers() -> Result<()> {
+fn semantic_text_views_render_default_modifiers() -> leptatui::app::Result<()> {
     let headings = [
         (h1("H1"), 1, Modifier::BOLD),
         (h2("H2"), 2, Modifier::BOLD),

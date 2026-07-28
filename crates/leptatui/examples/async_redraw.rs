@@ -16,7 +16,7 @@ use leptatui::prelude::*;
 fn AsyncRedraw() -> impl IntoView {
     let request = RwSignal::new(0usize);
 
-    let resource = create_resource(
+    let resource = Resource::new(
         move || request.get(),
         |request| async move {
             tokio::time::sleep(Duration::from_secs(2)).await;
@@ -29,13 +29,17 @@ fn AsyncRedraw() -> impl IntoView {
         },
     );
 
-    let action = create_action(|request: usize| async move {
-        tokio::time::sleep(Duration::from_millis(900)).await;
+    let action = Action::new(|request: &usize| {
+        let request = *request;
 
-        if request.is_multiple_of(2) {
-            Ok(format!("saved request {request}"))
-        } else {
-            Err("simulated action error")
+        async move {
+            tokio::time::sleep(Duration::from_millis(900)).await;
+
+            if request.is_multiple_of(2) {
+                Ok(format!("saved request {request}"))
+            } else {
+                Err("simulated action error")
+            }
         }
     });
 
@@ -75,19 +79,18 @@ fn AsyncRedraw() -> impl IntoView {
                 <Text class="title">"Async redraw"</Text>
                 {move || {
                     let (label, class) = match resource.get_untracked() {
-                        ResourceState::Pending => (String::from("Resource: pending"), "ready"),
-                        ResourceState::Ready(value) => (format!("Resource: {value}"), "ready"),
-                        ResourceState::Error(error) => (format!("Resource: {error}"), "error"),
+                        Some(Ok(value)) => (format!("Resource: {value}"), "ready"),
+                        Some(Err(error)) => (format!("Resource: {error}"), "error"),
+                        None => (String::from("Resource: pending"), "ready"),
                     };
 
                     view! { <Text class={class}>{label}</Text> }
                 }}
                 {move || {
-                    let state = action.get_untracked();
-                    let (label, class) = if state.is_pending() {
+                    let (label, class) = if action.is_pending_untracked() {
                         (String::from("Action: pending"), "ready")
                     } else {
-                        match state.result() {
+                        match action.value().get_untracked() {
                             Some(Ok(value)) => (format!("Action: {value}"), "ready"),
                             Some(Err(error)) => (format!("Action: {error}"), "error"),
                             None => (String::from("Action: idle"), "ready"),
@@ -112,7 +115,7 @@ fn AsyncRedraw() -> impl IntoView {
 ///
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> leptatui::app::Result<()> {
     let view = view! { <AsyncRedraw /> };
     App::new(view).run().await
 }

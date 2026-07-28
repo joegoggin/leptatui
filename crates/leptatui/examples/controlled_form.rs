@@ -210,7 +210,7 @@ fn ControlledForm() -> impl IntoView {
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> leptatui::app::Result<()> {
     let view = view! { <ControlledForm /> };
     App::new(view).run().await
 }

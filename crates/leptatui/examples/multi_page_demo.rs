@@ -318,7 +318,7 @@ fn SettingsPage() -> impl IntoView {
 
 /// Runs the multi-page demo application.
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> leptatui::app::Result<()> {
     let view = view! { <MultiPageDemo /> };
     App::new(view).run().await
 }

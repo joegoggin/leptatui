@@ -16,7 +16,7 @@
 /// - Header text uses the bold semantic default.
 /// - Centered and right-aligned cells use their allocated column widths.
 #[test]
-fn semantic_table_renders_borders_bold_header_and_alignment() -> Result<()> {
+fn semantic_table_renders_borders_bold_header_and_alignment() -> leptatui::app::Result<()> {
     let view = table([
         table_head([table_row([table_cell("Name"), table_cell("Status")])]),
         table_body([table_row([
@@ -53,7 +53,7 @@ fn semantic_table_renders_borders_bold_header_and_alignment() -> Result<()> {
 /// - An authored table-head type rule removes the bold semantic default.
 /// - A table-cell class rule colors its rich text content.
 #[test]
-fn semantic_table_styles_override_header_defaults_and_style_cells() -> Result<()> {
+fn semantic_table_styles_override_header_defaults_and_style_cells() -> leptatui::app::Result<()> {
     let view = table([table_head([table_row([
         table_cell("Ready").with_classes("status")
     ])])]);
@@ -99,7 +99,7 @@ fn semantic_table_styles_override_header_defaults_and_style_cells() -> Result<()
 /// Background colors are surface styles rather than inherited text styles, so
 /// the table renderer must paint the grid area before rendering its cells.
 #[test]
-fn semantic_table_background_fills_grid_cells() -> Result<()> {
+fn semantic_table_background_fills_grid_cells() -> leptatui::app::Result<()> {
     let view = table([table_body([
         table_row([table_cell("A")]),
         table_row([table_cell("B"), table_cell("C")]),
@@ -136,7 +136,7 @@ fn semantic_table_background_fills_grid_cells() -> Result<()> {
 /// Backgrounds are surface styles rather than inherited text styles, so table
 /// layout must retain them while flattening sections and rows for rendering.
 #[test]
-fn semantic_table_structural_backgrounds_respect_precedence() -> Result<()> {
+fn semantic_table_structural_backgrounds_respect_precedence() -> leptatui::app::Result<()> {
     let view = table([
         table_head([table_row([table_cell("H"), table_cell("I")])]),
         table_body([
@@ -189,7 +189,7 @@ fn semantic_table_structural_backgrounds_respect_precedence() -> Result<()> {
 /// - ASCII and double-width Unicode content wrap to a second row.
 /// - The bottom border follows the tallest wrapped cell.
 #[test]
-fn semantic_table_shrinks_columns_and_wraps_unicode_cells() -> Result<()> {
+fn semantic_table_shrinks_columns_and_wraps_unicode_cells() -> leptatui::app::Result<()> {
     let view = table([table_body([table_row([
         table_cell("abcdef"),
         table_cell("界界"),
@@ -231,7 +231,7 @@ fn semantic_table_shrinks_columns_and_wraps_unicode_cells() -> Result<()> {
 /// - The extra cells in the second row expand the shared grid to three columns.
 /// - All vertical separators remain aligned between rows.
 #[test]
-fn semantic_table_normalizes_missing_and_extra_cells() -> Result<()> {
+fn semantic_table_normalizes_missing_and_extra_cells() -> leptatui::app::Result<()> {
     let view = table([table_body([
         table_row([table_cell("A")]),
         table_row([table_cell("B"), table_cell("C"), table_cell("D")]),
@@ -268,7 +268,7 @@ fn semantic_table_normalizes_missing_and_extra_cells() -> Result<()> {
 /// - Viewports too narrow for one bordered content cell render and measure
 ///   without panicking.
 #[test]
-fn semantic_table_clips_columns_and_handles_zero_width() -> Result<()> {
+fn semantic_table_clips_columns_and_handles_zero_width() -> leptatui::app::Result<()> {
     let view = table([table_body([table_row([
         table_cell("A"),
         table_cell("B"),
@@ -313,7 +313,7 @@ fn semantic_table_clips_columns_and_handles_zero_width() -> Result<()> {
 /// - A short viewport renders only the visible top border and first content row.
 /// - Vertical clipping does not render a partial bottom boundary or panic.
 #[test]
-fn semantic_table_reserves_document_height_and_clips_vertically() -> Result<()> {
+fn semantic_table_reserves_document_height_and_clips_vertically() -> leptatui::app::Result<()> {
     let document = div((
         table([table_body([table_row([table_cell("A")])])]),
         text("End"),

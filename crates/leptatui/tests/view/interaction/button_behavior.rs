@@ -15,7 +15,7 @@
 /// - The button receives focus after another tab event.
 /// - Enter returns [`AppControl::Continue`] and runs the focused button callback.
 #[test]
-fn enter_and_space_do_not_activate_focused_editable_controls() -> Result<()> {
+fn enter_and_space_do_not_activate_focused_editable_controls() -> leptatui::app::Result<()> {
     let count = Rc::new(Cell::new(0));
     let submit_count = Rc::clone(&count);
     let mut view = div((
@@ -64,7 +64,7 @@ fn enter_and_space_do_not_activate_focused_editable_controls() -> Result<()> {
 /// - The tab event succeeds and focuses the button.
 /// - The enter event returns [`AppControl::Exit`].
 #[test]
-fn focused_button_action_can_exit_app_loop() -> Result<()> {
+fn focused_button_action_can_exit_app_loop() -> leptatui::app::Result<()> {
     let mut view = button("Quit").on_press(|| AppControl::Exit);
 
     view.handle_event(key(KeyCode::Tab))?;
@@ -96,7 +96,7 @@ fn focused_button_action_can_exit_app_loop() -> Result<()> {
 ///
 /// Focus selector state should affect rendered button styling.
 #[test]
-fn renders_focused_button_with_focus_stylesheet_rule() -> Result<()> {
+fn renders_focused_button_with_focus_stylesheet_rule() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(24, 5);
     let mut terminal = Terminal::new(backend)?;
     let view = div([button("One").with_focus(true), button("Two")])

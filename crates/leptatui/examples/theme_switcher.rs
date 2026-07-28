@@ -158,7 +158,7 @@ fn ThemeDemo() -> impl IntoView {
 /// Returns [`Error`] if the terminal app fails to initialize, render, or
 /// process events.
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> leptatui::app::Result<()> {
     let view = view! { <ThemeDemo /> };
     App::new(view).run().await
 }

@@ -1,11 +1,15 @@
 //! Viewer route-level component, local reload state, and shared file synchronization.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use leptatui::prelude::*;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 use crate::{
+    contexts::{NotificationContext, use_notifications},
     hooks::{Files, use_files, use_workspace},
     pages::shared::{relative_path, routed_page_style},
     services::{EditorSession, FileSystem, RECENT_FILE_LIMIT, Workspace},
@@ -43,6 +47,7 @@ const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
 #[component]
 pub(crate) fn ViewerPage() -> impl IntoView {
     let workspace_context = use_workspace();
+    let notifications = use_notifications();
     let workspace = workspace_context.workspace;
     let filesystem = workspace_context.filesystem;
     let files = use_files();
@@ -74,6 +79,7 @@ pub(crate) fn ViewerPage() -> impl IntoView {
                 filesystem,
                 &document_files,
                 route_params,
+                notifications,
             );
             let editor_error = matching_editor_error(&document_files, path.as_deref());
 
@@ -93,10 +99,15 @@ pub(crate) fn ViewerPage() -> impl IntoView {
             KeyCode::Char('e') => {
                 if let Some(path) = requested_path(&shortcut_workspace, route_params) {
                     editor_session.edit(path, move |path, result| {
-                        let failure = result.err().map(|error| crate::hooks::EditorFailure {
-                            path,
-                            message: error.to_string(),
+                        let failure = result.err().map(|error| {
+                            let error = Arc::new(anyhow::Error::new(error));
+                            notifications.show_error("Editor failed", error.to_string());
+                            crate::hooks::EditorFailure { path, error }
                         });
+                        if failure.is_none() {
+                            notifications
+                                .show_success("Editor closed", "Reloaded the Markdown preview.");
+                        }
                         editor_failure.set(failure);
                         revision.update(|revision| *revision = revision.wrapping_add(1));
                     });
@@ -108,6 +119,7 @@ pub(crate) fn ViewerPage() -> impl IntoView {
             KeyCode::Char('r') => {
                 editor_failure.set(None);
                 revision.update(|revision| *revision = revision.wrapping_add(1));
+                notifications.show_info("Preview reloaded", "Refreshed the current Markdown file.");
                 KeyControl::Handled
             }
             KeyCode::Char('h') => {
@@ -204,6 +216,7 @@ fn requested_path(workspace: &Workspace, params: Memo<ParamsMap>) -> Option<Path
 /// * `filesystem` — Service used to validate the route path.
 /// * `files` — Shared recent-file signals and persistence service.
 /// * `params` — Active route parameters.
+/// * `notifications` — Shared notification state for persistence failures.
 ///
 /// # Returns
 ///
@@ -213,6 +226,7 @@ fn synchronize_route(
     filesystem: FileSystem,
     files: &Files,
     params: Memo<ParamsMap>,
+    notifications: NotificationContext,
 ) -> Option<PathBuf> {
     let requested = requested_path(workspace, params)?;
     match filesystem.validate_markdown(workspace, &requested) {
@@ -227,7 +241,7 @@ fn synchronize_route(
                 entries.insert(0, canonical.clone());
                 entries.truncate(RECENT_FILE_LIMIT);
             });
-            save_recent_files(files);
+            save_recent_files(files, notifications);
             Some(canonical)
         }
         Err(_) => {
@@ -237,7 +251,7 @@ fn synchronize_route(
             files
                 .stored_recent_files
                 .update(|entries| entries.retain(|entry| entry != &requested));
-            save_recent_files(files);
+            save_recent_files(files, notifications);
             Some(requested)
         }
     }
@@ -248,13 +262,17 @@ fn synchronize_route(
 /// # Arguments
 ///
 /// * `files` — Shared recent-file signals to read and update.
-fn save_recent_files(files: &Files) {
+/// * `notifications` — Shared notification state for save failures.
+fn save_recent_files(files: &Files, notifications: NotificationContext) {
     let entries = files.stored_recent_files.get_untracked();
     let error = files
         .recent_files_store
         .save(&entries)
         .err()
-        .map(|error| error.to_string());
+        .map(|error| Arc::new(anyhow::Error::new(error)));
+    if let Some(error) = &error {
+        notifications.show_error("Recent files not saved", error.to_string());
+    }
     files.recent_files_error.set(error);
 }
 
@@ -273,6 +291,6 @@ fn matching_editor_error(files: &Files, path: Option<&Path>) -> Option<String> {
         failure
             .as_ref()
             .filter(|failure| Some(failure.path.as_path()) == path)
-            .map(|failure| failure.message.clone())
+            .map(|failure| failure.error.to_string())
     })
 }

@@ -34,7 +34,10 @@ pub(crate) fn HomePage() -> impl IntoView {
     let root_label = format!("Root: {}", root.display());
     let recent_root = root.clone();
     let recent_entries = files.recent_files.get_untracked();
-    let recent_error = files.recent_files_error.get_untracked();
+    let recent_error = files
+        .recent_files_error
+        .get_untracked()
+        .map(|error| error.to_string());
     let page_style = routed_page_style();
 
     view! {

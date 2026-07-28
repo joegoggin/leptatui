@@ -171,7 +171,7 @@ fn workflow_rebuilds_viewer_with_external_editor_failures() -> leptatui::Result<
             .expect_err("the injected editor should fail");
         contexts.files.editor_failure.set(Some(EditorFailure {
             path: canonical.clone(),
-            message: error.to_string(),
+            error: Arc::new(anyhow::Error::new(error)),
         }));
         assert_eq!(
             contexts

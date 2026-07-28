@@ -56,7 +56,7 @@ fn progress_bar_builder_stores_value_label_and_selector_metadata() {
 /// - Partial progress renders filled cells.
 /// - Full progress fills both edges around Ratatui's centered label.
 #[test]
-fn progress_bar_renders_empty_partial_and_full_values() -> Result<()> {
+fn progress_bar_renders_empty_partial_and_full_values() -> leptatui::app::Result<()> {
     let mut empty_terminal = Terminal::new(TestBackend::new(10, 1))?;
     draw_view(&mut empty_terminal, &progress_bar(0.0))?;
     assert!(!rendered_text(&empty_terminal).contains(symbol_block::FULL));
@@ -90,7 +90,7 @@ fn progress_bar_renders_empty_partial_and_full_values() -> Result<()> {
 /// - Overflow renders the same as `1.0`.
 /// - Non-finite progress renders the same as `0.0`.
 #[test]
-fn progress_bar_clamps_values_before_rendering() -> Result<()> {
+fn progress_bar_clamps_values_before_rendering() -> leptatui::app::Result<()> {
     let mut underflow = Terminal::new(TestBackend::new(10, 1))?;
     let mut empty = Terminal::new(TestBackend::new(10, 1))?;
     draw_view(&mut underflow, &progress_bar(-0.5))?;
@@ -125,7 +125,7 @@ fn progress_bar_clamps_values_before_rendering() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The caller-provided label appears in the rendered buffer.
 #[test]
-fn progress_bar_renders_optional_label() -> Result<()> {
+fn progress_bar_renders_optional_label() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(20, 1);
     let mut terminal = Terminal::new(backend)?;
     let view = progress_bar(0.5).label("Uploading");
@@ -151,7 +151,7 @@ fn progress_bar_renders_optional_label() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The gauge resolves styles through `ViewType::ProgressBar`.
 #[test]
-fn progress_bar_type_styles_apply_to_gauge() -> Result<()> {
+fn progress_bar_type_styles_apply_to_gauge() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 1);
     let mut terminal = Terminal::new(backend)?;
     let view = progress_bar(1.0).label("Done");
@@ -190,7 +190,7 @@ fn progress_bar_type_styles_apply_to_gauge() -> Result<()> {
 /// - Only the button is counted as focusable.
 /// - Tab focuses the button and skips the progress bar.
 #[test]
-fn progress_bar_is_not_focusable() -> Result<()> {
+fn progress_bar_is_not_focusable() -> leptatui::app::Result<()> {
     let mut view = div((progress_bar(0.5), button("Save")));
 
     assert_eq!(view.__focusable_count(), 1);

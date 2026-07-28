@@ -33,7 +33,7 @@
 //! }
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<()> {
+//! async fn main() -> leptatui::app::Result<()> {
 //!     let view = view! { <Root /> };
 //!     App::new(view).run().await
 //! }
@@ -232,8 +232,10 @@
 //! [`context::expect_context`]. Multi-page apps declare URL-like paths with
 //! [`Router`], `Routes`, and `Route` tags, read reactive location state with
 //! [`use_location`], and navigate with [`use_navigate`]. Asynchronous reads and
-//! mutations use [`create_resource`] and [`create_action`] to expose pending,
-//! ready, and error state to components.
+//! mutations use [`Resource::new`] and [`Action::new`] to expose loading,
+//! pending, and output state. Application errors remain ordinary typed
+//! [`std::result::Result`] values returned by resource fetchers or action
+//! handlers.
 //!
 //! # Deferred Scope
 //!
@@ -258,15 +260,16 @@ mod terminal_image;
 
 extern crate self as leptatui;
 
-pub use action::{Action, ActionState, create_action};
+pub use action::Action;
 pub use app::{App, AppControl, AppHandle, AppRoot, Error, Result, use_app_handle};
 pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, use_key_event};
+pub use executor::{spawn, spawn_local};
 pub use leptatui_macros::{component, stylesheet, view};
 pub use markdown::{
     MarkdownOptions, MarkdownView, markdown, markdown_file, markdown_file_with_options,
     markdown_with_options,
 };
-pub use resource::{Resource, ResourceState, create_resource};
+pub use resource::Resource;
 pub use route::{
     History, Location, Navigate, NavigateOptions, Outlet, ParamsMap, RouteViewFactory, Router,
     RouterProps, use_history, use_location, use_navigate, use_params_map, use_query_map,

@@ -1,6 +1,6 @@
 //! Declarative, URL-like routing for terminal applications.
 //!
-//! [`Router`] provides an in-memory location and history stack. [`Routes`]
+//! [`Router`] provides an in-memory location and history stack. `Routes`
 //! matches declarative route definitions, while [`Outlet`] renders nested
 //! matches. Hooks expose reactive location, parameter, query, navigation, and
 //! history state to descendant components.

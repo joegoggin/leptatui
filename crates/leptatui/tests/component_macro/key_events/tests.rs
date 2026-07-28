@@ -11,7 +11,7 @@
 /// - Unhandled keys continue the app.
 /// - The `q` key returns [`AppControl::Exit`].
 #[test]
-fn generated_component_key_handler_can_exit() -> Result<()> {
+fn generated_component_key_handler_can_exit() -> leptatui::app::Result<()> {
     let mut component = MacroKeyExitRoot::new();
 
     assert_eq!(
@@ -40,7 +40,7 @@ fn generated_component_key_handler_can_exit() -> Result<()> {
 /// - The child handler observes `x`.
 /// - The parent handler does not observe `x`.
 #[test]
-fn child_key_handler_overrides_parent_handler() -> Result<()> {
+fn child_key_handler_overrides_parent_handler() -> leptatui::app::Result<()> {
     MACRO_PARENT_KEY_PRESSES.store(0, Ordering::SeqCst);
     MACRO_CHILD_KEY_PRESSES.store(0, Ordering::SeqCst);
 
@@ -70,7 +70,7 @@ fn child_key_handler_overrides_parent_handler() -> Result<()> {
 /// - The child handler observes `p`.
 /// - The parent handler handles `p`.
 #[test]
-fn child_key_pass_reaches_parent_handler() -> Result<()> {
+fn child_key_pass_reaches_parent_handler() -> leptatui::app::Result<()> {
     MACRO_PASS_PARENT_KEY_PRESSES.store(0, Ordering::SeqCst);
     MACRO_PASS_CHILD_KEY_PRESSES.store(0, Ordering::SeqCst);
 
@@ -102,7 +102,7 @@ fn child_key_pass_reaches_parent_handler() -> Result<()> {
 /// - The second handling callback runs.
 /// - The third callback does not run.
 #[test]
-fn component_key_handlers_short_circuit_in_registration_order() -> Result<()> {
+fn component_key_handlers_short_circuit_in_registration_order() -> leptatui::app::Result<()> {
     MACRO_FIRST_KEY_HANDLER.store(0, Ordering::SeqCst);
     MACRO_SECOND_KEY_HANDLER.store(0, Ordering::SeqCst);
     MACRO_THIRD_KEY_HANDLER.store(0, Ordering::SeqCst);

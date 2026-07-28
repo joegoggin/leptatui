@@ -90,7 +90,7 @@ struct MacroMarkdownHistoryProbe {
 
 impl View for MacroMarkdownHistoryProbe {
     /// Renders the behavior-only probe without terminal output.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         Ok(())
     }
 

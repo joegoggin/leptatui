@@ -64,6 +64,7 @@ impl TestContexts {
             .expect("the workspace should initialize");
         let (recent_paths, stored_paths, recent_error) =
             recent_files_store.load_for_workspace(filesystem, &workspace);
+        let recent_error = recent_error.map(|error| Arc::new(anyhow::Error::new(error)));
         let workspace = WorkspaceContext::new(workspace, filesystem);
         let files =
             owner.with(|| Files::new(recent_paths, stored_paths, recent_error, recent_files_store));

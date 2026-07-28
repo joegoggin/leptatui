@@ -17,7 +17,7 @@ use super::*;
 /// - A pointer outside the root clip does not focus the button.
 /// - The button becomes focusable through its single visible terminal column.
 #[test]
-fn clipped_positioned_control_uses_final_visible_hit_area() -> Result<()> {
+fn clipped_positioned_control_uses_final_visible_hit_area() -> leptatui::app::Result<()> {
     let clipped = button("Wide").with_inline_style(
         fixture_size(4.0, 2.0)
             .position(Position::Absolute)
@@ -59,7 +59,7 @@ fn clipped_positioned_control_uses_final_visible_hit_area() -> Result<()> {
 /// Focus scrolling must use the sticky box's constrained paint coordinate
 /// instead of its superseded normal-flow coordinate.
 #[test]
-fn sticky_focus_visibility_uses_constrained_paint_geometry() -> Result<()> {
+fn sticky_focus_visibility_uses_constrained_paint_geometry() -> leptatui::app::Result<()> {
     let sticky = button("Pin").with_inline_style(
         fixture_size(8.0, 1.0)
             .position(Position::Sticky)
@@ -117,7 +117,7 @@ fn sticky_focus_visibility_uses_constrained_paint_geometry() -> Result<()> {
 /// Fixed boxes use the terminal viewport and must not be interpreted as
 /// offscreen descendants of a scrolled logical parent.
 #[test]
-fn fixed_focus_does_not_scroll_logical_ancestors() -> Result<()> {
+fn fixed_focus_does_not_scroll_logical_ancestors() -> leptatui::app::Result<()> {
     let fixed = button("Pin").with_inline_style(
         fixture_size(8.0, 1.0)
             .position(Position::Fixed)
@@ -171,7 +171,7 @@ fn fixed_focus_does_not_scroll_logical_ancestors() -> Result<()> {
 /// - The standalone link focuses at its final absolute terminal coordinate.
 /// - The embedded Markdown link focuses at its final absolute coordinate.
 #[test]
-fn positioned_link_areas_use_final_terminal_coordinates() -> Result<()> {
+fn positioned_link_areas_use_final_terminal_coordinates() -> leptatui::app::Result<()> {
     let positioned = link("Docs", "https://example.com").with_inline_style(
         fixture_size(4.0, 1.0)
             .position(Position::Absolute)
@@ -218,7 +218,7 @@ fn positioned_link_areas_use_final_terminal_coordinates() -> Result<()> {
 /// - The input paints at the positioned rectangle.
 /// - The terminal cursor appears after `A` inside the positioned content box.
 #[test]
-fn positioned_editor_cursor_uses_final_terminal_coordinates() -> Result<()> {
+fn positioned_editor_cursor_uses_final_terminal_coordinates() -> leptatui::app::Result<()> {
     let positioned = input("A").with_focus(true).with_inline_style(
         fixture_size(6.0, 3.0)
             .position(Position::Absolute)
@@ -249,7 +249,7 @@ fn positioned_editor_cursor_uses_final_terminal_coordinates() -> Result<()> {
 /// - The fixed scroller consumes the wheel delta.
 /// - The covered absolute scroller retains its original offset.
 #[test]
-fn wheel_targeting_uses_frontmost_global_paint_order() -> Result<()> {
+fn wheel_targeting_uses_frontmost_global_paint_order() -> leptatui::app::Result<()> {
     let inset = cell_insets(Some(0.0), None, None, Some(0.0));
     let scroller = |position| {
         div((text("one"), text("two"), text("three"), text("four"))).with_inline_style(

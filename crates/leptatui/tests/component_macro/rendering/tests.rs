@@ -11,7 +11,7 @@
 /// - A required `into` prop renders as text.
 /// - Nested children passed through a `Children` prop render inside the panel.
 #[test]
-fn generated_component_props_render() -> Result<()> {
+fn generated_component_props_render() -> leptatui::app::Result<()> {
     let mut component = MacroPropPanel::with_props(
         MacroPropPanelProps::builder()
             .title("Panel")
@@ -49,7 +49,7 @@ fn generated_component_props_render() -> Result<()> {
 /// - The responsive class rule wins over the lower-specificity type rule.
 /// - Content below the responsive row remains visible within the measured height.
 #[test]
-fn generated_component_min_height_tracks_responsive_internal_layout() -> Result<()> {
+fn generated_component_min_height_tracks_responsive_internal_layout() -> leptatui::app::Result<()> {
     let mut component = MacroResponsiveCaseRoot::new();
     let terminal = render_component(&mut component, 40, 3)?;
     let text = rendered_text(&terminal);
@@ -77,7 +77,7 @@ fn generated_component_min_height_tracks_responsive_internal_layout() -> Result<
 /// - `gg` returns the child component's overflowing column to the top.
 /// - `G` scrolls the child component's overflowing column to the bottom.
 #[test]
-fn generated_component_scroll_keys_cross_component_boundaries() -> Result<()> {
+fn generated_component_scroll_keys_cross_component_boundaries() -> leptatui::app::Result<()> {
     let mut component = MacroScrollableBoundaryRoot::new();
     let terminal = render_component(&mut component, 12, 3)?;
     let text = rendered_text(&terminal);
@@ -138,7 +138,7 @@ fn generated_component_scroll_keys_cross_component_boundaries() -> Result<()> {
 /// viewport, and clip rectangles instead of replacing them with one identity
 /// rectangle.
 #[test]
-fn generated_component_roots_preserve_scrolling_box_geometry() -> Result<()> {
+fn generated_component_roots_preserve_scrolling_box_geometry() -> leptatui::app::Result<()> {
     let mut component = MacroBorderedScrollableRoot::new();
     render_component(&mut component, 12, 4)?;
 
@@ -171,7 +171,7 @@ fn generated_component_roots_preserve_scrolling_box_geometry() -> Result<()> {
 /// - Scrolling replaces it with the visible control.
 /// - Pointer movement focuses the visible control rather than the stale one.
 #[test]
-fn offscreen_generated_component_hit_areas_are_cleared() -> Result<()> {
+fn offscreen_generated_component_hit_areas_are_cleared() -> leptatui::app::Result<()> {
     let mut component = MacroScrolledMouseRoot::new();
     let terminal = render_component(&mut component, 12, 3)?;
     assert!(rendered_text(&terminal).contains("Hidden"));
@@ -215,7 +215,7 @@ fn offscreen_generated_component_hit_areas_are_cleared() -> Result<()> {
 /// - Shift+H reaches a probe inside a generated component root.
 /// - Shift+L reaches a probe through both generated and stored component boundaries.
 #[test]
-fn markdown_history_keys_cross_component_boundaries() -> Result<()> {
+fn markdown_history_keys_cross_component_boundaries() -> leptatui::app::Result<()> {
     let direct_direction = Rc::new(Cell::new(None));
     let mut direct = MacroMarkdownHistoryBoundary::with_props(
         MacroMarkdownHistoryBoundaryProps::builder()

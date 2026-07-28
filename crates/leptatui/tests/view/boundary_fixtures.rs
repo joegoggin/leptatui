@@ -11,7 +11,7 @@ impl View for EventExit {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         View::render(&text("Child"), ctx)
     }
 
@@ -24,7 +24,7 @@ impl View for EventExit {
     /// # Returns
     ///
     /// An [`AppControl`] value requesting exit.
-    fn __dispatch_event(&mut self, _event: &Event) -> Result<AppControl> {
+    fn __dispatch_event(&mut self, _event: &Event) -> leptatui::app::Result<AppControl> {
         Ok(AppControl::Exit)
     }
 
@@ -53,7 +53,7 @@ impl View for EventCounter {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         Ok(())
     }
 
@@ -66,7 +66,7 @@ impl View for EventCounter {
     /// # Returns
     ///
     /// An [`AppControl`] value requesting continued traversal.
-    fn __dispatch_event(&mut self, _event: &Event) -> Result<AppControl> {
+    fn __dispatch_event(&mut self, _event: &Event) -> leptatui::app::Result<AppControl> {
         self.count.set(self.count.get() + 1);
         Ok(AppControl::Continue)
     }
@@ -96,7 +96,7 @@ impl View for MetadataRecorder {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         let view = text("Child")
             .with_id("inside")
             .with_classes("component-child");

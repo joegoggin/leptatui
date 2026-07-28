@@ -13,7 +13,7 @@
 /// - PageDown is handled by the view.
 /// - The second styled render succeeds and shows the later button.
 #[test]
-fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
+fn overflowing_column_scrolls_to_later_children_by_default() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 6);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div((
@@ -80,7 +80,7 @@ fn overflowing_column_scrolls_to_later_children_by_default() -> Result<()> {
 /// Parent overflow should manage page scrolling when nested stacked content is
 /// taller than the viewport.
 #[test]
-fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()> {
+fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 6);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div((
@@ -157,7 +157,7 @@ fn overflowing_page_scrolls_stacked_buttons_without_nested_scroll() -> Result<()
 /// - The view render call succeeds.
 /// - The child text views render on the same row at intrinsic widths.
 #[test]
-fn flex_layout_stays_horizontal_without_direction_override() -> Result<()> {
+fn flex_layout_stays_horizontal_without_direction_override() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(4, 2);
     let mut terminal = Terminal::new(backend)?;
     let view = div(vec![text("A"), text("B")])

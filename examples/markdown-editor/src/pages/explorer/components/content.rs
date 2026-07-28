@@ -1,5 +1,7 @@
 //! Explorer page content rendered from page-owned signals.
 
+use std::sync::Arc;
+
 use leptatui::prelude::*;
 
 use crate::{
@@ -26,7 +28,7 @@ pub(in crate::pages::explorer) fn ExplorerContent(
     workspace: Workspace,
     listing: RwSignal<DirectoryListing>,
     selection: RwSignal<Option<usize>>,
-    error: RwSignal<Option<String>>,
+    error: RwSignal<Option<Arc<anyhow::Error>>>,
 ) -> impl IntoView {
     let home_navigate = use_navigate();
     let root = workspace.root().to_path_buf();
@@ -51,7 +53,7 @@ pub(in crate::pages::explorer) fn ExplorerContent(
                         <ExplorerList
                             listing=listing.get_untracked()
                             selection=selection.get_untracked()
-                            error=error.get_untracked()
+                            error=error.get_untracked().map(|error| error.to_string())
                         />
                     }
                 }}

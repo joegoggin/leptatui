@@ -1,10 +1,14 @@
 //! Explorer route-level component, local state, and keyboard behavior.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use leptatui::prelude::*;
 
 use crate::{
+    contexts::{NotificationContext, use_notifications},
     hooks::use_workspace,
     pages::viewer_location,
     services::{DirectoryListing, ExplorerEntryKind, FileSystem, Workspace},
@@ -24,12 +28,17 @@ use super::components::{ExplorerContent, ExplorerContentProps};
 #[component]
 pub(crate) fn ExplorerPage() -> impl IntoView {
     let workspace_context = use_workspace();
+    let notifications = use_notifications();
     let workspace = workspace_context.workspace;
     let filesystem = workspace_context.filesystem;
     let root = workspace.root().to_path_buf();
     let (initial_listing, initial_error) = match filesystem.list_directory(&workspace, &root) {
         Ok(listing) => (listing, None),
-        Err(error) => (DirectoryListing::empty(root), Some(error.to_string())),
+        Err(error) => {
+            let error = Arc::new(anyhow::Error::new(error));
+            notifications.show_error("Directory unavailable", error.to_string());
+            (DirectoryListing::empty(root), Some(error))
+        }
     };
     let initial_selection = (!initial_listing.entries().is_empty()).then_some(0);
     let listing = RwSignal::new(initial_listing);
@@ -63,6 +72,7 @@ pub(crate) fn ExplorerPage() -> impl IntoView {
                                 selection,
                                 error,
                                 filesystem,
+                                notifications,
                                 entry.path(),
                             );
                         }
@@ -75,7 +85,14 @@ pub(crate) fn ExplorerPage() -> impl IntoView {
                 KeyControl::Handled
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                browse_parent(&shortcut_workspace, listing, selection, error, filesystem);
+                browse_parent(
+                    &shortcut_workspace,
+                    listing,
+                    selection,
+                    error,
+                    filesystem,
+                    notifications,
+                );
                 KeyControl::Handled
             }
             KeyCode::Esc => {
@@ -154,6 +171,7 @@ fn select_next(listing: RwSignal<DirectoryListing>, selection: RwSignal<Option<u
 /// * `selection` — Page-local selected index signal.
 /// * `error` — Page-local recoverable error signal.
 /// * `filesystem` — Service used to discover the requested directory.
+/// * `notifications` — Shared context used to report navigation failures.
 /// * `requested_directory` — Directory to resolve and list.
 ///
 /// # Returns
@@ -163,8 +181,9 @@ fn browse(
     workspace: &Workspace,
     listing: RwSignal<DirectoryListing>,
     selection: RwSignal<Option<usize>>,
-    error: RwSignal<Option<String>>,
+    error: RwSignal<Option<Arc<anyhow::Error>>>,
     filesystem: FileSystem,
+    notifications: NotificationContext,
     requested_directory: &Path,
 ) -> bool {
     match filesystem.list_directory(workspace, requested_directory) {
@@ -175,7 +194,9 @@ fn browse(
             true
         }
         Err(source) => {
-            error.set(Some(source.to_string()));
+            let source = Arc::new(anyhow::Error::new(source));
+            notifications.show_error("Unable to browse directory", source.to_string());
+            error.set(Some(source));
             false
         }
     }
@@ -190,6 +211,7 @@ fn browse(
 /// * `selection` — Page-local selected index signal.
 /// * `error` — Page-local recoverable error signal.
 /// * `filesystem` — Service used to discover the parent directory.
+/// * `notifications` — Shared context used to report navigation failures.
 ///
 /// # Returns
 ///
@@ -198,8 +220,9 @@ fn browse_parent(
     workspace: &Workspace,
     listing: RwSignal<DirectoryListing>,
     selection: RwSignal<Option<usize>>,
-    error: RwSignal<Option<String>>,
+    error: RwSignal<Option<Arc<anyhow::Error>>>,
     filesystem: FileSystem,
+    notifications: NotificationContext,
 ) -> bool {
     let directory: PathBuf = listing.with_untracked(|listing| listing.directory().to_path_buf());
     if directory == workspace.root() {
@@ -209,5 +232,13 @@ fn browse_parent(
         return false;
     };
 
-    browse(workspace, listing, selection, error, filesystem, parent)
+    browse(
+        workspace,
+        listing,
+        selection,
+        error,
+        filesystem,
+        notifications,
+        parent,
+    )
 }

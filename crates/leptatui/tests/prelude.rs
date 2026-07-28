@@ -59,7 +59,7 @@ fn PreludeComponent() -> impl IntoView {
 /// The prelude should expose enough macro, view, component, and context APIs for
 /// a small component to render without extra imports.
 #[test]
-fn prelude_exposes_macros_and_required_context() -> Result<()> {
+fn prelude_exposes_macros_and_required_context() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(32, 3);
     let mut terminal = Terminal::new(backend)?;
     let component = PreludeComponent::new();
@@ -338,19 +338,39 @@ fn prelude_exposes_reactivity_and_context() {
 ///
 /// ```text
 /// use leptatui::prelude::*;
-/// create_resource(|| (), |_| async { Ok(42) })
+/// Resource::new(|| (), |_| async { Ok(42) })
 /// ```
 ///
 /// # Assertions
 ///
 /// - A resource can be created through prelude exports.
-/// - The resource eventually resolves to `ResourceState::Ready(42)`.
+/// - The resource eventually resolves to `Some(Ok(42))`.
 #[tokio::test(flavor = "current_thread")]
 async fn prelude_exposes_resource_helpers() {
     let owner = Owner::new();
 
-    let resource: Resource<i32, &'static str> =
-        owner.with(|| create_resource(|| (), |_| async { Ok(42) }));
+    let resource: Resource<std::result::Result<i32, &'static str>> =
+        owner.with(|| Resource::new(|| (), |_| async { Ok(42) }));
 
-    wait_until(|| matches!(resource.get_untracked(), ResourceState::Ready(42))).await;
+    wait_until(|| resource.get_untracked() == Some(Ok(42))).await;
+}
+
+/// Verifies the prelude leaves the standard two-parameter result unshadowed.
+///
+/// # Example Under Test
+///
+/// ```text
+/// use leptatui::prelude::*;
+/// let value: Result<i32, &str> = Ok(42);
+/// ```
+///
+/// # Assertions
+///
+/// - A standard [`Result`] with distinct success and error types compiles.
+/// - The result contains `42`.
+#[test]
+fn prelude_does_not_shadow_standard_result() {
+    let value: Result<i32, &str> = Ok(42);
+
+    assert_eq!(value, Ok(42));
 }

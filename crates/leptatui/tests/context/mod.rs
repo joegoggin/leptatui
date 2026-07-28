@@ -1,7 +1,7 @@
 // Shared context test fixtures and imports.
 
 use leptatui::{
-    AnyView, AppControl, AppRoot, Color, IntoView, RenderCtx, Result, StyleDeclarations,
+    AnyView, AppControl, AppRoot, Color, IntoView, RenderCtx, StyleDeclarations,
     StyleSelector, Stylesheet, ThemeVariables, View, component, div,
     context::{expect_context, provide_context, use_context},
     text, theme_color,
@@ -25,7 +25,7 @@ struct LabelProvider {
 
 impl View for LabelProvider {
     /// Provides a label, then renders the child subtree.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         provide_context(self.value.clone());
         ctx.render_view(&self.child)
     }
@@ -53,7 +53,7 @@ impl LabelConsumer {
 
 impl View for LabelConsumer {
     /// Records the visible label during render.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         self.observed.borrow_mut().push(use_context::<ScopeLabel>());
         Ok(())
     }
@@ -75,13 +75,13 @@ struct EventLabelProvider {
 
 impl View for EventLabelProvider {
     /// Provides a label while rendering the provider subtree.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         provide_context(self.value.clone());
         ctx.render_view(&self.child)
     }
 
     /// Forwards events to the child while this provider's scope is active.
-    fn handle_event(&mut self, event: crossterm::event::Event) -> Result<AppControl> {
+    fn handle_event(&mut self, event: crossterm::event::Event) -> leptatui::app::Result<AppControl> {
         self.child.handle_event(event)
     }
 
@@ -101,12 +101,12 @@ struct EventLabelConsumer {
 
 impl View for EventLabelConsumer {
     /// Renders nothing; this component only observes event-time context.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         Ok(())
     }
 
     /// Records the label visible during event handling.
-    fn handle_event(&mut self, _event: crossterm::event::Event) -> Result<AppControl> {
+    fn handle_event(&mut self, _event: crossterm::event::Event) -> leptatui::app::Result<AppControl> {
         *self.observed.borrow_mut() = use_context::<ScopeLabel>();
         Ok(AppControl::Continue)
     }
@@ -137,7 +137,7 @@ impl View for ThemeRenderRoot {
     /// # Returns
     ///
     /// An empty [`Result`] on successful child rendering.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         let theme = if self.dark.get_untracked() {
             ThemeVariables::new()
                 .color("text", Color::White)
@@ -178,7 +178,7 @@ impl View for ThemeSignalRoot {
     /// # Returns
     ///
     /// An empty [`Result`] on successful child rendering.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         provide_context(self.theme);
         ctx.__with_stylesheet(&self.stylesheet, |ctx| ctx.render_view(&self.child))
     }
@@ -210,7 +210,7 @@ impl View for ContextRoot {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         provide_context(String::from("from component"));
         *self.observed_text.borrow_mut() = use_context::<String>();
 

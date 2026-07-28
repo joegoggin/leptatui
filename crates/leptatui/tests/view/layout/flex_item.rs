@@ -18,7 +18,7 @@ impl View for FlexMeasurementProbe {
     /// # Returns
     ///
     /// An empty [`Result`] because the probe performs no terminal I/O.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         Ok(())
     }
 
@@ -141,7 +141,7 @@ fn flex_width(width: f32) -> LayoutSize<Dimension> {
 /// - The authored basis overrides the second child's one-cell intrinsic width.
 /// - Both items retain their intrinsic one-cell cross size.
 #[test]
-fn flex_basis_uses_authored_or_intrinsic_main_size() -> Result<()> {
+fn flex_basis_uses_authored_or_intrinsic_main_size() -> leptatui::app::Result<()> {
     let root = div((
         text("abc").with_inline_style(TuiStyle::new().flex_shrink(0.0)),
         text("x").with_inline_style(
@@ -185,7 +185,7 @@ fn flex_basis_uses_authored_or_intrinsic_main_size() -> Result<()> {
 /// - The second item receives four of the six free cells.
 /// - The grown items exactly cover the parent main axis.
 #[test]
-fn flex_grow_distributes_positive_free_space_by_factor() -> Result<()> {
+fn flex_grow_distributes_positive_free_space_by_factor() -> leptatui::app::Result<()> {
     let root = div((
         text("A").with_inline_style(
             TuiStyle::new()
@@ -233,7 +233,7 @@ fn flex_grow_distributes_positive_free_space_by_factor() -> Result<()> {
 /// - The shrunken items remain contiguous.
 /// - The shrunken items exactly cover the parent main axis.
 #[test]
-fn flex_shrink_distributes_negative_free_space() -> Result<()> {
+fn flex_shrink_distributes_negative_free_space() -> leptatui::app::Result<()> {
     let child_style = TuiStyle::new()
         .flex_basis(Dimension::from(Length::cells(4.0)))
         .flex_shrink(1.0);
@@ -275,7 +275,7 @@ fn flex_shrink_distributes_negative_free_space() -> Result<()> {
 /// - Shrinkage stops the first item at three cells and reduces its sibling to one cell.
 /// - Both constrained layouts exactly cover their parent main axes.
 #[test]
-fn flex_distribution_honors_minimum_and_maximum_widths() -> Result<()> {
+fn flex_distribution_honors_minimum_and_maximum_widths() -> leptatui::app::Result<()> {
     let growing = div((
         text("A").with_inline_style(
             TuiStyle::new()
@@ -352,7 +352,7 @@ fn flex_distribution_honors_minimum_and_maximum_widths() -> Result<()> {
 /// - Align-self places the probe against the cross-end edge.
 /// - The sibling retains the container's cross-start alignment.
 #[test]
-fn align_self_overrides_parent_alignment_after_intrinsic_measurement() -> Result<()> {
+fn align_self_overrides_parent_alignment_after_intrinsic_measurement() -> leptatui::app::Result<()> {
     let (probe, measure_count) = flex_measurement_probe(
         LayoutSize::new(3.0, 2.0),
         TuiStyle::new()
@@ -395,7 +395,7 @@ fn align_self_overrides_parent_alignment_after_intrinsic_measurement() -> Result
 /// - The nested flex container contributes both intrinsic children before growing.
 /// - Nested child geometry remains horizontal and intrinsic after its parent grows.
 #[test]
-fn replaced_and_nested_widgets_use_intrinsic_flex_bases() -> Result<()> {
+fn replaced_and_nested_widgets_use_intrinsic_flex_bases() -> leptatui::app::Result<()> {
     let image_root = div((
         image("asset.png").with_inline_style(
             TuiStyle::new()

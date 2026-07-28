@@ -15,7 +15,7 @@
 /// - Link labels remain visible without appended destinations.
 /// - Quote prefixes, rules, image fallbacks, literal HTML, and tables render visibly.
 #[test]
-fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
+fn markdown_fixtures_render_targeted_terminal_fragments() -> leptatui::app::Result<()> {
     let core_document = markdown(CORE_FIXTURE);
     let core = render_view(core_document.as_view(), 40, 80)?;
     let core_lines = rendered_lines(&core);
@@ -97,7 +97,7 @@ fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
 /// - The unknown selector retains plain unstyled source.
 /// - Rendered code shows language titles, line-number gutters, and wrapped Unicode source.
 #[test]
-fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()> {
+fn markdown_code_fixture_applies_options_and_renders_highlighting() -> leptatui::app::Result<()> {
     let options = MarkdownOptions::default()
         .syntax_theme(SyntaxTheme::Light)
         .line_numbers(true);
@@ -162,7 +162,7 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
 /// - The trailing logical blank line retains the same syntax background.
 /// - The surrounding border does not receive the syntax background.
 #[test]
-fn markdown_code_background_fills_the_block_interior() -> Result<()> {
+fn markdown_code_background_fills_the_block_interior() -> leptatui::app::Result<()> {
     let source = "```rust\nlet value = true;\n```\n";
     let document = markdown(source);
     let terminal = render_view(document.as_view(), 24, 4)?;
@@ -192,7 +192,7 @@ fn markdown_code_background_fills_the_block_interior() -> Result<()> {
 /// - Empty input renders successfully in a zero-sized terminal.
 /// - Code-heavy Markdown measures and renders without panicking at widths zero through two.
 #[test]
-fn markdown_fixtures_handle_empty_and_zero_sized_viewports() -> Result<()> {
+fn markdown_fixtures_handle_empty_and_zero_sized_viewports() -> leptatui::app::Result<()> {
     let empty = markdown(EMPTY_FIXTURE);
     assert!(
         empty

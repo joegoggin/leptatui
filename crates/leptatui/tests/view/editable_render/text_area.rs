@@ -14,7 +14,7 @@
 /// - The first line starts on the first inner row.
 /// - The second line starts on the second inner row.
 #[test]
-fn renders_text_area_multiline_value() -> Result<()> {
+fn renders_text_area_multiline_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("One\nTwo");
@@ -45,7 +45,7 @@ fn renders_text_area_multiline_value() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - Lines start in the first column when borders are disabled.
 #[test]
-fn text_area_borders_none_disables_default_border() -> Result<()> {
+fn text_area_borders_none_disables_default_border() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("One\nTwo").with_inline_style(TuiStyle::new().borders(Borders::NONE));
@@ -72,7 +72,7 @@ fn text_area_borders_none_disables_default_border() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The inner cells contain the first and last placeholder characters.
 #[test]
-fn renders_text_area_placeholder_when_value_is_empty() -> Result<()> {
+fn renders_text_area_placeholder_when_value_is_empty() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("").placeholder("Notes");
@@ -101,7 +101,7 @@ fn renders_text_area_placeholder_when_value_is_empty() -> Result<()> {
 /// - The focused text-area cell uses the stylesheet foreground color.
 /// - The focused text-area cell uses the stylesheet background color.
 #[test]
-fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
+fn renders_focused_text_area_with_focus_stylesheet_rule() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("Ada").with_focus(true);
@@ -140,7 +140,7 @@ fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The focused text area sets the terminal cursor on the final row.
 #[test]
-fn focused_text_area_sets_terminal_cursor_position() -> Result<()> {
+fn focused_text_area_sets_terminal_cursor_position() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("one\ntwo").with_focus(true);
@@ -168,7 +168,7 @@ fn focused_text_area_sets_terminal_cursor_position() -> Result<()> {
 /// - Moving the cursor to the start succeeds.
 /// - The second render succeeds and shows the head of the multiline value.
 #[test]
-fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
+fn text_area_rendering_scrolls_vertically_around_cursor() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("aaa\nbbb\nccc").with_focus(true);
@@ -199,7 +199,7 @@ fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
 /// - The first logical line remains unselected.
 /// - The second and third logical lines render in reverse video.
 #[test]
-fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
+fn text_area_visual_line_selection_renders_reversed_cells() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(10, 5);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("one\ntwo\nthree").with_focus(true);
@@ -231,7 +231,7 @@ fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
 /// - The preview character wraps to the next row in reverse video.
 /// - The terminal cursor is placed on the wrapped preview character.
 #[test]
-fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
+fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(5, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("Ada").with_focus(true);
@@ -264,7 +264,7 @@ fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The following text view renders after the wrapped text-area rows.
 #[test]
-fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
+fn column_reserves_height_for_wrapped_text_area() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(6, 7);
     let mut terminal = Terminal::new(backend)?;
     let view = div((text_area("Hello World"), text("End")));
@@ -292,7 +292,7 @@ fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
 /// - Wrapped text occupies the first two rows.
 /// - The following text view renders on the third row.
 #[test]
-fn column_reserves_height_for_wrapped_text() -> Result<()> {
+fn column_reserves_height_for_wrapped_text() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(6, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = div(vec![text("Hello World"), text("End")]);

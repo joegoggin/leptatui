@@ -13,7 +13,7 @@
 /// - The input renders a default border.
 /// - The inner cells contain `A`, `d`, and `a`.
 #[test]
-fn renders_input_value() -> Result<()> {
+fn renders_input_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = input("Ada");
@@ -45,7 +45,7 @@ fn renders_input_value() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The value starts in the first cell when borders are disabled.
 #[test]
-fn input_borders_none_disables_default_border() -> Result<()> {
+fn input_borders_none_disables_default_border() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
     let view = input("Ada").with_inline_style(TuiStyle::new().borders(Borders::NONE));
@@ -72,7 +72,7 @@ fn input_borders_none_disables_default_border() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The inner cells contain the first and last placeholder characters.
 #[test]
-fn renders_input_placeholder_when_value_is_empty() -> Result<()> {
+fn renders_input_placeholder_when_value_is_empty() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = input("").placeholder("Name");
@@ -101,7 +101,7 @@ fn renders_input_placeholder_when_value_is_empty() -> Result<()> {
 /// - The focused input cell uses the stylesheet foreground color.
 /// - The focused input cell uses the stylesheet background color.
 #[test]
-fn renders_focused_input_with_focus_stylesheet_rule() -> Result<()> {
+fn renders_focused_input_with_focus_stylesheet_rule() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = input("Ada").with_focus(true);
@@ -140,7 +140,7 @@ fn renders_focused_input_with_focus_stylesheet_rule() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The focused input sets the terminal cursor after the rendered value.
 #[test]
-fn focused_input_sets_terminal_cursor_position() -> Result<()> {
+fn focused_input_sets_terminal_cursor_position() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = input("Ada").with_focus(true);
@@ -167,7 +167,7 @@ fn focused_input_sets_terminal_cursor_position() -> Result<()> {
 /// - The content-row cursor remains clipped instead of moving below the
 ///   parent's viewport.
 #[test]
-fn focused_input_cursor_respects_retained_clip() -> Result<()> {
+fn focused_input_cursor_respects_retained_clip() -> leptatui::app::Result<()> {
     let child = input("A").with_focus(true).with_inline_style(
         TuiStyle::new()
             .box_sizing(BoxSizing::BorderBox)
@@ -213,7 +213,7 @@ fn focused_input_cursor_respects_retained_clip() -> Result<()> {
 /// - A focused button reports button state.
 /// - An unfocused input reports no focused control.
 #[test]
-fn app_root_reports_focused_editable_control_mode() -> Result<()> {
+fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()> {
     let normal_input = input("Ada").with_focus(true);
     assert_eq!(
         leptatui::AppRoot::__focused_control(&normal_input),
@@ -317,7 +317,7 @@ fn app_root_reports_focused_editable_control_mode() -> Result<()> {
 /// - Moving the cursor to the start succeeds.
 /// - The second render succeeds and shows the head of the value.
 #[test]
-fn input_rendering_clips_and_scrolls_around_cursor() -> Result<()> {
+fn input_rendering_clips_and_scrolls_around_cursor() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(4, 3);
     let mut terminal = Terminal::new(backend)?;
     let mut view = input("abcdef").with_focus(true);
@@ -348,7 +348,7 @@ fn input_rendering_clips_and_scrolls_around_cursor() -> Result<()> {
 /// - Cells inside the selected byte range use reverse-video styling.
 /// - Cells outside the selected byte range do not use reverse-video styling.
 #[test]
-fn input_visual_selection_renders_reversed_cells() -> Result<()> {
+fn input_visual_selection_renders_reversed_cells() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let mut view = input("abcd").with_focus(true);
@@ -381,7 +381,7 @@ fn input_visual_selection_renders_reversed_cells() -> Result<()> {
 /// - The preview character renders in reverse video.
 /// - The terminal cursor remains on the preview character.
 #[test]
-fn input_pending_insert_j_renders_reversed_preview() -> Result<()> {
+fn input_pending_insert_j_renders_reversed_preview() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let mut view = input("Ada").with_focus(true);
@@ -415,7 +415,7 @@ fn input_pending_insert_j_renders_reversed_preview() -> Result<()> {
 /// - The terminal cursor advances past the expired character.
 /// - The focused input remains in insert mode.
 #[test]
-fn input_pending_insert_j_preview_expires_to_insert_cursor() -> Result<()> {
+fn input_pending_insert_j_preview_expires_to_insert_cursor() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let mut view = input("Ada").with_focus(true);

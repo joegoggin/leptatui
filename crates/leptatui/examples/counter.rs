@@ -76,7 +76,7 @@ fn Counter() -> impl IntoView {
 
 /// Runs the counter example application.
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> leptatui::app::Result<()> {
     let view = view! { <Counter /> };
     App::new(view).run().await
 }

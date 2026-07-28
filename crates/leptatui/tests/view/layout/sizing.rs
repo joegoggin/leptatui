@@ -49,7 +49,7 @@ fn retained_div_child_border_box(root: &AnyView, index: usize) -> ratatui::layou
 /// - A minimum width raises a smaller preferred width.
 /// - A maximum width lowers a larger preferred width.
 #[test]
-fn preferred_minimum_and_maximum_sizes_resolve_from_table() -> Result<()> {
+fn preferred_minimum_and_maximum_sizes_resolve_from_table() -> leptatui::app::Result<()> {
     let cases = [
         (
             "preferred",
@@ -109,7 +109,7 @@ fn preferred_minimum_and_maximum_sizes_resolve_from_table() -> Result<()> {
 /// - A definite width derives a four-cell automatic height.
 /// - A definite height derives an eight-cell automatic width.
 #[test]
-fn aspect_ratio_derives_automatic_width_or_height() -> Result<()> {
+fn aspect_ratio_derives_automatic_width_or_height() -> leptatui::app::Result<()> {
     let width_driven = text("width")
         .with_inline_style(
             TuiStyle::new()
@@ -172,7 +172,7 @@ fn aspect_ratio_derives_automatic_width_or_height() -> Result<()> {
 /// - Each invalid ratio is ignored.
 /// - Intrinsic text measurement supplies the automatic one-cell height.
 #[test]
-fn invalid_aspect_ratios_fall_back_to_automatic_sizing() -> Result<()> {
+fn invalid_aspect_ratios_fall_back_to_automatic_sizing() -> leptatui::app::Result<()> {
     for ratio in [0.0, -1.0, f32::NAN, f32::INFINITY] {
         let root = text("auto")
             .with_inline_style(
@@ -214,7 +214,7 @@ fn invalid_aspect_ratios_fall_back_to_automatic_sizing() -> Result<()> {
 /// - A minimum size clamps a smaller resolved percentage.
 /// - A maximum size clamps a larger resolved percentage.
 #[test]
-fn nested_percentage_sizes_and_constraints_resolve_from_table() -> Result<()> {
+fn nested_percentage_sizes_and_constraints_resolve_from_table() -> leptatui::app::Result<()> {
     let cases = [
         ("percentage", 50.0, Dimension::Auto, Dimension::Auto, 10),
         (
@@ -280,7 +280,7 @@ fn nested_percentage_sizes_and_constraints_resolve_from_table() -> Result<()> {
 /// - Width-relative and height-relative units use their matching viewport axes.
 /// - Minimum-axis and maximum-axis units use the current smaller and larger axes.
 #[test]
-fn viewport_relative_sizes_resolve_from_table() -> Result<()> {
+fn viewport_relative_sizes_resolve_from_table() -> leptatui::app::Result<()> {
     let cases = [
         (
             "width-height",
@@ -333,7 +333,7 @@ fn viewport_relative_sizes_resolve_from_table() -> Result<()> {
 /// - Border-box sizing keeps padding and borders inside the authored dimensions.
 /// - Both modes retain the expected content box.
 #[test]
-fn content_and_border_box_sizes_resolve_from_table() -> Result<()> {
+fn content_and_border_box_sizes_resolve_from_table() -> leptatui::app::Result<()> {
     let cases = [
         (
             "content-box",
@@ -389,7 +389,7 @@ fn content_and_border_box_sizes_resolve_from_table() -> Result<()> {
 /// - Rounded child positions remain contiguous without gaps or overlap.
 /// - The three rounded widths cover the ten-cell parent.
 #[test]
-fn fractional_percentages_round_cumulatively_to_terminal_cells() -> Result<()> {
+fn fractional_percentages_round_cumulatively_to_terminal_cells() -> leptatui::app::Result<()> {
     let child_style = TuiStyle::new()
         .box_sizing(BoxSizing::BorderBox)
         .size(LayoutSize::new(

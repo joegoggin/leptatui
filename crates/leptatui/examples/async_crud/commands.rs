@@ -30,9 +30,9 @@ pub(super) struct CrudContext {
     /// Mock API used for list and mutation requests.
     pub(super) api: MockApi,
     /// Resource containing the current ticket list state.
-    pub(super) tickets: Resource<Vec<Ticket>, String>,
+    pub(super) tickets: Resource<Result<Vec<Ticket>, String>>,
     /// Action used to run ticket mutations.
-    pub(super) mutation: Action<TicketMutation, MutationResult, String>,
+    pub(super) mutation: Action<TicketMutation, Result<MutationResult, String>>,
     /// Signal setter that increments to refresh the ticket list.
     pub(super) refresh: WriteSignal<u64>,
 }

@@ -2,45 +2,10 @@
 
 use std::fs;
 
-use leptatui::prelude::{AppRoot, IntoView, KeyCode, KeyControl, KeyEvent, KeyModifiers, view};
+use leptatui::prelude::{AppRoot, KeyCode, KeyControl, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
 
 use super::support::{TestContexts, TestTree, draw_editor, rendered_lines};
-use crate::app::{StartupErrorScreen, StartupErrorScreenProps};
-
-/// Verifies component-owned startup failures render a quit-capable TUI screen.
-///
-/// # Example Under Test
-///
-/// ```text
-/// StartupErrorScreen("workspace validation failed")
-/// q
-/// ```
-///
-/// # Assertions
-///
-/// - The rendered screen identifies startup failure.
-/// - The original diagnostic is visible.
-/// - Pressing `q` requests application exit.
-#[test]
-fn startup_error_screen_renders_diagnostic_and_exits() -> leptatui::Result<()> {
-    let mut view = view! {
-        <StartupErrorScreen message=String::from("workspace validation failed") />
-    }
-    .into_view();
-    let mut terminal = Terminal::new(TestBackend::new(70, 10))?;
-
-    draw_editor(&mut terminal, &view)?;
-    let rendered = rendered_lines(&terminal).join("\n");
-    assert!(rendered.contains("Markdown editor could not start"));
-    assert!(rendered.contains("workspace validation failed"));
-    assert_eq!(
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))?,
-        KeyControl::Exit
-    );
-
-    Ok(())
-}
 
 /// Verifies every routed page remains usable in a narrow terminal.
 ///

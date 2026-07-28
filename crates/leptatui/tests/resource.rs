@@ -33,13 +33,12 @@ type PendingFetches = Arc<Mutex<HashMap<i32, oneshot::Sender<TestFetchResult>>>>
 ///
 /// ```text
 /// let (key, _set_key) = signal(7);
-/// create_resource(move || key.get(), |key| async move { Ok(format!("item-{key}")) });
+/// Resource::new(move || key.get(), |key| async move { Ok(format!("item-{key}")) });
 /// ```
 ///
 /// # Assertions
 ///
-/// - The resource starts in the pending state.
-/// - The resource eventually stores `ResourceState::Ready("item-7")`.
+/// - The resource eventually stores `Some(Ok("item-7"))`.
 /// - The fetcher is called exactly once for the initial source key.
 #[tokio::test(flavor = "current_thread")]
 async fn resource_loads_initial_source_key_once() {
@@ -47,10 +46,10 @@ async fn resource_loads_initial_source_key_once() {
     let calls = Arc::new(AtomicUsize::new(0));
     let calls_for_fetcher = Arc::clone(&calls);
 
-    let resource: Resource<String, &'static str> = owner.with(|| {
+    let resource: Resource<TestFetchResult> = owner.with(|| {
         let (key, _set_key) = signal(7);
 
-        create_resource(
+        Resource::new(
             move || key.get(),
             move |key| {
                 let calls = Arc::clone(&calls_for_fetcher);
@@ -63,15 +62,7 @@ async fn resource_loads_initial_source_key_once() {
         )
     });
 
-    assert!(resource.is_pending());
-
-    wait_until(|| {
-        matches!(
-            resource.get_untracked(),
-            ResourceState::Ready(ref value) if value == "item-7"
-        )
-    })
-    .await;
+    wait_until(|| resource.get_untracked() == Some(Ok(String::from("item-7")))).await;
 
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
@@ -82,7 +73,7 @@ async fn resource_loads_initial_source_key_once() {
 ///
 /// ```text
 /// let (key, set_key) = signal(1);
-/// let resource = create_resource(move || key.get(), fetch);
+/// let resource = Resource::new(move || key.get(), fetch);
 /// set_key.set(2);
 /// ```
 ///
@@ -100,18 +91,19 @@ async fn source_key_change_triggers_reload() {
     let (resource, set_key) = create_keyed_test_resource(&owner, &pending);
 
     wait_until(|| has_pending_fetch(&pending, 1)).await;
-    assert!(resource.is_pending());
+    assert!(resource.is_loading_untracked());
 
     send_fetch_response(&pending, 1, Ok(String::from("one")));
-    wait_until(|| resource.value().as_deref() == Some("one")).await;
+    wait_until(|| resource.get_untracked() == Some(Ok(String::from("one")))).await;
 
     set_key.set(2);
 
     wait_until(|| has_pending_fetch(&pending, 2)).await;
-    assert!(resource.is_pending());
+    assert!(resource.is_loading_untracked());
+    assert_eq!(resource.get_untracked(), Some(Ok(String::from("one"))));
 
     send_fetch_response(&pending, 2, Ok(String::from("two")));
-    wait_until(|| resource.value().as_deref() == Some("two")).await;
+    wait_until(|| resource.get_untracked() == Some(Ok(String::from("two")))).await;
 }
 
 /// Verifies a slower stale fetch cannot overwrite a newer load result.
@@ -146,12 +138,12 @@ async fn stale_fetch_completion_does_not_overwrite_newer_result() {
     wait_until(|| has_pending_fetch(&pending, 2)).await;
 
     send_fetch_response(&pending, 2, Ok(String::from("second")));
-    wait_until(|| resource.value().as_deref() == Some("second")).await;
+    wait_until(|| resource.get_untracked() == Some(Ok(String::from("second")))).await;
 
     send_fetch_response(&pending, 1, Ok(String::from("first")));
     settle_tasks().await;
 
-    assert_eq!(resource.value().as_deref(), Some("second"));
+    assert_eq!(resource.get_untracked(), Some(Ok(String::from("second"))));
 }
 
 /// Verifies loading and error states render from a component.
@@ -167,17 +159,17 @@ async fn stale_fetch_completion_does_not_overwrite_newer_result() {
 ///
 /// - Terminal creation succeeds.
 /// - Rendering the pending resource succeeds and shows `Loading`.
-/// - Completing the fetch with `offline` stores `ResourceState::Error`.
+/// - Completing the fetch stores `Some(Err("offline"))`.
 /// - Rendering the failed resource succeeds and shows `Error: offline`.
 #[tokio::test(flavor = "current_thread")]
-async fn loading_and_error_states_render_in_component() -> Result<()> {
+async fn loading_and_error_states_render_in_component() -> leptatui::app::Result<()> {
     let owner = Owner::new();
     let (sender, receiver) = oneshot::channel::<TestFetchResult>();
     let receiver = Arc::new(Mutex::new(Some(receiver)));
     let receiver_for_fetcher = Arc::clone(&receiver);
 
-    let resource: Resource<String, &'static str> = owner.with(|| {
-        create_resource(
+    let resource: Resource<TestFetchResult> = owner.with(|| {
+        Resource::new(
             || (),
             move |_| {
                 let receiver = Arc::clone(&receiver_for_fetcher);
@@ -204,7 +196,7 @@ async fn loading_and_error_states_render_in_component() -> Result<()> {
     assert!(rendered_text(&terminal).contains("Loading"));
 
     sender.send(Err("offline")).expect("send error response");
-    wait_until(|| matches!(resource.get_untracked(), ResourceState::Error("offline"))).await;
+    wait_until(|| resource.get_untracked() == Some(Err("offline"))).await;
 
     draw_component(&mut terminal, &mut component)?;
     assert!(rendered_text(&terminal).contains("Error: offline"));
@@ -215,7 +207,7 @@ async fn loading_and_error_states_render_in_component() -> Result<()> {
 /// Test component that renders a label for the current resource state.
 struct ResourceStatus {
     /// Resource read by the component during render.
-    resource: Resource<String, &'static str>,
+    resource: Resource<TestFetchResult>,
 }
 
 impl View for ResourceStatus {
@@ -232,12 +224,17 @@ impl View for ResourceStatus {
     /// # Errors
     ///
     /// Returns [`Error::Io`] if rendering the text view fails.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        let label = match self.resource.get() {
-            ResourceState::Pending => String::from("Loading"),
-            ResourceState::Ready(value) => value,
-            ResourceState::Error(error) => format!("Error: {error}"),
-        };
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
+        let label =
+            if self.resource.is_loading_untracked() && self.resource.get_untracked().is_none() {
+                String::from("Loading")
+            } else {
+                match self.resource.get_untracked() {
+                    Some(Ok(value)) => value,
+                    Some(Err(error)) => format!("Error: {error}"),
+                    None => String::from("Loading"),
+                }
+            };
 
         View::render(&text(label), ctx)
     }
@@ -264,13 +261,13 @@ impl View for ResourceStatus {
 fn create_keyed_test_resource(
     owner: &Owner,
     pending: &PendingFetches,
-) -> (Resource<String, &'static str>, WriteSignal<i32>) {
+) -> (Resource<TestFetchResult>, WriteSignal<i32>) {
     let pending_for_fetcher = Arc::clone(pending);
 
     owner.with(|| {
         let (key, set_key) = signal(1);
 
-        let resource = create_resource(
+        let resource = Resource::new(
             move || key.get(),
             move |key| {
                 let pending = Arc::clone(&pending_for_fetcher);

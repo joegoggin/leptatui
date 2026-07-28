@@ -17,7 +17,7 @@ fn render_layout_root(
     root: &AnyView,
     width: u16,
     height: u16,
-) -> Result<Terminal<TestBackend>> {
+) -> leptatui::app::Result<Terminal<TestBackend>> {
     let mut terminal = Terminal::new(TestBackend::new(width, height))?;
     let mut render_result = Ok(());
     terminal.draw(|frame| {
@@ -50,7 +50,7 @@ struct GeometryContextProbe {
 
 impl View for GeometryContextProbe {
     /// Records the active rounded layout snapshot.
-    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         self.geometry.set(Some(ctx.layout_geometry()));
         Ok(())
     }
@@ -88,7 +88,7 @@ impl View for GeometryContextProbe {
 
 impl View for HiddenLayoutProbe {
     /// Records an unexpected paint request.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         self.renders
             .set(self.renders.get().saturating_add(1));
         Ok(())
@@ -117,7 +117,7 @@ impl View for HiddenLayoutProbe {
     }
 
     /// Records an unexpected custom event.
-    fn on_event(&mut self, _event: &Event) -> Result<AppControl> {
+    fn on_event(&mut self, _event: &Event) -> leptatui::app::Result<AppControl> {
         self.events.set(self.events.get().saturating_add(1));
         Ok(AppControl::Continue)
     }
@@ -147,7 +147,7 @@ impl View for HiddenLayoutProbe {
 /// - The first flex child renders against the block's left inner edge.
 /// - The second flex child renders against the block's right inner edge.
 #[test]
-fn nested_layout_uses_assigned_area_as_containing_block() -> Result<()> {
+fn nested_layout_uses_assigned_area_as_containing_block() -> leptatui::app::Result<()> {
     let root = block(
         div((text("A"), text("B"))).with_inline_style(
             TuiStyle::new()
@@ -182,7 +182,7 @@ fn nested_layout_uses_assigned_area_as_containing_block() -> Result<()> {
 ///
 /// - The higher-z-index first sibling paints over the later sibling.
 #[test]
-fn positioned_siblings_paint_by_z_index() -> Result<()> {
+fn positioned_siblings_paint_by_z_index() -> leptatui::app::Result<()> {
     let inset = Edges::new(
         Length::cells(0.0).into(),
         LengthAuto::Auto,
@@ -236,7 +236,7 @@ fn positioned_siblings_paint_by_z_index() -> Result<()> {
 /// Pointer interaction should target the frontmost painted control without
 /// changing keyboard traversal order.
 #[test]
-fn positioned_pointer_focus_follows_recorded_z_index_paint_order() -> Result<()> {
+fn positioned_pointer_focus_follows_recorded_z_index_paint_order() -> leptatui::app::Result<()> {
     let inset = Edges::new(
         Length::cells(0.0).into(),
         LengthAuto::Auto,
@@ -308,7 +308,7 @@ fn positioned_pointer_focus_follows_recorded_z_index_paint_order() -> Result<()>
 /// Invalid public layout values should degrade predictably at the layout-engine
 /// boundary rather than panic inside the engine.
 #[test]
-fn zero_grid_placements_fall_back_to_automatic_layout() -> Result<()> {
+fn zero_grid_placements_fall_back_to_automatic_layout() -> leptatui::app::Result<()> {
     let first = text("A").with_inline_style(
         TuiStyle::new().grid_row(GridLine::new(
             GridPlacement::line(0),
@@ -355,7 +355,7 @@ fn zero_grid_placements_fall_back_to_automatic_layout() -> Result<()> {
 /// - A box without scrollbars uses its content box as the viewport.
 /// - The child inherits the root terminal clip.
 #[test]
-fn layout_tree_retains_rounded_box_geometry() -> Result<()> {
+fn layout_tree_retains_rounded_box_geometry() -> leptatui::app::Result<()> {
     let styled_block = block(text("inside")).with_inline_style(
         TuiStyle::new()
             .box_sizing(BoxSizing::BorderBox)
@@ -402,7 +402,7 @@ fn layout_tree_retains_rounded_box_geometry() -> Result<()> {
 /// - The custom view receives the same geometry retained on its metadata.
 /// - Border, padding, content, viewport, and clip rectangles are all exposed.
 #[test]
-fn render_context_exposes_retained_layout_geometry() -> Result<()> {
+fn render_context_exposes_retained_layout_geometry() -> leptatui::app::Result<()> {
     let observed = Rc::new(Cell::new(None));
     let mut metadata = StyleMetadata::new(ViewType::new("GeometryContextProbe"));
     metadata.set_inline_style(
@@ -448,7 +448,7 @@ fn render_context_exposes_retained_layout_geometry() -> Result<()> {
 /// - Removing the borders produces an `8x8` padding box.
 /// - Removing the padding produces the authored `6x6` content box.
 #[test]
-fn content_box_sizing_includes_builtin_chrome() -> Result<()> {
+fn content_box_sizing_includes_builtin_chrome() -> leptatui::app::Result<()> {
     let root = block(text("inside"))
         .with_inline_style(
             TuiStyle::new()
@@ -487,7 +487,7 @@ fn content_box_sizing_includes_builtin_chrome() -> Result<()> {
 /// - The first render retains a `10x3` border box.
 /// - The second render replaces it with a `20x5` border box.
 #[test]
-fn layout_tree_rebuilds_viewport_geometry_on_resize() -> Result<()> {
+fn layout_tree_rebuilds_viewport_geometry_on_resize() -> leptatui::app::Result<()> {
     let root = text("responsive")
         .with_inline_style(
             TuiStyle::new()
@@ -542,7 +542,7 @@ fn layout_tree_rebuilds_viewport_geometry_on_resize() -> Result<()> {
 /// Standard widgets may keep specialized content rendering, but their outer
 /// geometry must remain owned by the shared layout engine.
 #[test]
-fn styleable_standard_views_share_computed_outer_geometry() -> Result<()> {
+fn styleable_standard_views_share_computed_outer_geometry() -> leptatui::app::Result<()> {
     let outer_style = || {
         crate::support::fixture_size(8.0, 5.0)
             .borders(Borders::ALL)
@@ -632,7 +632,7 @@ fn styleable_standard_views_share_computed_outer_geometry() -> Result<()> {
 /// - Focus traversal counts only the visible button.
 /// - Enter does not activate the hidden focused button.
 #[test]
-fn display_none_excludes_painting_focus_and_activation() -> Result<()> {
+fn display_none_excludes_painting_focus_and_activation() -> leptatui::app::Result<()> {
     let activations = Rc::new(Cell::new(0usize));
     let action_count = Rc::clone(&activations);
     let hidden = button("Hidden")
@@ -683,7 +683,7 @@ fn display_none_excludes_painting_focus_and_activation() -> Result<()> {
 /// - Painting does not invoke the hidden leaf.
 /// - Custom event dispatch does not invoke the hidden leaf.
 #[test]
-fn display_none_skips_measurement_paint_and_custom_events() -> Result<()> {
+fn display_none_skips_measurement_paint_and_custom_events() -> leptatui::app::Result<()> {
     let measures = Rc::new(Cell::new(0usize));
     let renders = Rc::new(Cell::new(0usize));
     let events = Rc::new(Cell::new(0usize));
@@ -724,7 +724,7 @@ fn display_none_skips_measurement_paint_and_custom_events() -> Result<()> {
 /// - The dynamic factory runs once during the first render.
 /// - The dynamic factory runs exactly once more during the second render.
 #[test]
-fn dynamic_layout_child_is_refreshed_once_per_render() -> Result<()> {
+fn dynamic_layout_child_is_refreshed_once_per_render() -> leptatui::app::Result<()> {
     let builds = Rc::new(Cell::new(0usize));
     let build_count = Rc::clone(&builds);
     let root = dynamic(move || {

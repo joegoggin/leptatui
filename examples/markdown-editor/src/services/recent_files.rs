@@ -134,10 +134,10 @@ impl RecentFilesStore {
         &self,
         filesystem: FileSystem,
         workspace: &Workspace,
-    ) -> (Vec<PathBuf>, Vec<PathBuf>, Option<String>) {
+    ) -> (Vec<PathBuf>, Vec<PathBuf>, Option<io::Error>) {
         let (stored_paths, error) = match self.load() {
             Ok(paths) => (paths, None),
-            Err(error) => (Vec::new(), Some(error.to_string())),
+            Err(error) => (Vec::new(), Some(error)),
         };
         let mut stored = Vec::new();
         for path in stored_paths {

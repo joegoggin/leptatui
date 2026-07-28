@@ -1,24 +1,20 @@
 //! Component-facing application runtime handle.
 //!
 //! This module exposes a scoped handle that lets managed components request
-//! terminal suspension and preserve an application error for return after the
-//! user exits an error screen.
+//! terminal suspension while synchronous external work owns the terminal.
 
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
-    error::Error as StdError,
     fmt,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
     thread::{self, ThreadId},
 };
 
 use crate::context;
-
-use super::Error;
 
 /// Synchronous task executed while the managed terminal is restored.
 type SuspendedTask = Box<dyn FnOnce()>;
@@ -38,15 +34,12 @@ struct AppHandleState {
     id: u64,
     /// Thread that owns terminal work for this handle.
     owner_thread: ThreadId,
-    /// First application error to return after a requested exit.
-    exit_error: Mutex<Option<Error>>,
 }
 
 /// Component-facing handle for the active [`App`](super::App) runner.
 ///
 /// The handle is provided through context before the root component is
-/// materialized. Clones refer to the same runner-local task queue and deferred
-/// error.
+/// materialized. Clones refer to the same runner-local terminal-task queue.
 #[derive(Clone)]
 pub struct AppHandle {
     /// Shared metadata for this runner.
@@ -58,13 +51,12 @@ impl AppHandle {
     ///
     /// # Returns
     ///
-    /// An [`AppHandle`] with no queued tasks or deferred error.
+    /// An [`AppHandle`] with no queued terminal tasks.
     pub(crate) fn new() -> Self {
         Self {
             state: Arc::new(AppHandleState {
                 id: NEXT_APP_HANDLE_ID.fetch_add(1, Ordering::Relaxed),
                 owner_thread: thread::current().id(),
-                exit_error: Mutex::new(None),
             }),
         }
     }
@@ -95,29 +87,6 @@ impl AppHandle {
         });
     }
 
-    /// Records an application error to return after the component tree exits.
-    ///
-    /// The first recorded error wins. Recording an error does not exit the app,
-    /// which allows a component to render a diagnostic screen before returning
-    /// the original failure.
-    ///
-    /// # Arguments
-    ///
-    /// * `error` — Application failure to return from [`App::run`](super::App::run).
-    pub fn set_exit_error<E>(&self, error: E)
-    where
-        E: StdError + Send + Sync + 'static,
-    {
-        let mut exit_error = self
-            .state
-            .exit_error
-            .lock()
-            .expect("app handle exit error should not be poisoned");
-        if exit_error.is_none() {
-            *exit_error = Some(Error::Application(Box::new(error)));
-        }
-    }
-
     /// Removes all currently queued terminal-suspension tasks.
     ///
     /// # Returns
@@ -138,19 +107,6 @@ impl AppHandle {
         })
     }
 
-    /// Removes the deferred application error, if one was recorded.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing the first recorded application error.
-    pub(crate) fn take_exit_error(&self) -> Option<Error> {
-        self.state
-            .exit_error
-            .lock()
-            .expect("app handle exit error should not be poisoned")
-            .take()
-    }
-
     /// Verifies a same-thread operation runs on the handle's owner thread.
     ///
     /// # Panics
@@ -166,7 +122,7 @@ impl AppHandle {
 }
 
 impl fmt::Debug for AppHandle {
-    /// Formats queue and error presence without inspecting task closures.
+    /// Formats queue state without inspecting task closures.
     ///
     /// # Arguments
     ///
@@ -182,17 +138,9 @@ impl fmt::Debug for AppHandle {
         } else {
             0
         };
-        let has_exit_error = self
-            .state
-            .exit_error
-            .lock()
-            .expect("app handle exit error should not be poisoned")
-            .is_some();
-
         formatter
             .debug_struct("AppHandle")
             .field("suspended_tasks", &suspended_tasks)
-            .field("has_exit_error", &has_exit_error)
             .finish()
     }
 }
@@ -214,7 +162,7 @@ pub fn use_app_handle() -> AppHandle {
 #[cfg(test)]
 /// Unit tests for runner-local application handles.
 mod tests {
-    use std::{cell::RefCell, io, rc::Rc};
+    use std::{cell::RefCell, rc::Rc};
 
     use super::*;
 
@@ -247,35 +195,5 @@ mod tests {
             task();
         }
         assert_eq!(*values.borrow(), vec![1, 2]);
-    }
-
-    /// Verifies the first deferred application error wins.
-    ///
-    /// # Example Under Test
-    ///
-    /// ```text
-    /// set_exit_error("first")
-    /// set_exit_error("second")
-    /// ```
-    ///
-    /// # Assertions
-    ///
-    /// - Taking the deferred error returns an application error.
-    /// - The retained source is the first submitted failure.
-    /// - A second take returns no error.
-    #[test]
-    fn first_exit_error_is_retained_until_taken() {
-        let handle = AppHandle::new();
-        handle.set_exit_error(io::Error::other("first"));
-        handle.set_exit_error(io::Error::other("second"));
-
-        let error = handle
-            .take_exit_error()
-            .expect("the first application error should be retained");
-        assert_eq!(
-            StdError::source(&error).map(ToString::to_string).as_deref(),
-            Some("first")
-        );
-        assert!(handle.take_exit_error().is_none());
     }
 }

@@ -1,134 +1,101 @@
-//! Signal-backed async resource state for terminal apps.
+//! Signal-backed asynchronous resources for terminal apps.
 //!
-//! Resources connect Leptos reactive source keys to asynchronous read work and
-//! expose the latest pending, ready, or error state as a signal-friendly value.
+//! Resources mirror Leptos resource semantics: the fetcher can return any
+//! value, including an application-owned [`std::result::Result`]. Loading state
+//! is separate from the retained value so refetches do not discard previously
+//! loaded data.
 
 use std::{future::Future, sync::Arc};
 
 use leptos::prelude::{
-    Effect, Get, GetUntracked, ReadSignal, Set, SyncStorage, With, WithUntracked, signal,
+    Effect, Get, GetUntracked, ReadSignal, Set, SyncStorage, Update, With, WithUntracked,
+    WriteSignal, signal,
 };
 
-use crate::app::request_redraw;
-use crate::executor::{LatestTask, init_tokio_executor};
+use crate::{
+    app::request_redraw,
+    executor::{LatestTask, init_tokio_executor},
+};
 
-/// Current state for an asynchronous resource read.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ResourceState<T, E> {
-    /// The resource is loading for the current source key.
-    Pending,
-    /// The resource finished successfully.
-    Ready(T),
-    /// The resource finished with an error.
-    Error(E),
-}
-
-impl<T, E> ResourceState<T, E> {
-    /// Returns whether this state is currently pending.
-    pub fn is_pending(&self) -> bool {
-        matches!(self, Self::Pending)
-    }
-
-    /// Returns whether this state contains a successful value.
-    pub fn is_ready(&self) -> bool {
-        matches!(self, Self::Ready(_))
-    }
-
-    /// Returns whether this state contains an error.
-    pub fn is_error(&self) -> bool {
-        matches!(self, Self::Error(_))
-    }
-
-    /// Returns the successful value by reference, when ready.
-    pub fn as_ready(&self) -> Option<&T> {
-        match self {
-            Self::Ready(value) => Some(value),
-            Self::Pending | Self::Error(_) => None,
-        }
-    }
-
-    /// Returns the error by reference, when failed.
-    pub fn as_error(&self) -> Option<&E> {
-        match self {
-            Self::Error(error) => Some(error),
-            Self::Pending | Self::Ready(_) => None,
-        }
-    }
-}
-
-/// Reactive handle for an async read keyed by a tracked source value.
-pub struct Resource<T, E> {
-    /// Signal containing the visible resource state.
-    state: ReadSignal<ResourceState<T, E>>,
-    /// Effect that tracks source-key changes and starts fetch tasks.
+/// Reactive handle for an asynchronous read keyed by tracked source state.
+pub struct Resource<T> {
+    /// Signal containing the latest completed value.
+    value: ReadSignal<Option<T>>,
+    /// Signal indicating whether the current request is running.
+    loading: ReadSignal<bool>,
+    /// Setter used to trigger a fetch for the current source value.
+    refetch: WriteSignal<u64>,
+    /// Effect that tracks source changes and starts fetch tasks.
     _watcher: Effect<SyncStorage>,
 }
 
-impl<T, E> Clone for Resource<T, E> {
-    /// Clones the resource signal and watcher handles.
+impl<T> Clone for Resource<T> {
+    /// Clones the resource signals and watcher handle.
     fn clone(&self) -> Self {
         Self {
-            state: self.state,
+            value: self.value,
+            loading: self.loading,
+            refetch: self.refetch,
             _watcher: self._watcher,
         }
     }
 }
 
-impl<T, E> Resource<T, E>
+impl<T> Resource<T>
 where
     T: Send + Sync + 'static,
-    E: Send + Sync + 'static,
 {
-    /// Creates a resource from a tracked source key and async fetcher.
+    /// Creates a resource from a tracked source and asynchronous fetcher.
     ///
-    /// The `source` closure is tracked with a Leptos effect. Whenever the source
-    /// key changes, the resource enters [`ResourceState::Pending`] and runs
-    /// `fetcher` for the new key. Each fetch receives a monotonically
-    /// increasing request id, and only the latest in-flight fetch may update the
-    /// state.
+    /// Source changes and explicit refetches begin a new request. Existing
+    /// values remain available while loading, and stale completions cannot
+    /// replace the latest value.
     ///
-    /// Older fetch tasks are not cancelled. They may still finish, but their
-    /// ready or error results are ignored when a newer request has started, so
-    /// slower stale fetches cannot overwrite newer results.
+    /// # Arguments
+    ///
+    /// * `source` — Tracked closure returning the current resource key.
+    /// * `fetcher` — Function returning the asynchronous value for a key.
+    ///
+    /// # Returns
+    ///
+    /// A [`Resource`] with separate loading and optional-value signals.
     ///
     /// # Panics
     ///
-    /// Panics if called outside a Tokio runtime, because the resource watcher
-    /// and fetch tasks are scheduled onto Tokio.
+    /// Panics if created outside a Tokio runtime.
     pub fn new<K, F, Fut>(source: impl Fn() -> K + Send + Sync + 'static, fetcher: F) -> Self
     where
         K: Clone + Send + Sync + 'static,
         F: Fn(K) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = std::result::Result<T, E>> + Send + 'static,
+        Fut: Future<Output = T> + Send + 'static,
     {
         init_tokio_executor();
 
-        let (state, set_state) = signal(ResourceState::Pending);
+        let (value, set_value) = signal(None);
+        let (loading, set_loading) = signal(false);
+        let (refetch_version, refetch) = signal(0_u64);
         let latest_request = LatestTask::default();
         let fetcher = Arc::new(fetcher);
 
         let watcher = {
             let latest_request = latest_request.clone();
             Effect::watch_sync(
-                source,
-                move |key, _, _| {
+                move || (refetch_version.get(), source()),
+                move |(_, key), _, _| {
                     let request_id = latest_request.next();
-                    let _ = set_state.try_set(ResourceState::Pending);
+                    let _ = set_loading.try_set(true);
                     request_redraw();
 
                     let key = key.clone();
-                    let set_state = set_state;
                     let fetcher = Arc::clone(&fetcher);
                     let latest_request = latest_request.clone();
 
                     tokio::spawn(async move {
-                        let next = match fetcher(key).await {
-                            Ok(value) => ResourceState::Ready(value),
-                            Err(error) => ResourceState::Error(error),
-                        };
+                        let next = fetcher(key).await;
 
                         if latest_request.is_current(request_id) {
-                            let _ = set_state.try_set(next);
+                            let _ = set_value.try_set(Some(next));
+                            let _ = set_loading.try_set(false);
                             request_redraw();
                         }
                     });
@@ -138,83 +105,102 @@ where
         };
 
         Self {
-            state,
+            value,
+            loading,
+            refetch,
             _watcher: watcher,
         }
     }
 
-    /// Returns the read signal containing this resource's state.
-    pub fn state(&self) -> ReadSignal<ResourceState<T, E>> {
-        self.state
+    /// Requests another fetch using the current source value.
+    pub fn refetch(&self) {
+        self.refetch.update(|version| *version += 1);
     }
 
-    /// Reads the current resource state reactively by reference.
-    pub fn with<R>(&self, read: impl FnOnce(&ResourceState<T, E>) -> R) -> R {
-        self.state.with(read)
+    /// Returns the signal containing the latest completed value.
+    ///
+    /// # Returns
+    ///
+    /// A [`ReadSignal<Option<T>>`] that retains its value while refetching.
+    pub fn value(&self) -> ReadSignal<Option<T>> {
+        self.value
     }
 
-    /// Reads the current resource state without tracking it.
-    pub fn with_untracked<R>(&self, read: impl FnOnce(&ResourceState<T, E>) -> R) -> R {
-        self.state.with_untracked(read)
+    /// Returns the signal indicating whether a request is running.
+    ///
+    /// # Returns
+    ///
+    /// A [`ReadSignal<bool>`] containing the loading state.
+    pub fn loading(&self) -> ReadSignal<bool> {
+        self.loading
     }
 
-    /// Returns whether the resource is currently pending.
-    pub fn is_pending(&self) -> bool {
-        self.with(ResourceState::is_pending)
+    /// Reads the optional resource value reactively by reference.
+    ///
+    /// # Arguments
+    ///
+    /// * `read` — Closure receiving the optional loaded value.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `read`.
+    pub fn with<R>(&self, read: impl FnOnce(&Option<T>) -> R) -> R {
+        self.value.with(read)
+    }
+
+    /// Reads the optional resource value without tracking.
+    ///
+    /// # Arguments
+    ///
+    /// * `read` — Closure receiving the optional loaded value.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `read`.
+    pub fn with_untracked<R>(&self, read: impl FnOnce(&Option<T>) -> R) -> R {
+        self.value.with_untracked(read)
+    }
+
+    /// Returns whether a request is currently running.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] containing the tracked loading state.
+    pub fn is_loading(&self) -> bool {
+        self.loading.get()
+    }
+
+    /// Returns whether a request is running without tracking.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] containing the untracked loading state.
+    pub fn is_loading_untracked(&self) -> bool {
+        self.loading.get_untracked()
     }
 }
 
-impl<T, E> Resource<T, E>
+impl<T> Resource<T>
 where
     T: Clone + Send + Sync + 'static,
-    E: Clone + Send + Sync + 'static,
 {
-    /// Returns the current resource state reactively.
-    pub fn get(&self) -> ResourceState<T, E> {
-        self.state.get()
+    /// Returns the optional resource value reactively.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<T>`] containing the latest completed value.
+    pub fn get(&self) -> Option<T> {
+        self.value.get()
     }
 
-    /// Returns the current resource state without tracking it.
-    pub fn get_untracked(&self) -> ResourceState<T, E> {
-        self.state.get_untracked()
+    /// Returns the optional resource value without tracking.
+    ///
+    /// # Returns
+    ///
+    /// An [`Option<T>`] containing the latest completed value.
+    pub fn get_untracked(&self) -> Option<T> {
+        self.value.get_untracked()
     }
-
-    /// Returns the successful value, when ready.
-    pub fn value(&self) -> Option<T> {
-        self.with(|state| state.as_ready().cloned())
-    }
-
-    /// Returns the error, when failed.
-    pub fn error(&self) -> Option<E> {
-        self.with(|state| state.as_error().cloned())
-    }
-}
-
-/// Creates a resource from a tracked source key and async fetcher.
-///
-/// Older in-flight fetch tasks are not cancelled when the source key changes.
-/// Their results are ignored if a newer request has started.
-///
-/// # Arguments
-///
-/// * `source` — Tracked closure that returns the current resource key.
-/// * `fetcher` — Async function that loads a value for each source key.
-///
-/// # Returns
-///
-/// A [`Resource`] that exposes pending, ready, and error state for the fetcher.
-pub fn create_resource<K, T, E, F, Fut>(
-    source: impl Fn() -> K + Send + Sync + 'static,
-    fetcher: F,
-) -> Resource<T, E>
-where
-    K: Clone + Send + Sync + 'static,
-    T: Send + Sync + 'static,
-    E: Send + Sync + 'static,
-    F: Fn(K) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = std::result::Result<T, E>> + Send + 'static,
-{
-    Resource::new(source, fetcher)
 }
 
 #[cfg(test)]
@@ -240,14 +226,14 @@ mod tests {
     /// # Example Under Test
     ///
     /// ```text
-    /// create_resource(|| (), |_| async move { Ok("ready") })
+    /// Resource::new(|| (), |_| async move { Ok("ready") })
     /// ```
     ///
     /// # Assertions
     ///
-    /// - The initial pending load sends a redraw request.
-    /// - Completing the fetch successfully sends another redraw request.
-    /// - The resource stores `ResourceState::Ready("ready")`.
+    /// - Initial loading sends a redraw request.
+    /// - Successful completion sends another redraw request.
+    /// - The resource stores `Some(Ok("ready"))`.
     #[tokio::test(flavor = "current_thread")]
     async fn successful_completion_requests_redraw() {
         assert_completion_requests_redraw(Ok(String::from("ready"))).await;
@@ -258,24 +244,24 @@ mod tests {
     /// # Example Under Test
     ///
     /// ```text
-    /// create_resource(|| (), |_| async move { Err("offline") })
+    /// Resource::new(|| (), |_| async move { Err("offline") })
     /// ```
     ///
     /// # Assertions
     ///
-    /// - The initial pending load sends a redraw request.
-    /// - Completing the fetch with an error sends another redraw request.
-    /// - The resource stores `ResourceState::Error("offline")`.
+    /// - Initial loading sends a redraw request.
+    /// - Failed completion sends another redraw request.
+    /// - The resource stores `Some(Err("offline"))`.
     #[tokio::test(flavor = "current_thread")]
     async fn error_completion_requests_redraw() {
         assert_completion_requests_redraw(Err("offline")).await;
     }
 
-    /// Verifies resource completion redraw behavior for one controlled response.
+    /// Verifies redraw behavior for one controlled resource response.
     ///
     /// # Arguments
     ///
-    /// * `response` — Result sent into the pending resource fetch task.
+    /// * `response` — Result sent into the pending fetch task.
     async fn assert_completion_requests_redraw(response: TestFetchResult) {
         let _redraw_guard = redraw_test_lock().await;
         let owner = Owner::new();
@@ -285,8 +271,8 @@ mod tests {
         let receiver_for_fetcher = Arc::clone(&receiver);
         let mut redraws = subscribe_redraws();
 
-        let resource: Resource<String, &'static str> = owner.with(|| {
-            create_resource(
+        let resource: Resource<TestFetchResult> = owner.with(|| {
+            Resource::new(
                 || (),
                 move |_| {
                     let receiver = Arc::clone(&receiver_for_fetcher);
@@ -316,11 +302,6 @@ mod tests {
             .expect("completion redraw request should arrive")
             .expect("redraw sender should stay available");
 
-        let state = resource.get_untracked();
-
-        match expected {
-            Ok(value) => assert_eq!(state, ResourceState::Ready(value)),
-            Err(error) => assert_eq!(state, ResourceState::Error(error)),
-        }
+        assert_eq!(resource.get_untracked(), Some(expected));
     }
 }

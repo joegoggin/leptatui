@@ -14,7 +14,7 @@
 /// - Rendering still shows the original value.
 /// - The cell after the first line remains blank.
 #[test]
-fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> Result<()> {
+fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("Ada\nLovelace").with_focus(true);
@@ -49,7 +49,7 @@ fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> Resul
 /// - The character key is handled by the focused input.
 /// - The callback receives `Ada!`.
 #[test]
-fn focused_input_inside_component_boundary_handles_editing_keys() -> Result<()> {
+fn focused_input_inside_component_boundary_handles_editing_keys() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_input = Rc::clone(&emitted);
     let input_view = input("Ada").on_input(move |next| {
@@ -90,7 +90,7 @@ fn focused_input_inside_component_boundary_handles_editing_keys() -> Result<()> 
 /// - The enter key is handled by the focused text area.
 /// - The callback receives `Ada\n`.
 #[test]
-fn focused_text_area_inside_component_boundary_handles_editing_keys() -> Result<()> {
+fn focused_text_area_inside_component_boundary_handles_editing_keys() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_text_area = Rc::clone(&emitted);
     let text_area_view = text_area("Ada").on_input(move |next| {

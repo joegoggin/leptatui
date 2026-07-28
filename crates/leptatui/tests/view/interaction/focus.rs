@@ -17,7 +17,7 @@
 ///
 /// Non-focusable text views should be skipped during keyboard focus movement.
 #[test]
-fn tab_focus_moves_between_static_buttons() -> Result<()> {
+fn tab_focus_moves_between_static_buttons() -> leptatui::app::Result<()> {
     let mut view = div((button("One"), text("Gap"), button("Two")));
 
     view.handle_event(key(KeyCode::Tab))?;
@@ -48,7 +48,7 @@ fn tab_focus_moves_between_static_buttons() -> Result<()> {
 /// - The back-tab event succeeds and moves focus back one control.
 /// - Non-editable text is skipped.
 #[test]
-fn tab_focus_moves_across_buttons_and_editable_controls() -> Result<()> {
+fn tab_focus_moves_across_buttons_and_editable_controls() -> leptatui::app::Result<()> {
     let mut view = div((
         button("Save"),
         text("Gap"),
@@ -98,7 +98,7 @@ fn tab_focus_moves_across_buttons_and_editable_controls() -> Result<()> {
 /// Keyboard focus should not move to an offscreen button without bringing that
 /// button into view.
 #[test]
-fn tab_focus_scrolls_overflowing_column_to_focused_button() -> Result<()> {
+fn tab_focus_scrolls_overflowing_column_to_focused_button() -> leptatui::app::Result<()> {
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
@@ -137,7 +137,7 @@ fn tab_focus_scrolls_overflowing_column_to_focused_button() -> Result<()> {
 /// Reverse focus movement should use the same focus visibility rule as forward
 /// movement.
 #[test]
-fn backtab_focus_scrolls_overflowing_column_up_to_focused_button() -> Result<()> {
+fn backtab_focus_scrolls_overflowing_column_up_to_focused_button() -> leptatui::app::Result<()> {
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
@@ -187,7 +187,7 @@ fn backtab_focus_scrolls_overflowing_column_up_to_focused_button() -> Result<()>
 /// Automatic focus visibility should be a response to focus movement, not a
 /// permanent constraint that prevents normal scrolling.
 #[test]
-fn focus_scroll_request_does_not_override_later_manual_scroll() -> Result<()> {
+fn focus_scroll_request_does_not_override_later_manual_scroll() -> leptatui::app::Result<()> {
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;
@@ -227,7 +227,7 @@ fn focus_scroll_request_does_not_override_later_manual_scroll() -> Result<()> {
 /// A focused control earlier in source order must not supply the bounds used
 /// for a pending anchor-navigation request.
 #[test]
-fn anchor_scroll_takes_priority_over_earlier_focused_control() -> Result<()> {
+fn anchor_scroll_takes_priority_over_earlier_focused_control() -> leptatui::app::Result<()> {
     let width = 18;
     let backend = TestBackend::new(width, 4);
     let mut terminal = Terminal::new(backend)?;

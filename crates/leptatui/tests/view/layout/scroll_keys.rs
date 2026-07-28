@@ -14,7 +14,7 @@
 /// - `G` is handled by the view.
 /// - The scroll offset moves to the bottom.
 #[test]
-fn overflowing_column_scrolls_to_bottom_with_vim_g() -> Result<()> {
+fn overflowing_column_scrolls_to_bottom_with_vim_g() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
@@ -48,7 +48,7 @@ fn overflowing_column_scrolls_to_bottom_with_vim_g() -> Result<()> {
 /// - `Ctrl-U` scrolls up five rows and is handled.
 /// - A second `Ctrl-U` at the top leaves the offset clamped and passes.
 #[test]
-fn overflowing_column_pages_with_vim_control_keys() -> Result<()> {
+fn overflowing_column_pages_with_vim_control_keys() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
@@ -91,7 +91,7 @@ fn overflowing_column_pages_with_vim_control_keys() -> Result<()> {
 /// - The first `g` keeps the pending top-scroll prefix.
 /// - The second `g` scrolls to the top.
 #[test]
-fn overflowing_column_scrolls_to_top_with_vim_gg() -> Result<()> {
+fn overflowing_column_scrolls_to_top_with_vim_gg() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
@@ -130,7 +130,7 @@ fn overflowing_column_scrolls_to_top_with_vim_gg() -> Result<()> {
 /// - `g`, `Down`, `g` leaves the scroll offset at the bottom.
 /// - A fresh `g` completes the prefix and scrolls to the top.
 #[test]
-fn vim_scroll_to_top_prefix_resets_on_unrelated_key() -> Result<()> {
+fn vim_scroll_to_top_prefix_resets_on_unrelated_key() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));

@@ -20,7 +20,7 @@
 /// Component boundaries should not prevent child views from carrying selector
 /// metadata used by stylesheets.
 #[test]
-fn selector_metadata_remains_available_inside_component_boundaries() -> Result<()> {
+fn selector_metadata_remains_available_inside_component_boundaries() -> leptatui::app::Result<()> {
     let seen = Rc::new(RefCell::new(None));
     let view = component(MetadataRecorder {
         seen: Rc::clone(&seen),
@@ -55,7 +55,7 @@ fn selector_metadata_remains_available_inside_component_boundaries() -> Result<(
 /// - The dynamic closure is evaluated during rendering.
 /// - The component boundary renders through its `View::render` method.
 #[test]
-fn renders_dynamic_and_component_child_views() -> Result<()> {
+fn renders_dynamic_and_component_child_views() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(24, 5);
     let mut terminal = Terminal::new(backend)?;
     let view = div((dynamic(|| text("Dynamic")), component(EventExit)));
@@ -96,7 +96,7 @@ fn renders_dynamic_and_component_child_views() -> Result<()> {
 /// - Event traversal reaches the component boundary.
 /// - `AppControl::Exit` short-circuits child traversal.
 #[test]
-fn dispatches_events_through_component_child_views() -> Result<()> {
+fn dispatches_events_through_component_child_views() -> leptatui::app::Result<()> {
     let mut view = div((text("Static"), component(EventExit)));
 
     assert_eq!(view.handle_event(Event::Resize(24, 5))?, AppControl::Exit);
@@ -118,7 +118,7 @@ fn dispatches_events_through_component_child_views() -> Result<()> {
 /// - The dynamic closure is evaluated during event dispatch.
 /// - Events reach the view produced by the dynamic closure.
 #[test]
-fn dispatches_events_through_dynamic_child_views() -> Result<()> {
+fn dispatches_events_through_dynamic_child_views() -> leptatui::app::Result<()> {
     let count = Rc::new(Cell::new(0));
     let child_count = Rc::clone(&count);
     let mut view = div([dynamic(move || {
@@ -183,7 +183,7 @@ fn compares_dynamic_views_by_identity() {
 /// Expensive view factories such as Markdown parsing should not rerun for
 /// unrelated redraws.
 #[test]
-fn keyed_views_rebuild_children_only_when_keys_change() -> Result<()> {
+fn keyed_views_rebuild_children_only_when_keys_change() -> leptatui::app::Result<()> {
     let key = Rc::new(Cell::new(0_u8));
     let builds = Rc::new(Cell::new(0_u8));
     let key_reader = Rc::clone(&key);
@@ -348,7 +348,7 @@ fn reconciliation_preserves_div_state_across_layout_styles() {
 /// - The first render shows the initial inner dynamic closure output.
 /// - Updating the outer dynamic state replaces the previous inner dynamic closure.
 #[test]
-fn dynamic_reconciliation_replaces_new_nested_dynamic_boundaries() -> Result<()> {
+fn dynamic_reconciliation_replaces_new_nested_dynamic_boundaries() -> leptatui::app::Result<()> {
     let label = Rc::new(Cell::new("Home"));
     let dynamic_label = Rc::clone(&label);
     let view = dynamic(move || {

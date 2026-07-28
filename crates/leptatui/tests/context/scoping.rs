@@ -45,7 +45,7 @@ fn leptos_owner_context_fallback_still_works() {
 /// - The inner descendant sees the inner provider value.
 /// - The sibling after the inner provider sees the restored outer value.
 #[test]
-fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
+fn component_context_is_scoped_to_render_subtrees() -> leptatui::app::Result<()> {
     let observed = Rc::new(RefCell::new(Vec::new()));
     let backend = TestBackend::new(24, 6);
     let mut terminal = Terminal::new(backend)?;
@@ -97,7 +97,7 @@ fn component_context_is_scoped_to_render_subtrees() -> Result<()> {
 /// - Event traversal continues.
 /// - The child event handler sees the provider value from the latest render.
 #[test]
-fn component_context_is_available_during_descendant_events() -> Result<()> {
+fn component_context_is_available_during_descendant_events() -> leptatui::app::Result<()> {
     let observed = Rc::new(RefCell::new(None));
     let backend = TestBackend::new(24, 4);
     let mut terminal = Terminal::new(backend)?;
