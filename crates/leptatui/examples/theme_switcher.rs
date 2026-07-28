@@ -159,5 +159,6 @@ fn ThemeDemo() -> impl IntoView {
 /// process events.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(ThemeDemo::new()).run().await
+    let view = view! { <ThemeDemo /> };
+    App::new(view).run().await
 }

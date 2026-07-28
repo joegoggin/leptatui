@@ -169,5 +169,6 @@ fn PositioningShowcase() -> impl IntoView {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(PositioningShowcase::new()).run().await
+    let view = view! { <PositioningShowcase /> };
+    App::new(view).run().await
 }

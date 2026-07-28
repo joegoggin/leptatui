@@ -106,28 +106,29 @@ spacing is reduced.
 - `cli` contains command-line parsing and browsing-root selection.
 - `hooks` exposes two domain contexts: `use_workspace()` supplies the validated
   workspace and filesystem service, while `use_files()` supplies recent-file
-  signals, persistence, and the external-editor handoff.
+  signals, persistence diagnostics, and external-editor failures.
 - `services` contains anchored filesystem access, persistent recent-file
-  storage, external editor process boundaries, and filesystem result values.
-- `app` owns the application shell and declares `/`, `/files`, and
-  `/view/*path`, providing only the workspace and file domain contexts.
+  storage, external editor process boundaries, restored-terminal session
+  coordination, and filesystem result values.
+- `app` owns component-driven startup and the application shell. Its prop-free
+  root parses the CLI, initializes services and signals, provides typed
+  contexts, and declares `/`, `/files`, and `/view/*path`.
 - `pages` organizes each routed feature around a `page` module with co-located
   state and child components. Explorer owns its listing, selection, and error
   signals; Viewer derives its document from the route and owns its reload
   revision. Viewer delegates document rendering to the existing `<Markdown />`
   component.
-- `main` validates startup, runs managed terminal sessions, and invokes the
-  external editor only after Leptatui restores raw mode, mouse capture, and the
-  alternate screen.
+- `main` only constructs `<AppRouter />` and passes that view to the async
+  Leptatui runner.
 
 The normal data flow is CLI root → `use_workspace()` context → page-owned
 Explorer signals → encoded Viewer route → `<Markdown />` Viewer. Successful
 Viewer route resolution updates and persists recent-file values through
-`use_files()`. Editing writes the route-derived path to the file context's
-edit-request signal, temporarily exits the managed TUI, appends `--` and the
-path to the resolved editor command, then starts a new Viewer session.
-Path-associated editor failures use the same context so the rebuilt Viewer can
-display them.
+`use_files()`. Editing queues the route-derived path through the contextual
+editor session, temporarily restores the terminal, appends `--` and the path to
+the resolved editor command, and resumes the same Viewer component. Completion
+updates the Viewer revision and path-associated failure signal so the mounted
+document reloads in place.
 
 ## Verification
 

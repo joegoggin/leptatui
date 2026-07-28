@@ -8,7 +8,7 @@
 
 use std::fs;
 
-use leptatui::prelude::{GetUntracked, KeyCode, KeyControl, KeyEvent, KeyModifiers, Set};
+use leptatui::prelude::{GetUntracked, KeyCode, KeyControl, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
 
 use super::support::{TestContexts, TestTree, draw_editor, rendered_lines};

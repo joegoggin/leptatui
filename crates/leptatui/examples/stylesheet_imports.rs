@@ -190,5 +190,6 @@ fn StylesheetImportsDemo() -> impl IntoView {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(StylesheetImportsDemo::new()).run().await
+    let view = view! { <StylesheetImportsDemo /> };
+    App::new(view).run().await
 }

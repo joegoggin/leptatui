@@ -35,7 +35,7 @@ cargo check --workspace --examples
 
 Application code normally imports `leptatui::prelude::*`, defines a root
 component, builds a view tree with either builders or `view!`, and runs it with
-`App::new(root).run().await`.
+`App::new(view).run().await`.
 
 `view!` and `#[component]` are Leptatui-owned macros for terminal UIs. They use
 familiar Leptos-style component syntax, but they create values implementing
@@ -67,9 +67,18 @@ fn Greeting() -> impl IntoView {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(Greeting::new()).run().await
+    let view = view! { <Greeting /> };
+    App::new(view).run().await
 }
 ```
+
+Signals created in a component body live for that component instance. Provide
+shared signals or services through typed context when descendants need them.
+Components that must temporarily release the terminal—for example, to launch an
+interactive editor—can call `use_app_handle()` and queue work with
+`AppHandle::suspend_terminal()`. The runtime restores normal terminal modes,
+runs the work on the app thread, re-enters the TUI, and redraws the same mounted
+component tree.
 
 Component function parameters are props. Use PascalCase component tags in
 `view!`, pass props as attributes, and use nested content with a `children:
@@ -975,8 +984,8 @@ fn Root() -> impl IntoView {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let root = Root::new();
-    App::new(root).run().await
+    let view = view! { <Root /> };
+    App::new(view).run().await
 }
 ```
 

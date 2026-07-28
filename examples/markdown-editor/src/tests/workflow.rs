@@ -1,6 +1,10 @@
 //! End-to-end non-interactive Markdown editor workflow coverage.
 
-use std::{cell::RefCell, ffi::OsString, fs, rc::Rc};
+use std::{
+    ffi::OsString,
+    fs,
+    sync::{Arc, Mutex},
+};
 
 use leptatui::prelude::{GetUntracked, KeyCode, KeyControl, KeyEvent, KeyModifiers, Set};
 use ratatui::{Terminal, backend::TestBackend};
@@ -32,9 +36,9 @@ use super::support::{
 /// - Home routes to Explorer before key events enter the nested directory.
 /// - Explorer opens the Markdown file in Viewer.
 /// - Test-backend rendering exposes the current path and original document.
-/// - The edit key exits the TUI session and records an edit request.
+/// - The edit key is handled without exiting the component tree.
 /// - The injected editor receives the canonical path and replaces the source.
-/// - A rebuilt view renders the edited source from the same shared file hook.
+/// - The mounted Viewer reloads and renders the edited source.
 ///
 /// # Why
 ///
@@ -48,10 +52,10 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
     fs::create_dir(&docs).expect("the docs directory should be created");
     fs::write(&guide, "# Before edit").expect("the Markdown file should be created");
     let canonical_guide = fs::canonicalize(&guide).expect("the guide should canonicalize");
-    let commands = Rc::new(RefCell::new(Vec::new()));
+    let commands = Arc::new(Mutex::new(Vec::new()));
     let editor_process = EditorProcess::with_services(
         RecordingLauncher {
-            commands: Rc::clone(&commands),
+            commands: Arc::clone(&commands),
             outcome: TestLaunchOutcome::Success,
             replacement: Some((canonical_guide.clone(), String::from("# After edit"))),
         },
@@ -61,7 +65,7 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
         },
     );
     let contexts = TestContexts::new(tree.root());
-    let mut view = contexts.view();
+    let mut view = contexts.view_with_editor(editor_process);
     let mut terminal = Terminal::new(TestBackend::new(90, 24))?;
 
     draw_editor(&mut terminal, &view)?;
@@ -94,20 +98,13 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
-        KeyControl::Exit
+        KeyControl::Handled
     );
     assert_eq!(
-        contexts.files.edit_request.get_untracked(),
-        Some(canonical_guide.clone())
-    );
-    drop(view);
-
-    editor_process
-        .edit(&canonical_guide)
-        .expect("the injected editor should succeed");
-    contexts.files.editor_failure.set(None);
-    assert_eq!(
-        commands.borrow().as_slice(),
+        commands
+            .lock()
+            .expect("recorded commands should not be poisoned")
+            .as_slice(),
         [(
             OsString::from("configured-editor"),
             vec![
@@ -116,9 +113,7 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
             ],
         )]
     );
-    let viewer_path = viewer_location(contexts.workspace.root(), &canonical_guide);
-    let rebuilt_view = contexts.view_at(viewer_path);
-    draw_editor(&mut terminal, &rebuilt_view)?;
+    draw_editor(&mut terminal, &view)?;
     let after_edit = rendered_lines(&terminal).join("\n");
     assert!(after_edit.contains("Open: docs/guide.md"));
     assert!(after_edit.contains("After edit"));
@@ -161,7 +156,7 @@ fn workflow_rebuilds_viewer_with_external_editor_failures() -> leptatui::Result<
         let canonical = fs::canonicalize(&guide).expect("the guide should canonicalize");
         let editor_process = EditorProcess::with_services(
             RecordingLauncher {
-                commands: Rc::new(RefCell::new(Vec::new())),
+                commands: Arc::new(Mutex::new(Vec::new())),
                 outcome,
                 replacement: None,
             },

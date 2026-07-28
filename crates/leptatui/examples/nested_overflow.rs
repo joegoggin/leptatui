@@ -109,5 +109,6 @@ fn NestedOverflow() -> impl IntoView {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(NestedOverflow::new()).run().await
+    let view = view! { <NestedOverflow /> };
+    App::new(view).run().await
 }

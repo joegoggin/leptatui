@@ -1,5 +1,6 @@
 //! Workspace resources and their required context hook.
 
+#[cfg(test)]
 use std::path::Path;
 
 use leptatui::prelude::expect_context;
@@ -38,6 +39,7 @@ impl WorkspaceContext {
     /// # Returns
     ///
     /// A [`Path`] borrowed from the bundled [`Workspace`].
+    #[cfg(test)]
     pub(crate) fn root(&self) -> &Path {
         self.workspace.root()
     }

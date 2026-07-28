@@ -146,5 +146,6 @@ fn ResponsiveGrid() -> impl IntoView {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(ResponsiveGrid::new()).run().await
+    let view = view! { <ResponsiveGrid /> };
+    App::new(view).run().await
 }

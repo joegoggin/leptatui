@@ -1,13 +1,12 @@
 //! Shared fixtures, mocks, and rendering helpers for editor tests.
 
 use std::{
-    cell::RefCell,
     env,
     ffi::OsString,
     fs, io,
     path::{Path, PathBuf},
     process::{self, Command},
-    rc::Rc,
+    sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -17,7 +16,10 @@ use ratatui::{Terminal, backend::TestBackend};
 use crate::{
     app::{app_view, app_view_at_path},
     hooks::{Files, WorkspaceContext},
-    services::{EnvironmentReader, ExplorerEntry, FileSystem, ProcessLauncher, RecentFilesStore},
+    services::{
+        EditorProcess, EditorSession, EnvironmentReader, ExplorerEntry, FileSystem,
+        ProcessLauncher, RecentFilesStore,
+    },
 };
 
 /// Shared-context fixture that keeps its signal owner alive.
@@ -92,7 +94,30 @@ impl TestContexts {
     ///
     /// An [`AnyView`] using this fixture's shared values.
     pub(super) fn view_at(&self, path: impl Into<String>) -> AnyView {
-        app_view_at_path(self.workspace.clone(), self.files.clone(), path)
+        app_view_at_path(
+            self.workspace.clone(),
+            self.files.clone(),
+            EditorSession::deferred(EditorProcess::new()),
+            path,
+        )
+    }
+
+    /// Creates an application view with an immediate injected editor process.
+    ///
+    /// # Arguments
+    ///
+    /// * `editor_process` — Process boundary executed without a real terminal.
+    ///
+    /// # Returns
+    ///
+    /// An [`AnyView`] whose Viewer completes editor requests synchronously.
+    pub(super) fn view_with_editor(&self, editor_process: EditorProcess) -> AnyView {
+        app_view_at_path(
+            self.workspace.clone(),
+            self.files.clone(),
+            EditorSession::immediate(editor_process),
+            "/",
+        )
     }
 }
 
@@ -114,7 +139,7 @@ pub(super) enum TestLaunchOutcome {
 #[derive(Clone, Debug)]
 pub(super) struct RecordingLauncher {
     /// Commands received by the launcher in call order.
-    pub(super) commands: Rc<RefCell<Vec<RecordedCommand>>>,
+    pub(super) commands: Arc<Mutex<Vec<RecordedCommand>>>,
     /// Outcome returned for each launch.
     pub(super) outcome: TestLaunchOutcome,
     /// Optional file replacement performed during a successful edit.
@@ -166,10 +191,13 @@ impl ProcessLauncher for RecordingLauncher {
     /// Returns [`io::Error`] for the missing-executable outcome or if a
     /// configured replacement cannot be written.
     fn success(&self, command: &mut Command) -> io::Result<bool> {
-        self.commands.borrow_mut().push((
-            command.get_program().to_os_string(),
-            command.get_args().map(OsString::from).collect(),
-        ));
+        self.commands
+            .lock()
+            .expect("recorded commands should not be poisoned")
+            .push((
+                command.get_program().to_os_string(),
+                command.get_args().map(OsString::from).collect(),
+            ));
 
         match self.outcome {
             TestLaunchOutcome::Success => {

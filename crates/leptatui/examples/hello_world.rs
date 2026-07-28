@@ -51,5 +51,6 @@ fn Root() -> impl IntoView {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(Root::new()).run().await
+    let view = view! { <Root /> };
+    App::new(view).run().await
 }

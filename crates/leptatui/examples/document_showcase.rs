@@ -139,5 +139,6 @@ fn DocumentShowcase() -> impl IntoView {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(DocumentShowcase::new()).run().await
+    let view = view! { <DocumentShowcase /> };
+    App::new(view).run().await
 }

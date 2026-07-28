@@ -18,8 +18,8 @@ use super::*;
 ///
 /// - `e` passes without an open Viewer document.
 /// - Explorer activation opens the selected Markdown document.
-/// - Viewer `e` requests a restored-terminal edit and exits the session.
-/// - Global `q` exits without setting an edit request.
+/// - Viewer `e` queues a restored-terminal edit without exiting the session.
+/// - Global `q` still exits the mounted application.
 #[test]
 fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> leptatui::Result<()>
 {
@@ -35,7 +35,7 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
         KeyControl::Pass
     );
-    assert_eq!(contexts.files.edit_request.get_untracked(), None);
+    assert_eq!(contexts.files.editor_failure.get_untracked(), None);
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE))?,
@@ -49,17 +49,14 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
     draw_editor(&mut terminal, &view)?;
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
-        KeyControl::Exit
+        KeyControl::Handled
     );
-    assert!(contexts.files.edit_request.get_untracked().is_some());
+    assert_eq!(contexts.files.editor_failure.get_untracked(), None);
 
-    contexts.files.edit_request.set(None);
-    let mut quit_view = contexts.view();
     assert_eq!(
-        quit_view.handle_key_event(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))?,
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))?,
         KeyControl::Exit
     );
-    assert_eq!(contexts.files.edit_request.get_untracked(), None);
 
     Ok(())
 }

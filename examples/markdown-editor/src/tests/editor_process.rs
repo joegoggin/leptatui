@@ -1,6 +1,10 @@
 //! Editor command resolution and process-boundary tests.
 
-use std::{cell::RefCell, ffi::OsString, fs, io, rc::Rc};
+use std::{
+    ffi::OsString,
+    fs, io,
+    sync::{Arc, Mutex},
+};
 
 use crate::services::EditorProcess;
 
@@ -28,10 +32,10 @@ fn editor_process_prefers_visual_and_parses_arguments() {
     fs::write(&markdown, "# Guide").expect("the Markdown file should be created");
     let absolute_markdown =
         fs::canonicalize(&markdown).expect("the Markdown file should canonicalize");
-    let commands = Rc::new(RefCell::new(Vec::new()));
+    let commands = Arc::new(Mutex::new(Vec::new()));
     let process = EditorProcess::with_services(
         RecordingLauncher {
-            commands: Rc::clone(&commands),
+            commands: Arc::clone(&commands),
             outcome: TestLaunchOutcome::Success,
             replacement: None,
         },
@@ -46,7 +50,10 @@ fn editor_process_prefers_visual_and_parses_arguments() {
         .expect("the injected editor launch should succeed");
 
     assert_eq!(
-        commands.borrow().as_slice(),
+        commands
+            .lock()
+            .expect("recorded commands should not be poisoned")
+            .as_slice(),
         [(
             OsString::from("custom-editor"),
             vec![
@@ -82,9 +89,9 @@ fn editor_process_uses_editor_then_vi_fallback() {
     fs::write(&markdown, "# Guide").expect("the Markdown file should be created");
     let absolute_markdown =
         fs::canonicalize(&markdown).expect("the Markdown file should canonicalize");
-    let commands = Rc::new(RefCell::new(Vec::new()));
+    let commands = Arc::new(Mutex::new(Vec::new()));
     let launcher = RecordingLauncher {
-        commands: Rc::clone(&commands),
+        commands: Arc::clone(&commands),
         outcome: TestLaunchOutcome::Success,
         replacement: None,
     };
@@ -105,7 +112,10 @@ fn editor_process_uses_editor_then_vi_fallback() {
         .expect("the fallback editor should succeed");
 
     assert_eq!(
-        commands.borrow().as_slice(),
+        commands
+            .lock()
+            .expect("recorded commands should not be poisoned")
+            .as_slice(),
         [
             (
                 OsString::from("configured-editor"),
@@ -140,10 +150,10 @@ fn editor_process_rejects_malformed_configuration() {
     let tree = TestTree::new("editor-malformed");
     let markdown = tree.root().join("guide.md");
     fs::write(&markdown, "# Guide").expect("the Markdown file should be created");
-    let commands = Rc::new(RefCell::new(Vec::new()));
+    let commands = Arc::new(Mutex::new(Vec::new()));
     let process = EditorProcess::with_services(
         RecordingLauncher {
-            commands: Rc::clone(&commands),
+            commands: Arc::clone(&commands),
             outcome: TestLaunchOutcome::Success,
             replacement: None,
         },
@@ -159,5 +169,10 @@ fn editor_process_rejects_malformed_configuration() {
 
     assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
     assert!(error.to_string().contains("VISUAL"));
-    assert!(commands.borrow().is_empty());
+    assert!(
+        commands
+            .lock()
+            .expect("recorded commands should not be poisoned")
+            .is_empty()
+    );
 }

@@ -21,7 +21,7 @@
 //! # Public API Shape
 //!
 //! Application code should normally import [`prelude`] and run a root component
-//! with `App::new(root).run().await`. Explicit module or top-level imports remain
+//! with `App::new(view).run().await`. Explicit module or top-level imports remain
 //! available for lower-level manual rendering and style inspection.
 //!
 //! ```no_run
@@ -34,9 +34,15 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     App::new(Root::new()).run().await
+//!     let view = view! { <Root /> };
+//!     App::new(view).run().await
 //! }
 //! ```
+//!
+//! Component bodies own their local signals and can provide shared signals or
+//! services through typed context. [`use_app_handle`] returns the scoped
+//! [`AppHandle`] when a component needs to queue synchronous work that must run
+//! while the managed terminal is temporarily restored.
 //!
 //! The [`macro@view`] and [`macro@component`] macros are Leptatui terminal UI
 //! macros. They use Leptos-style syntax and Leptos reactive primitives, but
@@ -253,7 +259,7 @@ mod terminal_image;
 extern crate self as leptatui;
 
 pub use action::{Action, ActionState, create_action};
-pub use app::{App, AppControl, AppRoot, Error, Result};
+pub use app::{App, AppControl, AppHandle, AppRoot, Error, Result, use_app_handle};
 pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, use_key_event};
 pub use leptatui_macros::{component, stylesheet, view};
 pub use markdown::{

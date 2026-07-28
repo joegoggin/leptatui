@@ -9,7 +9,7 @@ use crossterm::{cursor::SetCursorStyle, execute};
 
 use crate::{component::FocusedControl, context, terminal_image::TerminalImageSupport};
 
-use super::{AppRoot, Result, terminal::DefaultTerminal};
+use super::{AppHandle, AppRoot, Result, terminal::DefaultTerminal};
 
 /// Draws a root application into the terminal.
 ///
@@ -18,6 +18,7 @@ use super::{AppRoot, Result, terminal::DefaultTerminal};
 /// * `root` — Root application state to render.
 /// * `terminal` — Ratatui terminal backend receiving the draw call.
 /// * `terminal_images` — Terminal image support detected for the session.
+/// * `app_handle` — Runtime handle provided to managed components.
 ///
 /// # Returns
 ///
@@ -31,6 +32,7 @@ pub(super) fn draw_root<R>(
     root: &mut R,
     terminal: &mut DefaultTerminal,
     terminal_images: &TerminalImageSupport,
+    app_handle: &AppHandle,
 ) -> Result<()>
 where
     R: AppRoot,
@@ -41,6 +43,7 @@ where
     terminal.draw(|frame| {
         context::hooks::__with_context_scope(|| {
             context::provide_context(terminal_images.clone());
+            context::provide_context(app_handle.clone());
             render_result = root.render(frame);
             focused_control = root.__focused_control();
         });

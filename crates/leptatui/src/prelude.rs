@@ -19,7 +19,8 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     App::new(Root::new()).run().await
+//!     let view = view! { <Root /> };
+//!     App::new(view).run().await
 //! }
 //! ```
 //!
@@ -29,28 +30,28 @@
 //! render metadata and generated-code hooks stay outside the default import.
 
 pub use crate::{
-    Action, ActionState, AlignContent, AlignItems, AlignSelf, AnyView, App, AppControl, AppRoot,
-    AvailableSpace, Axes, BlockView, BorderType, Borders, BoxSizing, ButtonView, CellAlignment,
-    Children, ChildrenFn, ChildrenMut, CodeBlockView, Color, ContainerView, Dimension, Display,
-    DivView, DynamicView, Edges, EditableAction, EditableState, EditableView, Error, FlexDirection,
-    FlexWrap, FormAction, FormView, Fraction, GridAutoFlow, GridLine, GridMaxTrackSize,
-    GridMinTrackSize, GridPlacement, GridRepeat, GridTemplateTrack, GridTrackSize, HeadingLevel,
-    HeadingView, History, ImageSource, ImageView, InputView, IntoView, IntoViews, JustifyContent,
-    JustifyItems, JustifySelf, KeyControl, LayoutGeometry, LayoutSize, Length, LengthAuto,
-    LinkTarget, LinkView, ListItemView, ListKind, ListView, Location, MarkdownOptions,
-    MarkdownView, MediaQuery, Modifier, Navigate, NavigateOptions, Outlet, Overflow, ParagraphView,
-    ParamsMap, Position, ProgressBarView, RenderCtx, Resource, ResourceState, Result, RichText,
-    RouteLinkView, Router, RouterProps, StyleDeclarations, StyleMetadata, StyleModule, StyleRule,
-    StyleSelector, StyleValue, StyledView, Stylesheet, SyntaxTheme, TableCellView, TableRowView,
-    TableSectionKind, TableSectionView, TableView, TextAreaView, TextView, TextualView, ThemeValue,
-    ThemeVariables, TuiSize, TuiSpacing, TuiStyle, View, ViewType, ViewportSize, VimMode, ZIndex,
-    block, button, code_block,
+    Action, ActionState, AlignContent, AlignItems, AlignSelf, AnyView, App, AppControl, AppHandle,
+    AppRoot, AvailableSpace, Axes, BlockView, BorderType, Borders, BoxSizing, ButtonView,
+    CellAlignment, Children, ChildrenFn, ChildrenMut, CodeBlockView, Color, ContainerView,
+    Dimension, Display, DivView, DynamicView, Edges, EditableAction, EditableState, EditableView,
+    Error, FlexDirection, FlexWrap, FormAction, FormView, Fraction, GridAutoFlow, GridLine,
+    GridMaxTrackSize, GridMinTrackSize, GridPlacement, GridRepeat, GridTemplateTrack,
+    GridTrackSize, HeadingLevel, HeadingView, History, ImageSource, ImageView, InputView, IntoView,
+    IntoViews, JustifyContent, JustifyItems, JustifySelf, KeyControl, LayoutGeometry, LayoutSize,
+    Length, LengthAuto, LinkTarget, LinkView, ListItemView, ListKind, ListView, Location,
+    MarkdownOptions, MarkdownView, MediaQuery, Modifier, Navigate, NavigateOptions, Outlet,
+    Overflow, ParagraphView, ParamsMap, Position, ProgressBarView, RenderCtx, Resource,
+    ResourceState, Result, RichText, RouteLinkView, Router, RouterProps, StyleDeclarations,
+    StyleMetadata, StyleModule, StyleRule, StyleSelector, StyleValue, StyledView, Stylesheet,
+    SyntaxTheme, TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView,
+    TextAreaView, TextView, TextualView, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle,
+    View, ViewType, ViewportSize, VimMode, ZIndex, block, button, code_block,
     context::{expect_context, provide_context, use_context},
     create_action, create_resource, div, form, h1, h2, h3, h4, h5, h6, image, input, keyed, link,
     list_item, markdown, markdown_file, markdown_file_with_options, markdown_with_options,
     ordered_list, paragraph, progress_bar, route_link, table, table_body, table_cell, table_head,
-    table_row, text, text_area, theme_color, unordered_list, use_history, use_key_event,
-    use_location, use_navigate, use_params_map, use_query_map,
+    table_row, text, text_area, theme_color, unordered_list, use_app_handle, use_history,
+    use_key_event, use_location, use_navigate, use_params_map, use_query_map,
     view::{component, dynamic},
 };
 

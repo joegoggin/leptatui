@@ -104,9 +104,8 @@ fn markdown_path(args: impl IntoIterator<Item = OsString>) -> io::Result<PathBuf
 async fn main() -> std::result::Result<(), Box<dyn Error>> {
     let path = markdown_path(env::args_os())?;
     let document = view! { <Markdown src=path syntax_theme=SyntaxTheme::Dark line_numbers=true /> };
-    let reader =
-        MarkdownReader::with_props(MarkdownReaderProps::builder().document(document).build());
+    let view = view! { <MarkdownReader document=document /> };
 
-    App::new(reader).run().await?;
+    App::new(view).run().await?;
     Ok(())
 }

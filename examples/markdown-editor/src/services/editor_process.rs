@@ -4,7 +4,7 @@
 //! without invoking a shell, and delegates execution through injectable
 //! environment and process boundaries.
 
-use std::{env, ffi::OsString, fmt::Debug, io, path::Path, process::Command, rc::Rc};
+use std::{env, ffi::OsString, fmt::Debug, io, path::Path, process::Command, sync::Arc};
 
 /// Environment variable consulted first for an interactive visual editor.
 const VISUAL_ENVIRONMENT_VARIABLE: &str = "VISUAL";
@@ -14,7 +14,7 @@ const EDITOR_ENVIRONMENT_VARIABLE: &str = "EDITOR";
 const FALLBACK_EDITOR: &str = "vi";
 
 /// Executes a prepared external-editor command and reports its success state.
-pub(crate) trait ProcessLauncher: Debug {
+pub(crate) trait ProcessLauncher: Debug + Send + Sync {
     /// Runs a prepared process command to completion.
     ///
     /// # Arguments
@@ -32,7 +32,7 @@ pub(crate) trait ProcessLauncher: Debug {
 }
 
 /// Reads editor configuration from the process environment.
-pub(crate) trait EnvironmentReader: Debug {
+pub(crate) trait EnvironmentReader: Debug + Send + Sync {
     /// Returns one operating-system environment value.
     ///
     /// # Arguments
@@ -91,9 +91,9 @@ impl ProcessLauncher for SystemProcessLauncher {
 #[derive(Clone, Debug)]
 pub(crate) struct EditorProcess {
     /// Injectable boundary used to execute prepared commands.
-    launcher: Rc<dyn ProcessLauncher>,
+    launcher: Arc<dyn ProcessLauncher>,
     /// Injectable boundary used to resolve editor environment variables.
-    environment: Rc<dyn EnvironmentReader>,
+    environment: Arc<dyn EnvironmentReader>,
 }
 
 impl EditorProcess {
@@ -104,8 +104,8 @@ impl EditorProcess {
     /// An [`EditorProcess`] backed by the operating-system launcher.
     pub(crate) fn new() -> Self {
         Self {
-            launcher: Rc::new(SystemProcessLauncher),
-            environment: Rc::new(SystemEnvironmentReader),
+            launcher: Arc::new(SystemProcessLauncher),
+            environment: Arc::new(SystemEnvironmentReader),
         }
     }
 
@@ -125,8 +125,8 @@ impl EditorProcess {
         environment: impl EnvironmentReader + 'static,
     ) -> Self {
         Self {
-            launcher: Rc::new(launcher),
-            environment: Rc::new(environment),
+            launcher: Arc::new(launcher),
+            environment: Arc::new(environment),
         }
     }
 

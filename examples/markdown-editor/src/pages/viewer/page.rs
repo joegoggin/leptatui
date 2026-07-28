@@ -8,7 +8,7 @@ use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use crate::{
     hooks::{Files, use_files, use_workspace},
     pages::shared::{relative_path, routed_page_style},
-    services::{FileSystem, RECENT_FILE_LIMIT, Workspace},
+    services::{EditorSession, FileSystem, RECENT_FILE_LIMIT, Workspace},
 };
 
 use super::components::{ViewerDocument, ViewerDocumentProps};
@@ -35,8 +35,7 @@ const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
 /// Renders the standalone Markdown viewer and document actions.
 ///
 /// The route identifies the open document. Only the reload revision belongs
-/// to this page instance; recent files and editor handoff use shared file
-/// signals.
+/// to this page instance; recent files and editor failures use shared signals.
 ///
 /// # Returns
 ///
@@ -47,6 +46,7 @@ pub(crate) fn ViewerPage() -> impl IntoView {
     let workspace = workspace_context.workspace;
     let filesystem = workspace_context.filesystem;
     let files = use_files();
+    let editor_session = expect_context::<EditorSession>();
     let route_params = use_params_map();
     let revision = RwSignal::new(0_u64);
     let shortcut_navigate = use_navigate();
@@ -56,7 +56,6 @@ pub(crate) fn ViewerPage() -> impl IntoView {
     let document_files = files.clone();
     let shortcut_workspace = workspace.clone();
     let header_workspace = workspace.clone();
-    let edit_request = files.edit_request;
     let editor_failure = files.editor_failure;
     let document = keyed(
         move || {
@@ -93,11 +92,18 @@ pub(crate) fn ViewerPage() -> impl IntoView {
         match key.code {
             KeyCode::Char('e') => {
                 if let Some(path) = requested_path(&shortcut_workspace, route_params) {
-                    edit_request.set(Some(path));
-                    KeyControl::Exit
+                    editor_session.edit(path, move |path, result| {
+                        let failure = result.err().map(|error| crate::hooks::EditorFailure {
+                            path,
+                            message: error.to_string(),
+                        });
+                        editor_failure.set(failure);
+                        revision.update(|revision| *revision = revision.wrapping_add(1));
+                    });
                 } else {
-                    KeyControl::Handled
+                    editor_failure.set(None);
                 }
+                KeyControl::Handled
             }
             KeyCode::Char('r') => {
                 editor_failure.set(None);

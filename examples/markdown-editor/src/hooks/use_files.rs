@@ -15,8 +15,6 @@ pub(crate) struct Files {
     pub(crate) stored_recent_files: RwSignal<Vec<PathBuf>>,
     /// Recoverable recent-file load or save error.
     pub(crate) recent_files_error: RwSignal<Option<String>>,
-    /// Markdown path requested for editing after terminal restoration.
-    pub(crate) edit_request: RwSignal<Option<PathBuf>>,
     /// Recoverable external-editor failure associated with one path.
     pub(crate) editor_failure: RwSignal<Option<EditorFailure>>,
     /// Persistence service for the complete recent-file ordering.
@@ -35,7 +33,7 @@ impl Files {
     ///
     /// # Returns
     ///
-    /// A [`Files`] value with empty editor handoff signals.
+    /// A [`Files`] value with an empty editor-failure signal.
     pub(crate) fn new(
         recent_files: Vec<PathBuf>,
         stored_recent_files: Vec<PathBuf>,
@@ -46,7 +44,6 @@ impl Files {
             recent_files: RwSignal::new(recent_files),
             stored_recent_files: RwSignal::new(stored_recent_files),
             recent_files_error: RwSignal::new(recent_files_error),
-            edit_request: RwSignal::new(None),
             editor_failure: RwSignal::new(None),
             recent_files_store,
         }

@@ -113,5 +113,6 @@ fn AsyncRedraw() -> impl IntoView {
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(AsyncRedraw::new()).run().await
+    let view = view! { <AsyncRedraw /> };
+    App::new(view).run().await
 }

@@ -319,5 +319,6 @@ fn SettingsPage() -> impl IntoView {
 /// Runs the multi-page demo application.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(MultiPageDemo::new()).run().await
+    let view = view! { <MultiPageDemo /> };
+    App::new(view).run().await
 }

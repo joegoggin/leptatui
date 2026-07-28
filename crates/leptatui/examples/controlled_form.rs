@@ -211,5 +211,6 @@ fn ControlledForm() -> impl IntoView {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(ControlledForm::new()).run().await
+    let view = view! { <ControlledForm /> };
+    App::new(view).run().await
 }

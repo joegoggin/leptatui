@@ -216,5 +216,6 @@ fn StyleCascadeShowcase() -> impl IntoView {
 /// Runs the style cascade showcase example application.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(StyleCascadeShowcase::new()).run().await
+    let view = view! { <StyleCascadeShowcase /> };
+    App::new(view).run().await
 }

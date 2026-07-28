@@ -291,5 +291,6 @@ fn StandardLibraryShowcase() -> impl IntoView {
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(StandardLibraryShowcase::new()).run().await
+    let view = view! { <StandardLibraryShowcase /> };
+    App::new(view).run().await
 }

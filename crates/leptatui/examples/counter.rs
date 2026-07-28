@@ -77,5 +77,6 @@ fn Counter() -> impl IntoView {
 /// Runs the counter example application.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(Counter::new()).run().await
+    let view = view! { <Counter /> };
+    App::new(view).run().await
 }

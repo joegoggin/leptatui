@@ -34,5 +34,6 @@ use ui::AsyncCrudDemo;
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::new(AsyncCrudDemo::new()).run().await
+    let view = view! { <AsyncCrudDemo /> };
+    App::new(view).run().await
 }

@@ -1,7 +1,8 @@
 //! Runtime error and result types.
 //!
-//! This module centralizes Leptatui app-loop errors from terminal I/O and
-//! asynchronous event polling tasks.
+//! This module centralizes Leptatui app-loop errors from terminal I/O,
+//! asynchronous event polling tasks, link activation, and component-owned
+//! application initialization.
 
 /// Result type returned by Leptatui runtime APIs.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -26,6 +27,10 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+
+    /// A component-owned application failure returned after the app exits.
+    #[error("application failed")]
+    Application(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl From<std::convert::Infallible> for Error {
