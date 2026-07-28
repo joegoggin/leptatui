@@ -33,7 +33,7 @@ pub use root::AppRoot;
 pub(crate) use wakeup::redraw_test_lock;
 pub(crate) use wakeup::{request_redraw, subscribe_redraws};
 
-use event::next_event;
+use event::next_events;
 use render::draw_root;
 use terminal::TerminalSession;
 
@@ -153,10 +153,10 @@ where
     async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
         let mut redraw_requests = subscribe_redraws();
         let mut should_draw = true;
-        let event_poll = next_event(self.redraw_interval);
+        let event_poll = next_events(self.redraw_interval);
         tokio::pin!(event_poll);
 
-        loop {
+        'app: loop {
             if should_draw {
                 draw_root(
                     &mut self.root,
@@ -167,24 +167,24 @@ where
             }
 
             tokio::select! {
-                event = &mut event_poll => {
-                    match event? {
-                        Some(event) => {
-                            if self.root.handle_event(event)? == AppControl::Exit {
-                                break;
-                            }
+                events = &mut event_poll => {
+                    let events = events?;
+                    if events.is_empty() {
+                        if let Some(control) = self.root.__flush_pending_input()
+                            && control == AppControl::Exit
+                        {
+                            break;
                         }
-                        None => {
-                            if let Some(control) = self.root.__flush_pending_input()
-                                && control == AppControl::Exit
-                            {
-                                break;
+                    } else {
+                        for event in events {
+                            if self.root.handle_event(event)? == AppControl::Exit {
+                                break 'app;
                             }
                         }
                     }
 
                     should_draw = true;
-                    event_poll.set(next_event(self.redraw_interval));
+                    event_poll.set(next_events(self.redraw_interval));
                 }
                 changed = redraw_requests.changed() => {
                     if changed.is_ok() {
