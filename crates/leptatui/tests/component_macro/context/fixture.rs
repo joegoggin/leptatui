@@ -26,3 +26,9 @@ fn MacroContextProvider() -> impl leptatui::IntoView {
     leptatui::context::provide_context(MacroLabel("macro"));
     component(MacroContextConsumer)
 }
+
+/// Root component that creates its context provider lazily through `view!`.
+#[component]
+fn MacroLazyContextRoot() -> impl leptatui::IntoView {
+    view! { <MacroContextProvider /> }
+}

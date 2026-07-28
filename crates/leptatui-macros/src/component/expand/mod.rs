@@ -87,15 +87,17 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 let __leptatui_stylesheets =
                     #leptatui::__private::StylesheetRegistry::new();
                 let __leptatui_view = __leptatui_owner.with(|| {
-                    #leptatui::__private::__with_key_handler_registry(
-                        &__leptatui_key_handlers,
-                        || {
-                            #leptatui::__private::__with_stylesheet_registry(
-                                &__leptatui_stylesheets,
-                                __leptatui_setup,
-                            )
-                        },
-                    )
+                    #leptatui::__private::__with_component_setup_context(|| {
+                        #leptatui::__private::__with_key_handler_registry(
+                            &__leptatui_key_handlers,
+                            || {
+                                #leptatui::__private::__with_stylesheet_registry(
+                                    &__leptatui_stylesheets,
+                                    __leptatui_setup,
+                                )
+                            },
+                        )
+                    })
                 });
                 let __leptatui_stylesheet = __leptatui_stylesheets.stylesheet();
 

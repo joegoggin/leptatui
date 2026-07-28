@@ -1,17 +1,58 @@
 //! Public context hooks.
 //!
-//! This module exposes typed context helpers that prefer Leptatui render-scope
-//! storage and fall back to Leptos owner context when no matching render value
-//! is available.
+//! This module exposes typed context helpers that store generated component
+//! setup values in Leptos owners and ordinary render-time values in Leptatui
+//! render scopes.
 
-use std::any::type_name;
+use std::{any::type_name, cell::Cell};
 
 use super::{scope::ContextScope, storage};
 
-/// Provides a typed context value to descendant component render scopes.
+thread_local! {
+    /// Nesting depth for generated component setup that provides owner context.
+    static COMPONENT_SETUP_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Guard that restores the generated component setup depth when dropped.
+struct ComponentSetupGuard;
+
+impl ComponentSetupGuard {
+    /// Enters generated component setup context.
+    ///
+    /// # Returns
+    ///
+    /// A [`ComponentSetupGuard`] that restores the previous setup depth when
+    /// dropped.
+    fn enter() -> Self {
+        COMPONENT_SETUP_DEPTH.with(|depth| {
+            depth.set(
+                depth
+                    .get()
+                    .checked_add(1)
+                    .expect("component setup context depth should not overflow"),
+            );
+        });
+        Self
+    }
+}
+
+impl Drop for ComponentSetupGuard {
+    /// Restores the generated component setup depth.
+    fn drop(&mut self) {
+        COMPONENT_SETUP_DEPTH.with(|depth| {
+            let current = depth.get();
+            debug_assert!(current > 0, "component setup context depth underflow");
+            depth.set(current.saturating_sub(1));
+        });
+    }
+}
+
+/// Provides a typed context value to descendants.
 ///
-/// Falls back to Leptos owner context storage when no Leptatui render scope is
-/// active.
+/// Generated component setup stores values in the component's persistent
+/// Leptos owner context. Calls made during rendering prefer the active
+/// Leptatui render scope and fall back to Leptos owner context when no render
+/// scope is active.
 ///
 /// # Arguments
 ///
@@ -20,7 +61,9 @@ pub fn provide_context<T>(value: T)
 where
     T: Send + Sync + 'static,
 {
-    if let Err(value) = storage::provide(value) {
+    if component_setup_is_active() {
+        leptos::context::provide_context(value);
+    } else if let Err(value) = storage::provide(value) {
         leptos::context::provide_context(value);
     }
 }
@@ -95,6 +138,31 @@ pub fn __with_context_scope_if_missing<R>(render: impl FnOnce() -> R) -> R {
     }
 }
 
+/// Runs generated component setup with persistent owner-context provisioning.
+///
+/// # Arguments
+///
+/// * `setup` — Generated component setup that may provide context values.
+///
+/// # Returns
+///
+/// An `R` value returned by `setup`.
+#[doc(hidden)]
+pub fn __with_component_setup_context<R>(setup: impl FnOnce() -> R) -> R {
+    let _guard = ComponentSetupGuard::enter();
+    setup()
+}
+
+/// Returns whether generated component setup is currently active.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether context providers should use the current
+/// Leptos owner.
+fn component_setup_is_active() -> bool {
+    COMPONENT_SETUP_DEPTH.with(|depth| depth.get() > 0)
+}
+
 #[cfg(test)]
 /// Unit tests for Leptatui context stack behavior.
 mod tests {
@@ -154,6 +222,42 @@ mod tests {
             });
 
             assert_eq!(expect_context::<String>(), "ancestor");
+        });
+    }
+
+    /// Verifies component setup context survives its active render scope.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// Owner::new().with(|| {
+    ///     __with_context_scope(|| {
+    ///         __with_component_setup_context(|| provide_context("persistent"))
+    ///     });
+    ///     use_context::<String>()
+    /// })
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Setup-time context is available while the render scope is active.
+    /// - Setup-time context remains available after the render scope exits.
+    ///
+    /// # Why
+    ///
+    /// Components created lazily during rendering must retain values provided
+    /// by their one-time setup.
+    #[test]
+    fn component_setup_provides_persistent_owner_context() {
+        leptos::prelude::Owner::new().with(|| {
+            __with_context_scope(|| {
+                __with_component_setup_context(|| {
+                    provide_context(String::from("persistent"));
+                });
+                assert_eq!(use_context::<String>().as_deref(), Some("persistent"));
+            });
+
+            assert_eq!(use_context::<String>().as_deref(), Some("persistent"));
         });
     }
 

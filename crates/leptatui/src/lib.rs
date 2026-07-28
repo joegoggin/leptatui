@@ -295,7 +295,9 @@ pub mod __private {
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
         FocusedControl, KeyHandlerRegistry, StylesheetRegistry,
     };
-    pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
+    pub use crate::context::hooks::{
+        __with_component_setup_context, __with_context_scope, __with_context_scope_if_missing,
+    };
     pub use crate::route::{__outlet, __route_definition, __routes};
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};
 
