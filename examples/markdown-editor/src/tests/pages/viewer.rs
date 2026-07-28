@@ -162,6 +162,58 @@ fn viewer_markdown_view_renders_invalid_utf8_diagnostics() -> leptatui::Result<(
     Ok(())
 }
 
+/// Verifies scrolling Markdown preserves the Viewer document borders.
+///
+/// # Example Under Test
+///
+/// ```text
+/// guide.md = 40 Markdown headings
+/// terminal = 80x18
+/// PageDown
+/// ```
+///
+/// # Assertions
+///
+/// - Page Down scrolls the overflowing Markdown document.
+/// - The document's top border remains intact.
+/// - The document's bottom border remains intact.
+///
+/// # Why
+///
+/// The Markdown document owns the scroll range while the surrounding block
+/// owns the border and must clip scrolling descendants to its content area.
+#[test]
+fn viewer_scrolling_preserves_document_borders() -> leptatui::Result<()> {
+    let tree = TestTree::new("viewer-scroll-borders");
+    let source = (0..40)
+        .map(|index| format!("## Guide section {index}\n"))
+        .collect::<String>();
+    fs::write(tree.root().join("guide.md"), source)
+        .expect("the long Markdown file should be created");
+    let contexts = TestContexts::new(tree.root());
+    let mut view = contexts.view_at("/view/guide.md");
+    let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
+
+    draw_editor(&mut terminal, &view)?;
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_editor(&mut terminal, &view)?;
+
+    let rendered = rendered_lines(&terminal);
+    let top_border = rendered[4].chars().collect::<Vec<_>>();
+    let bottom_border = rendered[11].chars().collect::<Vec<_>>();
+    assert_eq!(top_border[2], '┌');
+    assert!(top_border[3..77].iter().all(|symbol| *symbol == '─'));
+    assert_eq!(top_border[77], '┐');
+    assert_eq!(bottom_border[2], '└');
+    assert!(bottom_border[3..77].iter().all(|symbol| *symbol == '─'));
+    assert_eq!(bottom_border[77], '┘');
+
+    Ok(())
+}
+
 /// Verifies Viewer inherits local navigation from the shared Markdown view.
 ///
 /// # Example Under Test

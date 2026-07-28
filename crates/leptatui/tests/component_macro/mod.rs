@@ -25,7 +25,7 @@ use leptatui::{
 use leptos::prelude::{GetUntracked, ReadSignal, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
 
-use crate::support::{key, render_component, rendered_text};
+use crate::support::{key, render_component, rendered_lines, rendered_text};
 
 include!("context/mod.rs");
 include!("input/mod.rs");

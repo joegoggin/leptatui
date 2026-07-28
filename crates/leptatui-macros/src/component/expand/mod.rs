@@ -132,7 +132,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
                     __leptatui_owner.with(|| {
                         #leptatui::__private::__with_context_scope_if_missing(|| {
-                            ctx.render_view(__leptatui_view)
+                            __leptatui_view.render(ctx)
                         })
                     })
                 })

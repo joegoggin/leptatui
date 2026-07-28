@@ -48,6 +48,25 @@ fn MacroScrollableBoundaryRoot() -> impl leptatui::IntoView {
         .with_inline_style(TuiStyle::new().display(Display::Flex))
 }
 
+/// Bordered component root whose child content overflows vertically.
+#[component]
+fn MacroBorderedScrollableRoot() -> impl leptatui::IntoView {
+    leptatui::block(div([
+        text("One"),
+        text("Two"),
+        text("Three"),
+        text("Four"),
+        text("Five"),
+        text("Six"),
+    ]))
+    .with_inline_style(
+        TuiStyle::new().overflow(leptatui::Axes::new(
+            leptatui::Overflow::Hidden,
+            leptatui::Overflow::Auto,
+        )),
+    )
+}
+
 /// View containing the button scrolled out of a parent viewport.
 #[component]
 fn MacroMouseBoundaryButton() -> impl leptatui::IntoView {

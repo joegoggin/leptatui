@@ -116,6 +116,45 @@ fn generated_component_scroll_keys_cross_component_boundaries() -> Result<()> {
     Ok(())
 }
 
+/// Verifies generated component roots preserve retained box geometry while scrolling.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroBorderedScrollableRoot
+/// terminal = 12x4
+/// PageDown
+/// ```
+///
+/// # Assertions
+///
+/// - Page Down reaches the overflowing component root.
+/// - The scrolled content displays the final list item.
+/// - The top and bottom border rows remain intact.
+///
+/// # Why
+///
+/// Component rendering must retain the root view's border, padding, content,
+/// viewport, and clip rectangles instead of replacing them with one identity
+/// rectangle.
+#[test]
+fn generated_component_roots_preserve_scrolling_box_geometry() -> Result<()> {
+    let mut component = MacroBorderedScrollableRoot::new();
+    render_component(&mut component, 12, 4)?;
+
+    assert_eq!(
+        View::handle_event(&mut component, key(KeyCode::PageDown))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 12, 4)?;
+    let lines = rendered_lines(&terminal);
+    assert!(rendered_text(&terminal).contains("Six"));
+    assert_eq!(lines[0], "┌──────────┐");
+    assert_eq!(lines[3], "└──────────┘");
+
+    Ok(())
+}
+
 /// Verifies off-screen generated components release their mouse hit areas.
 ///
 /// # Example Under Test
