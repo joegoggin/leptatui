@@ -3,8 +3,8 @@
 use std::fs;
 
 use crate::{
-    controller::Controller, domain::RECENT_FILE_LIMIT, editor_process::EditorProcess,
-    filesystem::FileSystem, recent_files::RecentFilesStore,
+    core::Controller, core::RECENT_FILE_LIMIT, services::EditorProcess, services::FileSystem,
+    services::RecentFilesStore,
 };
 
 use super::support::TestTree;

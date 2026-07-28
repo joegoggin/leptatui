@@ -3,9 +3,9 @@
 use std::{cell::RefCell, ffi::OsString, fs, rc::Rc};
 
 use crate::{
-    controller::{Controller, ExplorerActivation},
-    editor_process::EditorProcess,
-    filesystem::FileSystem,
+    core::{Controller, ExplorerActivation},
+    services::EditorProcess,
+    services::FileSystem,
 };
 
 use super::support::{RecordingLauncher, TestEnvironment, TestLaunchOutcome, TestTree};

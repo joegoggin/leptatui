@@ -3,10 +3,10 @@
 use std::{ffi::OsString, fs};
 
 use crate::{
-    controller::Controller,
-    domain::{ExplorerEntry, ExplorerEntryKind},
-    editor_process::EditorProcess,
-    filesystem::FileSystem,
+    core::Controller,
+    core::{ExplorerEntry, ExplorerEntryKind},
+    services::EditorProcess,
+    services::FileSystem,
 };
 
 use super::support::{TestTree, explorer_entry_names, temporary_path};

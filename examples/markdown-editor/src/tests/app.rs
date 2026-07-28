@@ -1,6 +1,17 @@
-//! Cross-page routing and responsive-layout tests.
+//! Application routing and responsive-layout tests.
 
-use super::*;
+use std::{
+    cell::{Cell, RefCell},
+    fs,
+    rc::Rc,
+};
+
+use leptatui::prelude::{KeyCode, KeyControl, KeyEvent, KeyModifiers, View};
+use ratatui::{Terminal, backend::TestBackend};
+
+use crate::{app::app_view, core::Controller, services::EditorProcess, services::FileSystem};
+
+use super::support::{TestTree, draw_editor, rendered_lines};
 
 /// Verifies every routed page remains usable in a narrow terminal.
 ///

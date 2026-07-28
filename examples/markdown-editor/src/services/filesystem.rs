@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::domain::{DirectoryListing, ExplorerEntry, ExplorerEntryKind, Workspace};
+use crate::core::{DirectoryListing, ExplorerEntry, ExplorerEntryKind, Workspace};
 
 /// Filesystem operations available to the application controller.
 #[derive(Clone, Copy, Debug, Default)]

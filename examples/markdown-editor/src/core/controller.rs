@@ -1,7 +1,7 @@
 //! Application controller for the Markdown editor.
 //!
 //! The controller validates initial state through infrastructure services and
-//! provides UI-facing access to explorer, viewer, and persistent recent-file
+//! provides page-facing access to explorer, viewer, and persistent recent-file
 //! state.
 
 use std::{
@@ -10,13 +10,11 @@ use std::{
 };
 
 use crate::{
-    domain::{
+    core::{
         ExplorerEntryKind, ExplorerState, PreviewState, RECENT_FILE_LIMIT, RecentFilesState,
         Workspace,
     },
-    editor_process::EditorProcess,
-    filesystem::FileSystem,
-    recent_files::RecentFilesStore,
+    services::{EditorProcess, FileSystem, RecentFilesStore},
 };
 
 /// Result of activating the selected explorer entry.
@@ -30,7 +28,7 @@ pub(crate) enum ExplorerActivation {
     Document,
 }
 
-/// Application state and service boundaries used by the Markdown editor UI.
+/// Application state and service boundaries used by the Markdown editor pages.
 #[derive(Clone, Debug)]
 pub(crate) struct Controller {
     /// Validated workspace displayed and navigated by the application.
@@ -148,7 +146,7 @@ impl Controller {
     ///
     /// # Returns
     ///
-    /// A [`Workspace`] reference containing UI-facing application state.
+    /// A [`Workspace`] reference containing page-facing application state.
     pub(crate) fn workspace(&self) -> &Workspace {
         &self.workspace
     }

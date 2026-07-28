@@ -1,4 +1,4 @@
-//! Fallback page for unmatched Markdown editor routes.
+//! Not Found route-level component.
 
 use leptatui::prelude::*;
 
@@ -8,7 +8,7 @@ use leptatui::prelude::*;
 ///
 /// A not-found page component with a Home anchor.
 #[component]
-pub(super) fn NotFoundPage() -> impl IntoView {
+pub(crate) fn NotFoundPage() -> impl IntoView {
     let location = use_location();
     view! {
         <Div class="page">

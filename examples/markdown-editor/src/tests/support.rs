@@ -15,8 +15,8 @@ use leptatui::prelude::{RenderCtx, View};
 use ratatui::{Terminal, backend::TestBackend};
 
 use crate::{
-    domain::ExplorerEntry,
-    editor_process::{EnvironmentReader, ProcessLauncher},
+    core::ExplorerEntry,
+    services::{EnvironmentReader, ProcessLauncher},
 };
 
 /// Program and argument values captured from one process launch.

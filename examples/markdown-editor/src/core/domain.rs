@@ -254,7 +254,7 @@ impl ExplorerState {
     ///
     /// # Arguments
     ///
-    /// * `error` — Contextual error message to expose to the UI.
+    /// * `error` — Contextual error message to expose on the active page.
     pub(crate) fn record_error(&mut self, error: String) {
         self.error = Some(error);
     }

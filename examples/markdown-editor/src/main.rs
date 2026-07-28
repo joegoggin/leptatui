@@ -2,16 +2,13 @@
 //!
 //! This binary validates a browsing root before starting Leptatui's managed
 //! terminal sessions, then coordinates routed pages and restored-terminal
-//! editor sessions while delegating application behavior to focused domain,
-//! infrastructure, controller, and UI modules.
+//! editor sessions while delegating behavior to the application shell, core,
+//! service, and page modules.
 
-mod cli;
-mod controller;
-mod domain;
-mod editor_process;
-mod filesystem;
-mod recent_files;
-mod ui;
+mod app;
+mod core;
+mod pages;
+mod services;
 
 #[cfg(test)]
 mod tests;
@@ -26,12 +23,10 @@ use clap::Parser;
 use leptatui::prelude::App;
 
 use crate::{
-    cli::Cli,
-    controller::Controller,
-    editor_process::EditorProcess,
-    filesystem::FileSystem,
-    recent_files::RecentFilesStore,
-    ui::{app_view_at_path, viewer_location},
+    app::app_view_at_path,
+    core::{Cli, Controller},
+    pages::viewer_location,
+    services::{EditorProcess, FileSystem, RecentFilesStore},
 };
 
 /// Validates startup configuration and runs the Markdown editor.

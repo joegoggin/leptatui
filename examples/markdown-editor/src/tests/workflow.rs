@@ -11,10 +11,11 @@ use leptatui::prelude::{KeyCode, KeyControl, KeyEvent, KeyModifiers, View};
 use ratatui::{Terminal, backend::TestBackend};
 
 use crate::{
-    controller::Controller,
-    editor_process::EditorProcess,
-    filesystem::FileSystem,
-    ui::{app_view, app_view_at_path, viewer_location},
+    app::{app_view, app_view_at_path},
+    core::Controller,
+    pages::viewer_location,
+    services::EditorProcess,
+    services::FileSystem,
 };
 
 use super::support::{

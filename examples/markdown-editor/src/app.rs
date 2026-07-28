@@ -7,13 +7,12 @@ use std::{
 
 use leptatui::prelude::*;
 
-use crate::controller::Controller;
-
-use super::{
-    explorer::{ExplorerPage, ExplorerPageProps},
-    home::{HomePage, HomePageProps},
-    not_found::NotFoundPage,
-    viewer::{ViewerPage, ViewerPageProps},
+use crate::{
+    core::Controller,
+    pages::{
+        ExplorerPage, ExplorerPageProps, HomePage, HomePageProps, NotFoundPage, ViewerPage,
+        ViewerPageProps,
+    },
 };
 
 /// Creates the root Markdown editor view.

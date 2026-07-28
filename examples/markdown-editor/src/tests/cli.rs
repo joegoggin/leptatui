@@ -4,7 +4,7 @@ use std::{env, path::PathBuf};
 
 use clap::Parser;
 
-use crate::cli::Cli;
+use crate::core::Cli;
 
 /// Verifies the CLI accepts no browsing root and uses the current directory.
 ///

@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, ffi::OsString, fs, io, rc::Rc};
 
-use crate::editor_process::EditorProcess;
+use crate::services::EditorProcess;
 
 use super::support::{RecordingLauncher, TestEnvironment, TestLaunchOutcome, TestTree};
 

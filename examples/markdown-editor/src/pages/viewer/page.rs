@@ -1,4 +1,4 @@
-//! Markdown viewer page and viewer-route synchronization.
+//! Viewer route-level component and route synchronization.
 
 use std::{
     cell::{Cell, RefCell},
@@ -9,9 +9,12 @@ use std::{
 use leptatui::prelude::*;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
-use crate::{controller::Controller, domain::PreviewState};
+use crate::{
+    core::Controller,
+    pages::shared::{relative_path, routed_page_style},
+};
 
-use super::shared::{relative_path, routed_page_style};
+use super::components::{ViewerDocument, ViewerDocumentProps};
 
 /// Characters encoded inside one viewer route path segment.
 const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
@@ -43,7 +46,7 @@ const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
 ///
 /// A Viewer page component.
 #[component]
-pub(super) fn ViewerPage(
+pub(crate) fn ViewerPage(
     controller: Rc<RefCell<Controller>>,
     edit_requested: Rc<Cell<bool>>,
 ) -> impl IntoView {
@@ -136,38 +139,6 @@ pub(super) fn ViewerPage(
             </Text>
         </Div>
     }
-}
-
-/// Renders an open path through the existing file-backed Markdown view.
-///
-/// # Arguments
-///
-/// * `preview` — Controller-owned document snapshot.
-///
-/// # Returns
-///
-/// A path-backed Markdown document, editor error, or empty hint.
-#[component]
-fn ViewerDocument(preview: PreviewState) -> impl IntoView {
-    let body = if let Some(error) = preview.editor_error() {
-        text(format!("Error: {error}"))
-            .with_classes("error")
-            .into_view()
-    } else if let Some(path) = preview.path() {
-        view! { <Markdown src=path syntax_theme=SyntaxTheme::Dark line_numbers=true /> }
-    } else {
-        text("Choose a Markdown file from Home or Explorer")
-            .with_classes("empty")
-            .into_view()
-    };
-    let content_style = TuiStyle::new()
-        .flex_basis(Dimension::from(Length::cells(0.0)))
-        .flex_grow(1.0)
-        .borders(Borders::ALL)
-        .padding(TuiSpacing::horizontal(1))
-        .overflow(Axes::new(Overflow::Hidden, Overflow::Auto));
-
-    view! { <Block style=content_style>{body}</Block> }
 }
 
 /// Creates an encoded viewer location for a workspace Markdown path.

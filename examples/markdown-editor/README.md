@@ -102,21 +102,15 @@ spacing is reduced.
 
 ## Architecture and Data Flow
 
-- `cli` parses the optional root and resolves the current-directory default.
-- `domain` owns the validated workspace, explorer entries, listings, open
-  document path and revision, editor errors, and recent-file state.
-- `filesystem` validates paths and performs anchored Markdown discovery.
-- `recent_files` loads and saves the versioned recent-file document through an
-  injectable storage boundary.
-- `editor_process` resolves, parses, and launches the configured editor through
-  injectable environment and process boundaries.
-- `controller` coordinates filesystem, recent-file, and editor services while
-  applying selection, navigation, open, view invalidation, and edit
-  transitions.
-- `ui` keeps the application shell and shared presentation helpers separate
-  from page-focused `home`, `explorer`, `viewer`, and `not_found` modules. The
-  shell declares `/`, `/files`, and `/view/*path`, and Viewer delegates document
-  rendering to the existing `<Markdown />` component.
+- `core` contains CLI parsing, domain state, and the controller that coordinates
+  selection, navigation, open, view invalidation, and edit transitions.
+- `services` contains anchored filesystem access, persistent recent-file
+  storage, and external editor process boundaries.
+- `app` owns the application shell and declares `/`, `/files`, and
+  `/view/*path`.
+- `pages` organizes each routed feature around a `page` module with co-located
+  child components. Viewer delegates document rendering to the existing
+  `<Markdown />` component.
 - `main` validates startup, runs managed terminal sessions, and invokes the
   external editor only after Leptatui restores raw mode, mouse capture, and the
   alternate screen.
