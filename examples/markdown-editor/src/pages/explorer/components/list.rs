@@ -21,9 +21,10 @@ pub(in crate::pages::explorer) fn ExplorerList(state: ExplorerState) -> impl Int
 
     if state.entries().is_empty() {
         rows.push(
-            text("No directories or Markdown files")
-                .with_classes("empty")
-                .into_view(),
+            view! {
+                <Text class="empty">"No directories or Markdown files"</Text>
+            }
+            .into_view(),
         );
     } else {
         rows.extend(
@@ -33,12 +34,11 @@ pub(in crate::pages::explorer) fn ExplorerList(state: ExplorerState) -> impl Int
                 .cloned()
                 .enumerate()
                 .map(|(index, entry)| {
-                    ExplorerEntryRow::with_props(
-                        ExplorerEntryRowProps::builder()
-                            .entry(entry)
-                            .selected(state.selection() == Some(index))
-                            .build(),
-                    )
+                    let selected = state.selection() == Some(index);
+
+                    view! {
+                        <ExplorerEntryRow entry=entry selected=selected />
+                    }
                     .into_view()
                 }),
         );
@@ -46,9 +46,10 @@ pub(in crate::pages::explorer) fn ExplorerList(state: ExplorerState) -> impl Int
 
     if let Some(error) = state.error() {
         rows.push(
-            text(format!("Error: {error}"))
-                .with_classes("error")
-                .into_view(),
+            view! {
+                <Text class="error">{format!("Error: {error}")}</Text>
+            }
+            .into_view(),
         );
     }
 

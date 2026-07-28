@@ -26,35 +26,42 @@ pub(in crate::pages::home) fn RecentFilesList(
     controller: Rc<RefCell<Controller>>,
 ) -> impl IntoView {
     let mut rows = vec![
-        text("Recent files")
-            .with_classes("section-title")
-            .into_view(),
+        view! {
+            <Text class="section-title">"Recent files"</Text>
+        }
+        .into_view(),
     ];
 
     if state.entries().is_empty() {
         rows.push(
-            text("No recent Markdown files")
-                .with_classes("empty")
-                .into_view(),
+            view! {
+                <Text class="empty">"No recent Markdown files"</Text>
+            }
+            .into_view(),
         );
     } else {
-        rows.extend(state.entries().iter().cloned().map(|path| {
-            RecentFileEntry::with_props(
-                RecentFileEntryProps::builder()
-                    .path(path)
-                    .root(root.clone())
-                    .controller(Rc::clone(&controller))
-                    .build(),
-            )
+        rows.extend(state.entries().iter().map(|path| {
+            let entry_path = PathBuf::clone(path);
+            let entry_root = root.clone();
+            let entry_controller = Rc::clone(&controller);
+
+            view! {
+                <RecentFileEntry
+                    path=entry_path
+                    root=entry_root
+                    controller=entry_controller
+                />
+            }
             .into_view()
         }));
     }
 
     if let Some(error) = state.error() {
         rows.push(
-            text(format!("Recent files warning: {error}"))
-                .with_classes("error")
-                .into_view(),
+            view! {
+                <Text class="error">{format!("Recent files warning: {error}")}</Text>
+            }
+            .into_view(),
         );
     }
 

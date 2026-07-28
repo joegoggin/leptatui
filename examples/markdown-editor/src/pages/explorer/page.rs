@@ -68,9 +68,7 @@ pub(crate) fn ExplorerPage(controller: Rc<RefCell<Controller>>) -> impl IntoView
         }
     });
 
-    ExplorerContent::with_props(
-        ExplorerContentProps::builder()
-            .controller(controller)
-            .build(),
-    )
+    view! {
+        <ExplorerContent controller=controller />
+    }
 }

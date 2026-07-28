@@ -48,13 +48,11 @@ pub(crate) fn HomePage(controller: Rc<RefCell<Controller>>) -> impl IntoView {
                 }>"Open file"</Button>
             </Div>
             <Block class="page-content scroll-content">
-                {RecentFilesList::with_props(
-                    RecentFilesListProps::builder()
-                        .state(recent_state)
-                        .root(recent_root)
-                        .controller(recent_controller)
-                        .build(),
-                )}
+                <RecentFilesList
+                    state=recent_state
+                    root=recent_root
+                    controller=recent_controller
+                />
             </Block>
             <Text class="help">"o open file | Tab/Enter actions | q quit"</Text>
         </Div>

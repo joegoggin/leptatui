@@ -72,11 +72,11 @@ pub(crate) fn ViewerPage(
         },
         move || {
             sync_preview_from_route(&preview_view_controller, preview_view_params);
-            ViewerDocument::with_props(
-                ViewerDocumentProps::builder()
-                    .preview(preview_view_controller.borrow().preview().clone())
-                    .build(),
-            )
+            let preview = preview_view_controller.borrow().preview().clone();
+
+            view! {
+                <ViewerDocument preview=preview />
+            }
         },
     );
     let page_style = routed_page_style();
@@ -121,7 +121,9 @@ pub(crate) fn ViewerPage(
                     .preview()
                     .path()
                     .map_or_else(|| String::from("none"), |path| relative_path(root, path));
-                text(format!("Open: {open_path}")).with_classes("path-context")
+                view! {
+                    <Text class="path-context">{format!("Open: {open_path}")}</Text>
+                }
             }}
             {document}
             <Div class="actions">

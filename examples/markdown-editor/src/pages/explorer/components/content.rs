@@ -40,15 +40,17 @@ pub(in crate::pages::explorer) fn ExplorerContent(
                     controller.workspace().root(),
                     controller.explorer().directory(),
                 );
-                text(format!("Directory: {directory}")).with_classes("path-context")
+                view! {
+                    <Text class="path-context">{format!("Directory: {directory}")}</Text>
+                }
             }}
             <Block class="page-content scroll-content">
                 {move || {
-                    ExplorerList::with_props(
-                        ExplorerListProps::builder()
-                            .state(list_controller.borrow().explorer().clone())
-                            .build(),
-                    )
+                    let state = list_controller.borrow().explorer().clone();
+
+                    view! {
+                        <ExplorerList state=state />
+                    }
                 }}
             </Block>
             <Div class="actions">

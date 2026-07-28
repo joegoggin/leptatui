@@ -30,9 +30,12 @@ pub(in crate::pages::explorer) fn ExplorerEntryRow(
         String::from(class)
     };
 
-    text(format!(
+    let label = format!(
         "{selection_marker} {marker} {}",
         entry.name().to_string_lossy()
-    ))
-    .with_classes(classes)
+    );
+
+    view! {
+        <Text class={classes}>{label}</Text>
+    }
 }

@@ -29,7 +29,7 @@ use crate::{
 pub(crate) fn app_view(
     controller: Rc<RefCell<Controller>>,
     edit_requested: Rc<Cell<bool>>,
-) -> impl View + IntoView {
+) -> AnyView {
     app_view_at_path(controller, edit_requested, "/")
 }
 
@@ -48,14 +48,16 @@ pub(crate) fn app_view_at_path(
     controller: Rc<RefCell<Controller>>,
     edit_requested: Rc<Cell<bool>>,
     initial_path: impl Into<String>,
-) -> impl View + IntoView {
-    MarkdownEditor::with_props(
-        MarkdownEditorProps::builder()
-            .controller(controller)
-            .edit_requested(edit_requested)
-            .initial_path(initial_path.into())
-            .build(),
-    )
+) -> AnyView {
+    let initial_path = initial_path.into();
+
+    view! {
+        <MarkdownEditor
+            controller=controller
+            edit_requested=edit_requested
+            initial_path=initial_path
+        />
+    }
 }
 
 /// Provides routing, shared styling, and global application controls.
@@ -188,32 +190,28 @@ fn MarkdownEditor(
                     <Route
                         path="/"
                         view=move || {
-                            HomePage::with_props(
-                                HomePageProps::builder()
-                                    .controller(Rc::clone(&home_controller))
-                                    .build(),
-                            )
+                            let controller = Rc::clone(&home_controller);
+
+                            view! { <HomePage controller=controller /> }
                         }
                     />
                     <Route
                         path="/files"
                         view=move || {
-                            ExplorerPage::with_props(
-                                ExplorerPageProps::builder()
-                                    .controller(Rc::clone(&explorer_controller))
-                                    .build(),
-                            )
+                            let controller = Rc::clone(&explorer_controller);
+
+                            view! { <ExplorerPage controller=controller /> }
                         }
                     />
                     <Route
                         path="/view/*path"
                         view=move || {
-                            ViewerPage::with_props(
-                                ViewerPageProps::builder()
-                                    .controller(Rc::clone(&viewer_controller))
-                                    .edit_requested(Rc::clone(&viewer_edit_requested))
-                                    .build(),
-                            )
+                            let controller = Rc::clone(&viewer_controller);
+                            let edit_requested = Rc::clone(&viewer_edit_requested);
+
+                            view! {
+                                <ViewerPage controller=controller edit_requested=edit_requested />
+                            }
                         }
                     />
                 </Routes>

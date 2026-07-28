@@ -16,15 +16,20 @@ use crate::core::PreviewState;
 #[component]
 pub(in crate::pages::viewer) fn ViewerDocument(preview: PreviewState) -> impl IntoView {
     let body = if let Some(error) = preview.editor_error() {
-        text(format!("Error: {error}"))
-            .with_classes("error")
-            .into_view()
+        view! {
+            <Text class="error">{format!("Error: {error}")}</Text>
+        }
+        .into_view()
     } else if let Some(path) = preview.path() {
-        view! { <Markdown src=path syntax_theme=SyntaxTheme::Dark line_numbers=true /> }
+        view! {
+            <Markdown src=path syntax_theme=SyntaxTheme::Dark line_numbers=true />
+        }
+        .into_view()
     } else {
-        text("Choose a Markdown file from Home or Explorer")
-            .with_classes("empty")
-            .into_view()
+        view! {
+            <Text class="empty">"Choose a Markdown file from Home or Explorer"</Text>
+        }
+        .into_view()
     };
     let content_style = TuiStyle::new()
         .flex_basis(Dimension::from(Length::cells(0.0)))

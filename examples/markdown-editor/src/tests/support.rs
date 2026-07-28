@@ -11,7 +11,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use leptatui::prelude::{RenderCtx, View};
+use leptatui::prelude::{AnyView, RenderCtx};
 use ratatui::{Terminal, backend::TestBackend};
 
 use crate::{
@@ -201,10 +201,10 @@ pub(super) fn explorer_entry_names(entries: &[ExplorerEntry]) -> Vec<String> {
 /// # Errors
 ///
 /// Returns [`leptatui::Error::Io`] if terminal drawing or view rendering fails.
-pub(super) fn draw_editor<V>(terminal: &mut Terminal<TestBackend>, view: &V) -> leptatui::Result<()>
-where
-    V: View,
-{
+pub(super) fn draw_editor(
+    terminal: &mut Terminal<TestBackend>,
+    view: &AnyView,
+) -> leptatui::Result<()> {
     let mut render_result = Ok(());
 
     terminal.draw(|frame| {

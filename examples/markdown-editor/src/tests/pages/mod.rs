@@ -12,7 +12,7 @@ use std::{
     rc::Rc,
 };
 
-use leptatui::prelude::{KeyCode, KeyControl, KeyEvent, KeyModifiers, View};
+use leptatui::prelude::{KeyCode, KeyControl, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
 
 use crate::{app::app_view, core::Controller, services::EditorProcess, services::FileSystem};
