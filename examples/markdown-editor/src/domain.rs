@@ -260,15 +260,17 @@ impl ExplorerState {
     }
 }
 
-/// Loaded Markdown preview or its most recent recoverable error.
+/// Open Markdown document state owned by the editor application.
+///
+/// Markdown source loading and file-read failures belong to the path-backed
+/// `Markdown` view. This state retains only the application concerns needed to
+/// rebuild that view or retry an external editor operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreviewState {
     /// Absolute Markdown path represented by the preview.
     path: Option<PathBuf>,
-    /// Successfully loaded UTF-8 Markdown source.
-    source: Option<String>,
-    /// Most recent read or decoding failure.
-    error: Option<String>,
+    /// Most recent external-editor failure.
+    editor_error: Option<String>,
     /// Monotonic invalidation key for retained preview views.
     revision: u64,
 }
@@ -282,8 +284,7 @@ impl PreviewState {
     pub(crate) const fn new() -> Self {
         Self {
             path: None,
-            source: None,
-            error: None,
+            editor_error: None,
             revision: 0,
         }
     }
@@ -297,56 +298,42 @@ impl PreviewState {
         self.path.as_deref()
     }
 
-    /// Returns the loaded Markdown source.
+    /// Returns the current external-editor error.
     ///
     /// # Returns
     ///
-    /// An [`Option`] containing valid UTF-8 Markdown.
-    pub(crate) fn source(&self) -> Option<&str> {
-        self.source.as_deref()
-    }
-
-    /// Returns the current preview error.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing a contextual read or decoding failure.
-    pub(crate) fn error(&self) -> Option<&str> {
-        self.error.as_deref()
+    /// An [`Option`] containing a contextual editor failure.
+    pub(crate) fn editor_error(&self) -> Option<&str> {
+        self.editor_error.as_deref()
     }
 
     /// Returns the current preview invalidation revision.
     ///
     /// # Returns
     ///
-    /// A [`u64`] that changes whenever preview contents are replaced.
+    /// A [`u64`] that changes whenever retained Viewer state is invalidated.
     pub(crate) const fn revision(&self) -> u64 {
         self.revision
     }
 
-    /// Replaces the preview with a loaded Markdown document.
+    /// Opens a Markdown path and invalidates the retained view.
     ///
     /// # Arguments
     ///
     /// * `path` — Absolute Markdown path represented by the document.
-    /// * `source` — UTF-8 Markdown source loaded from `path`.
-    pub(crate) fn replace_document(&mut self, path: PathBuf, source: String) {
+    pub(crate) fn open(&mut self, path: PathBuf) {
         self.path = Some(path);
-        self.source = Some(source);
-        self.error = None;
+        self.editor_error = None;
         self.revision = self.revision.wrapping_add(1);
     }
 
-    /// Replaces the preview body with a recoverable file error.
+    /// Records a recoverable external-editor failure.
     ///
     /// # Arguments
     ///
-    /// * `path` — Markdown path that failed to load.
-    /// * `error` — Contextual read or decoding failure.
-    pub(crate) fn record_error(&mut self, path: PathBuf, error: String) {
-        self.path = Some(path);
-        self.source = None;
-        self.error = Some(error);
+    /// * `error` — Contextual editor failure.
+    pub(crate) fn record_editor_error(&mut self, error: String) {
+        self.editor_error = Some(error);
         self.revision = self.revision.wrapping_add(1);
     }
 }

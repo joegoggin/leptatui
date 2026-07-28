@@ -37,7 +37,7 @@ pub(crate) struct Controller {
     workspace: Workspace,
     /// Last valid explorer listing plus any recoverable navigation error.
     explorer: ExplorerState,
-    /// Open Markdown source or its recoverable read error.
+    /// Open Markdown path, view revision, and recoverable editor error.
     preview: PreviewState,
     /// Persisted recent Markdown paths and recoverable storage state.
     recent_files: RecentFilesState,
@@ -167,7 +167,7 @@ impl Controller {
     ///
     /// # Returns
     ///
-    /// A [`PreviewState`] reference containing the open path and body state.
+    /// A [`PreviewState`] reference containing the open document state.
     pub(crate) fn preview(&self) -> &PreviewState {
         &self.preview
     }
@@ -194,8 +194,8 @@ impl Controller {
 
     /// Activates the selected directory or Markdown file.
     ///
-    /// Directories replace the explorer listing. Markdown files replace the
-    /// preview body. A failed file read remains visible in preview state.
+    /// Directories replace the explorer listing. Markdown files select the
+    /// path rendered by the existing path-backed Markdown view.
     ///
     /// # Returns
     ///
@@ -219,8 +219,8 @@ impl Controller {
 
     /// Opens a recent Markdown path through the workspace boundary.
     ///
-    /// Failed recent paths are removed from history while their read error
-    /// remains available to the Viewer page.
+    /// Failed recent paths are removed from history while the attempted path
+    /// remains available to the Viewer page for its file diagnostic.
     ///
     /// # Arguments
     ///
@@ -228,7 +228,7 @@ impl Controller {
     ///
     /// # Returns
     ///
-    /// A boolean indicating whether the document loaded successfully.
+    /// A boolean indicating whether the document path validated successfully.
     pub(crate) fn open_recent(&mut self, path: &Path) -> bool {
         let loaded = self.open_preview(path);
         if !loaded {
@@ -254,12 +254,13 @@ impl Controller {
         true
     }
 
-    /// Edits and reloads the currently open Markdown preview.
+    /// Edits and invalidates the currently open Markdown preview.
     ///
     /// The caller invokes this method only after Leptatui has restored the
-    /// terminal. A successful editor exit reloads the document from disk.
-    /// Launch and exit failures replace the preview body with a recoverable
-    /// error while retaining the path for retry.
+    /// terminal. A successful editor exit invalidates the path-backed Markdown
+    /// view so it reloads the document from disk. Launch and exit failures
+    /// become recoverable application errors while retaining the path for
+    /// retry.
     ///
     /// # Returns
     ///
@@ -273,7 +274,7 @@ impl Controller {
             Ok(()) => {
                 self.open_preview(&path);
             }
-            Err(error) => self.preview.record_error(path, error.to_string()),
+            Err(error) => self.preview.record_editor_error(error.to_string()),
         }
 
         true
@@ -336,20 +337,24 @@ impl Controller {
         self.browse(&root);
     }
 
-    /// Loads a Markdown path into recoverable preview state.
+    /// Selects and validates a Markdown path for the Viewer page.
+    ///
+    /// The path-backed Markdown view owns source loading and file diagnostics.
+    /// Successful validation promotes the canonical path in recent history;
+    /// failed validation retains the requested path so the view can render its
+    /// own failure page.
     ///
     /// # Arguments
     ///
     /// * `path` — Absolute selected Markdown path.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether the path validated successfully.
     fn open_preview(&mut self, path: &Path) -> bool {
-        match self.filesystem.read_markdown(&self.workspace, path) {
-            Ok(source) => {
-                let canonical_path = self
-                    .filesystem
-                    .validate_markdown(&self.workspace, path)
-                    .unwrap_or_else(|_| path.to_path_buf());
-                self.preview
-                    .replace_document(canonical_path.clone(), source);
+        match self.filesystem.validate_markdown(&self.workspace, path) {
+            Ok(canonical_path) => {
+                self.preview.open(canonical_path.clone());
                 self.recent_files.promote(canonical_path.clone());
                 self.stored_recent_files
                     .retain(|entry| entry != &canonical_path);
@@ -358,9 +363,8 @@ impl Controller {
                 self.save_recent_files();
                 true
             }
-            Err(error) => {
-                self.preview
-                    .record_error(path.to_path_buf(), error.to_string());
+            Err(_) => {
+                self.preview.open(path.to_path_buf());
                 false
             }
         }

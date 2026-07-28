@@ -130,7 +130,7 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
         controller.borrow().explorer().selection(),
         expected_selection
     );
-    assert_eq!(controller.borrow().preview().source(), Some("# After edit"));
+    assert_eq!(controller.borrow().preview().editor_error(), None);
 
     let viewer_path = viewer_location(controller.borrow().workspace().root(), &canonical_guide);
     let rebuilt_view = app_view_at_path(

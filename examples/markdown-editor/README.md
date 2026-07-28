@@ -58,7 +58,9 @@ between three component pages:
   directory, and `Esc` to return Home.
 - **Markdown Viewer** — Use `Page Up`, `Page Down`, `Ctrl-U`, `Ctrl-D`, `gg`,
   or `G` to scroll; `e` to edit; `r` to reload; `h` for Home; and `b` to browse
-  files.
+  files. Focus a Markdown link and press `Enter` to activate it; `Shift-H` and
+  `Shift-L` move backward and forward through the shared Markdown view's page
+  history.
 - **Global** — Use `Tab` and `Shift-Tab` to move between buttons, `Enter` to
   activate the focused button, and `q` to exit.
 
@@ -78,10 +80,13 @@ Explorer discovery follows symlinks only when their canonical targets remain
 below the configured root. Broken and escaping symlinks are hidden. Failed
 directory reads preserve the last valid listing and render a recoverable error.
 
-File-read, missing-file, and invalid UTF-8 errors replace the Viewer body with a
-diagnostic. Pressing `r` retries the same document after the problem is
-corrected, while Home and File Explorer remain available as explicit
-destinations.
+The Viewer delegates file loading, semantic rendering, local Markdown
+navigation, history, and file-read diagnostics to Leptatui's existing
+path-backed `<Markdown />` view. Missing-file and invalid UTF-8 failures
+therefore use the same diagnostic presentation as every other file-backed
+Markdown reader. Pressing `r` rebuilds that view and retries the same document
+after the problem is corrected, while Home and File Explorer remain available
+as explicit destinations.
 
 Editor values can contain shell-word quoted arguments, such as
 `VISUAL="nvim -f"`, but they are executed directly without shell expansion,
@@ -98,28 +103,28 @@ spacing is reduced.
 ## Architecture and Data Flow
 
 - `cli` parses the optional root and resolves the current-directory default.
-- `domain` owns the validated workspace, explorer entries, listings, preview,
-  and recent-file state.
-- `filesystem` validates paths and performs anchored Markdown discovery and
-  reads.
+- `domain` owns the validated workspace, explorer entries, listings, open
+  document path and revision, editor errors, and recent-file state.
+- `filesystem` validates paths and performs anchored Markdown discovery.
 - `recent_files` loads and saves the versioned recent-file document through an
   injectable storage boundary.
 - `editor_process` resolves, parses, and launches the configured editor through
   injectable environment and process boundaries.
 - `controller` coordinates filesystem, recent-file, and editor services while
-  applying selection, navigation, open, reload, and edit transitions.
+  applying selection, navigation, open, view invalidation, and edit
+  transitions.
 - `ui` declares `/`, `/files`, and `/view/*path` routes and renders Home, File
-  Explorer, Markdown Viewer, and reusable UI units as `#[component]` functions.
+  Explorer, and a Viewer backed by the existing `<Markdown />` component.
 - `main` validates startup, runs managed terminal sessions, and invokes the
   external editor only after Leptatui restores raw mode, mouse capture, and the
   alternate screen.
 
 The normal data flow is CLI root → validated workspace and recent paths → routed
-Home or Explorer action → controller transition → Viewer. Editing temporarily
-exits the managed TUI, appends `--` and the canonical document path to the
-resolved editor command, then starts a new TUI session on Viewer with the same
-controller. A successful editor exit reloads the document from disk without
-moving the explorer selection.
+Home or Explorer action → controller path transition → `<Markdown />` Viewer.
+Editing temporarily exits the managed TUI, appends `--` and the canonical
+document path to the resolved editor command, then starts a new TUI session on
+Viewer with the same controller. A successful editor exit invalidates and
+rebuilds the Markdown view without moving the explorer selection.
 
 ## Verification
 

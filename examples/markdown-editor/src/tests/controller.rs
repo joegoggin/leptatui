@@ -60,7 +60,8 @@ fn explorer_selection_clamps_at_listing_boundaries() {
 /// - The root directory entry is selected initially.
 /// - Activating it browses into `docs`.
 /// - The nested Markdown file becomes selected.
-/// - Activating the file loads its source and absolute path into the preview.
+/// - Activating the file stores its absolute path for the Markdown view.
+/// - Opening the document advances the view revision without an editor error.
 #[test]
 fn explorer_activation_browses_directories_and_opens_markdown() {
     let tree = TestTree::new("activation");
@@ -91,11 +92,11 @@ fn explorer_activation_browses_directories_and_opens_markdown() {
                 .as_path()
         )
     );
-    assert_eq!(controller.preview().source(), Some("# Guide"));
-    assert_eq!(controller.preview().error(), None);
+    assert_eq!(controller.preview().revision(), 1);
+    assert_eq!(controller.preview().editor_error(), None);
 }
 
-/// Verifies opening another Markdown file replaces the previous preview.
+/// Verifies opening another Markdown file replaces the previous view path.
 ///
 /// # Example Under Test
 ///
@@ -107,8 +108,9 @@ fn explorer_activation_browses_directories_and_opens_markdown() {
 ///
 /// # Assertions
 ///
-/// - Activating `alpha.md` loads its source.
-/// - Selecting and activating `beta.md` replaces the path and source.
+/// - Activating `alpha.md` stores its canonical path.
+/// - Selecting and activating `beta.md` replaces that path.
+/// - Each open advances the view revision.
 #[test]
 fn preview_replaces_document_when_another_file_opens() {
     let tree = TestTree::new("preview-replacement");
@@ -121,7 +123,15 @@ fn preview_replaces_document_when_another_file_opens() {
             .expect("the workspace should initialize");
 
     assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
-    assert_eq!(controller.preview().source(), Some("# Alpha"));
+    assert_eq!(
+        controller.preview().path(),
+        Some(
+            fs::canonicalize(&alpha)
+                .expect("the first file should canonicalize")
+                .as_path()
+        )
+    );
+    assert_eq!(controller.preview().revision(), 1);
 
     controller.select_next();
     assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
@@ -133,10 +143,10 @@ fn preview_replaces_document_when_another_file_opens() {
                 .as_path()
         )
     );
-    assert_eq!(controller.preview().source(), Some("# Beta"));
+    assert_eq!(controller.preview().revision(), 2);
 }
 
-/// Verifies preview reload reports a missing file and later recovers.
+/// Verifies preview reload invalidates the path-backed Markdown view.
 ///
 /// # Example Under Test
 ///
@@ -150,11 +160,11 @@ fn preview_replaces_document_when_another_file_opens() {
 ///
 /// # Assertions
 ///
-/// - The initial preview loads successfully.
-/// - Reloading the deleted file replaces the body with a contextual error.
-/// - Reloading the recreated file replaces the error with its new source.
+/// - The initial preview stores the canonical document path.
+/// - Reloading a deleted file retains its path and advances the revision.
+/// - Reloading the recreated file advances the revision again.
 #[test]
-fn preview_reload_recovers_after_a_missing_file_returns() {
+fn preview_reload_invalidates_after_file_changes() {
     let tree = TestTree::new("reload-recovery");
     let guide = tree.root().join("guide.md");
     fs::write(&guide, "# Original").expect("the Markdown file should be created");
@@ -163,54 +173,18 @@ fn preview_reload_recovers_after_a_missing_file_returns() {
             .expect("the workspace should initialize");
 
     assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
+    let canonical_guide =
+        fs::canonicalize(&guide).expect("the original document should canonicalize");
+    assert_eq!(controller.preview().revision(), 1);
     fs::remove_file(&guide).expect("the open Markdown file should be removed");
     assert!(controller.reload_preview());
-    assert_eq!(controller.preview().source(), None);
-    let error = controller
-        .preview()
-        .error()
-        .expect("the missing file should produce a preview error");
-    assert!(error.contains("failed to resolve Markdown file"));
-    assert!(error.contains(&guide.display().to_string()));
+    assert_eq!(controller.preview().path(), Some(canonical_guide.as_path()));
+    assert_eq!(controller.preview().revision(), 2);
 
     fs::write(&guide, "# Restored").expect("the Markdown file should be recreated");
     assert!(controller.reload_preview());
-    assert_eq!(controller.preview().source(), Some("# Restored"));
-    assert_eq!(controller.preview().error(), None);
-}
-
-/// Verifies invalid UTF-8 is presented as recoverable preview state.
-///
-/// # Example Under Test
-///
-/// ```text
-/// workspace/
-/// └── invalid.md = [0xff, 0xfe, 0xfd]
-/// ```
-///
-/// # Assertions
-///
-/// - Activating the selected file keeps its path open.
-/// - No Markdown source is exposed.
-/// - The preview error identifies the failed file read and invalid encoding.
-#[test]
-fn preview_invalid_utf8_is_recoverable() {
-    let tree = TestTree::new("invalid-utf8");
-    let invalid = tree.root().join("invalid.md");
-    fs::write(&invalid, [0xff, 0xfe, 0xfd]).expect("the invalid UTF-8 fixture should be created");
-    let mut controller =
-        Controller::initialize(tree.root(), FileSystem::new(), EditorProcess::new())
-            .expect("the workspace should initialize");
-
-    assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
-    assert_eq!(controller.preview().source(), None);
-    let error = controller
-        .preview()
-        .error()
-        .expect("invalid UTF-8 should produce a preview error");
-    assert!(error.contains("failed to read Markdown file"));
-    assert!(error.contains(&invalid.display().to_string()));
-    assert!(error.to_lowercase().contains("valid utf-8"));
+    assert_eq!(controller.preview().path(), Some(canonical_guide.as_path()));
+    assert_eq!(controller.preview().revision(), 3);
 }
 
 /// Verifies a successful external edit reloads content without moving context.
@@ -226,9 +200,10 @@ fn preview_invalid_utf8_is_recoverable() {
 /// # Assertions
 ///
 /// - Directory activation and file opening succeed.
-/// - The injected edit succeeds and replaces the preview source from disk.
+/// - The injected edit succeeds and replaces the file contents.
 /// - The explorer directory and selected index remain unchanged.
-/// - The preview retains the same canonical absolute path without an error.
+/// - The preview retains the same canonical path and advances its revision.
+/// - No external-editor error remains.
 #[test]
 fn editor_success_reloads_preview_and_preserves_browsing_context() {
     let tree = TestTree::new("editor-success");
@@ -263,11 +238,16 @@ fn editor_success_reloads_preview_and_preserves_browsing_context() {
     assert_eq!(controller.activate_selected(), ExplorerActivation::Document);
     let expected_directory = controller.explorer().directory().to_path_buf();
     let expected_selection = controller.explorer().selection();
+    let previous_revision = controller.preview().revision();
 
     assert!(controller.edit_preview());
     assert_eq!(controller.preview().path(), Some(canonical_beta.as_path()));
-    assert_eq!(controller.preview().source(), Some("# After"));
-    assert_eq!(controller.preview().error(), None);
+    assert_eq!(
+        fs::read_to_string(&canonical_beta).expect("the edited file should remain readable"),
+        "# After"
+    );
+    assert_eq!(controller.preview().revision(), previous_revision + 1);
+    assert_eq!(controller.preview().editor_error(), None);
     assert_eq!(controller.explorer().directory(), expected_directory);
     assert_eq!(controller.explorer().selection(), expected_selection);
 }
@@ -285,7 +265,7 @@ fn editor_success_reloads_preview_and_preserves_browsing_context() {
 /// # Assertions
 ///
 /// - Every editor attempt finds an open preview path.
-/// - Each failure removes stale source and renders a contextual error.
+/// - Each failure records a contextual external-editor error.
 /// - Configuration, missing-executable, and non-zero diagnostics remain
 ///   distinguishable.
 /// - The absolute preview path is retained so editing can be retried.
@@ -342,10 +322,9 @@ fn editor_failures_are_visible_and_retain_the_open_path() {
             controller.preview().path(),
             Some(canonical_markdown.as_path())
         );
-        assert_eq!(controller.preview().source(), None);
         let error = controller
             .preview()
-            .error()
+            .editor_error()
             .expect("the editor failure should be visible");
         assert!(error.contains(expected_error));
         if path_in_error {

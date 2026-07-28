@@ -268,7 +268,14 @@ fn recent_write_failure_preserves_in_memory_history() {
     .expect("the workspace should initialize");
 
     assert!(controller.open_recent(&guide));
-    assert_eq!(controller.preview().source(), Some("# Guide"));
+    assert_eq!(
+        controller.preview().path(),
+        Some(
+            fs::canonicalize(&guide)
+                .expect("the document should canonicalize")
+                .as_path()
+        )
+    );
     assert_eq!(controller.recent_files().entries().len(), 1);
     assert!(
         controller

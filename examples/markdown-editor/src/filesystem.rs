@@ -159,35 +159,6 @@ impl FileSystem {
         Ok(DirectoryListing::new(canonical_directory, entries))
     }
 
-    /// Loads a UTF-8 Markdown document below a workspace root.
-    ///
-    /// The path is canonicalized again at read time so a replaced file or
-    /// symlink cannot escape the configured workspace.
-    ///
-    /// # Arguments
-    ///
-    /// * `workspace` — Validated root that bounds the file read.
-    /// * `requested_file` — Markdown file path selected by the explorer.
-    ///
-    /// # Returns
-    ///
-    /// A [`String`] containing the Markdown source.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`io::Error`] if the file cannot be resolved, lies outside the
-    /// workspace, is not a regular file, cannot be read, or is not valid UTF-8.
-    pub(crate) fn read_markdown(
-        &self,
-        workspace: &Workspace,
-        requested_file: &Path,
-    ) -> io::Result<String> {
-        let canonical_file = self.validate_markdown(workspace, requested_file)?;
-
-        fs::read_to_string(&canonical_file)
-            .map_err(|source| path_error(source, "failed to read Markdown file", &canonical_file))
-    }
-
     /// Validates a Markdown file below a workspace root.
     ///
     /// The requested path is canonicalized and checked for containment,

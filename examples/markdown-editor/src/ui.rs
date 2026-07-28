@@ -207,28 +207,37 @@ fn MarkdownEditor(
         <Router initial_path=initial_path>
             <Block class="app-shell">
                 <Routes fallback=NotFoundPage>
-                    <Route path="/" view={move || {
-                        HomePage::with_props(
-                            HomePageProps::builder()
-                                .controller(Rc::clone(&home_controller))
-                                .build(),
-                        )
-                    }} />
-                    <Route path="/files" view={move || {
-                        ExplorerPage::with_props(
-                            ExplorerPageProps::builder()
-                                .controller(Rc::clone(&explorer_controller))
-                                .build(),
-                        )
-                    }} />
-                    <Route path="/view/*path" view={move || {
-                        ViewerPage::with_props(
-                            ViewerPageProps::builder()
-                                .controller(Rc::clone(&viewer_controller))
-                                .edit_requested(Rc::clone(&viewer_edit_requested))
-                                .build(),
-                        )
-                    }} />
+                    <Route
+                        path="/"
+                        view=move || {
+                            HomePage::with_props(
+                                HomePageProps::builder()
+                                    .controller(Rc::clone(&home_controller))
+                                    .build(),
+                            )
+                        }
+                    />
+                    <Route
+                        path="/files"
+                        view=move || {
+                            ExplorerPage::with_props(
+                                ExplorerPageProps::builder()
+                                    .controller(Rc::clone(&explorer_controller))
+                                    .build(),
+                            )
+                        }
+                    />
+                    <Route
+                        path="/view/*path"
+                        view=move || {
+                            ViewerPage::with_props(
+                                ViewerPageProps::builder()
+                                    .controller(Rc::clone(&viewer_controller))
+                                    .edit_requested(Rc::clone(&viewer_edit_requested))
+                                    .build(),
+                            )
+                        }
+                    />
                 </Routes>
             </Block>
         </Router>
@@ -249,7 +258,9 @@ fn NotFoundPage() -> impl IntoView {
             <Text class="error">
                 {move || format!("No page matches {}", location.pathname().get())}
             </Text>
-            <A href="/" exact=true>"Return home"</A>
+            <A href="/" exact=true>
+                "Return home"
+            </A>
         </Div>
     }
 }
@@ -666,10 +677,10 @@ fn ViewerPage(
             {move || {
                 let controller = controller.borrow();
                 let root = controller.workspace().root();
-                let open_path = controller.preview().path().map_or_else(
-                    || String::from("none"),
-                    |path| relative_path(root, path),
-                );
+                let open_path = controller
+                    .preview()
+                    .path()
+                    .map_or_else(|| String::from("none"), |path| relative_path(root, path));
                 text(format!("Open: {open_path}")).with_classes("path-context")
             }}
             {document}
@@ -690,28 +701,23 @@ fn ViewerPage(
     }
 }
 
-/// Renders an open Markdown source or its recoverable error.
+/// Renders an open path through the existing file-backed Markdown view.
 ///
 /// # Arguments
 ///
-/// * `preview` — Controller-owned preview snapshot.
+/// * `preview` — Controller-owned document snapshot.
 ///
 /// # Returns
 ///
-/// A semantic Markdown document, error, or empty hint.
+/// A path-backed Markdown document, editor error, or empty hint.
 #[component]
 fn ViewerDocument(preview: PreviewState) -> impl IntoView {
-    let body = if let Some(source) = preview.source() {
-        markdown_with_options(
-            source,
-            MarkdownOptions::default()
-                .syntax_theme(SyntaxTheme::Dark)
-                .line_numbers(true),
-        )
-    } else if let Some(error) = preview.error() {
+    let body = if let Some(error) = preview.editor_error() {
         text(format!("Error: {error}"))
             .with_classes("error")
             .into_view()
+    } else if let Some(path) = preview.path() {
+        view! { <Markdown src=path syntax_theme=SyntaxTheme::Dark line_numbers=true /> }
     } else {
         text("Choose a Markdown file from Home or Explorer")
             .with_classes("empty")
@@ -724,9 +730,7 @@ fn ViewerDocument(preview: PreviewState) -> impl IntoView {
         .padding(TuiSpacing::horizontal(1))
         .overflow(Axes::new(Overflow::Hidden, Overflow::Auto));
 
-    view! {
-        <Block style=content_style>{body}</Block>
-    }
+    view! { <Block style=content_style>{body}</Block> }
 }
 
 /// Formats a workspace path relative to its root.
