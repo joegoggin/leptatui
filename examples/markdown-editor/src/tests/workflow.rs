@@ -14,7 +14,7 @@ use crate::{
     controller::Controller,
     editor_process::EditorProcess,
     filesystem::FileSystem,
-    ui::{AppRoute, app_view, app_view_at_route},
+    ui::{app_view, app_view_at_path, viewer_location},
 };
 
 use super::support::{
@@ -79,10 +79,10 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
     let mut terminal = Terminal::new(TestBackend::new(90, 24))?;
 
     draw_editor(&mut terminal, &view)?;
+    let home = rendered_lines(&terminal).join("\n");
     assert!(
-        rendered_lines(&terminal)
-            .join("\n")
-            .contains("No recent Markdown files")
+        home.contains("No recent Markdown files"),
+        "rendered text: {home:?}"
     );
 
     assert_eq!(
@@ -132,10 +132,11 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
     );
     assert_eq!(controller.borrow().preview().source(), Some("# After edit"));
 
-    let rebuilt_view = app_view_at_route(
+    let viewer_path = viewer_location(controller.borrow().workspace().root(), &canonical_guide);
+    let rebuilt_view = app_view_at_path(
         Rc::clone(&controller),
         Rc::new(Cell::new(false)),
-        AppRoute::Viewer,
+        viewer_path,
     );
     draw_editor(&mut terminal, &rebuilt_view)?;
     let after_edit = rendered_lines(&terminal).join("\n");

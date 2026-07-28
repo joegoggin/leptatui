@@ -122,6 +122,9 @@ impl ViewType {
     /// Focusable standalone or embedded link.
     #[allow(non_upper_case_globals)]
     pub const Link: Self = Self::new("Link");
+    /// Focusable internal router anchor.
+    #[allow(non_upper_case_globals)]
+    pub const A: Self = Self::new("A");
 
     /// Creates a semantic view identity.
     ///
@@ -177,7 +180,7 @@ impl ViewType {
             | Self::TextArea
             | Self::Image
             | Self::ProgressBar => TuiStyle::new(),
-            Self::Link => TuiStyle::new().modifier(Modifier::UNDERLINED),
+            Self::Link | Self::A => TuiStyle::new().modifier(Modifier::UNDERLINED),
             _ => TuiStyle::new(),
         }
     }
@@ -192,7 +195,7 @@ impl ViewType {
     ///
     /// A [`TuiStyle`] containing defaults contributed by the current state.
     pub(crate) fn default_state_style(self, focused: bool) -> TuiStyle {
-        if self == Self::Link && focused {
+        if matches!(self, Self::Link | Self::A) && focused {
             TuiStyle::new().modifier(Modifier::UNDERLINED | Modifier::REVERSED)
         } else {
             TuiStyle::new()

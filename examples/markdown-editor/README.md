@@ -48,7 +48,7 @@ additional positional arguments fail without entering managed terminal mode.
 
 ## Pages and Controls
 
-The application starts on Home and uses Leptatui's typed route state to switch
+The application starts on Home and uses Leptatui's URL-like router to switch
 between three component pages:
 
 - **Home** — Press `o` or activate **Open file** to visit the File Explorer.
@@ -108,8 +108,8 @@ spacing is reduced.
   injectable environment and process boundaries.
 - `controller` coordinates filesystem, recent-file, and editor services while
   applying selection, navigation, open, reload, and edit transitions.
-- `ui` provides the typed route and renders Home, File Explorer, Markdown
-  Viewer, and their reusable UI units as `#[component]` functions.
+- `ui` declares `/`, `/files`, and `/view/*path` routes and renders Home, File
+  Explorer, Markdown Viewer, and reusable UI units as `#[component]` functions.
 - `main` validates startup, runs managed terminal sessions, and invokes the
   external editor only after Leptatui restores raw mode, mouse capture, and the
   alternate screen.

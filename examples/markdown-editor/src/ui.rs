@@ -1,6 +1,6 @@
 //! Routed Leptatui pages and input handling for the Markdown editor.
 //!
-//! The root component provides typed route state while Home, Explorer, and
+//! The root component provides URL-like route state while Home, Explorer, and
 //! Viewer components own their page-specific controls. Shared controller state
 //! survives route changes and restored-terminal editor sessions.
 
@@ -11,22 +11,31 @@ use std::{
 };
 
 use leptatui::prelude::*;
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 use crate::{
     controller::{Controller, ExplorerActivation},
     domain::{ExplorerEntry, ExplorerEntryKind, ExplorerState, PreviewState, RecentFilesState},
 };
 
-/// Pages available in the Markdown editor.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum AppRoute {
-    /// Landing page with open and recent-file actions.
-    Home,
-    /// Workspace file browser.
-    Explorer,
-    /// Open Markdown document.
-    Viewer,
-}
+/// Characters encoded inside one viewer route path segment.
+const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'%')
+    .add(b'/')
+    .add(b'<')
+    .add(b'>')
+    .add(b'?')
+    .add(b'[')
+    .add(b'\\')
+    .add(b']')
+    .add(b'^')
+    .add(b'`')
+    .add(b'{')
+    .add(b'|')
+    .add(b'}');
 
 /// Creates the root Markdown editor view.
 ///
@@ -43,30 +52,30 @@ pub(crate) fn app_view(
     controller: Rc<RefCell<Controller>>,
     edit_requested: Rc<Cell<bool>>,
 ) -> impl View + IntoView {
-    app_view_at_route(controller, edit_requested, AppRoute::Home)
+    app_view_at_path(controller, edit_requested, "/")
 }
 
-/// Creates the root Markdown editor view at an explicit route.
+/// Creates the root Markdown editor view at an explicit path.
 ///
 /// # Arguments
 ///
 /// * `controller` — Shared application state retained across TUI sessions.
 /// * `edit_requested` — Shared flag set when the open preview should be edited.
-/// * `initial_route` — Page shown when this managed terminal session starts.
+/// * `initial_path` — Location shown when this managed terminal session starts.
 ///
 /// # Returns
 ///
-/// A routed Leptatui view starting on `initial_route`.
-pub(crate) fn app_view_at_route(
+/// A routed Leptatui view starting on `initial_path`.
+pub(crate) fn app_view_at_path(
     controller: Rc<RefCell<Controller>>,
     edit_requested: Rc<Cell<bool>>,
-    initial_route: AppRoute,
+    initial_path: impl Into<String>,
 ) -> impl View + IntoView {
     MarkdownEditor::with_props(
         MarkdownEditorProps::builder()
             .controller(controller)
             .edit_requested(edit_requested)
-            .initial_route(initial_route)
+            .initial_path(initial_path.into())
             .build(),
     )
 }
@@ -77,7 +86,7 @@ pub(crate) fn app_view_at_route(
 ///
 /// * `controller` — Shared application state.
 /// * `edit_requested` — Flag used to request a restored-terminal edit.
-/// * `initial_route` — First page for the current TUI session.
+/// * `initial_path` — First location for the current TUI session.
 ///
 /// # Returns
 ///
@@ -86,45 +95,12 @@ pub(crate) fn app_view_at_route(
 fn MarkdownEditor(
     controller: Rc<RefCell<Controller>>,
     edit_requested: Rc<Cell<bool>>,
-    initial_route: AppRoute,
+    initial_path: String,
 ) -> impl IntoView {
-    let route_state = provide_route(initial_route);
-    let route = route_state.route();
     let home_controller = Rc::clone(&controller);
-    let home_page = keyed(
-        || (),
-        move || {
-            HomePage::with_props(
-                HomePageProps::builder()
-                    .controller(Rc::clone(&home_controller))
-                    .build(),
-            )
-        },
-    );
     let explorer_controller = Rc::clone(&controller);
-    let explorer_page = keyed(
-        || (),
-        move || {
-            ExplorerPage::with_props(
-                ExplorerPageProps::builder()
-                    .controller(Rc::clone(&explorer_controller))
-                    .build(),
-            )
-        },
-    );
     let viewer_controller = Rc::clone(&controller);
     let viewer_edit_requested = Rc::clone(&edit_requested);
-    let viewer_page = keyed(
-        || (),
-        move || {
-            ViewerPage::with_props(
-                ViewerPageProps::builder()
-                    .controller(Rc::clone(&viewer_controller))
-                    .edit_requested(Rc::clone(&viewer_edit_requested))
-                    .build(),
-            )
-        },
-    );
 
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') && key.modifiers == KeyModifiers::NONE {
@@ -212,6 +188,9 @@ fn MarkdownEditor(
         TableHead => { fg: Color::LightCyan }
         CodeBlock => { fg: Color::LightBlue }
         Link:focus => { fg: Color::Black, bg: Color::LightCyan }
+        A => { fg: Color::LightBlue }
+        A:focus => { fg: Color::Black, bg: Color::LightCyan }
+        .active => { fg: Color::LightCyan, modifier: Modifier::BOLD }
 
         @media (max-width: 60) {
             .app-shell => {
@@ -225,15 +204,53 @@ fn MarkdownEditor(
     }
 
     view! {
-        <Block class="app-shell">
-            {move || {
-                match route.get_untracked() {
-                    AppRoute::Home => home_page.clone().into_view(),
-                    AppRoute::Explorer => explorer_page.clone().into_view(),
-                    AppRoute::Viewer => viewer_page.clone().into_view(),
-                }
-            }}
-        </Block>
+        <Router initial_path=initial_path>
+            <Block class="app-shell">
+                <Routes fallback=NotFoundPage>
+                    <Route path="/" view={move || {
+                        HomePage::with_props(
+                            HomePageProps::builder()
+                                .controller(Rc::clone(&home_controller))
+                                .build(),
+                        )
+                    }} />
+                    <Route path="/files" view={move || {
+                        ExplorerPage::with_props(
+                            ExplorerPageProps::builder()
+                                .controller(Rc::clone(&explorer_controller))
+                                .build(),
+                        )
+                    }} />
+                    <Route path="/view/*path" view={move || {
+                        ViewerPage::with_props(
+                            ViewerPageProps::builder()
+                                .controller(Rc::clone(&viewer_controller))
+                                .edit_requested(Rc::clone(&viewer_edit_requested))
+                                .build(),
+                        )
+                    }} />
+                </Routes>
+            </Block>
+        </Router>
+    }
+}
+
+/// Renders an unmatched Markdown editor location.
+///
+/// # Returns
+///
+/// A not-found page component with a Home anchor.
+#[component]
+fn NotFoundPage() -> impl IntoView {
+    let location = use_location();
+    view! {
+        <Div class="page">
+            <Text class="page-title">"Page not found"</Text>
+            <Text class="error">
+                {move || format!("No page matches {}", location.pathname().get())}
+            </Text>
+            <A href="/" exact=true>"Return home"</A>
+        </Div>
     }
 }
 
@@ -248,12 +265,12 @@ fn MarkdownEditor(
 /// A Home page component.
 #[component]
 fn HomePage(controller: Rc<RefCell<Controller>>) -> impl IntoView {
-    let shortcut_navigate = use_navigate::<AppRoute>();
-    let button_navigate = use_navigate::<AppRoute>();
+    let shortcut_navigate = use_navigate();
+    let button_navigate = use_navigate();
 
     use_key_event(KeyEventKind::Press, move |key| {
         if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::NONE {
-            shortcut_navigate.set(AppRoute::Explorer);
+            shortcut_navigate("/files", NavigateOptions::default());
             return KeyControl::Handled;
         }
 
@@ -261,6 +278,7 @@ fn HomePage(controller: Rc<RefCell<Controller>>) -> impl IntoView {
     });
 
     let recent_controller = Rc::clone(&controller);
+    let recent_state = recent_controller.borrow().recent_files().clone();
     let root = controller.borrow().workspace().root().to_path_buf();
     let recent_root = root.clone();
     let page_style = routed_page_style();
@@ -271,20 +289,18 @@ fn HomePage(controller: Rc<RefCell<Controller>>) -> impl IntoView {
             <Text class="path-context">{format!("Root: {}", root.display())}</Text>
             <Div class="actions">
                 <Button on_press=move || {
-                    button_navigate.set(AppRoute::Explorer);
+                    button_navigate("/files", NavigateOptions::default());
                     AppControl::Continue
                 }>"Open file"</Button>
             </Div>
             <Block class="page-content scroll-content">
-                {move || {
-                    RecentFilesList::with_props(
-                        RecentFilesListProps::builder()
-                            .state(recent_controller.borrow().recent_files().clone())
-                            .root(recent_root.clone())
-                            .controller(Rc::clone(&recent_controller))
-                            .build(),
-                    )
-                }}
+                {RecentFilesList::with_props(
+                    RecentFilesListProps::builder()
+                        .state(recent_state)
+                        .root(recent_root)
+                        .controller(recent_controller)
+                        .build(),
+                )}
             </Block>
             <Text class="help">"o open file | Tab/Enter actions | q quit"</Text>
         </Div>
@@ -361,13 +377,14 @@ fn RecentFileEntry(
     root: PathBuf,
     controller: Rc<RefCell<Controller>>,
 ) -> impl IntoView {
-    let navigate = use_navigate::<AppRoute>();
+    let navigate = use_navigate();
     let label = relative_path(&root, &path);
+    let target = viewer_location(&root, &path);
 
     view! {
         <Button on_press=move || {
             controller.borrow_mut().open_recent(&path);
-            navigate.set(AppRoute::Viewer);
+            navigate(&target, NavigateOptions::default());
             AppControl::Continue
         }>{label}</Button>
     }
@@ -385,7 +402,7 @@ fn RecentFileEntry(
 #[component]
 fn ExplorerPage(controller: Rc<RefCell<Controller>>) -> impl IntoView {
     let shortcut_controller = Rc::clone(&controller);
-    let shortcut_navigate = use_navigate::<AppRoute>();
+    let shortcut_navigate = use_navigate();
 
     use_key_event(KeyEventKind::Press, move |key| {
         if key.modifiers != KeyModifiers::NONE {
@@ -405,7 +422,16 @@ fn ExplorerPage(controller: Rc<RefCell<Controller>>) -> impl IntoView {
                 if shortcut_controller.borrow_mut().activate_selected()
                     == ExplorerActivation::Document
                 {
-                    shortcut_navigate.set(AppRoute::Viewer);
+                    let target = {
+                        let controller = shortcut_controller.borrow();
+                        controller
+                            .preview()
+                            .path()
+                            .map(|path| viewer_location(controller.workspace().root(), path))
+                    };
+                    if let Some(target) = target {
+                        shortcut_navigate(&target, NavigateOptions::default());
+                    }
                 }
                 KeyControl::Handled
             }
@@ -414,7 +440,7 @@ fn ExplorerPage(controller: Rc<RefCell<Controller>>) -> impl IntoView {
                 KeyControl::Handled
             }
             KeyCode::Esc => {
-                shortcut_navigate.set(AppRoute::Home);
+                shortcut_navigate("/", NavigateOptions::default());
                 KeyControl::Handled
             }
             _ => KeyControl::Pass,
@@ -439,7 +465,7 @@ fn ExplorerPage(controller: Rc<RefCell<Controller>>) -> impl IntoView {
 /// Explorer headings and the scrollable listing.
 #[component]
 fn ExplorerContent(controller: Rc<RefCell<Controller>>) -> impl IntoView {
-    let home_navigate = use_navigate::<AppRoute>();
+    let home_navigate = use_navigate();
     let root = controller.borrow().workspace().root().to_path_buf();
     let directory_controller = Rc::clone(&controller);
     let list_controller = Rc::clone(&controller);
@@ -468,7 +494,7 @@ fn ExplorerContent(controller: Rc<RefCell<Controller>>) -> impl IntoView {
             </Block>
             <Div class="actions">
                 <Button on_press=move || {
-                    home_navigate.set(AppRoute::Home);
+                    home_navigate("/", NavigateOptions::default());
                     AppControl::Continue
                 }>"Home"</Button>
             </Div>
@@ -574,14 +600,27 @@ fn ViewerPage(
     edit_requested: Rc<Cell<bool>>,
 ) -> impl IntoView {
     let shortcut_controller = Rc::clone(&controller);
-    let shortcut_navigate = use_navigate::<AppRoute>();
-    let home_navigate = use_navigate::<AppRoute>();
-    let explorer_navigate = use_navigate::<AppRoute>();
+    let shortcut_navigate = use_navigate();
+    let home_navigate = use_navigate();
+    let explorer_navigate = use_navigate();
+    let route_params = use_params_map();
     let preview_key_controller = Rc::clone(&controller);
     let preview_view_controller = Rc::clone(&controller);
+    let preview_key_params = route_params;
+    let preview_view_params = route_params;
     let document = keyed(
-        move || preview_key_controller.borrow().preview().revision(),
         move || {
+            (
+                preview_key_params
+                    .get_untracked()
+                    .get("path")
+                    .unwrap_or_default()
+                    .to_owned(),
+                preview_key_controller.borrow().preview().revision(),
+            )
+        },
+        move || {
+            sync_preview_from_route(&preview_view_controller, preview_view_params);
             ViewerDocument::with_props(
                 ViewerDocumentProps::builder()
                     .preview(preview_view_controller.borrow().preview().clone())
@@ -610,11 +649,11 @@ fn ViewerPage(
                 KeyControl::Handled
             }
             KeyCode::Char('h') => {
-                shortcut_navigate.set(AppRoute::Home);
+                shortcut_navigate("/", NavigateOptions::default());
                 KeyControl::Handled
             }
             KeyCode::Char('b') => {
-                shortcut_navigate.set(AppRoute::Explorer);
+                shortcut_navigate("/files", NavigateOptions::default());
                 KeyControl::Handled
             }
             _ => KeyControl::Pass,
@@ -636,11 +675,11 @@ fn ViewerPage(
             {document}
             <Div class="actions">
                 <Button on_press=move || {
-                    home_navigate.set(AppRoute::Home);
+                    home_navigate("/", NavigateOptions::default());
                     AppControl::Continue
                 }>"Home"</Button>
                 <Button on_press=move || {
-                    explorer_navigate.set(AppRoute::Explorer);
+                    explorer_navigate("/files", NavigateOptions::default());
                     AppControl::Continue
                 }>"Browse files"</Button>
             </Div>
@@ -707,6 +746,49 @@ fn relative_path(root: &Path, path: &Path) -> String {
         Ok(relative) => relative.display().to_string(),
         Err(_) => path.display().to_string(),
     }
+}
+
+/// Creates an encoded viewer location for a workspace Markdown path.
+///
+/// # Arguments
+///
+/// * `root` — Canonical workspace root.
+/// * `path` — Canonical Markdown path below the root.
+///
+/// # Returns
+///
+/// A [`String`] containing `/view/` and encoded relative path segments.
+pub(crate) fn viewer_location(root: &Path, path: &Path) -> String {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    let encoded = relative
+        .components()
+        .map(|component| {
+            utf8_percent_encode(
+                &component.as_os_str().to_string_lossy(),
+                ROUTE_SEGMENT_ENCODE_SET,
+            )
+            .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    format!("/view/{encoded}")
+}
+
+/// Synchronizes controller preview state from the wildcard route parameter.
+///
+/// # Arguments
+///
+/// * `controller` — Shared controller to update when the route selects a file.
+/// * `params` — Reactive path parameters for the active viewer route.
+fn sync_preview_from_route(controller: &Rc<RefCell<Controller>>, params: Memo<ParamsMap>) {
+    let Some(relative) = params.get_untracked().get("path").map(str::to_owned) else {
+        return;
+    };
+    let requested = controller.borrow().workspace().root().join(relative);
+    if controller.borrow().preview().path() == Some(requested.as_path()) {
+        return;
+    }
+    controller.borrow_mut().open_recent(&requested);
 }
 
 /// Returns the full-size column layout shared by routed pages.

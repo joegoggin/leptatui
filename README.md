@@ -878,18 +878,16 @@ fn ThemeRoot() -> impl IntoView {
 See `cargo run --example theme_switcher` for the complete light/dark theme
 switcher.
 
-Multi-page apps use ordinary Leptatui components with route state stored in
-typed context. Keep `main` focused on startup, build shared state in the root
-component, provide route and app-wide context there, and let page components
-consume the values they need. The active page is usually a small enum, updated
-through the route write signal returned by `provide_route()` or by
-`use_navigate()` in descendants. The root then switches pages from a dynamic
-`view!` child.
+Multi-page apps use URL-like locations and declarative route components. Wrap
+the application shell in `Router`, place route declarations inside `Routes`,
+and navigate with internal `A` anchors or `use_navigate()`. Content outside
+`Routes` remains mounted, and `ParentRoute` plus `Outlet` provides retained
+nested layouts.
 
 Use props for required parent-to-child inputs and local component
 configuration. Use context for app-wide state that many routes or deeply nested
-descendants need to read or update, such as the active route, theme variables,
-or persisted settings. Keep shared state owned by the root when navigation
+descendants need to read or update, such as theme variables or persisted
+settings. Keep shared state owned by the root when navigation
 should not reset it; add explicit reset behavior when a route change should
 clear shared state. Descendant pages can read required context with
 `expect_context()` or optional context with `use_context()`.
@@ -897,31 +895,13 @@ clear shared state. Descendant pages can read required context with
 ```rust
 use leptatui::prelude::*;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Page {
-    Home,
-    Counter,
-    Settings,
-}
-
 #[component]
 fn Nav() -> impl IntoView {
-    let navigate = use_navigate::<Page>();
-
     view! {
         <Div style={TuiStyle::new().display(Display::Flex)}>
-            <Button on_press=move || {
-                navigate.update(|route| *route = Page::Home);
-                AppControl::Continue
-            }>"Home"</Button>
-            <Button on_press=move || {
-                navigate.update(|route| *route = Page::Counter);
-                AppControl::Continue
-            }>"Counter"</Button>
-            <Button on_press=move || {
-                navigate.update(|route| *route = Page::Settings);
-                AppControl::Continue
-            }>"Settings"</Button>
+            <A href="/" exact=true>"Home"</A>
+            <A href="/counter">"Counter"</A>
+            <A href="/settings">"Settings"</A>
         </Div>
     }
 }
@@ -961,34 +941,35 @@ fn CounterPage() -> impl IntoView {
 
 #[component]
 fn SettingsPage() -> impl IntoView {
-    let route = use_route::<Page>();
+    let location = use_location();
 
     view! {
-        {move || {
-            view! {
-                <Text>{format!("Current page: {:?}", route.get_untracked())}</Text>
-            }
-        }}
+        <Text>{move || format!("Current path: {}", location.pathname().get())}</Text>
     }
+}
+
+#[component]
+fn NotFoundPage() -> impl IntoView {
+    view! { <Text>"Page not found"</Text> }
 }
 
 #[component]
 fn Root() -> impl IntoView {
     let counter = RwSignal::new(0);
-    let route_state = provide_route(Page::Home);
-    let route = route_state.route();
 
     provide_context(counter);
 
     view! {
-        <Div>
-            <Nav />
-            {move || match route.get_untracked() {
-                Page::Home => view! { <HomePage /> },
-                Page::Counter => view! { <CounterPage /> },
-                Page::Settings => view! { <SettingsPage /> },
-            }}
-        </Div>
+        <Router initial_path="/">
+            <Div>
+                <Nav />
+                <Routes fallback=NotFoundPage>
+                    <Route path="/" view=HomePage />
+                    <Route path="/counter" view=CounterPage />
+                    <Route path="/settings" view=SettingsPage />
+                </Routes>
+            </Div>
+        </Router>
     }
 }
 
@@ -998,6 +979,12 @@ async fn main() -> Result<()> {
     App::new(root).run().await
 }
 ```
+
+Route patterns accept static segments, `:parameter` segments, and a terminal
+`*wildcard`. Read decoded matches with `use_params_map()`, query values with
+`use_query_map()`, and the current path with `use_location()`. Programmatic
+navigation uses `use_navigate()`, while `use_history()` exposes process-local
+back and forward controls.
 
 See `crates/leptatui/examples/multi_page_demo.rs` or run
 `cargo run --example multi_page_demo` for a complete routing and context

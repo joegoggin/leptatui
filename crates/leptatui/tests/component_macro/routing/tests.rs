@@ -1,13 +1,14 @@
-/// Verifies route state can drive dynamic `view!` page branches.
+/// Verifies declarative routes switch component page branches.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// provide_route(Home)
-/// <Div>
-///   <RouteKeyNav />
-///   {move || match route.get_untracked() { Home => <HomePage />, ... }}
-/// </Div>
+/// <Router initial_path="/">
+///   <Routes fallback=HomePage>
+///     <Route path="/" view=HomePage />
+///     <Route path="/counter" view=CounterPage />
+///   </Routes>
+/// </Router>
 /// ```
 ///
 /// # Assertions

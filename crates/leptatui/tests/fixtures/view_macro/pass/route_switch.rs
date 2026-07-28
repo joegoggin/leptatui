@@ -1,17 +1,8 @@
 //! Pass fixture for route-driven page switches in `view!`.
 //!
-//! This binary verifies a dynamic child can branch on route state and return
-//! different component pages without manual view-node construction.
+//! This binary verifies declarative routes accept component page factories.
 
 use leptatui::prelude::*;
-
-/// Route values for the page switch fixture.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Page {
-    Home,
-    Counter,
-    Settings,
-}
 
 /// Home page branch.
 #[component]
@@ -31,26 +22,21 @@ fn SettingsPage() -> impl IntoView {
     view! { <Text>"Settings"</Text> }
 }
 
-/// Exercises a three-branch route switch inside a dynamic child.
+/// Fallback page branch.
+#[component]
+fn NotFoundPage() -> impl IntoView {
+    view! { <Text>"Not found"</Text> }
+}
+
+/// Exercises three declarative route definitions.
 fn main() {
-    Owner::new().with(|| {
-        let route_state = provide_route(Page::Home);
-        let route = route_state.route();
-        let navigate = route_state.navigate();
-
-        navigate.update(|route| *route = Page::Counter);
-        navigate.update(|route| *route = Page::Settings);
-
-        let view = view! {
-            <Div>
-                {move || match route.get_untracked() {
-                    Page::Home => view! { <HomePage /> },
-                    Page::Counter => view! { <CounterPage /> },
-                    Page::Settings => view! { <SettingsPage /> },
-                }}
-            </Div>
-        };
-
-        assert_eq!(view.metadata().view_type(), ViewType::Div);
-    });
+    let _view = view! {
+        <Router initial_path="/counter">
+            <Routes fallback=NotFoundPage>
+                <Route path="/" view=HomePage />
+                <Route path="/counter" view=CounterPage />
+                <Route path="/settings" view=SettingsPage />
+            </Routes>
+        </Router>
+    };
 }

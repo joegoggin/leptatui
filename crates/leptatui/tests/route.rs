@@ -1,46 +1,60 @@
-//! Route state helper tests.
-//!
-//! These tests cover the public context-backed route helper API.
+//! Public router hook and history tests.
 
-use leptatui::{provide_route, use_navigate, use_route};
-use leptos::prelude::{GetUntracked, Owner, Update};
+use leptatui::{
+    NavigateOptions, Router, RouterProps, use_history, use_location, use_navigate, use_query_map,
+};
+use leptos::prelude::{GetUntracked, Owner};
 
-/// Route values used by route helper tests.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TestRoute {
-    Home,
-    Settings,
-}
-
-/// Verifies route helpers provide readable and writable route state.
+/// Verifies location, query, navigation, and history hooks share router state.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// provide_route(Home)
-/// use_route::<TestRoute>()
-/// use_navigate::<TestRoute>()
+/// /docs?page=1 -> /settings?mode=dark -> back -> forward
 /// ```
 ///
 /// # Assertions
 ///
-/// - The provided route can be read from context.
-/// - The navigation setter updates the active route.
-/// - The returned route state observes the same updated signal.
+/// - The initial pathname and decoded query are available.
+/// - Push navigation updates pathname and query state.
+/// - Back and forward restore their respective entries.
+/// - Replace navigation does not add another back entry.
 #[test]
-fn route_helpers_provide_and_update_route_state() {
+fn router_hooks_navigate_through_in_memory_history() {
     Owner::new().with(|| {
         leptatui::__private::__with_context_scope(|| {
-            let state = provide_route(TestRoute::Home);
-            let route = use_route::<TestRoute>();
-            let navigate = use_navigate::<TestRoute>();
+            let _router = Router::with_props(
+                RouterProps::builder()
+                    .initial_path("/docs?page=1")
+                    .children(Box::new(|| {
+                        let location = use_location();
+                        let query = use_query_map();
+                        let navigate = use_navigate();
+                        let history = use_history();
 
-            assert_eq!(route.get_untracked(), TestRoute::Home);
+                        assert_eq!(location.pathname().get_untracked(), "/docs");
+                        assert_eq!(query.get_untracked().get("page"), Some("1"));
 
-            navigate.update(|route| *route = TestRoute::Settings);
+                        navigate("/settings?mode=dark", NavigateOptions::default());
+                        assert_eq!(location.pathname().get_untracked(), "/settings");
+                        assert_eq!(query.get_untracked().get("mode"), Some("dark"));
+                        assert!(history.can_go_back());
 
-            assert_eq!(route.get_untracked(), TestRoute::Settings);
-            assert_eq!(state.route().get_untracked(), TestRoute::Settings);
+                        history.back();
+                        assert_eq!(location.pathname().get_untracked(), "/docs");
+                        assert!(history.can_go_forward());
+
+                        history.forward();
+                        assert_eq!(location.pathname().get_untracked(), "/settings");
+
+                        navigate("/profile", NavigateOptions { replace: true });
+                        history.back();
+                        assert_eq!(location.pathname().get_untracked(), "/docs");
+
+                        Vec::new()
+                    }))
+                    .build(),
+            );
         });
     });
 }

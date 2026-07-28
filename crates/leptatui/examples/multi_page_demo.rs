@@ -6,14 +6,6 @@
 
 use leptatui::prelude::*;
 
-/// Pages available in the demo router.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum DemoPage {
-    Home,
-    Counter,
-    Settings,
-}
-
 /// Theme preference shared by the demo pages.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ThemeMode {
@@ -53,21 +45,12 @@ impl ThemeMode {
     }
 }
 
-/// Navigates to a page and keeps the app running.
-fn navigate_to(navigate: WriteSignal<DemoPage>, page: DemoPage) -> AppControl {
-    navigate.update(|route| *route = page);
-    AppControl::Continue
-}
-
 /// Root component for the multi-page demo.
 #[component]
 fn MultiPageDemo() -> impl IntoView {
     let counter = RwSignal::new(0);
     let theme_mode = RwSignal::new(ThemeMode::Light);
     let theme = RwSignal::new(ThemeMode::Light.variables());
-    let route_state = provide_route(DemoPage::Home);
-    let route = route_state.route();
-
     provide_context(counter);
     provide_context(theme_mode);
     provide_context(theme);
@@ -135,54 +118,69 @@ fn MultiPageDemo() -> impl IntoView {
     }
 
     view! {
-        <Block class="app-shell">
-            <Div>
-                <Text class="app-title">"Leptatui multi-page demo"</Text>
-                <Nav />
-                {move || match route.get_untracked() {
-                    DemoPage::Home => view! { <HomePage /> },
-                    DemoPage::Counter => view! { <CounterPage /> },
-                    DemoPage::Settings => view! { <SettingsPage /> },
-                }}
-                <Text class="muted">
-                    "h Home | c Counter | s Settings | +/- count | t theme | q quit"
-                </Text>
-            </Div>
-        </Block>
+        <Router initial_path="/">
+            <Block class="app-shell">
+                <Div>
+                    <Text class="app-title">"Leptatui multi-page demo"</Text>
+                    <Nav />
+                    <Routes fallback=NotFoundPage>
+                        <Route path="/" view=HomePage />
+                        <Route path="/counter" view=CounterPage />
+                        <Route path="/settings" view=SettingsPage />
+                    </Routes>
+                    <Text class="muted">
+                        "h Home | c Counter | s Settings | +/- count | t theme | q quit"
+                    </Text>
+                </Div>
+            </Block>
+        </Router>
     }
 }
 
 /// Top navigation shared across pages.
 #[component]
 fn Nav() -> impl IntoView {
-    let navigate = use_navigate::<DemoPage>();
+    let shortcut_navigate = use_navigate();
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {
         KeyCode::Char('h') => {
-            navigate.update(|route| *route = DemoPage::Home);
+            shortcut_navigate("/", NavigateOptions::default());
             KeyControl::Handled
         }
         KeyCode::Char('c') => {
-            navigate.update(|route| *route = DemoPage::Counter);
+            shortcut_navigate("/counter", NavigateOptions::default());
             KeyControl::Handled
         }
         KeyCode::Char('s') => {
-            navigate.update(|route| *route = DemoPage::Settings);
+            shortcut_navigate("/settings", NavigateOptions::default());
             KeyControl::Handled
         }
         _ => KeyControl::Pass,
     });
 
-    let home = use_navigate::<DemoPage>();
-    let counter = use_navigate::<DemoPage>();
-    let settings = use_navigate::<DemoPage>();
-
     view! {
         <Div class="nav">
-            <Button on_press=move || navigate_to(home, DemoPage::Home)>"Home"</Button>
-            <Button on_press=move || navigate_to(counter, DemoPage::Counter)>"Counter"</Button>
-            <Button on_press=move || navigate_to(settings, DemoPage::Settings)>"Settings"</Button>
+            <A href="/" exact=true>"Home"</A>
+            <A href="/counter">"Counter"</A>
+            <A href="/settings">"Settings"</A>
         </Div>
+    }
+}
+
+/// Renders an unmatched-location fallback.
+///
+/// # Returns
+///
+/// A not-found page component.
+#[component]
+fn NotFoundPage() -> impl IntoView {
+    let location = use_location();
+    view! {
+        <Block class="page">
+            <Text class="danger">
+                {move || format!("No route matches {}", location.pathname().get())}
+            </Text>
+        </Block>
     }
 }
 

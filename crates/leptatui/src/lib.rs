@@ -223,18 +223,17 @@
 //!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
-//! [`context::expect_context`]. Multi-page apps can store the active page with
-//! [`provide_route`], read it with [`use_route`], and navigate with
-//! [`use_navigate`]. Asynchronous reads and mutations use [`create_resource`]
-//! and [`create_action`] to expose pending, ready, and error state to
-//! components.
+//! [`context::expect_context`]. Multi-page apps declare URL-like paths with
+//! [`Router`], `Routes`, and `Route` tags, read reactive location state with
+//! [`use_location`], and navigate with [`use_navigate`]. Asynchronous reads and
+//! mutations use [`create_resource`] and [`create_action`] to expose pending,
+//! ready, and error state to components.
 //!
 //! # Deferred Scope
 //!
-//! The first baseline intentionally does not expose a Leptos DOM renderer, a
-//! generalized router, or raw terminal session customization APIs. Generated-code
-//! and runtime wiring hooks live under `__private` and are not supported as user
-//! APIs.
+//! The first baseline intentionally does not expose a Leptos DOM renderer or
+//! raw terminal session customization APIs. Generated-code and runtime wiring
+//! hooks live under `__private` and are not supported as user APIs.
 
 mod executor;
 mod markdown;
@@ -262,7 +261,10 @@ pub use markdown::{
     markdown_with_options,
 };
 pub use resource::{Resource, ResourceState, create_resource};
-pub use route::{RouteState, provide_route, use_navigate, use_route};
+pub use route::{
+    History, Location, Navigate, NavigateOptions, Outlet, ParamsMap, RouteViewFactory, Router,
+    RouterProps, use_history, use_location, use_navigate, use_params_map, use_query_map,
+};
 pub use style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
     Display, Edges, FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridMaxTrackSize,
@@ -276,11 +278,12 @@ pub use view::{
     ContainerView, DivView, DynamicView, EditableAction, EditableState, EditableView, FormAction,
     FormView, HeadingLevel, HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews,
     LayoutGeometry, LinkTarget, LinkView, ListItemView, ListKind, ListView, ParagraphView,
-    ProgressBarView, RichText, StyleMetadata, StyledView, SyntaxTheme, TableCellView, TableRowView,
-    TableSectionKind, TableSectionView, TableView, TextAreaView, TextView, TextualView, View,
-    ViewType, VimMode, block, button, code_block, component, div, dynamic, form, h1, h2, h3, h4,
-    h5, h6, image, input, keyed, link, list_item, ordered_list, paragraph, progress_bar, table,
-    table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
+    ProgressBarView, RichText, RouteLinkView, StyleMetadata, StyledView, SyntaxTheme,
+    TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView, TextAreaView,
+    TextView, TextualView, View, ViewType, VimMode, block, button, code_block, component, div,
+    dynamic, form, h1, h2, h3, h4, h5, h6, image, input, keyed, link, list_item, ordered_list,
+    paragraph, progress_bar, route_link, table, table_body, table_cell, table_head, table_row,
+    text, text_area, unordered_list,
 };
 
 #[doc(hidden)]
@@ -293,6 +296,7 @@ pub mod __private {
         FocusedControl, KeyHandlerRegistry, StylesheetRegistry,
     };
     pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
+    pub use crate::route::{__outlet, __route_definition, __routes};
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};
 
     /// Creates a component view from a generated component factory.

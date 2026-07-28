@@ -58,6 +58,7 @@ pub use controls::{
     form::{FormAction, FormView, form},
     link::{LinkView, link},
     progress_bar::{ProgressBarView, progress_bar},
+    route_link::{RouteLinkView, route_link},
 };
 pub use core::{
     any_view::AnyView,

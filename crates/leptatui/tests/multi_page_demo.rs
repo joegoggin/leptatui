@@ -17,14 +17,6 @@ mod support;
 
 use support::{key, render_component, rendered_text};
 
-/// Test routes matching the demo page shape.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum DemoTestPage {
-    Home,
-    Counter,
-    Settings,
-}
-
 /// Test theme preference shared across pages.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DemoTestTheme {
@@ -62,9 +54,6 @@ fn DemoWorkflowRoot() -> impl IntoView {
     let counter = RwSignal::new(0);
     let theme_mode = RwSignal::new(DemoTestTheme::Light);
     let theme = RwSignal::new(DemoTestTheme::Light.variables());
-    let route_state = provide_route(DemoTestPage::Home);
-    let route = route_state.route();
-
     provide_context(counter);
     provide_context(theme_mode);
     provide_context(theme);
@@ -81,33 +70,37 @@ fn DemoWorkflowRoot() -> impl IntoView {
     }
 
     view! {
-        <Div>
-            <DemoWorkflowNav />
-            {move || match route.get_untracked() {
-                DemoTestPage::Home => view! { <DemoWorkflowHome /> },
-                DemoTestPage::Counter => view! { <DemoWorkflowCounter /> },
-                DemoTestPage::Settings => view! { <DemoWorkflowSettings /> },
-            }}
-        </Div>
+        <Router initial_path="/">
+            <Div>
+                <DemoWorkflowNav />
+                <Routes fallback=DemoWorkflowNotFound>
+                    <Route path="/" view=DemoWorkflowHome />
+                    <Route path="/counter" view=DemoWorkflowCounter />
+                    <ParentRoute path="/settings" view=DemoWorkflowSettingsLayout>
+                        <Route path="theme" view=DemoWorkflowSettings />
+                    </ParentRoute>
+                </Routes>
+            </Div>
+        </Router>
     }
 }
 
 /// Navigation component using route context.
 #[component]
 fn DemoWorkflowNav() -> impl IntoView {
-    let navigate = use_navigate::<DemoTestPage>();
+    let navigate = use_navigate();
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {
         KeyCode::Char('h') => {
-            navigate.update(|route| *route = DemoTestPage::Home);
+            navigate("/", NavigateOptions::default());
             KeyControl::Handled
         }
         KeyCode::Char('c') => {
-            navigate.update(|route| *route = DemoTestPage::Counter);
+            navigate("/counter", NavigateOptions::default());
             KeyControl::Handled
         }
         KeyCode::Char('s') => {
-            navigate.update(|route| *route = DemoTestPage::Settings);
+            navigate("/settings/theme", NavigateOptions::default());
             KeyControl::Handled
         }
         _ => KeyControl::Pass,
@@ -118,6 +111,31 @@ fn DemoWorkflowNav() -> impl IntoView {
             <Button>"Home"</Button>
             <Button>"Counter"</Button>
             <Button>"Settings"</Button>
+        </Div>
+    }
+}
+
+/// Renders the test router fallback.
+///
+/// # Returns
+///
+/// A not-found text component.
+#[component]
+fn DemoWorkflowNotFound() -> impl IntoView {
+    text("Not found")
+}
+
+/// Renders a retained settings layout around its child route.
+///
+/// # Returns
+///
+/// A settings heading followed by the current [`Outlet`].
+#[component]
+fn DemoWorkflowSettingsLayout() -> impl IntoView {
+    view! {
+        <Div>
+            <Text>"Settings layout"</Text>
+            <Outlet />
         </Div>
     }
 }

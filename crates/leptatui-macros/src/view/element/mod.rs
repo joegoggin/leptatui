@@ -15,6 +15,7 @@ mod attributes;
 mod builtins;
 mod children;
 mod custom_component;
+mod router;
 mod validation;
 
 use proc_macro2::TokenStream;
@@ -166,6 +167,22 @@ impl Element {
 
         if self.name == "Link" {
             return self.expand_link();
+        }
+
+        if self.name == "A" {
+            return self.expand_route_link();
+        }
+
+        if self.name == "Routes" {
+            return self.expand_routes();
+        }
+
+        if self.name == "Outlet" {
+            return self.expand_outlet();
+        }
+
+        if matches!(self.name.to_string().as_str(), "Route" | "ParentRoute") {
+            return self.expand_route_definition();
         }
 
         match self.name.to_string().as_str() {

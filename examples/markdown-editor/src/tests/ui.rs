@@ -145,6 +145,7 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
     let edit_requested = Rc::new(Cell::new(false));
     let mut view = app_view(Rc::clone(&controller), Rc::clone(&edit_requested));
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
+    draw_editor(&mut terminal, &view)?;
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
@@ -204,6 +205,7 @@ fn explicit_destinations_navigate_between_pages() -> leptatui::Result<()> {
     ));
     let mut view = app_view(controller, Rc::new(Cell::new(false)));
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
+    draw_editor(&mut terminal, &view)?;
 
     for key in [KeyCode::Char('o'), KeyCode::Esc] {
         assert_eq!(

@@ -31,7 +31,7 @@ use crate::{
     editor_process::EditorProcess,
     filesystem::FileSystem,
     recent_files::RecentFilesStore,
-    ui::{AppRoute, app_view_at_route},
+    ui::{app_view_at_path, viewer_location},
 };
 
 /// Validates startup configuration and runs the Markdown editor.
@@ -54,14 +54,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         EditorProcess::new(),
         RecentFilesStore::standard(),
     )?));
-    let mut initial_route = AppRoute::Home;
+    let mut initial_path = String::from("/");
 
     loop {
         let edit_requested = Rc::new(Cell::new(false));
-        App::new(app_view_at_route(
+        App::new(app_view_at_path(
             Rc::clone(&controller),
             Rc::clone(&edit_requested),
-            initial_route,
+            initial_path.clone(),
         ))
         .run()
         .await?;
@@ -71,6 +71,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
 
         controller.borrow_mut().edit_preview();
-        initial_route = AppRoute::Viewer;
+        initial_path = {
+            let controller = controller.borrow();
+            controller.preview().path().map_or_else(
+                || String::from("/"),
+                |path| viewer_location(controller.workspace().root(), path),
+            )
+        };
     }
 }

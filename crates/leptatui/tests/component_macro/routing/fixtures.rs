@@ -5,9 +5,6 @@ fn MacroRouteSwitchRoot() -> impl leptatui::IntoView {
 
     let (shared_count, set_shared_count) = signal(0);
     provide_context(MacroSharedCount(shared_count));
-    let route_state = leptatui::provide_route(MacroRoutePage::Home);
-    let route = route_state.route();
-
     use_key_event(KeyEventKind::Press, move |key| {
         if key.code == KeyCode::Char('i') {
             set_shared_count.update(|count| *count += 1);
@@ -18,27 +15,29 @@ fn MacroRouteSwitchRoot() -> impl leptatui::IntoView {
     });
 
     view! {
-        <Div>
-            <MacroRouteKeyNav />
-            {move || match route.get_untracked() {
-                MacroRoutePage::Home => view! { <MacroRouteHomePage /> },
-                MacroRoutePage::Counter => view! { <MacroRouteCounterPage /> },
-                MacroRoutePage::Settings => view! { <MacroRouteSettingsPage /> },
-            }}
-        </Div>
+        <Router initial_path="/">
+            <Div>
+                <MacroRouteKeyNav />
+                <Routes fallback=MacroRouteHomePage>
+                    <Route path="/" view=MacroRouteHomePage />
+                    <Route path="/counter" view=MacroRouteCounterPage />
+                    <Route path="/settings" view=MacroRouteSettingsPage />
+                </Routes>
+            </Div>
+        </Router>
     }
 }
 
 /// Descendant component that navigates by updating route context.
 #[component]
 fn MacroRouteKeyNav() -> impl leptatui::IntoView {
-    let navigate = leptatui::use_navigate::<MacroRoutePage>();
+    let navigate = leptatui::use_navigate();
 
     use_key_event(KeyEventKind::Press, move |key| {
         match key.code {
-            KeyCode::Char('h') => navigate.update(|route| *route = MacroRoutePage::Home),
-            KeyCode::Char('c') => navigate.update(|route| *route = MacroRoutePage::Counter),
-            KeyCode::Char('s') => navigate.update(|route| *route = MacroRoutePage::Settings),
+            KeyCode::Char('h') => navigate("/", NavigateOptions::default()),
+            KeyCode::Char('c') => navigate("/counter", NavigateOptions::default()),
+            KeyCode::Char('s') => navigate("/settings", NavigateOptions::default()),
             _ => return KeyControl::Pass,
         }
 
@@ -90,30 +89,42 @@ fn MacroRouteSettingsPage() -> impl leptatui::IntoView {
 /// Root component that switches between branches using the same component type.
 #[component]
 fn MacroRoutePropSwitchRoot() -> impl leptatui::IntoView {
-    let route_state = leptatui::provide_route(MacroRoutePage::Home);
-    let route = route_state.route();
-    let navigate = route_state.navigate();
+    view! {
+        <Router initial_path="/">
+            <Div>
+                <MacroRoutePropNav />
+                <Routes fallback={|| MacroRouteNamedPage::with_props(
+                    MacroRouteNamedPageProps::builder().label("Missing").build()
+                )}>
+                    <Route path="/" view={|| MacroRouteNamedPage::with_props(
+                        MacroRouteNamedPageProps::builder().label("Home").build()
+                    )} />
+                    <Route path="/counter" view={|| MacroRouteNamedPage::with_props(
+                        MacroRouteNamedPageProps::builder().label("Counter").build()
+                    )} />
+                    <Route path="/settings" view={|| MacroRouteNamedPage::with_props(
+                        MacroRouteNamedPageProps::builder().label("Settings").build()
+                    )} />
+                </Routes>
+            </Div>
+        </Router>
+    }
+}
 
+/// Descendant key handler for prop-bearing route pages.
+#[component]
+fn MacroRoutePropNav() -> impl leptatui::IntoView {
+    let navigate = leptatui::use_navigate();
     use_key_event(KeyEventKind::Press, move |key| {
         match key.code {
-            KeyCode::Char('h') => navigate.update(|route| *route = MacroRoutePage::Home),
-            KeyCode::Char('c') => navigate.update(|route| *route = MacroRoutePage::Counter),
-            KeyCode::Char('s') => navigate.update(|route| *route = MacroRoutePage::Settings),
+            KeyCode::Char('h') => navigate("/", NavigateOptions::default()),
+            KeyCode::Char('c') => navigate("/counter", NavigateOptions::default()),
+            KeyCode::Char('s') => navigate("/settings", NavigateOptions::default()),
             _ => return KeyControl::Pass,
         }
-
         KeyControl::Handled
     });
-
-    view! {
-        <Div>
-            {move || match route.get_untracked() {
-                MacroRoutePage::Home => view! { <MacroRouteNamedPage label="Home" /> },
-                MacroRoutePage::Counter => view! { <MacroRouteNamedPage label="Counter" /> },
-                MacroRoutePage::Settings => view! { <MacroRouteNamedPage label="Settings" /> },
-            }}
-        </Div>
-    }
+    text("Route keys")
 }
 
 /// Route page whose prop must update when branches share this component type.
