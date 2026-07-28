@@ -38,7 +38,7 @@ pub(in crate::pages::explorer) fn ExplorerContent(
             <Text class="page-title">"File explorer"</Text>
             <Text class="path-context">{format!("Root: {}", root.display())}</Text>
             {move || {
-                let current = listing.get();
+                let current = listing.get_untracked();
                 let directory =
                     relative_path(directory_workspace.root(), current.directory());
                 view! {
@@ -49,9 +49,9 @@ pub(in crate::pages::explorer) fn ExplorerContent(
                 {move || {
                     view! {
                         <ExplorerList
-                            listing=listing.get()
-                            selection=selection.get()
-                            error=error.get()
+                            listing=listing.get_untracked()
+                            selection=selection.get_untracked()
+                            error=error.get_untracked()
                         />
                     }
                 }}

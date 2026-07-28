@@ -14,7 +14,7 @@ pub(crate) fn NotFoundPage() -> impl IntoView {
         <Div class="page">
             <Text class="page-title">"Page not found"</Text>
             <Text class="error">
-                {move || format!("No page matches {}", location.pathname().get())}
+                {move || format!("No page matches {}", location.pathname().get_untracked())}
             </Text>
             <A href="/" exact=true>
                 "Return home"

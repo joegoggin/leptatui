@@ -50,8 +50,8 @@ pub(crate) fn HomePage() -> impl IntoView {
                     let root = recent_root.clone();
                     view! {
                         <RecentFilesList
-                            entries=files.recent_files.get()
-                            error=files.recent_files_error.get()
+                            entries=files.recent_files.get_untracked()
+                            error=files.recent_files_error.get_untracked()
                             root=root
                         />
                     }
