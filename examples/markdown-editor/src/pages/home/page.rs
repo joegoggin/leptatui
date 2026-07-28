@@ -33,6 +33,8 @@ pub(crate) fn HomePage() -> impl IntoView {
     let root = workspace.root().to_path_buf();
     let root_label = format!("Root: {}", root.display());
     let recent_root = root.clone();
+    let recent_entries = files.recent_files.get_untracked();
+    let recent_error = files.recent_files_error.get_untracked();
     let page_style = routed_page_style();
 
     view! {
@@ -46,16 +48,11 @@ pub(crate) fn HomePage() -> impl IntoView {
                 }>"Open file"</Button>
             </Div>
             <Block class="page-content scroll-content">
-                {move || {
-                    let root = recent_root.clone();
-                    view! {
-                        <RecentFilesList
-                            entries=files.recent_files.get_untracked()
-                            error=files.recent_files_error.get_untracked()
-                            root=root
-                        />
-                    }
-                }}
+                <RecentFilesList
+                    entries=recent_entries
+                    error=recent_error
+                    root=recent_root
+                />
             </Block>
             <Text class="help">"o open file | Tab/Enter actions | q quit"</Text>
         </Div>

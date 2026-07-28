@@ -95,5 +95,23 @@ fn routed_pages_open_reload_and_remember_a_markdown_file() -> leptatui::Result<(
     assert!(returned_home.contains("Recent files"));
     assert!(returned_home.contains("beta.md"));
 
+    for key in [KeyCode::Tab, KeyCode::Tab] {
+        assert_eq!(
+            view.handle_key_event(KeyEvent::new(key, KeyModifiers::NONE))?,
+            KeyControl::Handled
+        );
+        draw_editor(&mut terminal, &view)?;
+    }
+    assert_eq!(
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
+        KeyControl::Handled
+    );
+    draw_editor(&mut terminal, &view)?;
+    assert!(
+        rendered_lines(&terminal)
+            .join("\n")
+            .contains("Markdown viewer")
+    );
+
     Ok(())
 }
