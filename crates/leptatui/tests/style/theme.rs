@@ -37,6 +37,45 @@ fn stylesheet_theme_variables_resolve_against_active_theme() {
     assert_eq!(dark_style.background, Some(Color::Black));
 }
 
+/// Verifies buttons resolve built-in colors for blurred and focused states.
+///
+/// # Example Under Test
+///
+/// ```text
+/// button("Cancel")
+/// button("Save").with_focus(true)
+/// ```
+///
+/// # Assertions
+///
+/// - The blurred button resolves to a white foreground with no background.
+/// - The focused button resolves to a black foreground on a white background.
+#[test]
+fn buttons_resolve_default_focus_colors() {
+    let blurred = button("Cancel");
+    let focused = button("Save").with_focus(true);
+    let stylesheet = Stylesheet::new();
+    let theme = ThemeVariables::new();
+
+    let blurred_style = stylesheet.resolve(
+        blurred.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+    let focused_style = stylesheet.resolve(
+        focused.style_metadata().unwrap(),
+        &[],
+        TuiStyle::new(),
+        &theme,
+    );
+
+    assert_eq!(blurred_style.foreground, Some(Color::White));
+    assert_eq!(blurred_style.background, None);
+    assert_eq!(focused_style.foreground, Some(Color::Black));
+    assert_eq!(focused_style.background, Some(Color::White));
+}
+
 /// Verifies focus selectors match only focused views.
 ///
 /// # Example Under Test
@@ -52,7 +91,7 @@ fn stylesheet_theme_variables_resolve_against_active_theme() {
 /// - Focused button metadata is available for stylesheet resolution.
 /// - Blurred button metadata is available for stylesheet resolution.
 /// - The focused button resolves to a yellow foreground.
-/// - The blurred button resolves with no foreground color.
+/// - The blurred button retains its default white foreground.
 ///
 /// # Why
 ///
@@ -80,7 +119,7 @@ fn stylesheet_focus_selector_matches_only_focused_views() {
     );
 
     assert_eq!(focused_style.foreground, Some(Color::Yellow));
-    assert_eq!(blurred_style.foreground, None);
+    assert_eq!(blurred_style.foreground, Some(Color::White));
 }
 
 /// Verifies descendant selectors match ancestor metadata in source order.
@@ -97,7 +136,7 @@ fn stylesheet_focus_selector_matches_only_focused_views() {
 ///
 /// - The button metadata is available for stylesheet resolution.
 /// - The selector matches when `.app` appears before `.panel`.
-/// - The selector does not match when `.panel` appears before `.app`.
+/// - The reversed ancestor order retains the default button foreground.
 ///
 /// # Why
 ///
@@ -132,5 +171,5 @@ fn descendant_selector_matches_ordered_ancestors() {
     );
 
     assert_eq!(matched.foreground, Some(Color::Yellow));
-    assert_eq!(wrong_order.foreground, None);
+    assert_eq!(wrong_order.foreground, Some(Color::White));
 }

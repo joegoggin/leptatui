@@ -74,6 +74,54 @@ fn focused_button_action_can_exit_app_loop() -> leptatui::app::Result<()> {
     Ok(())
 }
 
+/// Verifies buttons render their built-in blurred and focused colors.
+///
+/// # Example Under Test
+///
+/// ```text
+/// div([button("U"), button("F").with_focus(true)])
+/// ```
+///
+/// # Assertions
+///
+/// - The unfocused button renders white with the terminal background.
+/// - The focused button renders black on white.
+/// - Button borders use the same colors as their labels.
+#[test]
+fn renders_buttons_with_default_focus_colors() -> leptatui::app::Result<()> {
+    let backend = TestBackend::new(12, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let view = div([button("U"), button("F").with_focus(true)])
+        .with_inline_style(TuiStyle::new().display(Display::Flex));
+
+    draw_view(&mut terminal, &view)?;
+
+    let buffer = terminal.backend().buffer();
+    let unfocused_label = buffer
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "U")
+        .expect("rendered unfocused button label");
+    let focused_label = buffer
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "F")
+        .expect("rendered focused button label");
+    let unfocused_border = &buffer[(0, 0)];
+    let focused_border = &buffer[(3, 0)];
+
+    assert_eq!(unfocused_label.fg, Color::White);
+    assert_eq!(unfocused_label.bg, Color::Reset);
+    assert_eq!(unfocused_border.fg, Color::White);
+    assert_eq!(unfocused_border.bg, Color::Reset);
+    assert_eq!(focused_label.fg, Color::Black);
+    assert_eq!(focused_label.bg, Color::White);
+    assert_eq!(focused_border.fg, Color::Black);
+    assert_eq!(focused_border.bg, Color::White);
+
+    Ok(())
+}
+
 /// Verifies focused buttons render with focus stylesheet rules.
 ///
 /// # Example Under Test

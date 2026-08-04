@@ -14,7 +14,7 @@
 ///
 /// - The macro accepts nested rules with `&:focus`.
 /// - The focused button resolves to a yellow foreground under `.panel`.
-/// - The blurred button resolves with no foreground color under `.panel`.
+/// - The blurred button retains its default white foreground under `.panel`.
 ///
 /// # Why
 ///
@@ -48,7 +48,7 @@ fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
     );
 
     assert_eq!(focused_style.foreground, Some(Color::Yellow));
-    assert_eq!(blurred_style.foreground, None);
+    assert_eq!(blurred_style.foreground, Some(Color::White));
 }
 
 /// Verifies stylesheet variables reuse their stored style expressions.
