@@ -1688,8 +1688,10 @@ name = "leptatui"
 version = "0.1.0"
 dependencies = [
  "any_spawner",
+ "anyhow",
  "criterion",
  "crossterm",
+ "futures-util",
  "image",
  "leptatui-macros",
  "leptos",

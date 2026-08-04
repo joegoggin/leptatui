@@ -10,7 +10,7 @@ macros for building interactive terminal applications.
 - `crates/leptatui`: Public runtime crate with app, component, view, context,
   style, and prelude APIs.
 - `crates/leptatui-macros`: Internal proc-macro crate that implements
-  `#[component]`, `view!`, and `stylesheet!`.
+  `#[component]`, `view!`, `view_error!`, and `stylesheet!`.
 - `crates/leptatui/examples`: Runnable examples for the public crate.
 
 Within each crate, domain facades keep public imports stable while substantive
@@ -71,6 +71,36 @@ async fn main() -> leptatui::app::Result<()> {
     App::new(view).run().await
 }
 ```
+
+Components that perform fallible setup can return
+`ViewResult<impl IntoView>`. The component macro permits `?` and automatically
+wraps the final bare view expression in `Ok`. An error replaces the active
+application UI with a standalone full-screen diagnostic and router-aware Back
+and Quit controls:
+
+```rust
+use leptatui::prelude::*;
+
+#[component]
+fn Document() -> ViewResult<impl IntoView> {
+    let source = std::fs::read_to_string("guide.md")?;
+    view! { <Text>{source}</Text> }
+}
+```
+
+Use `view_error!` for an intentional custom diagnostic. Passing only a message
+replaces the underlying failure; the `error => message` form preserves the
+source beneath anyhow context:
+
+```rust
+if let Err(error) = std::fs::read_to_string("settings.toml") {
+    view_error!(error => "Could not load application settings");
+}
+```
+
+The error screen supports Tab/Shift+Tab and Enter/Space, `Esc` or `b` to go
+back, and `q` to quit. While the managed app is active, panic handling restores
+the normal terminal before forwarding the panic to Rust's existing hook.
 
 Signals created in a component body live for that component instance. Provide
 shared signals or services through typed context when descendants need them.
@@ -1144,6 +1174,12 @@ Run the multi-page routing demo:
 
 ```sh
 cargo run --example multi_page_demo
+```
+
+Run the fallible-view and panic-cleanup showcase:
+
+```sh
+cargo run --example error_handling
 ```
 
 Run the standard component showcase:

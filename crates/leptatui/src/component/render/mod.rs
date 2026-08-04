@@ -260,6 +260,29 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         render(&mut child)
     }
 
+    /// Renders with application styles and selector ancestry reset.
+    ///
+    /// The isolated child preserves viewport, layout, painting, and hit-test
+    /// state while preventing surrounding component styles from resolving
+    /// inside the rendered subtree.
+    ///
+    /// # Arguments
+    ///
+    /// * `render` — Closure rendered inside the isolated style context.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
+    pub(crate) fn with_style_isolation<R>(
+        &mut self,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        let area = self.area;
+        let mut child = self.child_context(area, TuiStyle::new(), Vec::new(), Vec::new());
+
+        render(&mut child)
+    }
+
     /// Creates a child render context that reborrows the frame target.
     ///
     /// # Arguments

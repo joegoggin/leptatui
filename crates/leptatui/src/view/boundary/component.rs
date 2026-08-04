@@ -4,7 +4,12 @@
 //! tree while preserving component state and render-scope context between
 //! events.
 
-use std::{any::TypeId, cell::RefCell, fmt, rc::Rc};
+use std::{
+    any::TypeId,
+    cell::RefCell,
+    fmt,
+    rc::{Rc, Weak},
+};
 
 use crossterm::event::{Event, KeyEvent};
 
@@ -28,6 +33,16 @@ pub struct ComponentView {
     inner: Rc<ComponentViewInner>,
 }
 
+/// Weak handle to a mounted component boundary.
+///
+/// The handle lets runner-owned state refer to a screen without extending the
+/// lifetime of the render-tree component that owns it.
+#[derive(Clone)]
+pub(crate) struct WeakComponentView {
+    /// Weak reference to the shared component boundary state.
+    inner: Weak<ComponentViewInner>,
+}
+
 /// Component boundary state shared by cloned views.
 struct ComponentViewInner {
     /// Concrete component type represented by this boundary.
@@ -40,6 +55,8 @@ struct ComponentViewInner {
     factory: RefCell<Option<ComponentFactory>>,
     /// Persistent context scope owned by this component subtree.
     context: ContextScope,
+    /// Whether surrounding styles are excluded from this component subtree.
+    isolate_styles: bool,
 }
 
 impl ComponentView {
@@ -63,7 +80,44 @@ impl ComponentView {
                 component: RefCell::new(Some(Rc::new(RefCell::new(component.into_view())))),
                 factory: RefCell::new(None),
                 context: ContextScope::new(),
+                isolate_styles: false,
             }),
+        }
+    }
+
+    /// Creates a component boundary isolated from surrounding styles.
+    ///
+    /// # Arguments
+    ///
+    /// * `component` — Component value stored behind the isolated boundary.
+    ///
+    /// # Returns
+    ///
+    /// A [`ComponentView`] containing the provided component.
+    pub(crate) fn new_style_isolated<C>(component: C) -> Self
+    where
+        C: View + 'static,
+    {
+        Self {
+            inner: Rc::new(ComponentViewInner {
+                component_type: TypeId::of::<C>(),
+                preserve_on_reconcile: false,
+                component: RefCell::new(Some(Rc::new(RefCell::new(component.into_view())))),
+                factory: RefCell::new(None),
+                context: ContextScope::new(),
+                isolate_styles: true,
+            }),
+        }
+    }
+
+    /// Returns a weak handle to this mounted component boundary.
+    ///
+    /// # Returns
+    ///
+    /// A [`WeakComponentView`] that does not keep this component mounted.
+    pub(crate) fn downgrade(&self) -> WeakComponentView {
+        WeakComponentView {
+            inner: Rc::downgrade(&self.inner),
         }
     }
 
@@ -84,6 +138,7 @@ impl ComponentView {
                     Rc::new(RefCell::new(factory().into_view()))
                 }))),
                 context: ContextScope::new(),
+                isolate_styles: false,
             }),
         }
     }
@@ -103,7 +158,9 @@ impl ComponentView {
     /// Returns [`crate::app::Error::Io`] if the component render path performs
     /// terminal I/O that fails.
     pub(crate) fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
-        self.with_reset_component(|component| component.render(ctx))
+        self.with_reset_component(|component| {
+            self.with_style_scope(ctx, |ctx| component.render(ctx))
+        })
     }
 
     /// Returns intrinsic geometry inside this component boundary.
@@ -124,9 +181,11 @@ impl ComponentView {
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
         self.with_reset_component(|component| {
-            component
-                .as_view()
-                .measure(known_dimensions, available_space, ctx)
+            self.with_style_scope(ctx, |ctx| {
+                component
+                    .as_view()
+                    .measure(known_dimensions, available_space, ctx)
+            })
         })
     }
 
@@ -213,7 +272,9 @@ impl ComponentView {
     /// Returns the focused control's vertical span inside this component boundary.
     #[doc(hidden)]
     pub(crate) fn focused_control_span(&self, ctx: &mut RenderCtx<'_, '_>) -> Option<(u32, u32)> {
-        self.with_component(|component| component.__focused_button_span(ctx))
+        self.with_component(|component| {
+            self.with_style_scope(ctx, |ctx| component.__focused_button_span(ctx))
+        })
     }
 
     /// Activates the focused control inside the component boundary, if any.
@@ -398,6 +459,28 @@ impl ComponentView {
         })
     }
 
+    /// Runs a render-context operation with this boundary's style policy.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` — Parent rendering context supplied to this boundary.
+    /// * `render` — Operation to run with inherited or isolated styles.
+    ///
+    /// # Returns
+    ///
+    /// An `R` value returned by `render`.
+    fn with_style_scope<'buffer, R>(
+        &self,
+        ctx: &mut RenderCtx<'_, 'buffer>,
+        render: impl FnOnce(&mut RenderCtx<'_, 'buffer>) -> R,
+    ) -> R {
+        if self.inner.isolate_styles {
+            ctx.with_style_isolation(render)
+        } else {
+            render(ctx)
+        }
+    }
+
     /// Returns the shared mutable component, materializing lazy boundaries once.
     fn component(&self) -> SharedComponent {
         if let Some(component) = self.inner.component.borrow().as_ref() {
@@ -414,6 +497,17 @@ impl ComponentView {
 
         *self.inner.component.borrow_mut() = Some(component.clone());
         component
+    }
+}
+
+impl WeakComponentView {
+    /// Returns the mounted component when it is still alive.
+    ///
+    /// # Returns
+    ///
+    /// An optional [`ComponentView`] sharing the mounted component state.
+    pub(crate) fn upgrade(&self) -> Option<ComponentView> {
+        self.inner.upgrade().map(|inner| ComponentView { inner })
     }
 }
 
@@ -465,7 +559,9 @@ impl View for ComponentView {
         ctx: &mut RenderCtx<'_, '_>,
         visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
     ) {
-        self.with_reset_component(|component| visitor(component, ctx));
+        self.with_reset_component(|component| {
+            self.with_style_scope(ctx, |ctx| visitor(component, ctx));
+        });
     }
 
     fn __visit_retained_children(
@@ -473,7 +569,9 @@ impl View for ComponentView {
         ctx: &mut RenderCtx<'_, '_>,
         visitor: &mut dyn FnMut(&AnyView, &mut RenderCtx<'_, '_>),
     ) {
-        self.with_component(|component| visitor(component, ctx));
+        self.with_component(|component| {
+            self.with_style_scope(ctx, |ctx| visitor(component, ctx));
+        });
     }
 
     fn __is_layout_transparent(&self) -> bool {

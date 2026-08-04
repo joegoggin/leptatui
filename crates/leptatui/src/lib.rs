@@ -39,6 +39,25 @@
 //! }
 //! ```
 //!
+//! Component setup that can fail returns [`ViewResult<impl IntoView>`]. The
+//! [`macro@component`] supports `?` and automatically wraps the final bare
+//! view expression. [`view_error!`] returns an intentional custom error, with
+//! an optional source-preserving form:
+//!
+//! ```
+//! use leptatui::prelude::*;
+//!
+//! #[component]
+//! fn Fallible() -> ViewResult<impl IntoView> {
+//!     let result: std::io::Result<()> = Ok(());
+//!     if let Err(error) = result {
+//!         view_error!(error => "failed to prepare the view");
+//!     }
+//!     view! { <Text>"Ready"</Text> }
+//! }
+//! # let _ = Fallible::new();
+//! ```
+//!
 //! Component bodies own their local signals and can provide shared signals or
 //! services through typed context. [`use_app_handle`] returns the scoped
 //! [`AppHandle`] when a component needs to queue synchronous work that must run
@@ -261,6 +280,7 @@ mod terminal_image;
 extern crate self as leptatui;
 
 pub use action::Action;
+pub use anyhow::Error as ViewError;
 pub use app::{App, AppControl, AppHandle, AppRoot, Error, Result, use_app_handle};
 pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, use_key_event};
 pub use executor::{spawn, spawn_local};
@@ -295,6 +315,49 @@ pub use view::{
     text, text_area, unordered_list,
 };
 
+/// Result type returned by fallible component setup functions.
+///
+/// [`ViewResult`] uses [`ViewError`] so component bodies can propagate any
+/// thread-safe standard error with the `?` operator. The [`macro@component`]
+/// converts an error into Leptatui's default interactive error screen.
+pub type ViewResult<T> = std::result::Result<T, ViewError>;
+
+/// Returns a custom error from a fallible component.
+///
+/// The one-part form creates a new [`ViewError`] from a formatted message. The
+/// source-preserving form converts its first expression into a [`ViewError`]
+/// and attaches the formatted message as context.
+///
+/// ```
+/// use leptatui::prelude::*;
+///
+/// # fn load() -> std::io::Result<()> { Ok(()) }
+/// #[component]
+/// fn Example() -> ViewResult<impl IntoView> {
+///     if let Err(error) = load() {
+///         view_error!(error => "failed to load the example");
+///     }
+///
+///     view! { <Text>"Loaded"</Text> }
+/// }
+/// # let _ = Example::new();
+/// ```
+#[macro_export]
+macro_rules! view_error {
+    ($source:expr => $($message:tt)+) => {{
+        let __leptatui_error: $crate::ViewError =
+            ::core::convert::Into::into($source);
+        return ::core::result::Result::Err(
+            __leptatui_error.context(::std::format!($($message)+)),
+        );
+    }};
+    ($($message:tt)+) => {{
+        return ::core::result::Result::Err(
+            $crate::ViewError::msg(::std::format!($($message)+)),
+        );
+    }};
+}
+
 #[doc(hidden)]
 /// Hidden implementation details used by generated macro code.
 pub mod __private {
@@ -308,6 +371,7 @@ pub mod __private {
         __with_component_setup_context, __with_context_scope, __with_context_scope_if_missing,
     };
     pub use crate::route::{__outlet, __route_definition, __routes};
+    pub use crate::view::error::__view_error;
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};
 
     /// Creates a component view from a generated component factory.

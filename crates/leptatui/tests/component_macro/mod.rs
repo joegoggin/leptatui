@@ -18,7 +18,7 @@ use crossterm::event::{
 };
 use leptatui::context::provide_context;
 use leptatui::{
-    AnyView, AppControl, Children, Color, Display, FlexDirection, IntoView, KeyControl,
+    AnyView, AppControl, Borders, Children, Color, Display, FlexDirection, IntoView, KeyControl,
     NavigateOptions, RenderCtx, Router, RouterProps, ThemeVariables, TuiStyle, View, button,
     component, div, dynamic, stylesheet, text, theme_color, use_key_event, view,
 };
@@ -28,6 +28,7 @@ use ratatui::{Terminal, backend::TestBackend};
 use crate::support::{key, render_component, rendered_lines, rendered_text};
 
 include!("context/mod.rs");
+include!("error_handling/mod.rs");
 include!("input/mod.rs");
 include!("key_events/mod.rs");
 include!("lifecycle/mod.rs");

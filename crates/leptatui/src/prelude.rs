@@ -44,8 +44,8 @@ pub use crate::{
     RouterProps, StyleDeclarations, StyleMetadata, StyleModule, StyleRule, StyleSelector,
     StyleValue, StyledView, Stylesheet, SyntaxTheme, TableCellView, TableRowView, TableSectionKind,
     TableSectionView, TableView, TextAreaView, TextView, TextualView, ThemeValue, ThemeVariables,
-    TuiSize, TuiSpacing, TuiStyle, View, ViewType, ViewportSize, VimMode, ZIndex, block, button,
-    code_block,
+    TuiSize, TuiSpacing, TuiStyle, View, ViewError, ViewResult, ViewType, ViewportSize, VimMode,
+    ZIndex, block, button, code_block,
     context::{expect_context, provide_context, use_context},
     div, form, h1, h2, h3, h4, h5, h6, image, input, keyed, link, list_item, markdown,
     markdown_file, markdown_file_with_options, markdown_with_options, ordered_list, paragraph,
@@ -53,6 +53,7 @@ pub use crate::{
     table_row, text, text_area, theme_color, unordered_list, use_app_handle, use_history,
     use_key_event, use_location, use_navigate, use_params_map, use_query_map,
     view::{component, dynamic},
+    view_error,
 };
 
 pub use leptatui_macros::{component, stylesheet, view};

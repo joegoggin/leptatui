@@ -10,6 +10,7 @@
 //! - `content` — Text, paragraph, heading, and code views.
 //! - `controls` — Interactive form and input views.
 //! - `core` — Shared view contracts, conversion, metadata, and rendering.
+//! - `error` — Default interactive screen for fallible component errors.
 //! - `media` — Terminal image views.
 //! - `reconciliation` — Retained view-tree state reconciliation.
 
@@ -18,11 +19,12 @@ pub(crate) mod containers;
 pub(crate) mod content;
 pub(crate) mod controls;
 pub(crate) mod core;
+pub(crate) mod error;
 mod link;
 pub(crate) mod media;
 mod reconciliation;
 
-pub(crate) use boundary::component::{ComponentView, component_factory};
+pub(crate) use boundary::component::{ComponentView, WeakComponentView, component_factory};
 pub use boundary::{
     component::component,
     dynamic::{DynamicView, dynamic, keyed},

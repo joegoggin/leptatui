@@ -7,9 +7,15 @@ use std::io::stdout;
 
 use crossterm::{cursor::SetCursorStyle, execute};
 
-use crate::{component::FocusedControl, context, terminal_image::TerminalImageSupport};
+use crate::{
+    View,
+    component::{FocusedControl, RenderCtx},
+    context,
+    terminal_image::TerminalImageSupport,
+    view::{ComponentView, core::layout::render_with_layout},
+};
 
-use super::{AppHandle, AppRoot, Result, terminal::DefaultTerminal};
+use super::{AppHandle, AppRoot, ErrorScreenRegistry, Result, terminal::DefaultTerminal};
 
 /// Draws a root application into the terminal.
 ///
@@ -19,6 +25,7 @@ use super::{AppHandle, AppRoot, Result, terminal::DefaultTerminal};
 /// * `terminal` — Ratatui terminal backend receiving the draw call.
 /// * `terminal_images` — Terminal image support detected for the session.
 /// * `app_handle` — Runtime handle provided to managed components.
+/// * `error_screens` — Runner registry for standalone error screens.
 ///
 /// # Returns
 ///
@@ -33,6 +40,7 @@ pub(super) fn draw_root<R>(
     terminal: &mut DefaultTerminal,
     terminal_images: &TerminalImageSupport,
     app_handle: &AppHandle,
+    error_screens: &ErrorScreenRegistry,
 ) -> Result<()>
 where
     R: AppRoot,
@@ -44,8 +52,23 @@ where
         context::hooks::__with_context_scope(|| {
             context::provide_context(terminal_images.clone());
             context::provide_context(app_handle.clone());
+            context::provide_context(error_screens.clone());
+
+            if let Some(screen) = error_screens.active() {
+                render_result = render_error_screen(&screen, frame);
+                focused_control = screen.focused_control();
+                return;
+            }
+
             render_result = root.render(frame);
-            focused_control = root.__focused_control();
+            if render_result.is_ok()
+                && let Some(screen) = error_screens.active()
+            {
+                render_result = render_error_screen(&screen, frame);
+                focused_control = screen.focused_control();
+            } else {
+                focused_control = root.__focused_control();
+            }
         });
     })?;
 
@@ -53,6 +76,26 @@ where
     execute!(stdout(), cursor_style_for_focused_control(focused_control))?;
 
     Ok(())
+}
+
+/// Renders one registered error screen as the complete frame root.
+///
+/// # Arguments
+///
+/// * `screen` — Active error-screen component boundary.
+/// * `frame` — Ratatui frame receiving the standalone screen.
+///
+/// # Returns
+///
+/// An empty [`Result`] after the screen renders successfully.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::Io`] if error-screen rendering performs terminal
+/// I/O that fails.
+fn render_error_screen(screen: &ComponentView, frame: &mut ratatui::Frame<'_>) -> Result<()> {
+    let mut ctx = RenderCtx::new(frame);
+    render_with_layout(screen, &mut ctx, |ctx| View::render(screen, ctx))
 }
 
 /// Returns the terminal cursor style for the focused built-in control.

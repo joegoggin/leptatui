@@ -17,6 +17,7 @@
 
 mod control;
 mod error;
+mod error_screen;
 mod event;
 mod handle;
 mod render;
@@ -26,11 +27,14 @@ mod wakeup;
 
 use std::time::Duration;
 
+use futures_util::FutureExt;
+
 use crate::executor::init_tokio_executor;
-use crate::{AnyView, IntoView};
+use crate::{AnyView, IntoView, View};
 
 pub use control::AppControl;
 pub use error::{Error, Result};
+pub(crate) use error_screen::ErrorScreenRegistry;
 pub use handle::{AppHandle, use_app_handle};
 pub use root::AppRoot;
 #[cfg(test)]
@@ -51,6 +55,8 @@ pub struct App<R> {
     root: R,
     /// Component-facing runtime handle scoped to this runner.
     handle: AppHandle,
+    /// Active standalone error screen scoped to this runner.
+    error_screens: ErrorScreenRegistry,
     /// Polling timeout that also controls idle redraw cadence.
     redraw_interval: Duration,
 }
@@ -69,6 +75,7 @@ impl App<AnyView> {
         Self {
             root: root.into_view(),
             handle: AppHandle::new(),
+            error_screens: ErrorScreenRegistry::new(),
             redraw_interval: DEFAULT_REDRAW_INTERVAL,
         }
     }
@@ -88,6 +95,7 @@ impl<R> App<R> {
         Self {
             root,
             handle: AppHandle::new(),
+            error_screens: ErrorScreenRegistry::new(),
             redraw_interval: DEFAULT_REDRAW_INTERVAL,
         }
     }
@@ -120,6 +128,41 @@ impl<R> App<R>
 where
     R: AppRoot,
 {
+    /// Dispatches an event to the active error screen or ordinary app root.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — Crossterm event emitted by the terminal.
+    ///
+    /// # Returns
+    ///
+    /// An [`AppControl`] value indicating whether the app should exit.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if event handling performs terminal I/O that
+    /// fails. Returns [`Error::LinkOpen`] if an activated link cannot open.
+    fn handle_active_event(&mut self, event: crossterm::event::Event) -> Result<AppControl> {
+        if let Some(mut screen) = self.error_screens.active() {
+            View::handle_event(&mut screen, event)
+        } else {
+            self.root.handle_event(event)
+        }
+    }
+
+    /// Flushes pending input from the active error screen or ordinary root.
+    ///
+    /// # Returns
+    ///
+    /// An optional [`AppControl`] emitted by pending input handling.
+    fn flush_active_input(&mut self) -> Option<AppControl> {
+        if let Some(mut screen) = self.error_screens.active() {
+            View::__flush_pending_input(&mut screen)
+        } else {
+            self.root.__flush_pending_input()
+        }
+    }
+
     /// Runs the app until the root requests exit or a runtime error occurs.
     ///
     /// # Returns
@@ -150,9 +193,21 @@ where
     /// cleanup, event polling, or link activation fails.
     async fn run_managed(&mut self) -> Result<()> {
         let mut session = TerminalSession::enter()?;
+        let panic_hook = session.install_panic_hook();
 
-        let loop_result = self.run_loop(&mut session).await;
+        let loop_result = std::panic::AssertUnwindSafe(self.run_loop(&mut session))
+            .catch_unwind()
+            .await;
         let restore_result = session.restore();
+        drop(panic_hook);
+
+        let loop_result = match loop_result {
+            Ok(result) => result,
+            Err(panic) => {
+                let _ = restore_result;
+                std::panic::resume_unwind(panic);
+            }
+        };
 
         loop_result?;
         restore_result?;
@@ -188,6 +243,7 @@ where
                     &mut session.terminal,
                     &session.terminal_images,
                     &self.handle,
+                    &self.error_screens,
                 )?;
                 should_draw = false;
             }
@@ -196,14 +252,14 @@ where
                 events = &mut event_poll => {
                     let events = events?;
                     if events.is_empty() {
-                        if let Some(control) = self.root.__flush_pending_input()
+                        if let Some(control) = self.flush_active_input()
                             && control == AppControl::Exit
                         {
                             break;
                         }
                     } else {
                         for event in events {
-                            if self.root.handle_event(event)? == AppControl::Exit {
+                            if self.handle_active_event(event)? == AppControl::Exit {
                                 break 'app;
                             }
 
@@ -294,11 +350,66 @@ where
 #[cfg(test)]
 /// Unit tests for component-requested runtime transitions.
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+    };
 
-    use crate::text;
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::Frame;
+
+    use crate::{button, text, view::ComponentView};
 
     use super::*;
+
+    /// App root that records every event dispatched to the ordinary screen.
+    struct EventCountingRoot {
+        /// Shared number of events received by this root.
+        event_count: Rc<Cell<usize>>,
+    }
+
+    impl AppRoot for EventCountingRoot {
+        /// Leaves the test frame unchanged.
+        ///
+        /// # Arguments
+        ///
+        /// * `_frame` — Unused Ratatui frame supplied by the app root contract.
+        ///
+        /// # Returns
+        ///
+        /// An empty [`Result`] for the render-only test root.
+        fn render(&mut self, _frame: &mut Frame<'_>) -> Result<()> {
+            Ok(())
+        }
+
+        /// Records one event dispatched to the ordinary app root.
+        ///
+        /// # Arguments
+        ///
+        /// * `_event` — Event counted by the test root.
+        ///
+        /// # Returns
+        ///
+        /// An [`AppControl::Continue`] value after recording the event.
+        fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
+            self.event_count
+                .set(self.event_count.get().saturating_add(1));
+            Ok(AppControl::Continue)
+        }
+    }
+
+    /// Creates a plain key-press event for app dispatch tests.
+    ///
+    /// # Arguments
+    ///
+    /// * `code` — Key code placed in the event.
+    ///
+    /// # Returns
+    ///
+    /// An [`Event`] containing the requested key press.
+    fn key(code: KeyCode) -> Event {
+        Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+    }
 
     /// Verifies terminal suspension surrounds queued component work.
     ///
@@ -383,5 +494,50 @@ mod tests {
 
         assert!(!executed);
         assert_eq!(*transitions.borrow(), 0);
+    }
+
+    /// Verifies an active error screen exclusively owns app event dispatch.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// ordinary root + active focused Exit button
+    /// Enter -> error screen
+    /// dismiss
+    /// Enter -> ordinary root
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Enter activates the error-screen button and requests app exit.
+    /// - The mounted ordinary root receives no event while the screen is active.
+    /// - The same ordinary root receives events again after dismissal.
+    #[test]
+    fn active_error_screen_exclusively_handles_events_and_preserves_root() {
+        let event_count = Rc::new(Cell::new(0));
+        let mut app = App::from_root(EventCountingRoot {
+            event_count: event_count.clone(),
+        });
+        let screen = ComponentView::new(
+            button("Quit")
+                .on_press(|| AppControl::Exit)
+                .with_focus(true),
+        );
+        app.error_screens.register(&screen);
+
+        assert_eq!(
+            app.handle_active_event(key(KeyCode::Enter))
+                .expect("error-screen event dispatch should succeed"),
+            AppControl::Exit,
+        );
+        assert_eq!(event_count.get(), 0);
+
+        app.error_screens.dismiss();
+        assert_eq!(
+            app.handle_active_event(key(KeyCode::Enter))
+                .expect("ordinary root event dispatch should succeed"),
+            AppControl::Continue,
+        );
+        assert_eq!(event_count.get(), 1);
     }
 }

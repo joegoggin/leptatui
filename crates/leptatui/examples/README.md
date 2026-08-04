@@ -273,6 +273,21 @@ their labels and are keyboard navigable. Local targets resolve relative to the
 source file's directory. Images render as descriptive text, and neither local
 nor remote image targets are fetched.
 
+## Error Handling
+
+Run the fallible component and panic-cleanup showcase:
+
+```sh
+cargo run --example error_handling
+```
+
+Use `e` to propagate the real I/O error produced by reading the intentionally
+absent `examples/demo-data.json` file, `c` for a replacement `view_error!`
+message, and `s` for a source-preserving contextual error. On the error screen,
+use `Esc` or `b` to return to the previous route and `q` to quit. Use `p` to
+open the panic page, then activate its button to verify that the normal terminal
+is restored before Rust prints the panic diagnostic. Press `h` to return Home.
+
 ## Theme Switcher
 
 Run the context-backed light/dark theme example:

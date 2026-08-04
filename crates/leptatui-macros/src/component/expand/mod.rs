@@ -14,7 +14,7 @@ mod props;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{ItemFn, Stmt};
+use syn::{Error, ItemFn, Stmt};
 
 use super::signature;
 
@@ -38,6 +38,7 @@ use self::{
 /// Returns [`syn::Error`] if the function signature is unsupported.
 pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
     let props = signature::analyze(&input_fn.sig)?;
+    let fallible_error = signature::fallible_error(&input_fn.sig);
 
     let attrs = input_fn.attrs;
     let vis = input_fn.vis;
@@ -61,7 +62,18 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
     let props_api = expand_props_api(&vis, &ident, &props);
     let constructors = expand_constructors(&vis, &ident, &props);
-    let setup_fn = expand_setup_fn(&ident, &props, quote! { #body }, &leptatui);
+    let setup_body = if fallible_error.is_some() {
+        expand_fallible_body(&mut body.stmts, &leptatui)?
+    } else {
+        quote! { #body }
+    };
+    let setup_fn = expand_setup_fn(
+        &ident,
+        &props,
+        setup_body,
+        fallible_error.as_ref(),
+        &leptatui,
+    );
     let default_impl = expand_default_impl(&ident, &props);
 
     Ok(quote! {
@@ -505,4 +517,49 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
         }
     })
+}
+
+/// Wraps a fallible component's final view expression in `Result::Ok`.
+///
+/// # Arguments
+///
+/// * `statements` — Parsed statements from the original component body.
+/// * `leptatui` — Resolved path to the public runtime crate.
+///
+/// # Returns
+///
+/// A [`TokenStream`] containing the transformed fallible setup body.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the component has no final bare expression.
+fn expand_fallible_body(
+    statements: &mut Vec<Stmt>,
+    leptatui: &TokenStream,
+) -> syn::Result<TokenStream> {
+    let Some(tail) = statements.pop() else {
+        return Err(Error::new(
+            proc_macro2::Span::call_site(),
+            "fallible #[component] functions must end with a view expression",
+        ));
+    };
+
+    let view = match tail {
+        Stmt::Expr(expression, None) => quote! { #expression },
+        Stmt::Macro(statement) if statement.semi_token.is_none() => {
+            let invocation = statement.mac;
+            quote! { #invocation }
+        }
+        statement => {
+            return Err(Error::new_spanned(
+                statement,
+                "fallible #[component] functions must end with a bare view expression",
+            ));
+        }
+    };
+
+    Ok(quote! {{
+        #(#statements)*
+        ::core::result::Result::Ok(#leptatui::IntoView::into_view(#view))
+    }})
 }

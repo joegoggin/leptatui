@@ -6,9 +6,17 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    Attribute, Error, Expr, FnArg, Ident, Pat, PatType, ReturnType, Signature, Type,
-    parse::ParseStream,
+    Attribute, Error, Expr, FnArg, GenericArgument, Ident, Pat, PatType, PathArguments, ReturnType,
+    Signature, Type, parse::ParseStream,
 };
+
+/// Error type emitted by a supported fallible component signature.
+pub(super) enum FallibleError {
+    /// Leptatui's type-erased [`ViewResult`](leptatui::ViewResult) error.
+    ViewError,
+    /// Explicit error type from a two-parameter [`Result`](std::result::Result).
+    Explicit(Box<Type>),
+}
 
 /// Metadata extracted from a supported component prop parameter.
 pub(super) struct Prop {
@@ -117,6 +125,46 @@ pub(super) fn analyze(sig: &Signature) -> syn::Result<Vec<Prop>> {
     }
 
     sig.inputs.iter().map(parse_prop).collect()
+}
+
+/// Returns the error model declared by a fallible component signature.
+///
+/// # Arguments
+///
+/// * `sig` — Component function signature to inspect.
+///
+/// # Returns
+///
+/// An optional [`FallibleError`] for `ViewResult<T>` and `Result<T, E>`
+/// return types.
+pub(super) fn fallible_error(sig: &Signature) -> Option<FallibleError> {
+    let ReturnType::Type(_, ty) = &sig.output else {
+        return None;
+    };
+    let Type::Path(type_path) = ty.as_ref() else {
+        return None;
+    };
+    let segment = type_path.path.segments.last()?;
+    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return None;
+    };
+    let types = arguments
+        .args
+        .iter()
+        .filter_map(|argument| match argument {
+            GenericArgument::Type(ty) => Some(ty),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    if segment.ident == "ViewResult" && types.len() == 1 {
+        return Some(FallibleError::ViewError);
+    }
+    if segment.ident == "Result" && types.len() == 2 {
+        return Some(FallibleError::Explicit(Box::new(types[1].clone())));
+    }
+
+    None
 }
 
 /// Parses one function parameter as a component prop.

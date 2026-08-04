@@ -4,8 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+anyhow = "1.0.102"
 any_spawner = { version = "0.3.0", features = ["tokio"] }
 crossterm = "0.29.0"
+futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
 image = { version = "0.25.10", default-features = false }
 leptatui-macros = { path = "../leptatui-macros" }
 leptos = { version = "0.9.0-alpha", default-features = false, features = [

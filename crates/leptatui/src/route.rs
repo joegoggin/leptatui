@@ -109,6 +109,15 @@ impl History {
     /// A [`bool`] indicating whether [`back`](Self::back) can move.
     pub fn can_go_back(&self) -> bool {
         self.router.revision.get();
+        self.can_go_back_untracked()
+    }
+
+    /// Returns whether a previous history entry exists without tracking.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether [`back`](Self::back) can move.
+    pub(crate) fn can_go_back_untracked(&self) -> bool {
         self.router
             .history
             .lock()
@@ -529,6 +538,15 @@ pub fn use_history() -> History {
     History {
         router: use_router(),
     }
+}
+
+/// Returns in-memory history controls when a router exists in context.
+///
+/// # Returns
+///
+/// An optional [`History`] value for the nearest router.
+pub(crate) fn try_use_history() -> Option<History> {
+    crate::context::use_context::<RouterContext>().map(|router| History { router })
 }
 
 /// Returns the nearest router context.
