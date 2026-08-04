@@ -13,7 +13,7 @@ use crate::view::{
         measurement::{AvailableSpace, measure_rich_text},
         render::{resolve_style, semantic_paragraph},
     },
-    link::open_link_target,
+    link::{activate_link_target, sync_visited},
 };
 
 /// Focusable standalone link view.
@@ -71,6 +71,7 @@ pub(crate) fn link_with_base(
 
 impl View for LinkView {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+        sync_visited(&self.metadata, &self.target);
         let style = resolve_style(&self.metadata, ctx);
         if let Some(geometry) = ctx.active_layout_geometry(&self.metadata) {
             ctx.with_area(geometry.border_box, |ctx| {
@@ -93,6 +94,7 @@ impl View for LinkView {
         available_space: LayoutSize<AvailableSpace>,
         ctx: &mut RenderCtx<'_, '_>,
     ) -> LayoutSize<f32> {
+        sync_visited(&self.metadata, &self.target);
         let style = resolve_style(&self.metadata, ctx);
         measure_rich_text(self.label.text(), style, known_dimensions, available_space)
     }
@@ -170,7 +172,8 @@ impl View for LinkView {
 
     fn __activate_focused_button(&self) -> Result<Option<AppControl>> {
         if self.metadata.is_focused() && self.target.is_actionable() {
-            return open_link_target(&self.target).map(Some);
+            let control = activate_link_target(&self.metadata, &self.target)?;
+            return Ok(Some(control));
         }
         Ok(None)
     }

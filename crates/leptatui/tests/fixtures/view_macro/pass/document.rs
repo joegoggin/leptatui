@@ -26,7 +26,6 @@ fn main() {
                 id={markdown_id}
                 style={markdown_style.clone()}
                 line_numbers=true
-                syntax_theme={SyntaxTheme::Light}
             />
             <OrderedList start=3>
                 <ListItem>
@@ -53,7 +52,6 @@ fn main() {
             <CodeBlock
                 language="rust"
                 line_numbers=true
-                syntax_theme={SyntaxTheme::Light}
             >{source.clone()}</CodeBlock>
         </Div>
     };
@@ -71,9 +69,7 @@ fn main() {
         paragraph(String::from("Semantic content")),
         markdown_file_with_options(
             markdown_path,
-            MarkdownOptions::default()
-                .syntax_theme(SyntaxTheme::Light)
-                .line_numbers(true),
+            MarkdownOptions::default().line_numbers(true),
         )
             .with_classes("markdown guide")
             .with_id("markdown-guide")
@@ -95,8 +91,7 @@ fn main() {
         ]),
         code_block(source)
             .language("rust")
-            .line_numbers(true)
-            .syntax_theme(SyntaxTheme::Light),
+            .line_numbers(true),
     ));
 
     assert_eq!(view, expected);

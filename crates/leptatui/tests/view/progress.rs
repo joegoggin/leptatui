@@ -124,6 +124,7 @@ fn progress_bar_clamps_values_before_rendering() -> leptatui::app::Result<()> {
 ///
 /// - The terminal draw call succeeds.
 /// - The caller-provided label appears in the rendered buffer.
+/// - The gauge uses the built-in light-green-on-dark-gray palette.
 #[test]
 fn progress_bar_renders_optional_label() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(20, 1);
@@ -133,6 +134,7 @@ fn progress_bar_renders_optional_label() -> leptatui::app::Result<()> {
     draw_view(&mut terminal, &view)?;
 
     assert!(rendered_text(&terminal).contains("Uploading"));
+    assert_eq!(cell_colors(&terminal, 0, 0, 20), (Color::LightGreen, Color::DarkGray));
 
     Ok(())
 }

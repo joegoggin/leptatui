@@ -124,6 +124,25 @@ Advance or Reset to update progress, and press `q` to quit. The `Image` view
 renders terminal graphics automatically when the terminal supports them and
 otherwise displays deterministic fallback text.
 
+## Default Styles Showcase
+
+Run the complete default-style review app:
+
+```sh
+cargo run --example default_styles_showcase
+```
+
+The showcase places every visible built-in view except `Markdown` on one
+scrollable page. Its stylesheet controls layout and sizing only, leaving each
+view's default colors, borders, modifiers, focus state, active route state, and
+editing-mode state unchanged. Use Tab and Shift+Tab to move focus, press `i` on
+an input or text area to inspect the yellow insert state, press `v` or `V` to
+inspect the magenta visual states, and press Esc to return to normal mode.
+Activate either router anchor to switch the active style, use the buttons to
+update the progress bar, and activate the standalone blue link to inspect its
+magenta visited state. Scroll with the keyboard or mouse wheel, and press `q` to
+quit.
+
 ## Document Showcase
 
 Run the semantic document component showcase:
@@ -163,7 +182,6 @@ let document = div((
     ]),
     code_block("fn main() {}")
         .language("rust")
-        .syntax_theme(SyntaxTheme::Dark)
         .line_numbers(true),
 ));
 ```
@@ -193,7 +211,6 @@ let document = view! {
         </OrderedList>
         <CodeBlock
             language="rust"
-            syntax_theme={SyntaxTheme::Dark}
             line_numbers=true
         >"fn main() {}"</CodeBlock>
     </Div>
@@ -201,8 +218,10 @@ let document = view! {
 ```
 
 All document content, including code, wraps to the terminal width instead of
-scrolling horizontally. Unknown code languages render as plain source text,
-and table cells contain inline text rather than nested block views in v1.
+scrolling horizontally. Syntax highlighting uses the terminal's ANSI palette
+with `DarkGray` as its background, unknown code languages render as plain
+source text, and table cells contain inline text rather than nested block views
+in v1.
 
 ## Markdown Reader
 
@@ -246,9 +265,7 @@ let source = "# Reader\n\n```rust\nfn main() {}\n```";
 let default_document = markdown(source);
 let configured_document = markdown_with_options(
     source,
-    MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Dark)
-        .line_numbers(true),
+    MarkdownOptions::default().line_numbers(true),
 );
 ```
 
@@ -260,10 +277,10 @@ use leptatui::prelude::*;
 let default_file = markdown_file("README.md");
 let configured_file = markdown_file_with_options(
     "README.md",
-    MarkdownOptions::default().syntax_theme(SyntaxTheme::Light),
+    MarkdownOptions::default().line_numbers(true),
 );
 let tagged_file = view! {
-    <Markdown src="README.md" syntax_theme={SyntaxTheme::Dark} line_numbers=true />
+    <Markdown src="README.md" line_numbers=true />
 };
 ```
 

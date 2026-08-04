@@ -54,7 +54,7 @@ fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> leptatui::app::Re
     draw_view(&mut terminal, &view)?;
 
     assert_eq!(scroll_offset(&view), 2);
-    terminal.backend_mut().assert_cursor_position((1, 4));
+    terminal.backend_mut().assert_cursor_position((2, 4));
 
     Ok(())
 }

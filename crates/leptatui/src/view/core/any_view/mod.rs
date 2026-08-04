@@ -186,6 +186,70 @@ impl AnyView {
         self
     }
 
+    /// Sets active state when the stored node is styleable.
+    ///
+    /// # Arguments
+    ///
+    /// * `active` — Whether this view should match the active selector.
+    ///
+    /// # Returns
+    ///
+    /// This type-erased view after applying the active state when possible.
+    pub fn with_active(mut self, active: bool) -> Self {
+        if let Some(metadata) = self.style_metadata_mut() {
+            metadata.set_active(active);
+        }
+        self
+    }
+
+    /// Sets insert state when the stored node is styleable.
+    ///
+    /// # Arguments
+    ///
+    /// * `insert` — Whether this view should match the insert selector.
+    ///
+    /// # Returns
+    ///
+    /// This type-erased view after applying the insert state when possible.
+    pub fn with_insert(mut self, insert: bool) -> Self {
+        if let Some(metadata) = self.style_metadata_mut() {
+            metadata.set_insert(insert);
+        }
+        self
+    }
+
+    /// Sets visual state when the stored node is styleable.
+    ///
+    /// # Arguments
+    ///
+    /// * `visual` — Whether this view should match the visual selector.
+    ///
+    /// # Returns
+    ///
+    /// This type-erased view after applying the visual state when possible.
+    pub fn with_visual(mut self, visual: bool) -> Self {
+        if let Some(metadata) = self.style_metadata_mut() {
+            metadata.set_visual(visual);
+        }
+        self
+    }
+
+    /// Sets visited state when the stored node is styleable.
+    ///
+    /// # Arguments
+    ///
+    /// * `visited` — Whether this view should match the visited selector.
+    ///
+    /// # Returns
+    ///
+    /// This type-erased view after applying the visited state when possible.
+    pub fn with_visited(mut self, visited: bool) -> Self {
+        if let Some(metadata) = self.style_metadata_mut() {
+            metadata.set_visited(visited);
+        }
+        self
+    }
+
     /// Returns direct children of the stored node.
     ///
     /// # Returns

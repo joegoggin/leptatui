@@ -4,10 +4,11 @@
 //! documents and verify both semantic view construction and stable fragments of
 //! terminal-buffer output.
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use leptatui::{
-    AnyView, AvailableSpace, Borders, CellAlignment, CodeBlockView, DivView, IntoView, IntoViews,
-    LayoutSize, MarkdownOptions, Modifier, RenderCtx, SyntaxTheme, TuiSpacing, TuiStyle, View,
-    block, code_block, div, h1, h2, h3, h4, h5, h6, list_item, markdown, markdown_with_options,
+    AnyView, AvailableSpace, Borders, CellAlignment, CodeBlockView, Color, DivView, IntoView,
+    IntoViews, LayoutSize, MarkdownOptions, Modifier, RenderCtx, TuiSpacing, TuiStyle, View, block,
+    code_block, div, h1, h2, h3, h4, h5, h6, list_item, markdown, markdown_with_options,
     ordered_list, paragraph, table, table_body, table_cell, table_head, table_row, unordered_list,
     view::{Line, Span, Text},
 };

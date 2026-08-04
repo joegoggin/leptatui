@@ -1,4 +1,4 @@
-//! Syntax-highlighting support for code-block views.
+//! Terminal-native syntax-highlighting support for code-block views.
 
 use std::sync::OnceLock;
 
@@ -12,38 +12,30 @@ use syntect::{
     parsing::SyntaxSet,
 };
 
-use super::SyntaxTheme;
+use crate::style::TERMINAL_SURFACE_BACKGROUND;
 
-impl SyntaxTheme {
-    /// Returns the syntect bundled-theme key for this public theme.
-    ///
-    /// # Returns
-    ///
-    /// A string slice key present in syntect's default theme set.
-    fn key(self) -> &'static str {
-        match self {
-            Self::Dark => "base16-ocean.dark",
-            Self::Light => "base16-ocean.light",
-        }
-    }
+/// Bundled Syntect theme used only to classify syntax scopes into palette roles.
+const CLASSIFICATION_THEME: &str = "base16-ocean.dark";
 
-    /// Returns the bundled theme's terminal background color.
-    ///
-    /// Syntect's white fallback is retained if a bundled theme unexpectedly
-    /// omits its background setting.
-    ///
-    /// # Returns
-    ///
-    /// A Ratatui [`Color`] for the selected syntax theme.
-    pub(crate) fn background(self) -> Color {
-        let background = theme_set()
-            .themes
-            .get(self.key())
-            .and_then(|theme| theme.settings.background)
-            .unwrap_or(SyntectColor::WHITE);
-        ratatui_color(background)
-    }
-}
+/// Base16 Ocean colors paired with terminal-native semantic equivalents.
+const TERMINAL_SYNTAX_PALETTE: [((u8, u8, u8), Color); 16] = [
+    ((43, 48, 59), Color::DarkGray),
+    ((52, 61, 70), Color::DarkGray),
+    ((79, 91, 102), Color::Gray),
+    ((101, 115, 126), Color::Gray),
+    ((167, 173, 186), Color::Gray),
+    ((192, 197, 206), Color::White),
+    ((223, 225, 232), Color::White),
+    ((239, 241, 245), Color::White),
+    ((191, 97, 106), Color::LightRed),
+    ((208, 135, 112), Color::Yellow),
+    ((235, 203, 139), Color::LightYellow),
+    ((163, 190, 140), Color::LightGreen),
+    ((150, 181, 180), Color::LightCyan),
+    ((143, 161, 179), Color::LightBlue),
+    ((180, 142, 173), Color::LightMagenta),
+    ((171, 121, 103), Color::Red),
+];
 
 /// Returns retained logical lines for the requested highlighting configuration.
 ///
@@ -53,18 +45,13 @@ impl SyntaxTheme {
 ///
 /// * `source` — Source text to split and optionally highlight.
 /// * `language` — Optional bundled grammar token or alias.
-/// * `syntax_theme` — Bundled theme used for recognized source.
 ///
 /// # Returns
 ///
 /// A [`Vec`] containing at least one owned Ratatui [`Line`].
-pub(crate) fn highlighted_source_lines(
-    source: &str,
-    language: Option<&str>,
-    syntax_theme: SyntaxTheme,
-) -> Vec<Line<'static>> {
+pub(crate) fn highlighted_source_lines(source: &str, language: Option<&str>) -> Vec<Line<'static>> {
     language
-        .and_then(|language| try_highlighted_lines(source, language, syntax_theme))
+        .and_then(|language| try_highlighted_lines(source, language))
         .unwrap_or_else(|| plain_lines(source))
 }
 
@@ -94,20 +81,15 @@ fn theme_set() -> &'static ThemeSet {
 ///
 /// * `source` — Source text to highlight.
 /// * `language` — Grammar token or alias used for lookup.
-/// * `syntax_theme` — Bundled theme to apply.
 ///
 /// # Returns
 ///
 /// An [`Option`] containing highlighted Ratatui lines when lookup and
 /// highlighting succeed.
-fn try_highlighted_lines(
-    source: &str,
-    language: &str,
-    syntax_theme: SyntaxTheme,
-) -> Option<Vec<Line<'static>>> {
+fn try_highlighted_lines(source: &str, language: &str) -> Option<Vec<Line<'static>>> {
     let syntax_set = syntax_set();
     let syntax = syntax_set.find_syntax_by_token(language)?;
-    let theme = theme_set().themes.get(syntax_theme.key())?;
+    let theme = theme_set().themes.get(CLASSIFICATION_THEME)?;
     let mut highlighter = HighlightLines::new(syntax, theme);
     logical_lines(source)
         .map(|line| {
@@ -136,7 +118,7 @@ fn try_highlighted_lines(
 ///
 /// # Returns
 ///
-/// A Ratatui [`Style`] preserving foreground, background, and modifiers.
+/// A Ratatui [`Style`] preserving semantic color roles and modifiers.
 fn ratatui_style(style: syntect::highlighting::Style) -> Style {
     let mut modifiers = Modifier::empty();
     if style.font_style.contains(FontStyle::BOLD) {
@@ -150,12 +132,12 @@ fn ratatui_style(style: syntect::highlighting::Style) -> Style {
     }
 
     Style::new()
-        .fg(ratatui_color(style.foreground))
-        .bg(ratatui_color(style.background))
+        .fg(terminal_syntax_color(style.foreground))
+        .bg(TERMINAL_SURFACE_BACKGROUND)
         .add_modifier(modifiers)
 }
 
-/// Converts a Syntect RGB color into its Ratatui equivalent.
+/// Maps a Syntect classification color to the nearest terminal-native role.
 ///
 /// # Arguments
 ///
@@ -163,9 +145,17 @@ fn ratatui_style(style: syntect::highlighting::Style) -> Style {
 ///
 /// # Returns
 ///
-/// A Ratatui [`Color`] retaining the red, green, and blue components.
-fn ratatui_color(color: SyntectColor) -> Color {
-    Color::Rgb(color.r, color.g, color.b)
+/// A named Ratatui [`Color`] resolved through the terminal's ANSI palette.
+fn terminal_syntax_color(color: SyntectColor) -> Color {
+    TERMINAL_SYNTAX_PALETTE
+        .iter()
+        .min_by_key(|((red, green, blue), _)| {
+            let red = i32::from(color.r) - i32::from(*red);
+            let green = i32::from(color.g) - i32::from(*green);
+            let blue = i32::from(color.b) - i32::from(*blue);
+            red * red + green * green + blue * blue
+        })
+        .map_or(Color::White, |(_, terminal)| *terminal)
 }
 
 /// Returns plain owned Ratatui lines for source text.

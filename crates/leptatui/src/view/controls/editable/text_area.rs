@@ -81,6 +81,7 @@ impl View for TextAreaView {
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {
+        self.model.sync_style_state();
         Some(&self.model.metadata)
     }
 

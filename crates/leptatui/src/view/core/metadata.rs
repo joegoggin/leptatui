@@ -1,13 +1,16 @@
 //! Selector and runtime metadata attached to render-tree views.
 //!
-//! This module stores the type, id, class, inline-style, focus, and scroll
-//! metadata used during style resolution and rendering.
+//! This module stores the type, id, class, inline-style, pseudo-class, and
+//! scroll metadata used during style resolution and rendering.
 
 use std::cell::{Cell, RefCell};
 
 use ratatui::layout::Rect;
 
-use crate::style::{Axes, Color, LayoutSize, Modifier, TuiStyle};
+use crate::style::{
+    Axes, BorderType, Borders, Color, LayoutSize, Modifier, TERMINAL_SURFACE_BACKGROUND,
+    TuiSpacing, TuiStyle,
+};
 
 /// Rounded terminal rectangles computed for one visible layout box.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -156,18 +159,33 @@ impl ViewType {
     /// stylesheet and inline declarations.
     pub(crate) fn default_style(self) -> TuiStyle {
         match self {
-            Self::H1 => TuiStyle::new().modifier(Modifier::BOLD),
-            Self::H2 | Self::TableHead => TuiStyle::new().modifier(Modifier::BOLD),
-            Self::H3 => TuiStyle::new().modifier(Modifier::BOLD | Modifier::ITALIC),
-            Self::H4 => TuiStyle::new().modifier(Modifier::ITALIC),
-            Self::H5 => TuiStyle::new().modifier(Modifier::DIM | Modifier::ITALIC),
-            Self::H6 => TuiStyle::new().modifier(Modifier::DIM),
-            Self::Paragraph
-            | Self::CodeBlock
-            | Self::OrderedList
-            | Self::UnorderedList
-            | Self::ListItem
-            | Self::Table
+            Self::H1 => TuiStyle::new()
+                .foreground(Color::LightCyan)
+                .modifier(Modifier::BOLD),
+            Self::H2 => TuiStyle::new()
+                .foreground(Color::LightBlue)
+                .modifier(Modifier::BOLD),
+            Self::H3 => TuiStyle::new()
+                .foreground(Color::LightGreen)
+                .modifier(Modifier::BOLD | Modifier::ITALIC),
+            Self::H4 => TuiStyle::new()
+                .foreground(Color::LightYellow)
+                .modifier(Modifier::ITALIC),
+            Self::H5 => TuiStyle::new()
+                .foreground(Color::LightMagenta)
+                .modifier(Modifier::DIM | Modifier::ITALIC),
+            Self::H6 => TuiStyle::new()
+                .foreground(Color::Gray)
+                .modifier(Modifier::DIM),
+            Self::Paragraph => TuiStyle::new().foreground(Color::White),
+            Self::CodeBlock => TuiStyle::new().foreground(Color::LightBlue),
+            Self::OrderedList => TuiStyle::new().foreground(Color::LightCyan),
+            Self::UnorderedList => TuiStyle::new().foreground(Color::LightGreen),
+            Self::Table => TuiStyle::new().foreground(Color::White),
+            Self::TableHead => TuiStyle::new()
+                .foreground(Color::LightCyan)
+                .modifier(Modifier::BOLD),
+            Self::ListItem
             | Self::TableBody
             | Self::TableRow
             | Self::TableCell
@@ -175,12 +193,21 @@ impl ViewType {
             | Self::Text
             | Self::Div
             | Self::Form
-            | Self::Input
-            | Self::TextArea
-            | Self::Image
-            | Self::ProgressBar => TuiStyle::new(),
-            Self::Button => TuiStyle::new().foreground(Color::White),
-            Self::Link | Self::A => TuiStyle::new().modifier(Modifier::UNDERLINED),
+            | Self::Image => TuiStyle::new(),
+            Self::Button | Self::Input | Self::TextArea => TuiStyle::new()
+                .foreground(Color::White)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .padding(TuiSpacing::horizontal(1)),
+            Self::ProgressBar => TuiStyle::new()
+                .foreground(Color::LightGreen)
+                .background(Color::DarkGray),
+            Self::Link => TuiStyle::new()
+                .foreground(Color::Blue)
+                .modifier(Modifier::UNDERLINED),
+            Self::A => TuiStyle::new()
+                .foreground(Color::Blue)
+                .modifier(Modifier::UNDERLINED),
             _ => TuiStyle::new(),
         }
     }
@@ -190,17 +217,64 @@ impl ViewType {
     /// # Arguments
     ///
     /// * `focused` — Whether the view currently matches the focus pseudo-class.
+    /// * `active` — Whether the view currently matches the active pseudo-class.
+    /// * `insert` — Whether the view currently matches the insert pseudo-class.
+    /// * `visual` — Whether the view currently matches the visual pseudo-class.
+    /// * `visited` — Whether the view currently matches the visited pseudo-class.
     ///
     /// # Returns
     ///
     /// A [`TuiStyle`] containing defaults contributed by the current state.
-    pub(crate) fn default_state_style(self, focused: bool) -> TuiStyle {
-        match (self, focused) {
-            (Self::Button, true) => TuiStyle::new()
-                .foreground(Color::Black)
-                .background(Color::White),
-            (Self::Link | Self::A, true) => {
-                TuiStyle::new().modifier(Modifier::UNDERLINED | Modifier::REVERSED)
+    pub(crate) fn default_state_style(
+        self,
+        focused: bool,
+        active: bool,
+        insert: bool,
+        visual: bool,
+        visited: bool,
+    ) -> TuiStyle {
+        match (self, focused, active, insert, visual, visited) {
+            (Self::Button, true, _, _, _, _) => TuiStyle::new()
+                .foreground(Color::White)
+                .background(TERMINAL_SURFACE_BACKGROUND)
+                .modifier(Modifier::BOLD)
+                .border_type(BorderType::Thick),
+            (Self::Input | Self::TextArea, true, _, _, true, _) => TuiStyle::new()
+                .foreground(Color::Magenta)
+                .background(TERMINAL_SURFACE_BACKGROUND)
+                .modifier(Modifier::BOLD)
+                .border_type(BorderType::Thick),
+            (Self::Input | Self::TextArea, true, _, true, false, _) => TuiStyle::new()
+                .foreground(Color::Yellow)
+                .background(TERMINAL_SURFACE_BACKGROUND)
+                .modifier(Modifier::BOLD)
+                .border_type(BorderType::Thick),
+            (Self::Input | Self::TextArea, true, _, false, false, _) => TuiStyle::new()
+                .foreground(Color::White)
+                .background(TERMINAL_SURFACE_BACKGROUND)
+                .modifier(Modifier::BOLD)
+                .border_type(BorderType::Thick),
+            (Self::Input | Self::TextArea, false, _, _, true, _) => {
+                TuiStyle::new().foreground(Color::Magenta)
+            }
+            (Self::Input | Self::TextArea, false, _, true, false, _) => {
+                TuiStyle::new().foreground(Color::Yellow)
+            }
+            (Self::A, true, true, _, _, visited) => TuiStyle::new()
+                .foreground(if visited { Color::Magenta } else { Color::Blue })
+                .background(TERMINAL_SURFACE_BACKGROUND)
+                .modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            (Self::Link | Self::A, true, _, _, _, visited) => TuiStyle::new()
+                .foreground(if visited { Color::Magenta } else { Color::Blue })
+                .background(TERMINAL_SURFACE_BACKGROUND)
+                .modifier(Modifier::UNDERLINED),
+            (Self::A, false, true, _, _, visited) => TuiStyle::new()
+                .foreground(if visited { Color::Magenta } else { Color::Blue })
+                .modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            (Self::Link, false, _, _, _, true) | (Self::A, false, false, _, _, true) => {
+                TuiStyle::new()
+                    .foreground(Color::Magenta)
+                    .modifier(Modifier::UNDERLINED)
             }
             _ => TuiStyle::new(),
         }
@@ -215,6 +289,14 @@ pub struct StyleMetadata {
     classes: Vec<String>,
     inline_style: Option<TuiStyle>,
     focused: bool,
+    /// Current active pseudo-class state.
+    active: bool,
+    /// Current insert pseudo-class state.
+    insert: Cell<bool>,
+    /// Current visual pseudo-class state.
+    visual: Cell<bool>,
+    /// Current visited pseudo-class state.
+    visited: Cell<bool>,
     scroll_into_view_requested: Cell<bool>,
     /// Pending request to align this view with an overflowing parent's top.
     scroll_to_anchor_requested: Cell<bool>,
@@ -242,7 +324,8 @@ impl StyleMetadata {
     ///
     /// # Returns
     ///
-    /// A [`StyleMetadata`] value with no id, classes, inline style, or focus.
+    /// A [`StyleMetadata`] value with no id, classes, inline style, focus, or
+    /// active, insert, visual, or visited state.
     pub fn new(view_type: ViewType) -> Self {
         Self {
             view_type,
@@ -250,6 +333,10 @@ impl StyleMetadata {
             classes: Vec::new(),
             inline_style: None,
             focused: false,
+            active: false,
+            insert: Cell::new(false),
+            visual: Cell::new(false),
+            visited: Cell::new(false),
             scroll_into_view_requested: Cell::new(false),
             scroll_to_anchor_requested: Cell::new(false),
             scroll_to_top_key_pending: Cell::new(false),
@@ -305,6 +392,42 @@ impl StyleMetadata {
     /// A [`bool`] indicating whether this view is focused.
     pub const fn is_focused(&self) -> bool {
         self.focused
+    }
+
+    /// Returns whether this view currently matches `:active`.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether this view is active.
+    pub const fn is_active(&self) -> bool {
+        self.active
+    }
+
+    /// Returns whether this view currently matches `:insert`.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether this view is in insert mode.
+    pub fn is_insert(&self) -> bool {
+        self.insert.get()
+    }
+
+    /// Returns whether this view currently matches `:visual`.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether this view is in visual mode.
+    pub fn is_visual(&self) -> bool {
+        self.visual.get()
+    }
+
+    /// Returns whether this view currently matches `:visited`.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether this view has been visited.
+    pub fn is_visited(&self) -> bool {
+        self.visited.get()
     }
 
     /// Returns rounded geometry from the most recent root layout pass.
@@ -445,6 +568,69 @@ impl StyleMetadata {
         self.focused = focused;
     }
 
+    /// Replaces the current active pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `active` — Whether this view should match `:active`.
+    pub fn set_active(&mut self, active: bool) {
+        self.active = active;
+    }
+
+    /// Replaces the current insert pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `insert` — Whether this view should match `:insert`.
+    pub fn set_insert(&mut self, insert: bool) {
+        self.insert.set(insert);
+    }
+
+    /// Replaces the current visual pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `visual` — Whether this view should match `:visual`.
+    pub fn set_visual(&mut self, visual: bool) {
+        self.visual.set(visual);
+    }
+
+    /// Replaces the current visited pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `visited` — Whether this view should match `:visited`.
+    pub fn set_visited(&mut self, visited: bool) {
+        self.visited.set(visited);
+    }
+
+    /// Synchronizes computed insert-mode state through shared metadata.
+    ///
+    /// # Arguments
+    ///
+    /// * `insert` — Whether the owning editable view is in insert mode.
+    pub(crate) fn sync_insert(&self, insert: bool) {
+        self.insert.set(insert);
+    }
+
+    /// Synchronizes computed visual-mode state through shared metadata.
+    ///
+    /// # Arguments
+    ///
+    /// * `visual` — Whether the owning editable view is in a visual mode.
+    pub(crate) fn sync_visual(&self, visual: bool) {
+        self.visual.set(visual);
+    }
+
+    /// Synchronizes computed visited state through shared metadata.
+    ///
+    /// # Arguments
+    ///
+    /// * `visited` — Whether the owning link's destination was visited.
+    pub(crate) fn sync_visited(&self, visited: bool) {
+        self.visited.set(visited);
+    }
+
     /// Copies transient interaction state from compatible previous metadata.
     ///
     /// Authored selector values and inline styles remain owned by the newly
@@ -455,6 +641,7 @@ impl StyleMetadata {
     /// * `previous` — Metadata from the previous compatible view node.
     pub(crate) fn reconcile_runtime_state(&mut self, previous: &Self) {
         self.focused = previous.focused;
+        self.visited.set(previous.visited.get());
         self.scroll_into_view_requested
             .set(previous.scroll_into_view_requested.get());
         self.scroll_to_anchor_requested
@@ -673,6 +860,10 @@ impl PartialEq for StyleMetadata {
             && self.classes == other.classes
             && self.inline_style == other.inline_style
             && self.focused == other.focused
+            && self.active == other.active
+            && self.insert.get() == other.insert.get()
+            && self.visual.get() == other.visual.get()
+            && self.visited.get() == other.visited.get()
             && self.scroll_into_view_requested.get() == other.scroll_into_view_requested.get()
             && self.scroll_to_anchor_requested.get() == other.scroll_to_anchor_requested.get()
             && self.scroll_to_top_key_pending.get() == other.scroll_to_top_key_pending.get()

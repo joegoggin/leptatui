@@ -42,7 +42,7 @@ pub use crate::{
     MarkdownView, MediaQuery, Modifier, Navigate, NavigateOptions, Outlet, Overflow, ParagraphView,
     ParamsMap, Position, ProgressBarView, RenderCtx, Resource, RichText, RouteLinkView, Router,
     RouterProps, StyleDeclarations, StyleMetadata, StyleModule, StyleRule, StyleSelector,
-    StyleValue, StyledView, Stylesheet, SyntaxTheme, TableCellView, TableRowView, TableSectionKind,
+    StyleValue, StyledView, Stylesheet, TableCellView, TableRowView, TableSectionKind,
     TableSectionView, TableView, TextAreaView, TextView, TextualView, ThemeValue, ThemeVariables,
     TuiSize, TuiSpacing, TuiStyle, View, ViewError, ViewResult, ViewType, ViewportSize, VimMode,
     ZIndex, block, button, code_block,

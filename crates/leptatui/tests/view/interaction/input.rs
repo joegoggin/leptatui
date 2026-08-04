@@ -317,9 +317,9 @@ fn focused_input_without_callback_does_not_mutate_displayed_value() -> leptatui:
     assert_eq!(view.value(), "Ada");
 
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "A");
-    assert_eq!(cell_symbol(&terminal, 3, 1, 8), "a");
-    assert_eq!(cell_symbol(&terminal, 4, 1, 8), " ");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 4, 1, 8), "a");
+    assert_eq!(cell_symbol(&terminal, 5, 1, 8), " ");
 
     Ok(())
 }

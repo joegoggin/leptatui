@@ -1,4 +1,4 @@
-error: unsupported view! attribute; expected class, id, style, src, line_numbers, or syntax_theme
+error: unsupported view! attribute; expected class, id, style, src, or line_numbers
  --> tests/fixtures/view_macro/fail/markdown_source_attr.rs:8:19
   |
 8 |         <Markdown source="guide.md" />

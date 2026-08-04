@@ -23,7 +23,7 @@ fn renders_form_children_and_moves_focus_through_descendants() -> leptatui::app:
     let title_position = symbol_position(&terminal, "T", 12);
     let input_position = symbol_position(&terminal, "A", 12);
     assert_eq!(title_position, (0, 0));
-    assert_eq!(input_position.0, 1);
+    assert_eq!(input_position.0, 2);
     assert!(input_position.1 > title_position.1);
     assert_eq!(view.__focusable_count(), 2);
 

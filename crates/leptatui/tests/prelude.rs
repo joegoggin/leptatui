@@ -165,9 +165,7 @@ fn prelude_exposes_reactivity_and_context() {
             markdown("# Markdown"),
             markdown_with_options(
                 "```rust\nfn main() {}\n```",
-                MarkdownOptions::default()
-                    .syntax_theme(SyntaxTheme::Light)
-                    .line_numbers(true),
+                MarkdownOptions::default().line_numbers(true),
             ),
             ordered_list([
                 list_item([paragraph("First")]),
@@ -184,8 +182,7 @@ fn prelude_exposes_reactivity_and_context() {
             ]),
             code_block("fn main() {}")
                 .language("rust")
-                .line_numbers(true)
-                .syntax_theme(SyntaxTheme::Light),
+                .line_numbers(true),
             form_view,
             image(image_source).alt("Project logo"),
             progress_bar(0.5).label("Half"),
@@ -214,7 +211,7 @@ fn prelude_exposes_reactivity_and_context() {
                         </TableRow>
                     </TableBody>
                 </Table>
-                <CodeBlock language="rust" line_numbers=true syntax_theme=SyntaxTheme::Light>
+                <CodeBlock language="rust" line_numbers=true>
                     "fn main() {}"
                 </CodeBlock>
                 <Form>
@@ -229,13 +226,10 @@ fn prelude_exposes_reactivity_and_context() {
         let macro_markdown = view! {
             <Markdown
                 src={markdown_path}
-                syntax_theme=SyntaxTheme::Light
                 line_numbers=true
             />
         };
-        let markdown_options = MarkdownOptions::default()
-            .syntax_theme(SyntaxTheme::Light)
-            .line_numbers(true);
+        let markdown_options = MarkdownOptions::default().line_numbers(true);
         assert_eq!(
             macro_markdown,
             markdown_file_with_options(markdown_path, markdown_options)

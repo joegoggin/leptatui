@@ -163,10 +163,11 @@ name can be used as a `stylesheet!` type selector.
 `Link` opens URLs and local paths with the operating system's configured
 handler. Use `link("Project site", "https://example.com")` or
 `<Link href="https://example.com">"Project site"</Link>` anywhere in a view.
-Links are underlined by default; use Tab and Shift+Tab to move focus and Enter
-or Space to activate the focused link. Moving the pointer over a link focuses
-it, and left-clicking activates it. Empty and `#fragment` targets remain visible
-but are intentionally not focusable.
+Links are blue and underlined by default, then magenta and underlined after a
+successful visit during the current app session. Use Tab and Shift+Tab to move
+focus and Enter or Space to activate the focused link. Moving the pointer over
+a link focuses it, and left-clicking activates it. Empty and `#fragment` targets
+remain visible but are intentionally not focusable.
 
 `Input` and `TextArea` are controlled components: pass the displayed `value`
 from caller-owned state and update that state from `on_input` when editing
@@ -222,7 +223,6 @@ let document = div((
     ]),
     code_block("fn main() { println!(\"hello\"); }")
         .language("rust")
-        .syntax_theme(SyntaxTheme::Dark)
         .line_numbers(true),
 ));
 ```
@@ -269,7 +269,6 @@ fn Guide() -> impl IntoView {
             </Table>
             <CodeBlock
                 language="rust"
-                syntax_theme={SyntaxTheme::Dark}
                 line_numbers=true
             >"fn main() {}"</CodeBlock>
         </Div>
@@ -281,9 +280,10 @@ Headings, paragraphs, list items, table cells, and code lines wrap to the
 available width and contribute their wrapped height to parent layouts. Code
 blocks do not scroll horizontally. A recognized `language` selects a bundled
 syntax grammar; an unknown language keeps the source readable as plain text.
-`SyntaxTheme::Dark` is the default, and line numbers are disabled unless
-requested. Table cells accept inline Ratatui text rather than nested block
-views in the v1 API.
+Syntax colors use the terminal's ANSI palette, code-block backgrounds use the
+terminal's `DarkGray` palette entry, and line numbers are disabled unless
+requested. Table cells accept inline Ratatui text rather than nested block views
+in the v1 API.
 
 ### Markdown Readers
 
@@ -297,9 +297,7 @@ let source = "# Guide\n\n```rust\nfn main() {}\n```";
 let default_document = markdown(source);
 let highlighted_document = markdown_with_options(
     source,
-    MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Light)
-        .line_numbers(true),
+    MarkdownOptions::default().line_numbers(true),
 );
 ```
 
@@ -313,18 +311,22 @@ use leptatui::prelude::*;
 let default_file = markdown_file("README.md");
 let configured_file = markdown_file_with_options(
     "README.md",
-    MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Dark)
-        .line_numbers(true),
+    MarkdownOptions::default().line_numbers(true),
 );
 let tagged_file = view! {
-    <Markdown
-        src="README.md"
-        syntax_theme={SyntaxTheme::Dark}
-        line_numbers=true
-    />
+    <Markdown src="README.md" line_numbers=true />
 };
 ```
+
+Markdown readers use the same semantic defaults as their underlying elements:
+cyan-to-gray heading levels, white paragraphs, cyan ordered lists and table
+headers, green unordered lists, terminal-native syntax on dark-gray code blocks,
+blue Markdown links, and white-on-dark-gray focused links and anchors. Visited
+Markdown links are magenta and underlined; active route anchors are light cyan
+and bold. The same palette applies to
+standalone tags such as `<H1>`,
+`<Paragraph>`, `<CodeBlock>`, and `<A>`. Authored stylesheet rules and inline
+styles override these defaults through the normal cascade.
 
 The compatibility promise is CommonMark plus tables. Optional GFM task lists,
 strikethrough, footnotes, and other extensions are deferred. Markdown links
@@ -390,12 +392,24 @@ fn StandardControls() -> impl IntoView {
 }
 ```
 
+Buttons, inputs, and text areas default to white text with rounded borders and
+one cell of horizontal padding. Focused controls use bold white text on the
+terminal surface background with thick borders; insert-mode inputs and text
+areas use yellow foregrounds, while both visual modes use magenta foregrounds.
+Tables default to white and progress bars to light green on dark gray. Links are
+blue and underlined until visited, then magenta and underlined. These remain
+low-precedence defaults.
+
 Styles live with components. Put `stylesheet!` inside a `#[component]` body to
 register those rules for that component subtree, including descendant
 components. The same macro still returns a `Stylesheet` value for direct
 construction and tests. It supports flat terminal selectors and nested rules
-that lower into explicit descendant selectors. Use `&:focus` inside a nested
-rule to combine focus with the current terminal selector. Matching rules use
+that lower into explicit descendant selectors. Use `&:focus`, `&:active`,
+`&:insert`, `&:visual`, or `&:visited` inside a nested rule to combine a
+pseudo-class with the current terminal selector. `:insert` matches `Input` and
+`TextArea` views whose retained Vim mode is `Insert`; `:visual` matches either
+character-wise Visual or Visual Line mode; `:visited` matches links whose
+destination was opened during the current app session. Matching rules use
 CSS-style specificity and source order; inline styles override normal
 stylesheet declarations, and stylesheet declarations marked `!important`
 override normal inline styles.
@@ -921,7 +935,10 @@ Multi-page apps use URL-like locations and declarative route components. Wrap
 the application shell in `Router`, place route declarations inside `Routes`,
 and navigate with internal `A` anchors or `use_navigate()`. Content outside
 `Routes` remains mounted, and `ParentRoute` plus `Outlet` provides retained
-nested layouts.
+nested layouts. An `A` whose destination matches the current route matches the
+`:active` stylesheet pseudo-class. Route matching no longer injects an
+`active` class, so authored route-state rules should use `A:active` or nested
+`&:active` selectors.
 
 Use props for required parent-to-child inputs and local component
 configuration. Use context for app-wide state that many routes or deeply nested

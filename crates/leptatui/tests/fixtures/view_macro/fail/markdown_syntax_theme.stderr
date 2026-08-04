@@ -1,0 +1,5 @@
+error: unsupported view! attribute; expected class, id, style, src, or line_numbers
+ --> tests/fixtures/view_macro/fail/markdown_syntax_theme.rs:8:34
+  |
+8 |         <Markdown src="guide.md" syntax_theme={Color::Blue} />
+  |                                  ^^^^^^^^^^^^

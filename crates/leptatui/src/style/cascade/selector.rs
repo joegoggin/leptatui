@@ -17,6 +17,14 @@ pub enum StyleSelector {
     Id(String),
     /// Matches views currently marked as focused.
     Focus,
+    /// Matches views currently marked as active.
+    Active,
+    /// Matches views currently marked as being in insert mode.
+    Insert,
+    /// Matches views currently marked as being in a visual mode.
+    Visual,
+    /// Matches views currently marked as visited.
+    Visited,
     /// Matches views that satisfy every nested selector.
     Compound(Vec<StyleSelector>),
     /// Matches a target selector when its ordered ancestor chain matches.
@@ -75,6 +83,42 @@ impl StyleSelector {
     /// A [`StyleSelector::Focus`] selector.
     pub const fn focus() -> Self {
         Self::Focus
+    }
+
+    /// Creates a selector that matches active views.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleSelector::Active`] selector.
+    pub const fn active() -> Self {
+        Self::Active
+    }
+
+    /// Creates a selector that matches views in insert mode.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleSelector::Insert`] selector.
+    pub const fn insert() -> Self {
+        Self::Insert
+    }
+
+    /// Creates a selector that matches views in a visual mode.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleSelector::Visual`] selector.
+    pub const fn visual() -> Self {
+        Self::Visual
+    }
+
+    /// Creates a selector that matches visited views.
+    ///
+    /// # Returns
+    ///
+    /// A [`StyleSelector::Visited`] selector.
+    pub const fn visited() -> Self {
+        Self::Visited
     }
 
     /// Creates a selector that matches only when every nested selector matches.
@@ -144,6 +188,10 @@ impl StyleSelector {
             Self::Class(class) => metadata.classes().iter().any(|value| value == class),
             Self::Id(id) => metadata.id() == Some(id.as_str()),
             Self::Focus => metadata.is_focused(),
+            Self::Active => metadata.is_active(),
+            Self::Insert => metadata.is_insert(),
+            Self::Visual => metadata.is_visual(),
+            Self::Visited => metadata.is_visited(),
             Self::Compound(selectors) => selectors
                 .iter()
                 .all(|selector| selector.matches(metadata, ancestors)),
@@ -176,7 +224,12 @@ impl StyleSelector {
     pub(crate) fn specificity(&self) -> Specificity {
         match self {
             Self::Type(_) => Specificity::TYPE,
-            Self::Class(_) | Self::Focus => Specificity::CLASS,
+            Self::Class(_)
+            | Self::Focus
+            | Self::Active
+            | Self::Insert
+            | Self::Visual
+            | Self::Visited => Specificity::CLASS,
             Self::Id(_) => Specificity::ID,
             Self::Compound(selectors) => selectors
                 .iter()

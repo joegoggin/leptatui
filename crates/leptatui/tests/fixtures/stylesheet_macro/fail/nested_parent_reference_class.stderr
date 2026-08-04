@@ -1,4 +1,4 @@
-error: stylesheet! parent selector only supports &:focus in nested rules
+error: stylesheet! parent selector only supports &:focus, &:active, &:insert, &:visual, or &:visited in nested rules
  --> tests/fixtures/stylesheet_macro/fail/nested_parent_reference_class.rs:9:14
   |
 9 |             &.primary => { fg: Color::White }

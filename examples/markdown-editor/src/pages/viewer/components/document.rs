@@ -26,7 +26,7 @@ pub(in crate::pages::viewer) fn ViewerDocument(
         .into_view()
     } else if let Some(path) = path {
         view! {
-            <Markdown src=path syntax_theme=SyntaxTheme::Dark line_numbers=true />
+            <Markdown src=path line_numbers=true />
         }
         .into_view()
     } else {

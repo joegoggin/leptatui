@@ -107,6 +107,256 @@ fn inherited_text_styles_flow_to_children_unless_overridden() {
     assert_eq!(resolved.modifiers, Some(Modifier::BOLD));
 }
 
+/// Verifies standard views resolve their built-in presentation defaults.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Button, focused Input, insert-mode TextArea, visual-mode Input, Table,
+/// ProgressBar, Link
+/// ```
+///
+/// # Assertions
+///
+/// - Controls use white text, rounded borders, and horizontal padding.
+/// - Focused controls use white on dark gray with bold text and thick borders.
+/// - Insert-mode editable controls use yellow on dark gray.
+/// - Visual-mode editable controls use magenta on dark gray.
+/// - Visual mode takes precedence when insert and visual flags are both set.
+/// - Unfocused visual-mode editable controls retain a magenta foreground.
+/// - Regular links are blue and underlined.
+/// - Focused unvisited links remain blue on the focus background.
+/// - Visited links are magenta and remain magenta on the focus background.
+/// - Tables and progress bars use their approved default palettes.
+#[test]
+fn standard_views_resolve_built_in_presentation_defaults() {
+    let theme = ThemeVariables::new();
+    let resolve = |metadata: &StyleMetadata| {
+        Stylesheet::new().resolve(metadata, &[], TuiStyle::new(), &theme)
+    };
+
+    let button = resolve(&StyleMetadata::new(ViewType::Button));
+    assert_eq!(button.foreground, Some(Color::White));
+    assert_eq!(button.borders, Some(Borders::ALL));
+    assert_eq!(button.border_type, Some(BorderType::Rounded));
+    assert_eq!(button.padding, Some(TuiSpacing::horizontal(1)));
+
+    let mut focused_input = StyleMetadata::new(ViewType::Input);
+    focused_input.set_focused(true);
+    let focused_input = resolve(&focused_input);
+    assert_eq!(focused_input.foreground, Some(Color::White));
+    assert_eq!(focused_input.background, Some(Color::DarkGray));
+    assert_eq!(focused_input.modifiers, Some(Modifier::BOLD));
+    assert_eq!(focused_input.border_type, Some(BorderType::Thick));
+
+    let mut insert_text_area = StyleMetadata::new(ViewType::TextArea);
+    insert_text_area.set_focused(true);
+    insert_text_area.set_insert(true);
+    let insert_text_area = resolve(&insert_text_area);
+    assert_eq!(insert_text_area.foreground, Some(Color::Yellow));
+    assert_eq!(insert_text_area.background, Some(Color::DarkGray));
+    assert_eq!(insert_text_area.modifiers, Some(Modifier::BOLD));
+    assert_eq!(insert_text_area.border_type, Some(BorderType::Thick));
+
+    let mut visual_input = StyleMetadata::new(ViewType::Input);
+    visual_input.set_focused(true);
+    visual_input.set_insert(true);
+    visual_input.set_visual(true);
+    let visual_input = resolve(&visual_input);
+    assert_eq!(visual_input.foreground, Some(Color::Magenta));
+    assert_eq!(visual_input.background, Some(Color::DarkGray));
+    assert_eq!(visual_input.modifiers, Some(Modifier::BOLD));
+    assert_eq!(visual_input.border_type, Some(BorderType::Thick));
+
+    let mut unfocused_visual_text_area = StyleMetadata::new(ViewType::TextArea);
+    unfocused_visual_text_area.set_visual(true);
+    let unfocused_visual_text_area = resolve(&unfocused_visual_text_area);
+    assert_eq!(unfocused_visual_text_area.foreground, Some(Color::Magenta));
+    assert_eq!(unfocused_visual_text_area.background, None);
+
+    let table = resolve(&StyleMetadata::new(ViewType::Table));
+    assert_eq!(table.foreground, Some(Color::White));
+
+    let progress = resolve(&StyleMetadata::new(ViewType::ProgressBar));
+    assert_eq!(progress.foreground, Some(Color::LightGreen));
+    assert_eq!(progress.background, Some(Color::DarkGray));
+
+    let link = resolve(&StyleMetadata::new(ViewType::Link));
+    assert_eq!(link.foreground, Some(Color::Blue));
+    assert_eq!(link.modifiers, Some(Modifier::UNDERLINED));
+
+    let mut focused_link = StyleMetadata::new(ViewType::Link);
+    focused_link.set_focused(true);
+    let focused_link = resolve(&focused_link);
+    assert_eq!(focused_link.foreground, Some(Color::Blue));
+    assert_eq!(focused_link.background, Some(Color::DarkGray));
+    assert_eq!(focused_link.modifiers, Some(Modifier::UNDERLINED));
+
+    let mut visited_link = StyleMetadata::new(ViewType::Link);
+    visited_link.set_visited(true);
+    let visited_link = resolve(&visited_link);
+    assert_eq!(visited_link.foreground, Some(Color::Magenta));
+    assert_eq!(visited_link.modifiers, Some(Modifier::UNDERLINED));
+
+    let mut focused_visited_link = StyleMetadata::new(ViewType::Link);
+    focused_visited_link.set_focused(true);
+    focused_visited_link.set_visited(true);
+    let focused_visited_link = resolve(&focused_visited_link);
+    assert_eq!(focused_visited_link.foreground, Some(Color::Magenta));
+    assert_eq!(focused_visited_link.background, Some(Color::DarkGray));
+    assert_eq!(
+        focused_visited_link.modifiers,
+        Some(Modifier::UNDERLINED)
+    );
+}
+
+/// Verifies authored insert styles override editable-control defaults.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Input:insert { fg: Magenta, bg: Blue, border_type: Plain }
+/// ```
+///
+/// # Assertions
+///
+/// - The authored foreground overrides yellow.
+/// - The authored background overrides white.
+/// - The authored border type overrides the thick focused border.
+/// - A media rule can remove built-in control padding.
+#[test]
+fn authored_insert_and_media_rules_override_control_defaults() {
+    let mut metadata = StyleMetadata::new(ViewType::Input);
+    metadata.set_focused(true);
+    metadata.set_insert(true);
+    let stylesheet = stylesheet! {
+        Input:insert => {
+            fg: Color::Magenta,
+            bg: Color::Blue,
+            border_type: BorderType::Plain
+        }
+        @media (max-width: 20) {
+            Input => { padding: TuiSpacing::ZERO }
+        }
+    };
+
+    let resolved = stylesheet.resolve_for_viewport(
+        &metadata,
+        &[],
+        TuiStyle::new(),
+        ViewportSize::new(20, 5),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Magenta));
+    assert_eq!(resolved.background, Some(Color::Blue));
+    assert_eq!(resolved.border_type, Some(BorderType::Plain));
+    assert_eq!(resolved.padding, Some(TuiSpacing::ZERO));
+}
+
+/// Verifies authored visual styles override editable-control defaults.
+///
+/// # Example Under Test
+///
+/// ```text
+/// TextArea:visual { fg: Cyan, bg: Blue, border_type: Plain }
+/// ```
+///
+/// # Assertions
+///
+/// - The authored foreground overrides magenta.
+/// - The authored background overrides dark gray.
+/// - The authored border type overrides the thick focused border.
+#[test]
+fn authored_visual_rules_override_control_defaults() {
+    let mut metadata = StyleMetadata::new(ViewType::TextArea);
+    metadata.set_focused(true);
+    metadata.set_visual(true);
+    let stylesheet = stylesheet! {
+        TextArea:visual => {
+            fg: Color::Cyan,
+            bg: Color::Blue,
+            border_type: BorderType::Plain
+        }
+    };
+
+    let resolved = stylesheet.resolve(
+        &metadata,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(resolved.foreground, Some(Color::Cyan));
+    assert_eq!(resolved.background, Some(Color::Blue));
+    assert_eq!(resolved.border_type, Some(BorderType::Plain));
+}
+
+/// Verifies route-anchor defaults remain below authored cascade declarations.
+///
+/// # Example Under Test
+///
+/// ```text
+/// A default
+/// A { fg: red }
+/// .accent { fg: green }
+/// inline fg: yellow
+/// A:focus { bg: blue }
+/// A:active { fg: magenta }
+/// ```
+///
+/// # Assertions
+///
+/// - The route-anchor default foreground is blue.
+/// - A type rule overrides the default foreground.
+/// - A class rule overrides the type rule.
+/// - An inline declaration overrides the class rule.
+/// - A focus rule overrides the default focus background.
+/// - The active defaults remain blue, bold, and underlined.
+/// - An active rule overrides the default active foreground.
+#[test]
+fn route_anchor_defaults_have_low_cascade_precedence() {
+    let theme = ThemeVariables::new();
+    let plain = StyleMetadata::new(ViewType::A);
+    let default_style = Stylesheet::new().resolve(&plain, &[], TuiStyle::new(), &theme);
+    assert_eq!(default_style.foreground, Some(Color::Blue));
+
+    let type_stylesheet = stylesheet! { A => { fg: Color::Red } };
+    let type_style = type_stylesheet.resolve(&plain, &[], TuiStyle::new(), &theme);
+    assert_eq!(type_style.foreground, Some(Color::Red));
+
+    let mut class = StyleMetadata::new(ViewType::A);
+    class.set_classes("accent");
+    let class_stylesheet = stylesheet! {
+        A => { fg: Color::Red }
+        .accent => { fg: Color::Green }
+    };
+    let class_style = class_stylesheet.resolve(&class, &[], TuiStyle::new(), &theme);
+    assert_eq!(class_style.foreground, Some(Color::Green));
+
+    class.set_inline_style(TuiStyle::new().foreground(Color::Yellow));
+    let inline_style = class_stylesheet.resolve(&class, &[], TuiStyle::new(), &theme);
+    assert_eq!(inline_style.foreground, Some(Color::Yellow));
+
+    class.set_focused(true);
+    let focus_stylesheet = stylesheet! { A:focus => { bg: Color::Blue } };
+    let focus_style = focus_stylesheet.resolve(&class, &[], TuiStyle::new(), &theme);
+    assert_eq!(focus_style.background, Some(Color::Blue));
+
+    let mut active = StyleMetadata::new(ViewType::A);
+    active.set_active(true);
+    let active_default = Stylesheet::new().resolve(&active, &[], TuiStyle::new(), &theme);
+    assert_eq!(active_default.foreground, Some(Color::Blue));
+    assert_eq!(
+        active_default.modifiers,
+        Some(Modifier::BOLD | Modifier::UNDERLINED)
+    );
+
+    let active_stylesheet = stylesheet! { A:active => { fg: Color::Magenta } };
+    let active_style = active_stylesheet.resolve(&active, &[], TuiStyle::new(), &theme);
+    assert_eq!(active_style.foreground, Some(Color::Magenta));
+}
+
 /// Verifies important stylesheet values override normal inline styles.
 ///
 /// # Example Under Test

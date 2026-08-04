@@ -132,3 +132,24 @@ fn MacroRoutePropNav() -> impl leptatui::IntoView {
 fn MacroRouteNamedPage(#[prop(into)] label: String) -> impl leptatui::IntoView {
     view! { <Text>{label}</Text> }
 }
+
+/// Renders active and inactive route anchors inside their required router context.
+///
+/// # Returns
+///
+/// A routed view containing two focusable anchors.
+#[component]
+fn MacroRouteLinkRoot() -> impl leptatui::IntoView {
+    stylesheet! {
+        .active => { bg: Color::Red }
+    }
+
+    view! {
+        <Router initial_path="/docs">
+            <Div>
+                <A href="/" exact=true>"Home"</A>
+                <A href="/docs" exact=true>"Docs"</A>
+            </Div>
+        </Router>
+    }
+}

@@ -143,7 +143,7 @@ fn mouse_events_reach_custom_view_hooks() -> leptatui::app::Result<()> {
 ///
 /// ```text
 /// div((button("One"), button("Two"))).display(Flex)
-/// MouseMoved(6, 1)
+/// MouseMoved(8, 1)
 /// ```
 ///
 /// # Assertions
@@ -157,7 +157,7 @@ fn mouse_move_focuses_button_under_pointer() -> leptatui::app::Result<()> {
         .with_inline_style(TuiStyle::new().display(Display::Flex));
 
     draw_view(&mut terminal, &view)?;
-    view.handle_event(mouse(MouseEventKind::Moved, 6, 1))?;
+    view.handle_event(mouse(MouseEventKind::Moved, 8, 1))?;
 
     assert_eq!(button_focuses(&view), vec![false, true]);
     Ok(())
@@ -338,6 +338,7 @@ fn horizontal_clipping_maps_partial_child_hit_coordinates() -> leptatui::app::Re
             Dimension::from(Length::cells(8.0)),
             Dimension::from(Length::cells(3.0)),
         ))
+        .padding(TuiSpacing::ZERO)
         .flex_shrink(0.0);
     let mut view = div([
         button("First").with_inline_style(child_style.clone()),
@@ -357,6 +358,7 @@ fn horizontal_clipping_maps_partial_child_hit_coordinates() -> leptatui::app::Re
     draw_view(&mut terminal, &view)?;
     for _ in 0..4 {
         view.handle_event(mouse(MouseEventKind::ScrollRight, 1, 1))?;
+        draw_view(&mut terminal, &view)?;
     }
     view.__clear_hit_areas();
     draw_view(&mut terminal, &view)?;

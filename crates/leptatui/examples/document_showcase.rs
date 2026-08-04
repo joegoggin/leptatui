@@ -116,7 +116,6 @@ fn DocumentShowcase() -> impl IntoView {
                 <CodeBlock
                     language="rust"
                     line_numbers=true
-                    syntax_theme={SyntaxTheme::Dark}
                 >{source}</CodeBlock>
 
                 <Paragraph class="help">

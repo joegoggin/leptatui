@@ -1,7 +1,8 @@
 //! Selector model for `stylesheet!` syntax.
 //!
-//! This module parses type, class, id, focus, type-focus, and nested `&:focus`
-//! selectors and lowers them into public `StyleSelector` constructor calls.
+//! This module parses type, class, id, focus, active, insert, visual, visited,
+//! compound pseudo, and nested parent-pseudo selectors and lowers them into
+//! public `StyleSelector` constructor calls.
 
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
@@ -18,9 +19,11 @@ pub(super) enum Selector {
     Class(SelectorName),
     /// Id selector such as `#submit`.
     Id(SelectorName),
-    /// Pseudo selector such as `:focus`.
+    /// Pseudo selector such as `:focus`, `:active`, `:insert`, `:visual`, or
+    /// `:visited`.
     Pseudo(Ident),
-    /// Compound type and pseudo selector such as `Button:focus`.
+    /// Compound type and pseudo selector such as `Button:focus`, `A:active`, or
+    /// `Input:insert`, `TextArea:visual`, or `Link:visited`.
     TypePseudo {
         /// View type part of the compound selector.
         view_type: Ident,
@@ -28,7 +31,8 @@ pub(super) enum Selector {
         pseudo: Ident,
     },
     /// Nested parent pseudo selector containing the pseudo identifier from
-    /// selectors such as `&:focus`.
+    /// selectors such as `&:focus`, `&:active`, `&:insert`, `&:visual`, or
+    /// `&:visited`.
     ParentPseudo(Ident),
 }
 
@@ -46,7 +50,8 @@ impl Parse for Selector {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the selector is not a supported type, class,
-    /// id, focus, type-focus, or nested `&:focus` selector.
+    /// id, focus, active, insert, visual, visited, type-pseudo, or nested
+    /// parent-pseudo selector.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         if input.peek(Token![&]) {
             input.parse::<Token![&]>()?;
@@ -56,9 +61,9 @@ impl Parse for Selector {
                 return Ok(Self::ParentPseudo(input.parse()?));
             }
 
-            return Err(
-                input.error("stylesheet! parent selector only supports &:focus in nested rules")
-            );
+            return Err(input.error(
+                "stylesheet! parent selector only supports &:focus, &:active, &:insert, &:visual, or &:visited in nested rules",
+            ));
         }
 
         if input.peek(Token![.]) {
@@ -88,7 +93,7 @@ impl Parse for Selector {
         }
 
         Err(input.error(
-            "stylesheet! selector must be a type, .class, #id, :focus, Type:focus, or nested &:focus selector",
+            "stylesheet! selector must be a type, .class, #id, :focus, :active, :insert, :visual, :visited, Type:pseudo, or nested &:pseudo selector",
         ))
     }
 }
@@ -135,7 +140,7 @@ impl Selector {
             }
             Self::ParentPseudo(_) => Err(Error::new_spanned(
                 self.span_tokens(),
-                "stylesheet! parent selector &:focus can only appear inside a nested rule",
+                "stylesheet! parent pseudo-selector can only appear inside a nested rule",
             )),
         }
     }
@@ -165,7 +170,7 @@ impl Selector {
                     let Some(segment) = segments.last_mut() else {
                         return Err(Error::new_spanned(
                             selector.span_tokens(),
-                            "stylesheet! parent selector &:focus requires a parent selector",
+                            "stylesheet! parent pseudo-selector requires a parent selector",
                         ));
                     };
 
@@ -231,9 +236,13 @@ impl Selector {
 
         match pseudo.to_string().as_str() {
             "focus" => Ok(quote! { #leptatui::StyleSelector::focus() }),
+            "active" => Ok(quote! { #leptatui::StyleSelector::active() }),
+            "insert" => Ok(quote! { #leptatui::StyleSelector::insert() }),
+            "visual" => Ok(quote! { #leptatui::StyleSelector::visual() }),
+            "visited" => Ok(quote! { #leptatui::StyleSelector::visited() }),
             _ => Err(Error::new_spanned(
                 pseudo,
-                "unsupported stylesheet pseudo-selector; expected :focus",
+                "unsupported stylesheet pseudo-selector; expected :focus, :active, :insert, :visual, or :visited",
             )),
         }
     }

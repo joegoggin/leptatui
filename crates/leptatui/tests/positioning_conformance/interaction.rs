@@ -229,8 +229,8 @@ fn positioned_editor_cursor_uses_final_terminal_coordinates() -> leptatui::app::
         .into_view();
     let mut terminal = render_view(root.as_view(), 10, 5)?;
 
-    assert_eq!(rendered_lines(&terminal)[2].chars().nth(4), Some('A'));
-    terminal.backend_mut().assert_cursor_position((5, 2));
+    assert_eq!(rendered_lines(&terminal)[2].chars().nth(5), Some('A'));
+    terminal.backend_mut().assert_cursor_position((6, 2));
     Ok(())
 }
 

@@ -205,35 +205,6 @@ fn MarkdownEditor(
         }
         .help => { fg: Color::Gray }
 
-        Button => {
-            fg: Color::White,
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
-        }
-        Button:focus => {
-            fg: Color::Black,
-            bg: Color::LightCyan,
-            modifier: Modifier::BOLD,
-            border_type: BorderType::Thick
-        }
-
-        H1 => { fg: Color::LightCyan }
-        H2 => { fg: Color::LightBlue }
-        H3 => { fg: Color::LightGreen }
-        H4 => { fg: Color::LightYellow }
-        H5 => { fg: Color::LightMagenta }
-        H6 => { fg: Color::Gray }
-        Paragraph => { fg: Color::White }
-        OrderedList => { fg: Color::LightCyan }
-        UnorderedList => { fg: Color::LightGreen }
-        TableHead => { fg: Color::LightCyan }
-        CodeBlock => { fg: Color::LightBlue }
-        Link:focus => { fg: Color::Black, bg: Color::LightCyan }
-        A => { fg: Color::LightBlue }
-        A:focus => { fg: Color::Black, bg: Color::LightCyan }
-        .active => { fg: Color::LightCyan, modifier: Modifier::BOLD }
-
         @media (max-width: 60) {
             .app-shell => {
                 border_type: BorderType::Plain,
@@ -242,6 +213,7 @@ fn MarkdownEditor(
             .page-content => { padding: TuiSpacing::ZERO }
             .actions => { flex_direction: FlexDirection::Column }
             Button => { padding: TuiSpacing::ZERO }
+            TextArea => { padding: TuiSpacing::ZERO }
         }
     }
 

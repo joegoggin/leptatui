@@ -38,6 +38,62 @@ fn markdown_file_links_decode_percent_encoded_paths() -> Result<()> {
     Ok(())
 }
 
+/// Verifies accepted Markdown navigation marks the source link visited.
+///
+/// # Example Under Test
+///
+/// ```text
+/// root.md: [Guide](guide.md)
+/// Enter, then H to return through Markdown history
+/// ```
+///
+/// # Assertions
+///
+/// - Link activation navigates to `guide.md` inside the active session.
+/// - Markdown history returns to the source document.
+/// - The restored link renders magenta and underlined.
+#[test]
+fn markdown_navigation_marks_restored_link_visited_for_session() -> Result<()> {
+    let fixture_dir = markdown_fixture_dir("visited-navigation");
+    let root_path = fixture_dir.join("root.md");
+    let target_path = fixture_dir.join("guide.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    fs::write(&root_path, "[Guide](guide.md)")
+        .expect("source Markdown fixture should be written");
+    fs::write(&target_path, "# Guide").expect("target Markdown fixture should be written");
+
+    let registry = crate::view::VisitedLinkRegistry::new();
+    let mut document = markdown_file(&root_path);
+    let mut terminal = Terminal::new(TestBackend::new(8, 1))?;
+    registry.with(|| -> Result<()> {
+        document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?;
+        document.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?;
+        assert_eq!(
+            document
+                .downcast_ref::<MarkdownView>()
+                .expect("file reader should return a Markdown boundary")
+                .current_path(),
+            target_path
+        );
+
+        document.handle_key_event(KeyEvent::new(KeyCode::Char('H'), KeyModifiers::NONE))?;
+        let mut render_result = Ok(());
+        terminal.draw(|frame| {
+            let mut ctx = RenderCtx::new(frame);
+            render_result = document.render(&mut ctx);
+        })?;
+        render_result
+    })?;
+
+    for cell in &terminal.backend().buffer().content()[..5] {
+        assert_eq!(cell.fg, Color::Magenta);
+        assert!(cell.modifier.contains(Modifier::UNDERLINED));
+    }
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+    Ok(())
+}
+
 /// Verifies percent-encoded non-Markdown paths resolve to decoded filenames.
 ///
 /// # Example Under Test

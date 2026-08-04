@@ -88,14 +88,6 @@ impl Element {
         let leptatui = crate::crate_path::leptatui();
         let mut options = quote! { #leptatui::MarkdownOptions::default() };
 
-        if let Some(theme) = attrs
-            .iter()
-            .find(|validated| validated.kind == AttrKind::SyntaxTheme)
-        {
-            let value = theme.attr.value.to_tokens();
-            options = quote! { (#options).syntax_theme(#value) };
-        }
-
         if let Some(line_numbers) = attrs
             .iter()
             .find(|validated| validated.kind == AttrKind::LineNumbers)

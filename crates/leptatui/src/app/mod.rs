@@ -30,7 +30,7 @@ use std::time::Duration;
 use futures_util::FutureExt;
 
 use crate::executor::init_tokio_executor;
-use crate::{AnyView, IntoView, View};
+use crate::{AnyView, IntoView, View, view::VisitedLinkRegistry};
 
 pub use control::AppControl;
 pub use error::{Error, Result};
@@ -58,6 +58,8 @@ pub struct App<R> {
     handle: AppHandle,
     /// Active standalone error screen scoped to this runner.
     error_screens: ErrorScreenRegistry,
+    /// Destinations visited during this runner's lifetime.
+    visited_links: VisitedLinkRegistry,
     /// Event polling timeout and, when enabled, idle redraw cadence.
     redraw_interval: Duration,
     /// Whether a timed-out event poll requests an idle redraw.
@@ -79,6 +81,7 @@ impl App<AnyView> {
             root: root.into_view(),
             handle: AppHandle::new(),
             error_screens: ErrorScreenRegistry::new(),
+            visited_links: VisitedLinkRegistry::new(),
             redraw_interval: DEFAULT_EVENT_POLL_INTERVAL,
             redraw_on_timeout: false,
         }
@@ -100,6 +103,7 @@ impl<R> App<R> {
             root,
             handle: AppHandle::new(),
             error_screens: ErrorScreenRegistry::new(),
+            visited_links: VisitedLinkRegistry::new(),
             redraw_interval: DEFAULT_EVENT_POLL_INTERVAL,
             redraw_on_timeout: false,
         }
@@ -150,19 +154,22 @@ where
     /// Returns [`Error::Io`] if event handling performs terminal I/O that
     /// fails. Returns [`Error::LinkOpen`] if an activated link cannot open.
     fn handle_active_event(&mut self, event: crossterm::event::Event) -> Result<EventOutcome> {
-        if let Some(mut screen) = self.error_screens.active() {
-            View::handle_event(&mut screen, event).map(EventOutcome::recompute)
-        } else {
-            self.root
-                .__handle_event(event)
-                .map(|(control, reuse_layout)| {
-                    if reuse_layout {
-                        EventOutcome::reuse(control)
-                    } else {
-                        EventOutcome::recompute(control)
-                    }
-                })
-        }
+        let visited_links = self.visited_links.clone();
+        visited_links.with(|| {
+            if let Some(mut screen) = self.error_screens.active() {
+                View::handle_event(&mut screen, event).map(EventOutcome::recompute)
+            } else {
+                self.root
+                    .__handle_event(event)
+                    .map(|(control, reuse_layout)| {
+                        if reuse_layout {
+                            EventOutcome::reuse(control)
+                        } else {
+                            EventOutcome::recompute(control)
+                        }
+                    })
+            }
+        })
     }
 
     /// Flushes pending input from the active error screen or ordinary root.
@@ -270,14 +277,17 @@ where
                 } else {
                     LayoutMode::Recompute
                 };
-                draw_root(
-                    &mut self.root,
-                    &mut session.terminal,
-                    &session.terminal_images,
-                    &self.handle,
-                    &self.error_screens,
-                    layout,
-                )?;
+                let visited_links = self.visited_links.clone();
+                visited_links.with(|| {
+                    draw_root(
+                        &mut self.root,
+                        &mut session.terminal,
+                        &session.terminal_images,
+                        &self.handle,
+                        &self.error_screens,
+                        layout,
+                    )
+                })?;
                 last_viewport = Some(viewport);
                 should_draw = false;
                 next_layout = LayoutMode::Recompute;

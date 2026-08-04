@@ -4,33 +4,25 @@
 ///
 /// ```text
 /// markdown("```rust\nfn main() {}\n```")
-/// markdown_with_options(source, light theme + line numbers)
+/// markdown_with_options(source, line numbers enabled)
 /// ```
 ///
 /// # Assertions
 ///
 /// - Both in-memory readers return document views without failure.
-/// - Default code blocks use the dark theme without line numbers.
-/// - Custom options apply the light theme and enable line numbers.
+/// - Default code blocks omit line numbers.
+/// - Custom options enable line numbers.
 /// - An owned source string is accepted by the option-bearing reader.
 #[test]
 fn markdown_reader_apis_apply_default_and_custom_options() {
     let source = "```rust\nfn main() {}\n```\n";
     let default = markdown(source);
-    assert_eq!(
-        parsed_code_block_options(&default),
-        (false, SyntaxTheme::Dark)
-    );
+    assert!(!parsed_code_block_line_numbers(&default));
 
-    let options = MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Light)
-        .line_numbers(true);
+    let options = MarkdownOptions::default().line_numbers(true);
     let owned_source = source.to_owned();
     let configured = markdown_with_options(owned_source, options);
-    assert_eq!(
-        parsed_code_block_options(&configured),
-        (true, SyntaxTheme::Light)
-    );
+    assert!(parsed_code_block_line_numbers(&configured));
 }
 
 /// Verifies Markdown file readers synchronously load UTF-8 source.
@@ -39,7 +31,7 @@ fn markdown_reader_apis_apply_default_and_custom_options() {
 ///
 /// ```text
 /// markdown_file("guide.md")
-/// markdown_file_with_options("guide.md", light theme + line numbers)
+/// markdown_file_with_options("guide.md", line numbers enabled)
 /// ```
 ///
 /// # Assertions
@@ -71,9 +63,7 @@ fn markdown_file_reader_apis_load_utf8_source() {
         fixture_path
     );
 
-    let options = MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Light)
-        .line_numbers(true);
+    let options = MarkdownOptions::default().line_numbers(true);
     let configured = markdown_file_with_options(&fixture_path, options);
     let expected_configured = markdown_with_options(source, options);
     assert_eq!(

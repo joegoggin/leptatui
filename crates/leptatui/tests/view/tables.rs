@@ -13,7 +13,8 @@
 /// # Assertions
 ///
 /// - Plain outer borders and intersections frame both rows.
-/// - Header text uses the bold semantic default.
+/// - Header text uses the light-cyan, bold semantic defaults.
+/// - Body text uses the white table foreground default.
 /// - Centered and right-aligned cells use their allocated column widths.
 #[test]
 fn semantic_table_renders_borders_bold_header_and_alignment() -> leptatui::app::Result<()> {
@@ -31,8 +32,10 @@ fn semantic_table_renders_borders_bold_header_and_alignment() -> leptatui::app::
     assert_eq!(cell_symbol(&terminal, 0, 0, 13), "┌");
     assert_eq!(cell_symbol(&terminal, 5, 0, 13), "┬");
     assert_eq!(cell_symbol(&terminal, 12, 4, 13), "┘");
+    assert_eq!(cell_colors(&terminal, 1, 1, 13).0, Color::LightCyan);
     assert!(cell_modifiers(&terminal, 1, 1, 13).contains(Modifier::BOLD));
     assert_eq!(symbol_position(&terminal, "A", 13), (3, 3));
+    assert_eq!(cell_colors(&terminal, 3, 3, 13).0, Color::White);
     assert_eq!(symbol_position(&terminal, "O", 13), (10, 3));
 
     Ok(())

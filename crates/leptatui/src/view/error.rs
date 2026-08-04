@@ -72,9 +72,12 @@ fn ErrorScreen(
     error_screens: Option<ErrorScreenRegistry>,
 ) -> impl IntoView {
     crate::stylesheet! {
+        Paragraph => { fg: Color::Red }
         Button => {
             fg: Color::Red,
-            bg: Color::Reset
+            bg: Color::Reset,
+            border_type: BorderType::Plain,
+            padding: TuiSpacing::ZERO
         }
         Button:focus => {
             fg: Color::White,

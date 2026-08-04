@@ -1,4 +1,4 @@
-/// Verifies code-block builders retain source, highlighting, and display options.
+/// Verifies code-block builders retain source, terminal highlighting, and display options.
 ///
 /// # Example Under Test
 ///
@@ -6,35 +6,38 @@
 /// code_block("fn main() {}")
 ///     .language("rs")
 ///     .line_numbers(true)
-///     .syntax_theme(SyntaxTheme::Light)
 /// ```
 ///
 /// # Assertions
 ///
-/// - Code blocks default to the dark theme with line numbers disabled.
-/// - The configured language token and light theme are retained.
+/// - Code blocks default to line numbers disabled.
+/// - The configured language token and line-number choice are retained.
 /// - The `rs` alias selects syntax highlighting instead of plain source spans.
+/// - Highlighted spans use named terminal colors instead of fixed RGB colors.
 /// - Code-block metadata uses [`ViewType::CodeBlock`].
 #[test]
 fn code_block_builder_retains_highlighted_lines_and_options() {
     let default = code_block("fn main() {}");
     assert!(!default.has_line_numbers());
-    assert_eq!(default.selected_syntax_theme(), SyntaxTheme::Dark);
 
     let configured = code_block("fn main() {}")
         .language("rs")
-        .line_numbers(true)
-        .syntax_theme(SyntaxTheme::Light);
+        .line_numbers(true);
     assert_eq!(configured.source(), "fn main() {}");
     assert_eq!(configured.language_token(), Some("rs"));
     assert!(configured.has_line_numbers());
-    assert_eq!(configured.selected_syntax_theme(), SyntaxTheme::Light);
     assert!(
         configured.highlighted_lines()[0]
             .spans
             .iter()
             .any(|span| span.style.fg.is_some())
     );
+    assert!(configured.highlighted_lines().iter().all(|line| {
+        line.spans.iter().all(|span| {
+            !matches!(span.style.fg, Some(Color::Rgb(_, _, _)))
+                && !matches!(span.style.bg, Some(Color::Rgb(_, _, _)))
+        })
+    }));
     assert_eq!(configured.metadata().view_type(), ViewType::CodeBlock);
 }
 
@@ -69,33 +72,63 @@ fn code_block_recognizes_aliases_and_falls_back_for_unknown_languages() {
     assert_eq!(unknown_lines[0].spans[0].style, Style::default());
 }
 
-/// Verifies code-block themes produce distinct syntax colors.
+/// Verifies plain code blocks use the semantic foreground default.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code_block("plain").language("unknown-language")
+/// ```
+///
+/// # Assertions
+///
+/// - The code block renders successfully.
+/// - Unstyled fallback source renders light blue.
+#[test]
+fn plain_code_block_renders_default_foreground() -> leptatui::app::Result<()> {
+    let view = code_block("plain").language("unknown-language");
+    let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "p");
+    assert_eq!(cell_colors(&terminal, 1, 1, 8).0, Color::LightBlue);
+
+    Ok(())
+}
+
+/// Verifies recognized syntax uses terminal-native colors.
 ///
 /// # Example Under Test
 ///
 /// ```text
 /// code_block("fn main() {}").language("rust")
-/// code_block("fn main() {}").language("rust").syntax_theme(SyntaxTheme::Light)
 /// ```
 ///
 /// # Assertions
 ///
-/// - Both themes retain highlighted spans.
-/// - At least one corresponding syntax span has a different foreground or background color.
+/// - Recognized source retains highlighted spans.
+/// - Every syntax foreground and background avoids fixed RGB colors.
+/// - Syntax spans use the shared dark-gray terminal surface.
 #[test]
-fn code_block_dark_and_light_themes_produce_distinct_colors() {
-    let dark = code_block("fn main() {}\nlet value = true;").language("rust");
-    let light = dark.clone().syntax_theme(SyntaxTheme::Light);
-    let dark_lines = dark.highlighted_lines();
-    let light_lines = light.highlighted_lines();
-
-    assert!(dark_lines.iter().any(|line| !line.spans.is_empty()));
-    assert!(light_lines.iter().any(|line| !line.spans.is_empty()));
-    assert!(dark_lines
+fn code_block_highlighting_uses_terminal_native_colors() {
+    let code = code_block("fn main() {}\nlet value = true;").language("rust");
+    let spans = code
+        .highlighted_lines()
         .iter()
         .flat_map(|line| &line.spans)
-        .zip(light_lines.iter().flat_map(|line| &line.spans))
-        .any(|(dark, light)| dark.style.fg != light.style.fg || dark.style.bg != light.style.bg));
+        .collect::<Vec<_>>();
+
+    assert!(!spans.is_empty());
+    assert!(spans.iter().all(|span| {
+        !matches!(span.style.fg, Some(Color::Rgb(_, _, _)))
+            && !matches!(span.style.bg, Some(Color::Rgb(_, _, _)))
+    }));
+    assert!(
+        spans
+            .iter()
+            .all(|span| span.style.bg == Some(Color::DarkGray))
+    );
 }
 
 /// Verifies language titles and logical-line gutters render inside the border.
@@ -141,33 +174,23 @@ fn code_block_renders_language_title_and_line_number_gutter() -> leptatui::app::
 ///
 /// # Assertions
 ///
-/// - Dark and light syntax themes fill padding, code, trailing, and blank interior cells.
-/// - Dark and light syntax-theme backgrounds remain distinct.
-/// - An authored background overrides the selected theme for unknown-language fallback code.
-/// - Border cells do not receive either syntax or authored interior backgrounds.
+/// - The terminal-native surface fills padding, code, trailing, and blank interior cells.
+/// - An authored background overrides the default for unknown-language fallback code.
+/// - Border cells do not receive either the default or authored interior backgrounds.
 #[test]
 fn code_block_background_fills_interior_and_honors_authored_override() -> leptatui::app::Result<()> {
     let padding = TuiSpacing::uniform(1);
-    let dark = code_block("x")
+    let code = code_block("x")
         .language("rust")
         .with_inline_style(TuiStyle::new().padding(padding));
-    let mut dark_terminal = Terminal::new(TestBackend::new(12, 5))?;
-    draw_view(&mut dark_terminal, &dark)?;
-    let dark_background = cell_colors(&dark_terminal, 2, 2, 12).1;
-    assert_ne!(dark_background, Color::Reset);
+    let mut terminal = Terminal::new(TestBackend::new(12, 5))?;
+    draw_view(&mut terminal, &code)?;
+    let background = cell_colors(&terminal, 2, 2, 12).1;
+    assert_eq!(background, Color::DarkGray);
     for (x, y) in [(1, 1), (9, 2), (10, 2), (1, 3)] {
-        assert_eq!(cell_colors(&dark_terminal, x, y, 12).1, dark_background);
+        assert_eq!(cell_colors(&terminal, x, y, 12).1, background);
     }
-    assert_ne!(cell_colors(&dark_terminal, 0, 0, 12).1, dark_background);
-
-    let light = dark.clone().syntax_theme(SyntaxTheme::Light);
-    let mut light_terminal = Terminal::new(TestBackend::new(12, 5))?;
-    draw_view(&mut light_terminal, &light)?;
-    let light_background = cell_colors(&light_terminal, 2, 2, 12).1;
-    assert_ne!(light_background, dark_background);
-    assert_eq!(cell_colors(&light_terminal, 9, 2, 12).1, light_background);
-    assert_eq!(cell_colors(&light_terminal, 1, 3, 12).1, light_background);
-    assert_ne!(cell_colors(&light_terminal, 0, 0, 12).1, light_background);
+    assert_ne!(cell_colors(&terminal, 0, 0, 12).1, background);
 
     let authored = code_block("x")
         .language("unknown-language")

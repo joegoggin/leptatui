@@ -228,9 +228,13 @@ impl Stylesheet {
             metadata.view_type().default_style(),
         ));
         resolved.overlay_normal(&StyleDeclarations::from(
-            metadata
-                .view_type()
-                .default_state_style(metadata.is_focused()),
+            metadata.view_type().default_state_style(
+                metadata.is_focused(),
+                metadata.is_active(),
+                metadata.is_insert(),
+                metadata.is_visual(),
+                metadata.is_visited(),
+            ),
         ));
         let rules = Self::matching_rules(stylesheets, metadata, ancestors, viewport);
 

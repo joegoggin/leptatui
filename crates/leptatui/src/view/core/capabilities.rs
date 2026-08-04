@@ -80,6 +80,62 @@ pub trait StyledView: Sized {
         self.metadata_mut().set_focused(focused);
         self
     }
+
+    /// Sets the current active pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `active` — Whether this view should match the active selector.
+    ///
+    /// # Returns
+    ///
+    /// This view with the updated active state.
+    fn with_active(mut self, active: bool) -> Self {
+        self.metadata_mut().set_active(active);
+        self
+    }
+
+    /// Sets the current insert pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `insert` — Whether this view should match the insert selector.
+    ///
+    /// # Returns
+    ///
+    /// This view with the updated insert state.
+    fn with_insert(mut self, insert: bool) -> Self {
+        self.metadata_mut().set_insert(insert);
+        self
+    }
+
+    /// Sets the current visual pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `visual` — Whether this view should match the visual selector.
+    ///
+    /// # Returns
+    ///
+    /// This view with the updated visual state.
+    fn with_visual(mut self, visual: bool) -> Self {
+        self.metadata_mut().set_visual(visual);
+        self
+    }
+
+    /// Sets the current visited pseudo-class state.
+    ///
+    /// # Arguments
+    ///
+    /// * `visited` — Whether this view should match the visited selector.
+    ///
+    /// # Returns
+    ///
+    /// This view with the updated visited state.
+    fn with_visited(mut self, visited: bool) -> Self {
+        self.metadata_mut().set_visited(visited);
+        self
+    }
 }
 
 /// Child access shared by concrete container views.
@@ -200,6 +256,42 @@ macro_rules! impl_styled_view {
             /// Sets the current focus pseudo-class state.
             pub fn with_focus(self, focused: bool) -> Self {
                 $crate::view::StyledView::with_focus(self, focused)
+            }
+
+            /// Sets the current active pseudo-class state.
+            pub fn with_active(self, active: bool) -> Self {
+                $crate::view::StyledView::with_active(self, active)
+            }
+
+            /// Sets the current insert pseudo-class state.
+            pub fn with_insert(self, insert: bool) -> Self {
+                $crate::view::StyledView::with_insert(self, insert)
+            }
+
+            /// Sets the current visual pseudo-class state.
+            ///
+            /// # Arguments
+            ///
+            /// * `visual` — Whether this view should match the visual selector.
+            ///
+            /// # Returns
+            ///
+            /// This view with the updated visual state.
+            pub fn with_visual(self, visual: bool) -> Self {
+                $crate::view::StyledView::with_visual(self, visual)
+            }
+
+            /// Sets the current visited pseudo-class state.
+            ///
+            /// # Arguments
+            ///
+            /// * `visited` — Whether this view should match the visited selector.
+            ///
+            /// # Returns
+            ///
+            /// This view with the updated visited state.
+            pub fn with_visited(self, visited: bool) -> Self {
+                $crate::view::StyledView::with_visited(self, visited)
             }
         }
     };

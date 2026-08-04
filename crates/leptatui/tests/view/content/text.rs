@@ -160,7 +160,7 @@ fn semantic_text_builders_store_rich_text_and_metadata() {
     assert_eq!(paragraph.metadata().view_type(), ViewType::Paragraph);
 }
 
-/// Verifies semantic text views render their documented hierarchy and modifiers.
+/// Verifies semantic text views render their documented hierarchy and styles.
 ///
 /// # Example Under Test
 ///
@@ -171,26 +171,34 @@ fn semantic_text_builders_store_rich_text_and_metadata() {
 ///
 /// # Assertions
 ///
+/// - H1 through H6 use the cyan-to-gray semantic foreground palette.
 /// - H1 is bold and retains the terminal's default background.
-/// - H2 is bold.
-/// - H3 is bold and italic.
-/// - H4 is italic.
-/// - H5 is dim and italic.
-/// - H6 is dim.
+/// - H2 is bold, H3 is bold and italic, and H4 is italic.
+/// - H5 is dim and italic, and H6 is dim.
 /// - H1 through H6 use Markdown-style `#` markers and no underline modifier.
-/// - Paragraph has no default modifier.
+/// - Paragraph is white with no default modifier.
 #[test]
-fn semantic_text_views_render_default_modifiers() -> leptatui::app::Result<()> {
+fn semantic_text_views_render_default_styles() -> leptatui::app::Result<()> {
     let headings = [
-        (h1("H1"), 1, Modifier::BOLD),
-        (h2("H2"), 2, Modifier::BOLD),
-        (h3("H3"), 3, Modifier::BOLD | Modifier::ITALIC),
-        (h4("H4"), 4, Modifier::ITALIC),
-        (h5("H5"), 5, Modifier::DIM | Modifier::ITALIC),
-        (h6("H6"), 6, Modifier::DIM),
+        (h1("H1"), 1, Color::LightCyan, Modifier::BOLD),
+        (h2("H2"), 2, Color::LightBlue, Modifier::BOLD),
+        (
+            h3("H3"),
+            3,
+            Color::LightGreen,
+            Modifier::BOLD | Modifier::ITALIC,
+        ),
+        (h4("H4"), 4, Color::LightYellow, Modifier::ITALIC),
+        (
+            h5("H5"),
+            5,
+            Color::LightMagenta,
+            Modifier::DIM | Modifier::ITALIC,
+        ),
+        (h6("H6"), 6, Color::Gray, Modifier::DIM),
     ];
 
-    for (view, level, expected_modifiers) in headings {
+    for (view, level, expected_color, expected_modifiers) in headings {
         let mut terminal = Terminal::new(TestBackend::new(16, 1))?;
         draw_view(&mut terminal, &view)?;
 
@@ -199,6 +207,7 @@ fn semantic_text_views_render_default_modifiers() -> leptatui::app::Result<()> {
             assert_eq!(cell_symbol(&terminal, marker_x, 0, 16), "#");
         }
         assert_eq!(cell_symbol(&terminal, content_x, 0, 16), "H");
+        assert_eq!(cell_colors(&terminal, content_x, 0, 16).0, expected_color);
         assert_eq!(
             cell_modifiers(&terminal, content_x, 0, 16),
             expected_modifiers
@@ -213,6 +222,10 @@ fn semantic_text_views_render_default_modifiers() -> leptatui::app::Result<()> {
     let mut paragraph_terminal = Terminal::new(TestBackend::new(16, 1))?;
     draw_view(&mut paragraph_terminal, &paragraph("Paragraph"))?;
     assert_eq!(
+        cell_colors(&paragraph_terminal, 0, 0, 16).0,
+        Color::White
+    );
+    assert_eq!(
         cell_modifiers(&paragraph_terminal, 0, 0, 16),
         Modifier::empty()
     );
@@ -226,17 +239,17 @@ fn semantic_text_views_render_default_modifiers() -> leptatui::app::Result<()> {
 ///
 /// ```text
 /// h1("Guide")
-/// H1 { modifier: empty }
-/// .title { modifier: italic }
-/// inline modifier: dim
-/// .title { modifier: crossed-out !important }
+/// H1 { fg: red, modifier: empty }
+/// .title { fg: green, modifier: italic }
+/// inline fg: yellow, modifier: dim
+/// .title { fg: magenta, modifier: crossed-out !important }
 /// ```
 ///
 /// # Assertions
 ///
-/// - The H1 default resolves to bold without authored styles.
-/// - A normal type rule can remove every default modifier.
-/// - A class rule replaces the semantic default.
+/// - The H1 default resolves to light cyan and bold without authored styles.
+/// - A normal type rule replaces the default color and modifier.
+/// - A class rule replaces the semantic defaults.
 /// - An inline declaration replaces a normal class rule.
 /// - An important rule replaces the inline declaration.
 #[test]
@@ -249,11 +262,14 @@ fn semantic_defaults_have_low_cascade_precedence() {
         TuiStyle::new(),
         &theme,
     );
+    assert_eq!(default_style.foreground, Some(Color::LightCyan));
     assert_eq!(default_style.modifiers, Some(Modifier::BOLD));
 
     let type_stylesheet = Stylesheet::new().rule(
         StyleSelector::view_type(ViewType::H1),
-        TuiStyle::new().modifier(Modifier::empty()),
+        TuiStyle::new()
+            .foreground(Color::Red)
+            .modifier(Modifier::empty()),
     );
     let type_style = type_stylesheet.resolve(
         plain.style_metadata().expect("H1 metadata"),
@@ -261,12 +277,15 @@ fn semantic_defaults_have_low_cascade_precedence() {
         TuiStyle::new(),
         &theme,
     );
+    assert_eq!(type_style.foreground, Some(Color::Red));
     assert_eq!(type_style.modifiers, Some(Modifier::empty()));
 
     let class_view = h1("Guide").with_classes("title");
     let class_stylesheet = Stylesheet::new().rule(
         StyleSelector::class("title"),
-        TuiStyle::new().modifier(Modifier::ITALIC),
+        TuiStyle::new()
+            .foreground(Color::Green)
+            .modifier(Modifier::ITALIC),
     );
     let class_style = class_stylesheet.resolve(
         class_view.style_metadata().expect("H1 metadata"),
@@ -274,22 +293,30 @@ fn semantic_defaults_have_low_cascade_precedence() {
         TuiStyle::new(),
         &theme,
     );
+    assert_eq!(class_style.foreground, Some(Color::Green));
     assert_eq!(class_style.modifiers, Some(Modifier::ITALIC));
 
     let inline_view = h1("Guide")
         .with_classes("title")
-        .with_inline_style(TuiStyle::new().modifier(Modifier::DIM));
+        .with_inline_style(
+            TuiStyle::new()
+                .foreground(Color::Yellow)
+                .modifier(Modifier::DIM),
+        );
     let inline_style = class_stylesheet.resolve(
         inline_view.style_metadata().expect("H1 metadata"),
         &[],
         TuiStyle::new(),
         &theme,
     );
+    assert_eq!(inline_style.foreground, Some(Color::Yellow));
     assert_eq!(inline_style.modifiers, Some(Modifier::DIM));
 
     let important_stylesheet = Stylesheet::new().rule(
         StyleSelector::class("title"),
-        StyleDeclarations::new().modifier_important(Modifier::CROSSED_OUT),
+        StyleDeclarations::new()
+            .foreground_important(Color::LightMagenta)
+            .modifier_important(Modifier::CROSSED_OUT),
     );
     let important_style = important_stylesheet.resolve(
         inline_view.style_metadata().expect("H1 metadata"),
@@ -297,5 +324,6 @@ fn semantic_defaults_have_low_cascade_precedence() {
         TuiStyle::new(),
         &theme,
     );
+    assert_eq!(important_style.foreground, Some(Color::LightMagenta));
     assert_eq!(important_style.modifiers, Some(Modifier::CROSSED_OUT));
 }

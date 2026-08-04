@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 
 use pulldown_cmark::{Options, Parser};
 
-use crate::{AnyView, IntoView, SyntaxTheme, div};
+use crate::{AnyView, IntoView, div};
 
 use self::block::parse_blocks;
 use self::navigation::MarkdownParseContext;
@@ -42,27 +42,11 @@ pub use self::navigation::MarkdownView;
 /// Default presentation options applied while converting Markdown documents.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MarkdownOptions {
-    /// Bundled syntax theme applied to fenced and indented code blocks.
-    pub(super) syntax_theme: SyntaxTheme,
     /// Whether parsed code blocks display one-based line numbers.
     pub(super) line_numbers: bool,
 }
 
 impl MarkdownOptions {
-    /// Sets the bundled syntax theme for parsed code blocks.
-    ///
-    /// # Arguments
-    ///
-    /// * `syntax_theme` — Dark or light bundled theme selection.
-    ///
-    /// # Returns
-    ///
-    /// A [`MarkdownOptions`] value with the requested syntax theme.
-    pub fn syntax_theme(mut self, syntax_theme: SyntaxTheme) -> Self {
-        self.syntax_theme = syntax_theme;
-        self
-    }
-
     /// Sets default line-number visibility for parsed code blocks.
     ///
     /// # Arguments
@@ -110,14 +94,12 @@ pub fn markdown(source: impl AsRef<str>) -> AnyView {
 /// # Examples
 ///
 /// ```
-/// use leptatui::{MarkdownOptions, SyntaxTheme, markdown_with_options};
+/// use leptatui::{MarkdownOptions, markdown_with_options};
 ///
 /// let source = "```rust\nfn main() {}\n```";
 /// let document = markdown_with_options(
 ///     source,
-///     MarkdownOptions::default()
-///         .syntax_theme(SyntaxTheme::Dark)
-///         .line_numbers(true),
+///     MarkdownOptions::default().line_numbers(true),
 /// );
 /// # let _ = document;
 /// ```
@@ -195,13 +177,11 @@ pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
 /// # Examples
 ///
 /// ```no_run
-/// use leptatui::{MarkdownOptions, SyntaxTheme, markdown_file_with_options};
+/// use leptatui::{MarkdownOptions, markdown_file_with_options};
 ///
 /// let view = markdown_file_with_options(
 ///     "README.md",
-///     MarkdownOptions::default()
-///         .syntax_theme(SyntaxTheme::Light)
-///         .line_numbers(true),
+///     MarkdownOptions::default().line_numbers(true),
 /// );
 /// # let _ = view;
 /// ```

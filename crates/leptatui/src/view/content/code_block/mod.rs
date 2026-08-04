@@ -2,7 +2,7 @@
 //!
 //! # Modules
 //!
-//! - [`highlight`] — Bundled syntax-set and theme-based source highlighting.
+//! - [`highlight`] — Bundled syntax parsing and terminal-native highlighting.
 
 mod highlight;
 
@@ -24,29 +24,20 @@ use crate::view::core::{
     },
 };
 use crate::view::{StyleMetadata, View, ViewType};
-use crate::{Borders, LayoutSize, TuiStyle, app::Result, component::RenderCtx};
-
-/// Bundled syntax and background theme used by code-block views.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum SyntaxTheme {
-    /// Base16 Ocean dark theme.
-    #[default]
-    Dark,
-    /// Base16 Ocean light theme.
-    Light,
-}
+use crate::{
+    Borders, LayoutSize, TuiStyle, app::Result, component::RenderCtx,
+    style::TERMINAL_SURFACE_BACKGROUND,
+};
 
 /// Bordered syntax-highlighted source code.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CodeBlockView {
-    /// Original source used when highlighting configuration changes.
+    /// Original source used when language selection changes.
     pub(crate) source: String,
     /// Caller-supplied language token.
     pub(crate) language: Option<String>,
     /// Whether one-based line numbers are displayed.
     pub(crate) line_numbers: bool,
-    /// Bundled syntax theme used for recognized source.
-    pub(crate) syntax_theme: SyntaxTheme,
     /// Retained highlighted logical source lines.
     pub(crate) highlighted_lines: Vec<ratatui::text::Line<'static>>,
     /// Selector and runtime metadata.
@@ -65,8 +56,7 @@ impl CodeBlockView {
     /// This code block with refreshed highlighted lines.
     pub fn language(mut self, language: impl Into<String>) -> Self {
         self.language = Some(language.into());
-        self.highlighted_lines =
-            highlighted_source_lines(&self.source, self.language.as_deref(), self.syntax_theme);
+        self.highlighted_lines = highlighted_source_lines(&self.source, self.language.as_deref());
         self
     }
 
@@ -83,22 +73,6 @@ impl CodeBlockView {
         self.line_numbers = line_numbers;
         self
     }
-
-    /// Sets the bundled syntax-highlighting theme.
-    ///
-    /// # Arguments
-    ///
-    /// * `syntax_theme` — Bundled theme used to highlight recognized source.
-    ///
-    /// # Returns
-    ///
-    /// This code block with refreshed highlighted lines.
-    pub fn syntax_theme(mut self, syntax_theme: SyntaxTheme) -> Self {
-        self.syntax_theme = syntax_theme;
-        self.highlighted_lines =
-            highlighted_source_lines(&self.source, self.language.as_deref(), self.syntax_theme);
-        self
-    }
 }
 
 /// Creates a bordered syntax-highlighted code block.
@@ -109,15 +83,14 @@ impl CodeBlockView {
 ///
 /// # Returns
 ///
-/// A [`CodeBlockView`] using the dark theme with line numbers disabled.
+/// A [`CodeBlockView`] using terminal-native colors with line numbers disabled.
 pub fn code_block(source: impl Into<String>) -> CodeBlockView {
     let source = source.into();
     CodeBlockView {
-        highlighted_lines: highlighted_source_lines(&source, None, SyntaxTheme::Dark),
+        highlighted_lines: highlighted_source_lines(&source, None),
         source,
         language: None,
         line_numbers: false,
-        syntax_theme: SyntaxTheme::Dark,
         metadata: StyleMetadata::new(ViewType::CodeBlock),
     }
 }
@@ -136,11 +109,6 @@ impl CodeBlockView {
     /// Returns whether line numbers are enabled.
     pub const fn has_line_numbers(&self) -> bool {
         self.line_numbers
-    }
-
-    /// Returns the selected syntax theme.
-    pub const fn selected_syntax_theme(&self) -> SyntaxTheme {
-        self.syntax_theme
     }
 
     /// Returns retained highlighted logical source lines.
@@ -283,7 +251,6 @@ pub(crate) fn wrap_styled_line(
 ///
 /// * `language` — Optional caller-supplied token shown in the border title.
 /// * `line_numbers` — Whether the logical-line gutter is enabled.
-/// * `syntax_theme` — Bundled theme supplying the default block background.
 /// * `highlighted_lines` — Retained highlighted logical source lines.
 /// * `metadata` — Selector metadata used to resolve block styling.
 /// * `ctx` — Rendering context containing the target area.
@@ -294,15 +261,12 @@ pub(crate) fn wrap_styled_line(
 fn render_code_block_view(
     language: Option<&str>,
     line_numbers: bool,
-    syntax_theme: SyntaxTheme,
     highlighted_lines: &[Line<'static>],
     metadata: &StyleMetadata,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
     let style = resolve_style(metadata, ctx);
-    let background = style
-        .background
-        .unwrap_or_else(|| syntax_theme.background());
+    let background = style.background.unwrap_or(TERMINAL_SURFACE_BACKGROUND);
     let mut content_style = style.clone();
     content_style.background = Some(background);
     let geometry = ctx.active_layout_geometry(metadata);
@@ -355,7 +319,6 @@ impl View for CodeBlockView {
         render_code_block_view(
             self.language.as_deref(),
             self.line_numbers,
-            self.syntax_theme,
             &self.highlighted_lines,
             &self.metadata,
             ctx,

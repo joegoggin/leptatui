@@ -1,0 +1,5 @@
+error: unsupported view! attribute; expected class, id, style, language, or line_numbers
+ --> tests/fixtures/view_macro/fail/code_block_syntax_theme.rs:8:20
+  |
+8 |         <CodeBlock syntax_theme={Color::Blue}>"fn main() {}"</CodeBlock>
+  |                    ^^^^^^^^^^^^

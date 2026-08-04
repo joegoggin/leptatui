@@ -38,8 +38,9 @@ fn link_builder_stores_rich_text_target_and_metadata() {
 ///
 /// # Assertions
 ///
-/// - The default link style is underlined but not reversed.
-/// - The focused link style is both underlined and reversed.
+/// - The default link style is blue, underlined, and not reversed.
+/// - The focused link style is blue on dark gray and underlined without reversal.
+/// - A focused visited link is magenta on dark gray and remains underlined.
 #[test]
 fn link_renders_default_and_focused_styles() -> leptatui::app::Result<()> {
     let mut view = link("Guide", "https://example.com");
@@ -47,6 +48,7 @@ fn link_renders_default_and_focused_styles() -> leptatui::app::Result<()> {
     draw_view(&mut terminal, &view)?;
     assert!(cell_modifiers(&terminal, 0, 0, 8).contains(Modifier::UNDERLINED));
     assert!(!cell_modifiers(&terminal, 0, 0, 8).contains(Modifier::REVERSED));
+    assert_eq!(cell_colors(&terminal, 0, 0, 8).0, Color::Blue);
 
     assert_eq!(
         view.handle_key_event(key_event(KeyCode::Tab))?,
@@ -54,8 +56,20 @@ fn link_renders_default_and_focused_styles() -> leptatui::app::Result<()> {
     );
     draw_view(&mut terminal, &view)?;
     let focused = cell_modifiers(&terminal, 0, 0, 8);
+    assert_eq!(
+        cell_colors(&terminal, 0, 0, 8),
+        (Color::Blue, Color::DarkGray)
+    );
     assert!(focused.contains(Modifier::UNDERLINED));
-    assert!(focused.contains(Modifier::REVERSED));
+    assert!(!focused.contains(Modifier::REVERSED));
+
+    view.metadata_mut().set_visited(true);
+    draw_view(&mut terminal, &view)?;
+    assert_eq!(
+        cell_colors(&terminal, 0, 0, 8),
+        (Color::Magenta, Color::DarkGray)
+    );
+    assert!(cell_modifiers(&terminal, 0, 0, 8).contains(Modifier::UNDERLINED));
     Ok(())
 }
 
@@ -106,20 +120,24 @@ fn link_focus_skips_fragments_and_propagates_open_errors() -> leptatui::app::Res
 ///
 /// # Assertions
 ///
-/// - Reconciliation preserves focus when the link target is unchanged.
-/// - Reconciliation clears focus when the link target changes.
+/// - Reconciliation preserves focus and visited state when the target is unchanged.
+/// - Reconciliation clears focus and visited state when the target changes.
 #[test]
 fn link_reconciliation_retains_focus_only_for_matching_targets() -> leptatui::app::Result<()> {
     let mut previous = link("Guide", "https://example.com");
     previous.handle_key_event(key_event(KeyCode::Tab))?;
+    previous.metadata_mut().set_visited(true);
     assert_eq!(control_focuses(&previous), vec![true]);
+    assert!(previous.metadata().is_visited());
 
     let mut matching = link("Updated", "https://example.com");
     leptatui::__private::__reconcile_view(&mut matching, &previous);
     assert_eq!(control_focuses(&matching), vec![true]);
+    assert!(matching.metadata().is_visited());
 
     let mut different = link("Other", "https://example.org");
     leptatui::__private::__reconcile_view(&mut different, &previous);
     assert_eq!(control_focuses(&different), vec![false]);
+    assert!(!different.metadata().is_visited());
     Ok(())
 }

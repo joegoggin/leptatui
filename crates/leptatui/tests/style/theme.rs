@@ -49,7 +49,7 @@ fn stylesheet_theme_variables_resolve_against_active_theme() {
 /// # Assertions
 ///
 /// - The blurred button resolves to a white foreground with no background.
-/// - The focused button resolves to a black foreground on a white background.
+/// - The focused button resolves to a white foreground on a dark-gray background.
 #[test]
 fn buttons_resolve_default_focus_colors() {
     let blurred = button("Cancel");
@@ -72,8 +72,8 @@ fn buttons_resolve_default_focus_colors() {
 
     assert_eq!(blurred_style.foreground, Some(Color::White));
     assert_eq!(blurred_style.background, None);
-    assert_eq!(focused_style.foreground, Some(Color::Black));
-    assert_eq!(focused_style.background, Some(Color::White));
+    assert_eq!(focused_style.foreground, Some(Color::White));
+    assert_eq!(focused_style.background, Some(Color::DarkGray));
 }
 
 /// Verifies focus selectors match only focused views.

@@ -27,9 +27,9 @@ fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> lepta
     assert_eq!(view.value(), "Ada\nLovelace");
 
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 1, 1, 12), "A");
-    assert_eq!(cell_symbol(&terminal, 3, 1, 12), "a");
-    assert_eq!(cell_symbol(&terminal, 4, 1, 12), " ");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 12), "A");
+    assert_eq!(cell_symbol(&terminal, 4, 1, 12), "a");
+    assert_eq!(cell_symbol(&terminal, 5, 1, 12), " ");
 
     Ok(())
 }

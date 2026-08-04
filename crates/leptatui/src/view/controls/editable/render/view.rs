@@ -46,6 +46,7 @@ pub(crate) fn render_editable_text_view(
     view: &EditableModel,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
+    view.sync_style_state();
     let style = resolve_style(&view.metadata, ctx);
     ctx.record_metadata_hit_area(&view.metadata);
     let block = style.to_block_with_default_borders(Borders::ALL);
@@ -192,6 +193,7 @@ pub(crate) fn measure_editable_text_view(
     available_space: LayoutSize<AvailableSpace>,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> LayoutSize<f32> {
+    view.sync_style_state();
     let style = resolve_style(&view.metadata, ctx);
     let borders = style.borders.unwrap_or(Borders::ALL);
     let border_width = horizontal_border_columns(borders);

@@ -12,7 +12,7 @@
 //! - [`mixin`] — Mixin definitions, includes, and cycle detection.
 //! - [`root`] — Complete stylesheet invocation parsing and expansion.
 //! - [`rule`] — Selector rule parsing and media-aware expansion.
-//! - [`selector`] — Type, class, id, focus, and descendant selectors.
+//! - [`selector`] — Type, class, id, state pseudo-class, and descendant selectors.
 //! - [`value`] — Literal, local-variable, and imported-variable values.
 //! - [`variable`] — Stylesheet variable definitions and references.
 

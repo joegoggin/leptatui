@@ -103,3 +103,80 @@ fn generated_view_route_switch_rebuilds_same_type_component_with_new_props() -> 
 
     Ok(())
 }
+
+/// Verifies route anchors recompute and render their pseudo-class styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Router initial_path="/docs">
+///   <A href="/" exact=true>Home</A>
+///   <A href="/docs" exact=true>Docs</A>
+/// </Router>
+/// render, Tab, Enter, render
+/// ```
+///
+/// # Assertions
+///
+/// - Inactive and active unvisited anchors render blue and underlined.
+/// - The active anchor is additionally bold.
+/// - The active anchor does not match an authored `.active` class rule.
+/// - Activating the focused home anchor navigates to the home route.
+/// - The newly active focused anchor renders magenta on dark gray after navigation.
+/// - The previously active anchor returns to its inactive defaults.
+#[test]
+fn generated_route_link_renders_default_styles() -> leptatui::app::Result<()> {
+    let mut component = MacroRouteLinkRoot::new();
+    let terminal = render_component(&mut component, 12, 2)?;
+    let initial = terminal.backend().buffer();
+    let home = initial
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "H")
+        .expect("home anchor cell");
+    let docs = initial
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "D")
+        .expect("docs anchor cell");
+    assert_eq!(home.fg, Color::Blue);
+    assert!(home.modifier.contains(Modifier::UNDERLINED));
+    assert!(!home.modifier.contains(Modifier::BOLD));
+    assert_eq!(docs.fg, Color::Blue);
+    assert_eq!(docs.bg, Color::Reset);
+    assert!(docs.modifier.contains(Modifier::BOLD));
+    assert!(docs.modifier.contains(Modifier::UNDERLINED));
+    assert!(!docs.modifier.contains(Modifier::REVERSED));
+
+    assert_eq!(
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
+        AppControl::Continue,
+    );
+    assert_eq!(
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue,
+    );
+    let terminal = render_component(&mut component, 12, 2)?;
+    let navigated = terminal.backend().buffer();
+    let home = navigated
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "H")
+        .expect("home anchor cell");
+    let docs = navigated
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "D")
+        .expect("docs anchor cell");
+    assert_eq!(home.fg, Color::Magenta);
+    assert_eq!(home.bg, Color::DarkGray);
+    assert!(home.modifier.contains(Modifier::BOLD));
+    assert!(home.modifier.contains(Modifier::UNDERLINED));
+    assert!(!home.modifier.contains(Modifier::REVERSED));
+    assert_eq!(docs.fg, Color::Blue);
+    assert_eq!(docs.bg, Color::Reset);
+    assert!(docs.modifier.contains(Modifier::UNDERLINED));
+    assert!(!docs.modifier.contains(Modifier::BOLD));
+
+    Ok(())
+}

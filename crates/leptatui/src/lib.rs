@@ -123,8 +123,8 @@
 //!
 //! Semantic headings are available through [`h1`] through [`h6`], and
 //! [`paragraph`] creates unmodified body text. [`code_block`] creates a
-//! bordered, width-aware source view with optional bundled syntax highlighting
-//! and line numbers. [`ordered_list`] and
+//! bordered, width-aware source view with optional syntax highlighting through
+//! the terminal's ANSI palette and optional line numbers. [`ordered_list`] and
 //! [`unordered_list`] group block-oriented [`list_item`] values with terminal
 //! markers. [`table`] groups semantic table sections, rows, and aligned cells
 //! into a bordered responsive grid. These semantic views accept
@@ -158,7 +158,6 @@
 //!     ]),
 //!     code_block("fn main() {}")
 //!         .language("rust")
-//!         .syntax_theme(SyntaxTheme::Dark)
 //!         .line_numbers(true),
 //! ));
 //! # let _ = document;
@@ -201,11 +200,9 @@
 //!                 </TableRow>
 //!             </TableBody>
 //!         </Table>
-//!         <CodeBlock
-//!             language="rust"
-//!             syntax_theme={SyntaxTheme::Dark}
-//!             line_numbers=true
-//!         >"fn main() {}"</CodeBlock>
+//!         <CodeBlock language="rust" line_numbers=true>
+//!             "fn main() {}"
+//!         </CodeBlock>
 //!     </Div>
 //! };
 //! # let _ = document;
@@ -223,13 +220,11 @@
 //! let default_document = markdown(source);
 //! let configured_document = markdown_with_options(
 //!     source,
-//!     MarkdownOptions::default()
-//!         .syntax_theme(SyntaxTheme::Light)
-//!         .line_numbers(true),
+//!     MarkdownOptions::default().line_numbers(true),
 //! );
 //! let file_document = markdown_file("README.md");
 //! let tagged_document = view! {
-//!     <Markdown src="README.md" syntax_theme={SyntaxTheme::Dark} line_numbers=true />
+//!     <Markdown src="README.md" line_numbers=true />
 //! };
 //! # let _ = (default_document, configured_document, file_document, tagged_document);
 //! ```
@@ -307,12 +302,12 @@ pub use view::{
     ContainerView, DivView, DynamicView, EditableAction, EditableState, EditableView, FormAction,
     FormView, HeadingLevel, HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews,
     LayoutGeometry, LinkTarget, LinkView, ListItemView, ListKind, ListView, ParagraphView,
-    ProgressBarView, RichText, RouteLinkView, StyleMetadata, StyledView, SyntaxTheme,
-    TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView, TextAreaView,
-    TextView, TextualView, View, ViewType, VimMode, block, button, code_block, component, div,
-    dynamic, form, h1, h2, h3, h4, h5, h6, image, input, keyed, link, list_item, ordered_list,
-    paragraph, progress_bar, route_link, table, table_body, table_cell, table_head, table_row,
-    text, text_area, unordered_list,
+    ProgressBarView, RichText, RouteLinkView, StyleMetadata, StyledView, TableCellView,
+    TableRowView, TableSectionKind, TableSectionView, TableView, TextAreaView, TextView,
+    TextualView, View, ViewType, VimMode, block, button, code_block, component, div, dynamic, form,
+    h1, h2, h3, h4, h5, h6, image, input, keyed, link, list_item, ordered_list, paragraph,
+    progress_bar, route_link, table, table_body, table_cell, table_head, table_row, text,
+    text_area, unordered_list,
 };
 
 /// Result type returned by fallible component setup functions.

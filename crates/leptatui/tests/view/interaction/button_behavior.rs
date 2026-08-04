@@ -85,7 +85,7 @@ fn focused_button_action_can_exit_app_loop() -> leptatui::app::Result<()> {
 /// # Assertions
 ///
 /// - The unfocused button renders white with the terminal background.
-/// - The focused button renders black on white.
+/// - The focused button renders white on dark gray.
 /// - Button borders use the same colors as their labels.
 #[test]
 fn renders_buttons_with_default_focus_colors() -> leptatui::app::Result<()> {
@@ -108,16 +108,16 @@ fn renders_buttons_with_default_focus_colors() -> leptatui::app::Result<()> {
         .find(|cell| cell.symbol() == "F")
         .expect("rendered focused button label");
     let unfocused_border = &buffer[(0, 0)];
-    let focused_border = &buffer[(3, 0)];
+    let focused_border = &buffer[(5, 0)];
 
     assert_eq!(unfocused_label.fg, Color::White);
     assert_eq!(unfocused_label.bg, Color::Reset);
     assert_eq!(unfocused_border.fg, Color::White);
     assert_eq!(unfocused_border.bg, Color::Reset);
-    assert_eq!(focused_label.fg, Color::Black);
-    assert_eq!(focused_label.bg, Color::White);
-    assert_eq!(focused_border.fg, Color::Black);
-    assert_eq!(focused_border.bg, Color::White);
+    assert_eq!(focused_label.fg, Color::White);
+    assert_eq!(focused_label.bg, Color::DarkGray);
+    assert_eq!(focused_border.fg, Color::White);
+    assert_eq!(focused_border.bg, Color::DarkGray);
 
     Ok(())
 }

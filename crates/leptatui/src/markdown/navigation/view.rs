@@ -12,6 +12,7 @@ use crate::{
     app::{AppControl, Result},
     component::{KeyControl, RenderCtx},
     paragraph,
+    view::mark_target_visited,
 };
 
 use super::{
@@ -140,6 +141,10 @@ impl MarkdownState {
             return false;
         };
 
+        mark_target_visited(&LinkTarget::Markdown {
+            path: path.clone(),
+            fragment: fragment.clone(),
+        });
         let next = load_markdown_page(path, self.options, fragment.as_deref());
         let previous = std::mem::replace(&mut self.current, next);
         self.back.push(previous);

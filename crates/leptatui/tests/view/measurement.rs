@@ -223,9 +223,9 @@ fn specialized_leaf_views_measure_width_and_height() -> leptatui::app::Result<()
         LayoutSize::all(AvailableSpace::Definite(4.0)),
     )?;
 
-    assert_eq!(button_size, LayoutSize::new(4.0, 3.0));
-    assert_eq!(input_size, LayoutSize::new(5.0, 3.0));
-    assert_eq!(text_area_size, LayoutSize::new(5.0, 4.0));
+    assert_eq!(button_size, LayoutSize::new(6.0, 3.0));
+    assert_eq!(input_size, LayoutSize::new(7.0, 3.0));
+    assert_eq!(text_area_size, LayoutSize::new(7.0, 4.0));
     assert_eq!(image_size, LayoutSize::new(9.0, 4.0));
     assert_eq!(code_size, LayoutSize::new(4.0, 5.0));
     Ok(())

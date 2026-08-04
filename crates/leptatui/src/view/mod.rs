@@ -44,7 +44,7 @@ pub use containers::{
     },
 };
 pub use content::{
-    code_block::{CodeBlockView, SyntaxTheme, code_block},
+    code_block::{CodeBlockView, code_block},
     heading::{HeadingLevel, HeadingView, h1, h2, h3, h4, h5, h6},
     paragraph::{ParagraphView, paragraph},
     text::{TextView, text},
@@ -72,6 +72,7 @@ pub use core::{
 };
 pub(crate) use link::{InlineLink, LinkedSpan};
 pub use link::{LinkTarget, RichText};
+pub(crate) use link::{VisitedLinkRegistry, mark_target_visited};
 pub use media::image::{ImageSource, ImageView, image};
 pub use ratatui::text::{Line, Span, Text};
 pub(crate) use reconciliation::reconcile_views;

@@ -19,8 +19,8 @@ use crossterm::event::{
 use leptatui::context::provide_context;
 use leptatui::{
     AnyView, AppControl, Borders, Children, Color, Display, FlexDirection, IntoView, KeyControl,
-    NavigateOptions, RenderCtx, Router, RouterProps, ThemeVariables, TuiStyle, View, button,
-    component, div, dynamic, stylesheet, text, theme_color, use_key_event, view,
+    Modifier, NavigateOptions, RenderCtx, Router, RouterProps, ThemeVariables, TuiStyle, View,
+    button, component, div, dynamic, stylesheet, text, theme_color, use_key_event, view,
 };
 use leptos::prelude::{GetUntracked, ReadSignal, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};

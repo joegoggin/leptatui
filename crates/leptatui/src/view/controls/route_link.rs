@@ -14,6 +14,7 @@ use crate::view::core::{
     measurement::{AvailableSpace, measure_rich_text},
     render::{resolve_style, semantic_paragraph},
 };
+use crate::view::link::{mark_route_visited, sync_route_visited};
 
 /// Focusable link that updates the nearest router.
 pub struct RouteLinkView {
@@ -78,22 +79,26 @@ impl RouteLinkView {
                     .is_some_and(|suffix| suffix.starts_with('/')))
     }
 
-    /// Returns metadata with the computed active class.
+    /// Returns metadata with the computed active pseudo-class state.
     ///
     /// # Returns
     ///
     /// A [`StyleMetadata`] clone used for style resolution.
     fn resolved_metadata(&self) -> StyleMetadata {
+        sync_route_visited(&self.metadata, &self.normalized_target_location());
         let mut metadata = self.metadata.clone();
-        if self.is_active() {
-            let mut classes = metadata.classes().join(" ");
-            if !classes.is_empty() {
-                classes.push(' ');
-            }
-            classes.push_str("active");
-            metadata.set_classes(classes);
-        }
+        metadata.set_active(self.is_active());
         metadata
+    }
+
+    /// Returns the normalized router destination used for visited tracking.
+    ///
+    /// # Returns
+    ///
+    /// A [`String`] containing the resolved pathname and optional query.
+    fn normalized_target_location(&self) -> String {
+        let current = self.location.pathname().get_untracked();
+        normalize_target_location(&self.href, &current)
     }
 }
 
@@ -238,7 +243,9 @@ impl View for RouteLinkView {
     /// Navigates when this focused link is activated.
     fn __activate_focused_button(&self) -> crate::Result<Option<AppControl>> {
         if self.metadata.is_focused() {
+            let target = self.normalized_target_location();
             (self.navigate)(&self.href, NavigateOptions::default());
+            mark_route_visited(&self.metadata, &target);
             return Ok(Some(AppControl::Continue));
         }
         Ok(None)
@@ -298,5 +305,67 @@ fn normalize_target_path(href: &str, current: &str) -> String {
         String::from("/")
     } else {
         format!("/{}", segments.join("/"))
+    }
+}
+
+/// Resolves an anchor target into its visited-registry identity.
+///
+/// Fragments are excluded because the router does not retain them. Query text
+/// remains part of the identity so anchors for distinct routed states do not
+/// share visited status.
+///
+/// # Arguments
+///
+/// * `href` — Anchor destination.
+/// * `current` — Current pathname used to resolve relative destinations.
+///
+/// # Returns
+///
+/// A [`String`] containing a normalized pathname and optional query.
+fn normalize_target_location(href: &str, current: &str) -> String {
+    let target = href.split('#').next().unwrap_or_default();
+    let search = target.split_once('?').map_or("", |(_, search)| search);
+    let pathname = normalize_target_path(target, current);
+    if search.is_empty() {
+        pathname
+    } else {
+        format!("{pathname}?{search}")
+    }
+}
+
+#[cfg(test)]
+/// Unit tests for route-anchor target normalization.
+mod tests {
+    use super::normalize_target_location;
+
+    /// Verifies visited route keys match the router's path and query behavior.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// current: /guides/start
+    /// targets: ../api?mode=full#methods, ?mode=compact, #details
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Relative path segments resolve against the current route.
+    /// - Query strings remain part of the visited identity.
+    /// - Fragments are excluded from the visited identity.
+    /// - Query-only and fragment-only targets resolve against the current path.
+    #[test]
+    fn visited_target_normalization_matches_router_locations() {
+        assert_eq!(
+            normalize_target_location("../api?mode=full#methods", "/guides/start"),
+            "/api?mode=full"
+        );
+        assert_eq!(
+            normalize_target_location("?mode=compact", "/guides/start"),
+            "/guides/start?mode=compact"
+        );
+        assert_eq!(
+            normalize_target_location("#details", "/guides/start"),
+            "/guides/start"
+        );
     }
 }

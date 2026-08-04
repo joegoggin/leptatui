@@ -1,4 +1,4 @@
-error: stylesheet! parent selector &:focus requires a parent selector
+error: stylesheet! parent pseudo-selector requires a parent selector
  --> tests/fixtures/stylesheet_macro/fail/nested_parent_reference_top_level.rs:8:11
   |
 8 |         &:focus => { fg: Color::White }

@@ -10,7 +10,8 @@
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The input renders a default border.
+/// - The input renders a rounded default border.
+/// - One cell of horizontal padding separates the value from the border.
 /// - The inner cells contain `A`, `d`, and `a`.
 #[test]
 fn renders_input_value() -> leptatui::app::Result<()> {
@@ -22,11 +23,11 @@ fn renders_input_value() -> leptatui::app::Result<()> {
 
     assert_eq!(
         cell_symbol(&terminal, 0, 0, 8),
-        symbol_border::PLAIN.top_left
+        symbol_border::ROUNDED.top_left
     );
-    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "A");
-    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "d");
-    assert_eq!(cell_symbol(&terminal, 3, 1, 8), "a");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 3, 1, 8), "d");
+    assert_eq!(cell_symbol(&terminal, 4, 1, 8), "a");
 
     Ok(())
 }
@@ -43,7 +44,7 @@ fn renders_input_value() -> leptatui::app::Result<()> {
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The value starts in the first cell when borders are disabled.
+/// - The value retains one cell of padding when borders are disabled.
 #[test]
 fn input_borders_none_disables_default_border() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 1);
@@ -52,8 +53,8 @@ fn input_borders_none_disables_default_border() -> leptatui::app::Result<()> {
 
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "A");
-    assert_eq!(cell_symbol(&terminal, 3, 0, 8), " ");
+    assert_eq!(cell_symbol(&terminal, 1, 0, 8), "A");
+    assert_eq!(cell_symbol(&terminal, 4, 0, 8), " ");
 
     Ok(())
 }
@@ -79,8 +80,8 @@ fn renders_input_placeholder_when_value_is_empty() -> leptatui::app::Result<()> 
 
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "N");
-    assert_eq!(cell_symbol(&terminal, 4, 1, 8), "e");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "N");
+    assert_eq!(cell_symbol(&terminal, 5, 1, 8), "e");
 
     Ok(())
 }
@@ -119,10 +120,118 @@ fn renders_focused_input_with_focus_stylesheet_rule() -> leptatui::app::Result<(
     })?;
     render_result?;
 
-    let (fg, bg) = cell_colors(&terminal, 1, 1, 8);
+    let (fg, bg) = cell_colors(&terminal, 2, 1, 8);
     assert_eq!(fg, Color::Black);
     assert_eq!(bg, Color::Yellow);
 
+    Ok(())
+}
+
+/// Verifies insert-mode inputs render their built-in yellow palette.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true)
+/// mode = Insert
+/// ```
+///
+/// # Assertions
+///
+/// - Input text and borders render yellow on dark gray.
+/// - The focused border uses thick glyphs.
+/// - The resolved text remains bold.
+#[test]
+fn insert_mode_input_renders_default_palette() -> leptatui::app::Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
+    let mut view = input("Ada").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        cell_colors(&terminal, 2, 1, 8),
+        (Color::Yellow, Color::DarkGray)
+    );
+    assert_eq!(
+        cell_colors(&terminal, 0, 0, 8),
+        (Color::Yellow, Color::DarkGray)
+    );
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), symbol_border::THICK.top_left);
+    assert!(cell_modifiers(&terminal, 2, 1, 8).contains(Modifier::BOLD));
+    Ok(())
+}
+
+/// Verifies authored insert rules override mode-aware input defaults.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Input:insert { fg: Magenta, padding: 0 }
+/// input("Ada").with_focus(true), mode = Insert
+/// ```
+///
+/// # Assertions
+///
+/// - The runtime editing mode matches the insert selector.
+/// - The authored foreground replaces yellow.
+/// - Removing padding moves the content one cell toward the border.
+#[test]
+fn insert_mode_stylesheet_rules_override_input_defaults() -> leptatui::app::Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
+    let mut view = input("Ada").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
+    let stylesheet = stylesheet! {
+        Input:insert => { fg: Color::Magenta, padding: TuiSpacing::ZERO }
+    };
+    let mut render_result = Ok(());
+
+    terminal.draw(|frame| {
+        let mut ctx = RenderCtx::new(frame);
+        render_result = ctx.__with_stylesheet(&stylesheet, |ctx| view.render(ctx));
+    })?;
+    render_result?;
+
+    assert!(view.metadata().is_insert());
+    assert_eq!(cell_colors(&terminal, 1, 1, 8).0, Color::Magenta);
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "A");
+    Ok(())
+}
+
+/// Verifies character-wise visual-mode inputs render their built-in magenta palette.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada").with_focus(true)
+/// mode = Visual, selection = first two characters
+/// ```
+///
+/// # Assertions
+///
+/// - Input text and borders render magenta on dark gray.
+/// - The focused border uses thick glyphs.
+/// - Selected cells remain reversed.
+#[test]
+fn visual_mode_input_renders_default_palette_and_selection() -> leptatui::app::Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
+    let mut view = input("Ada").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Visual);
+    editable_state_mut(&mut view).set_selection_anchor(Some(0));
+    editable_state_mut(&mut view).set_cursor(1);
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        cell_colors(&terminal, 2, 1, 8),
+        (Color::Magenta, Color::DarkGray)
+    );
+    assert_eq!(
+        cell_colors(&terminal, 0, 0, 8),
+        (Color::Magenta, Color::DarkGray)
+    );
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), symbol_border::THICK.top_left);
+    assert!(cell_modifiers(&terminal, 2, 1, 8).contains(Modifier::REVERSED));
     Ok(())
 }
 
@@ -147,7 +256,7 @@ fn focused_input_sets_terminal_cursor_position() -> leptatui::app::Result<()> {
 
     draw_view(&mut terminal, &view)?;
 
-    terminal.backend_mut().assert_cursor_position((4, 1));
+    terminal.backend_mut().assert_cursor_position((5, 1));
 
     Ok(())
 }
@@ -190,7 +299,7 @@ fn focused_input_cursor_respects_retained_clip() -> leptatui::app::Result<()> {
 
     assert_eq!(
         cell_symbol(&terminal, 0, 0, 4),
-        symbol_border::PLAIN.top_left
+        symbol_border::THICK.top_left
     );
     terminal.backend_mut().assert_cursor_position((0, 0));
     Ok(())
@@ -307,7 +416,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
 ///
 /// ```text
 /// input("abcdef").with_focus(true)
-/// width = 4, height = 3
+/// width = 6, height = 3
 /// cursor = end, then cursor = 0
 /// ```
 ///
@@ -318,18 +427,18 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
 /// - The second render succeeds and shows the head of the value.
 #[test]
 fn input_rendering_clips_and_scrolls_around_cursor() -> leptatui::app::Result<()> {
-    let backend = TestBackend::new(4, 3);
+    let backend = TestBackend::new(6, 3);
     let mut terminal = Terminal::new(backend)?;
     let mut view = input("abcdef").with_focus(true);
 
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 1, 1, 4), "e");
-    assert_eq!(cell_symbol(&terminal, 2, 1, 4), "f");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 6), "e");
+    assert_eq!(cell_symbol(&terminal, 3, 1, 6), "f");
 
     editable_state_mut(&mut view).set_cursor(0);
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 1, 1, 4), "a");
-    assert_eq!(cell_symbol(&terminal, 2, 1, 4), "b");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 6), "a");
+    assert_eq!(cell_symbol(&terminal, 3, 1, 6), "b");
 
     Ok(())
 }
@@ -358,10 +467,10 @@ fn input_visual_selection_renders_reversed_cells() -> leptatui::app::Result<()> 
 
     draw_view(&mut terminal, &view)?;
 
-    assert!(!cell_modifiers(&terminal, 1, 1, 8).contains(Modifier::REVERSED));
-    assert!(cell_modifiers(&terminal, 2, 1, 8).contains(Modifier::REVERSED));
+    assert!(!cell_modifiers(&terminal, 2, 1, 8).contains(Modifier::REVERSED));
     assert!(cell_modifiers(&terminal, 3, 1, 8).contains(Modifier::REVERSED));
-    assert!(!cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
+    assert!(cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
+    assert!(!cell_modifiers(&terminal, 5, 1, 8).contains(Modifier::REVERSED));
 
     Ok(())
 }
@@ -393,9 +502,9 @@ fn input_pending_insert_j_renders_reversed_preview() -> leptatui::app::Result<()
     );
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 4, 1, 8), "j");
-    assert!(cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
-    terminal.backend_mut().assert_cursor_position((4, 1));
+    assert_eq!(cell_symbol(&terminal, 5, 1, 8), "j");
+    assert!(cell_modifiers(&terminal, 5, 1, 8).contains(Modifier::REVERSED));
+    terminal.backend_mut().assert_cursor_position((5, 1));
 
     Ok(())
 }
@@ -428,8 +537,8 @@ fn input_pending_insert_j_preview_expires_to_insert_cursor() -> leptatui::app::R
     thread::sleep(Duration::from_millis(1100));
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 4, 1, 8), "j");
-    assert!(!cell_modifiers(&terminal, 4, 1, 8).contains(Modifier::REVERSED));
+    assert_eq!(cell_symbol(&terminal, 5, 1, 8), "j");
+    assert!(!cell_modifiers(&terminal, 5, 1, 8).contains(Modifier::REVERSED));
     terminal.backend_mut().assert_cursor_position((5, 1));
     assert_eq!(
         leptatui::AppRoot::__focused_control(&view),
