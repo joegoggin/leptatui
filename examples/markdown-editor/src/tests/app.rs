@@ -1,6 +1,6 @@
 //! Application routing and responsive-layout tests.
 
-use std::fs;
+use std::{fs, thread, time::Duration};
 
 use leptatui::prelude::{AppRoot, KeyCode, KeyControl, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
@@ -98,11 +98,14 @@ fn managed_root_preserves_context_after_route_navigation() -> leptatui::Result<(
         KeyControl::Handled
     );
 
-    render_result = Ok(());
-    terminal.draw(|frame| {
-        render_result = AppRoot::render(&mut view, frame);
-    })?;
-    render_result?;
+    for _ in 0..3 {
+        thread::sleep(Duration::from_millis(20));
+        render_result = Ok(());
+        terminal.draw(|frame| {
+            render_result = AppRoot::render(&mut view, frame);
+        })?;
+        render_result?;
+    }
 
     assert!(
         rendered_lines(&terminal)

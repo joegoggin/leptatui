@@ -17,6 +17,6 @@ pub(crate) use editor_process::EditorProcess;
 pub(crate) use editor_process::{EnvironmentReader, ProcessLauncher};
 pub(crate) use editor_session::EditorSession;
 pub(crate) use filesystem::{
-    DirectoryListing, ExplorerEntry, ExplorerEntryKind, FileSystem, Workspace,
+    DirectoryListing, ExplorerEntry, ExplorerEntryKind, Workspace, is_markdown_path,
 };
 pub(crate) use recent_files::{RECENT_FILE_LIMIT, RecentFilesStore};

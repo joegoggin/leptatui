@@ -377,3 +377,52 @@ The demo loads a mock ticket list, dispatches create/update actions, refetches
 after successful mutations, and renders pending, success, and error states.
 Use `n` to create, `u` to update the first ticket, `r` to reload, `l` to fail
 the next list request, `e` to fail a mutation, and `q` to quit.
+
+## File System Showcase
+
+Run the complete root-scoped filesystem operation laboratory:
+
+```sh
+cargo run --example file_system_showcase
+```
+
+The showcase confines every operation to a process-specific directory below
+the platform temporary directory. Press `n` or Enter to execute one unlocked
+step. The next step remains locked until the current asynchronous operation
+produces its expected result, so `copy_file()` always completes before
+`rename()` can start. Completed results remain visible and `b` moves backward
+through them without undoing filesystem changes.
+
+| Function | Successful tour | What it does |
+| --- | ---: | --- |
+| `use_file_system_with_options(root, options)` | Setup | Expands a leading `~`, recursively creates the example root, and returns the component-local handle. |
+| `root()` | Setup | Returns the canonical boundary displayed above the walkthrough. |
+| `create_dir(path)` | 1 | Recursively creates `walkthrough/nested/tree`. |
+| `write_file(path, contents)` | 2 | Creates `demo.txt` and writes its initial bytes. |
+| `append_file(path, contents)` | 3 | Adds bytes to the end of `demo.txt`. |
+| `resolve_path(path)` | 4 | Canonicalizes `demo.txt` and enforces containment. |
+| `get_metadata(path)` | 5 | Reports the file's kind, size, permissions, and timestamps. |
+| `read_dir(path)` | 6 | Lists safe contained entries in deterministic order. |
+| `read_file_as_bytes(path)` | 7 | Reads the complete file without decoding it. |
+| `read_file_as_string(path)` | 8 | Reads and UTF-8 decodes the complete file. |
+| `write_and_replace_file(path, contents)` | 9 | Writes a sibling temporary file, then replaces `demo.txt`. |
+| `copy_file(source, destination)` | 10 | Copies `demo.txt` to `copy.txt` without overwriting. |
+| `rename(source, destination)` | 11 | Moves the completed `copy.txt` operation to `moved.txt`; it cannot run early. |
+| `delete_file(path)` | 12 | Removes `moved.txt`. |
+| `delete_dir(path)` | 13 | Recursively removes the walkthrough tree while preserving the scoped root. |
+
+Each method immediately starts and returns a `FileOperation<T>`. Retain that
+handle to observe pending, result, and version state or retry the same captured
+arguments with `dispatch(())`. The walkthrough uses that retry behavior when an
+unexpected result occurs: press `r` to rerun the same captured operation.
+
+After the successful tour, press `f` for an optional ordered failure tour. Its
+visible setup and cleanup steps demonstrate invalid UTF-8, a missing file,
+parent traversal, `~` expansion outside the root, a non-overwriting copy
+conflict, and protected-root deletion. An expected error counts as a passed
+step; any different result stops the tour for inspection and retry.
+
+Use `n` or Enter to run or advance, `b` to inspect previous results, `r` to
+retry an unexpected failure, Shift+`R` to clean the walkthrough subtree and
+restart, `f` to enter the failure tour, and `q` to quit. Reset never deletes the
+process-specific scoped root.

@@ -8,10 +8,10 @@ use std::{
 use leptatui::prelude::*;
 
 use crate::{
-    contexts::{NotificationContext, use_notifications},
+    contexts::use_notifications,
     hooks::use_workspace,
     pages::viewer_location,
-    services::{DirectoryListing, ExplorerEntryKind, FileSystem, Workspace},
+    services::{DirectoryListing, ExplorerEntryKind, Workspace},
 };
 
 use super::components::{ExplorerContent, ExplorerContentProps};
@@ -24,29 +24,80 @@ use super::components::{ExplorerContent, ExplorerContentProps};
 ///
 /// # Returns
 ///
-/// An Explorer page component.
+/// An Explorer page component or a filesystem initialization error.
 #[component]
-pub(crate) fn ExplorerPage() -> impl IntoView {
+pub(crate) fn ExplorerPage() -> ViewResult<impl IntoView> {
     let workspace_context = use_workspace();
     let notifications = use_notifications();
     let workspace = workspace_context.workspace;
-    let filesystem = workspace_context.filesystem;
+    let filesystem = use_file_system(workspace.root())?;
     let root = workspace.root().to_path_buf();
-    let (initial_listing, initial_error) = match filesystem.list_directory(&workspace, &root) {
-        Ok(listing) => (listing, None),
-        Err(error) => {
-            let error = Arc::new(anyhow::Error::new(error));
-            notifications.show_error("Directory unavailable", error.to_string());
-            (DirectoryListing::empty(root), Some(error))
-        }
-    };
-    let initial_selection = (!initial_listing.entries().is_empty()).then_some(0);
-    let listing = RwSignal::new(initial_listing);
-    let selection = RwSignal::new(initial_selection);
-    let error = RwSignal::new(initial_error);
+    let listing = ArcRwSignal::new(DirectoryListing::empty(root.clone()));
+    let selection = ArcRwSignal::new(None);
+    let error = ArcRwSignal::new(None);
+    let requested_directory = ArcRwSignal::new(root.clone());
+    let read_directory = ArcRwSignal::new(Some(filesystem.read_dir(&root)));
+    let read_directory_result = read_directory.clone();
+    let read_directory_version = read_directory.clone();
+    let result_requested_directory = requested_directory.clone();
+    let result_selection = selection.clone();
+    let result_listing = listing.clone();
+    let result_error = error.clone();
+    Effect::watch_sync(
+        move || {
+            read_directory_version
+                .try_with(|operation| {
+                    operation
+                        .as_ref()
+                        .and_then(|operation| operation.version().try_get())
+                })
+                .flatten()
+                .unwrap_or_default()
+        },
+        move |version, _, _| {
+            if *version == 0 {
+                return;
+            }
+            let Some(directory) = result_requested_directory.try_get_untracked() else {
+                return;
+            };
+            let Some(Some(operation)) = read_directory_result.try_get_untracked() else {
+                return;
+            };
+            operation.value().with_untracked(|result| {
+                let Some(result) = result else {
+                    return;
+                };
+                match result {
+                    Ok(entries) => {
+                        let next_listing =
+                            DirectoryListing::from_file_entries(directory, entries.clone());
+                        let _ = result_selection
+                            .try_set((!next_listing.entries().is_empty()).then_some(0));
+                        let _ = result_listing.try_set(next_listing);
+                        let _ = result_error.try_set(None);
+                    }
+                    Err(source) => {
+                        let source = Arc::new(anyhow::Error::new(std::io::Error::new(
+                            source.kind(),
+                            source.to_string(),
+                        )));
+                        notifications.show_error("Unable to browse directory", source.to_string());
+                        let _ = result_error.try_set(Some(source));
+                    }
+                }
+            });
+        },
+        true,
+    );
     let shortcut_workspace = workspace.clone();
     let content_workspace = workspace.clone();
     let shortcut_navigate = use_navigate();
+    let shortcut_filesystem = filesystem.clone();
+    let shortcut_listing = listing.clone();
+    let shortcut_selection = selection.clone();
+    let shortcut_requested_directory = requested_directory.clone();
+    let shortcut_read_directory = read_directory.clone();
 
     use_key_event(KeyEventKind::Press, move |key| {
         if key.modifiers != KeyModifiers::NONE {
@@ -55,24 +106,21 @@ pub(crate) fn ExplorerPage() -> impl IntoView {
 
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
-                select_previous(selection);
+                select_previous(&shortcut_selection);
                 KeyControl::Handled
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                select_next(listing, selection);
+                select_next(&shortcut_listing, &shortcut_selection);
                 KeyControl::Handled
             }
             KeyCode::Enter => {
-                if let Some(entry) = selected_entry(listing, selection) {
+                if let Some(entry) = selected_entry(&shortcut_listing, &shortcut_selection) {
                     match entry.kind() {
                         ExplorerEntryKind::Directory => {
                             browse(
-                                &shortcut_workspace,
-                                listing,
-                                selection,
-                                error,
-                                filesystem,
-                                notifications,
+                                &shortcut_requested_directory,
+                                &shortcut_read_directory,
+                                &shortcut_filesystem,
                                 entry.path(),
                             );
                         }
@@ -87,11 +135,10 @@ pub(crate) fn ExplorerPage() -> impl IntoView {
             KeyCode::Left | KeyCode::Char('h') => {
                 browse_parent(
                     &shortcut_workspace,
-                    listing,
-                    selection,
-                    error,
-                    filesystem,
-                    notifications,
+                    &shortcut_listing,
+                    &shortcut_requested_directory,
+                    &shortcut_read_directory,
+                    &shortcut_filesystem,
                 );
                 KeyControl::Handled
             }
@@ -106,9 +153,9 @@ pub(crate) fn ExplorerPage() -> impl IntoView {
     view! {
         <ExplorerContent
             workspace=content_workspace
-            listing=listing
-            selection=selection
-            error=error
+            listing=listing.clone()
+            selection=selection.clone()
+            error=error.clone()
         />
     }
 }
@@ -124,8 +171,8 @@ pub(crate) fn ExplorerPage() -> impl IntoView {
 ///
 /// An optional cloned explorer entry.
 fn selected_entry(
-    listing: RwSignal<DirectoryListing>,
-    selection: RwSignal<Option<usize>>,
+    listing: &ArcRwSignal<DirectoryListing>,
+    selection: &ArcRwSignal<Option<usize>>,
 ) -> Option<crate::services::ExplorerEntry> {
     let selected = selection.get_untracked()?;
     listing.with_untracked(|listing| listing.entries().get(selected).cloned())
@@ -136,7 +183,7 @@ fn selected_entry(
 /// # Arguments
 ///
 /// * `selection` — Page-local selected index signal.
-fn select_previous(selection: RwSignal<Option<usize>>) {
+fn select_previous(selection: &ArcRwSignal<Option<usize>>) {
     selection.update(|selection| {
         if let Some(index) = selection {
             *index = index.saturating_sub(1);
@@ -150,7 +197,7 @@ fn select_previous(selection: RwSignal<Option<usize>>) {
 ///
 /// * `listing` — Page-local directory listing signal.
 /// * `selection` — Page-local selected index signal.
-fn select_next(listing: RwSignal<DirectoryListing>, selection: RwSignal<Option<usize>>) {
+fn select_next(listing: &ArcRwSignal<DirectoryListing>, selection: &ArcRwSignal<Option<usize>>) {
     let last = listing.with_untracked(|listing| listing.entries().len().checked_sub(1));
     selection.update(|selection| {
         if let (Some(index), Some(last)) = (selection, last) {
@@ -166,40 +213,23 @@ fn select_next(listing: RwSignal<DirectoryListing>, selection: RwSignal<Option<u
 ///
 /// # Arguments
 ///
-/// * `workspace` — Workspace bounding navigation.
-/// * `listing` — Page-local directory listing signal.
-/// * `selection` — Page-local selected index signal.
-/// * `error` — Page-local recoverable error signal.
-/// * `filesystem` — Service used to discover the requested directory.
-/// * `notifications` — Shared context used to report navigation failures.
+/// * `requested` — Signal retaining the latest requested directory.
+/// * `read_directory` — Signal retaining the latest directory operation.
+/// * `filesystem` — Component-local filesystem handle used for the request.
 /// * `requested_directory` — Directory to resolve and list.
 ///
 /// # Returns
 ///
-/// A [`bool`] indicating whether navigation succeeded.
+/// A [`bool`] indicating whether the request was dispatched.
 fn browse(
-    workspace: &Workspace,
-    listing: RwSignal<DirectoryListing>,
-    selection: RwSignal<Option<usize>>,
-    error: RwSignal<Option<Arc<anyhow::Error>>>,
-    filesystem: FileSystem,
-    notifications: NotificationContext,
+    requested: &ArcRwSignal<PathBuf>,
+    read_directory: &ArcRwSignal<Option<FileOperation<Vec<FileEntry>>>>,
+    filesystem: &FileSystem,
     requested_directory: &Path,
 ) -> bool {
-    match filesystem.list_directory(workspace, requested_directory) {
-        Ok(next_listing) => {
-            selection.set((!next_listing.entries().is_empty()).then_some(0));
-            listing.set(next_listing);
-            error.set(None);
-            true
-        }
-        Err(source) => {
-            let source = Arc::new(anyhow::Error::new(source));
-            notifications.show_error("Unable to browse directory", source.to_string());
-            error.set(Some(source));
-            false
-        }
-    }
+    let _ = requested.try_set(requested_directory.to_path_buf());
+    let _ = read_directory.try_set(Some(filesystem.read_dir(requested_directory)));
+    true
 }
 
 /// Navigates the page-local explorer to its parent directory.
@@ -208,21 +238,19 @@ fn browse(
 ///
 /// * `workspace` — Workspace bounding parent navigation.
 /// * `listing` — Page-local directory listing signal.
-/// * `selection` — Page-local selected index signal.
-/// * `error` — Page-local recoverable error signal.
-/// * `filesystem` — Service used to discover the parent directory.
-/// * `notifications` — Shared context used to report navigation failures.
+/// * `requested` — Signal retaining the latest requested directory.
+/// * `read_directory` — Signal retaining the latest directory operation.
+/// * `filesystem` — Component-local filesystem handle used for the request.
 ///
 /// # Returns
 ///
 /// A [`bool`] indicating whether the explorer moved to its parent.
 fn browse_parent(
     workspace: &Workspace,
-    listing: RwSignal<DirectoryListing>,
-    selection: RwSignal<Option<usize>>,
-    error: RwSignal<Option<Arc<anyhow::Error>>>,
-    filesystem: FileSystem,
-    notifications: NotificationContext,
+    listing: &ArcRwSignal<DirectoryListing>,
+    requested: &ArcRwSignal<PathBuf>,
+    read_directory: &ArcRwSignal<Option<FileOperation<Vec<FileEntry>>>>,
+    filesystem: &FileSystem,
 ) -> bool {
     let directory: PathBuf = listing.with_untracked(|listing| listing.directory().to_path_buf());
     if directory == workspace.root() {
@@ -232,13 +260,5 @@ fn browse_parent(
         return false;
     };
 
-    browse(
-        workspace,
-        listing,
-        selection,
-        error,
-        filesystem,
-        notifications,
-        parent,
-    )
+    browse(requested, read_directory, filesystem, parent)
 }

@@ -9,6 +9,7 @@
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
 //! - [`mod@component`] — Component construction support and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
+//! - [`file_system`] — Root-scoped asynchronous filesystem operations.
 //! - `executor` — Leptos executor integration for async reactive work.
 //! - `markdown` — CommonMark parsing and semantic view conversion.
 //! - [`route`] — Signal-backed route state helpers for page switches.
@@ -264,6 +265,7 @@ pub mod action;
 pub mod app;
 pub mod component;
 pub mod context;
+pub mod file_system;
 pub mod prelude;
 pub mod resource;
 pub mod route;
@@ -282,7 +284,7 @@ pub use executor::{spawn, spawn_local};
 pub use leptatui_macros::{component, stylesheet, view};
 pub use markdown::{
     MarkdownOptions, MarkdownView, markdown, markdown_file, markdown_file_with_options,
-    markdown_with_options,
+    markdown_source_with_options, markdown_with_options,
 };
 pub use resource::Resource;
 pub use route::{

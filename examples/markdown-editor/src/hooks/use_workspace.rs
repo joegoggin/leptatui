@@ -5,33 +5,26 @@ use std::path::Path;
 
 use leptatui::prelude::expect_context;
 
-use crate::services::{FileSystem, Workspace};
+use crate::services::Workspace;
 
-/// Validated workspace and its bounded filesystem service.
+/// Validated workspace shared by routed components.
 #[derive(Clone, Debug)]
 pub(crate) struct WorkspaceContext {
     /// Validated workspace that bounds browsing and Markdown access.
     pub(crate) workspace: Workspace,
-    /// Filesystem service used for workspace-scoped operations.
-    pub(crate) filesystem: FileSystem,
 }
 
 impl WorkspaceContext {
-    /// Creates a workspace context from its validated value and service.
+    /// Creates a workspace context from its validated value.
     ///
     /// # Arguments
     ///
     /// * `workspace` — Validated workspace that bounds file access.
-    /// * `filesystem` — Filesystem service for workspace-scoped operations.
-    ///
     /// # Returns
     ///
-    /// A [`WorkspaceContext`] containing both workspace resources.
-    pub(crate) const fn new(workspace: Workspace, filesystem: FileSystem) -> Self {
-        Self {
-            workspace,
-            filesystem,
-        }
+    /// A [`WorkspaceContext`] containing the shared workspace.
+    pub(crate) const fn new(workspace: Workspace) -> Self {
+        Self { workspace }
     }
 
     /// Returns the canonical root of the validated workspace.

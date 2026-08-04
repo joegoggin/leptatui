@@ -43,8 +43,10 @@ cargo run -p markdown-editor -- --help
 
 The command accepts zero or one positional `ROOT`. An omitted root resolves to
 the process current directory. Before terminal startup, the path is
-canonicalized and verified as a directory; missing paths, regular files, and
-additional positional arguments fail without entering managed terminal mode.
+expanded when it begins with exact `~` or `~/`, canonicalized, and verified as
+a directory. Named-user forms such as `~alice` remain literal. Missing paths,
+regular files, and additional positional arguments fail without entering
+managed terminal mode.
 
 ## Pages and Controls
 
@@ -81,13 +83,13 @@ Explorer discovery follows symlinks only when their canonical targets remain
 below the configured root. Broken and escaping symlinks are hidden. Failed
 directory reads preserve the last valid listing and render a recoverable error.
 
-The Viewer delegates file loading, semantic rendering, local Markdown
-navigation, history, and file-read diagnostics to Leptatui's existing
-path-backed `<Markdown />` view. Missing-file and invalid UTF-8 failures
-therefore use the same diagnostic presentation as every other file-backed
-Markdown reader. Pressing `r` rebuilds that view and retries the same document
-after the problem is corrected, while Home and File Explorer remain available
-as explicit destinations.
+The Viewer loads its initial UTF-8 source through a component-local Leptatui
+filesystem handle, then constructs a path-identified Markdown view so relative
+links, local navigation, and history keep their normal behavior. Missing-file
+and invalid UTF-8 failures remain recoverable diagnostics. Pressing `r`
+dispatches a fresh read and rebuilds the document after the problem is
+corrected, while Home and File Explorer remain available as explicit
+destinations.
 
 Editor values can contain shell-word quoted arguments, such as
 `VISUAL="nvim -f"`, but they are executed directly without shell expansion,
@@ -105,33 +107,36 @@ spacing is reduced.
 
 - `cli` contains command-line parsing and browsing-root selection.
 - `hooks` exposes two domain contexts: `use_workspace()` supplies the validated
-  workspace and filesystem service, while `use_files()` supplies recent-file
+  workspace root, while `use_files()` supplies recent-file
   signals, persistence diagnostics, and external-editor failures.
-- `services` contains anchored filesystem access, persistent recent-file
-  storage, external editor process boundaries, restored-terminal session
-  coordination, and filesystem result values.
+- `services` contains Markdown-specific filesystem filtering, persistent
+  recent-file storage, external editor process boundaries, restored-terminal
+  session coordination, and explorer result values. Leptatui owns root
+  containment and asynchronous filesystem I/O.
 - `contexts` owns shared notification state and user-facing feedback.
 - `app` owns the application shell, provides typed contexts, and declares `/`,
   `/files`, and `/view/*path`.
 - `pages` organizes each routed feature around a `page` module with co-located
   state and child components. Explorer owns its listing, selection, and error
   signals; Viewer derives its document from the route and owns its reload
-  revision. Viewer delegates document rendering to the existing `<Markdown />`
-  component.
+  revision. Explorer and Viewer each call `use_file_system(workspace.root())`
+  locally, and Viewer builds a navigable Markdown view from operation-loaded
+  source.
 - `main` uses `anyhow` to add startup and runtime context while it parses the
   CLI, validates the workspace, initializes services and signals, constructs
   `<AppRouter />`, and starts Leptatui.
 
-The normal data flow is CLI root → `use_workspace()` context → page-owned
-Explorer signals → encoded Viewer route → `<Markdown />` Viewer. Successful
-Viewer route resolution updates and persists recent-file values through
-`use_files()`. Editing queues the route-derived path through the contextual
-editor session, temporarily restores the terminal, appends `--` and the path to
-the resolved editor command, and resumes the same Viewer component. Completion
-updates the Viewer revision and path-associated failure signal so the mounted
-document reloads in place. Recoverable failures retain their `anyhow` source
-chains in shared pointers until the page renders them inline or sends them
-through the notification context.
+The normal data flow is CLI root validation → `use_workspace()` context →
+component-local `use_file_system()` handles and page-owned operations → encoded
+Viewer route → operation-loaded Markdown source. Successful Viewer reads update
+and persist recent-file values through `use_files()`. Editing queues the
+route-derived path through the contextual editor session, temporarily restores
+the terminal, appends `--` and the path to the resolved editor command, and
+resumes the same Viewer component. Completion updates the Viewer revision and
+path-associated failure signal so the mounted document reloads in place.
+Recoverable failures retain their `anyhow` source chains in shared pointers
+until the page renders them inline or sends them through the notification
+context.
 
 ## Verification
 

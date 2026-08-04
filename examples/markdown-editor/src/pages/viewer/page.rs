@@ -12,10 +12,10 @@ use crate::{
     contexts::{NotificationContext, use_notifications},
     hooks::{Files, use_files, use_workspace},
     pages::shared::{relative_path, routed_page_style},
-    services::{EditorSession, FileSystem, RECENT_FILE_LIMIT, Workspace},
+    services::{EditorSession, RECENT_FILE_LIMIT, is_markdown_path},
 };
 
-use super::components::{ViewerDocument, ViewerDocumentProps};
+use super::components::viewer_document;
 
 /// Characters encoded inside one viewer route path segment.
 const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
@@ -43,13 +43,13 @@ const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
 ///
 /// # Returns
 ///
-/// A Viewer page component.
+/// A Viewer page component or a filesystem initialization error.
 #[component]
-pub(crate) fn ViewerPage() -> impl IntoView {
+pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
     let workspace_context = use_workspace();
     let notifications = use_notifications();
     let workspace = workspace_context.workspace;
-    let filesystem = workspace_context.filesystem;
+    let filesystem = use_file_system(workspace.root())?;
     let files = use_files();
     let editor_session = expect_context::<EditorSession>();
     let route_params = use_params_map();
@@ -57,35 +57,146 @@ pub(crate) fn ViewerPage() -> impl IntoView {
     let shortcut_navigate = use_navigate();
     let home_navigate = use_navigate();
     let explorer_navigate = use_navigate();
-    let document_workspace = workspace.clone();
-    let document_files = files.clone();
-    let shortcut_workspace = workspace.clone();
-    let header_workspace = workspace.clone();
+    let open_path = route_params
+        .get_untracked()
+        .get("path")
+        .map(|relative| workspace.root().join(relative))
+        .map_or_else(
+            || String::from("none"),
+            |path| relative_path(workspace.root(), &path),
+        );
     let editor_failure = files.editor_failure;
-    let document = keyed(
+    let document_path = RwSignal::new(None::<PathBuf>);
+    let load_error = RwSignal::new(None::<String>);
+    let load_generation = RwSignal::new(0_u64);
+    let read_document = RwSignal::new(None::<FileOperation<String>>);
+    let read_for_route = read_document;
+    let route_filesystem = filesystem.clone();
+    let route_workspace = workspace.clone();
+    Effect::watch_sync(
         move || {
             (
                 route_params
-                    .get_untracked()
+                    .get()
                     .get("path")
                     .unwrap_or_default()
                     .to_owned(),
-                revision.get_untracked(),
+                revision.get(),
             )
         },
-        move || {
-            let path = synchronize_route(
-                &document_workspace,
-                filesystem,
-                &document_files,
-                route_params,
-                notifications,
-            );
-            let editor_error = matching_editor_error(&document_files, path.as_deref());
-
-            view! {
-                <ViewerDocument path=path editor_error=editor_error />
+        move |(relative, _), _, _| {
+            let _ = load_generation.try_update(|generation| {
+                *generation = generation.wrapping_add(1);
+            });
+            let _ = document_path.try_set(None);
+            let _ = load_error.try_set(None);
+            let _ = read_for_route.try_set(None);
+            if relative.is_empty() {
+                return;
             }
+            let requested = route_workspace.root().join(relative);
+            if !is_markdown_path(&requested) {
+                let _ = load_error.try_set(Some(format!(
+                    "preview path is not a Markdown file: {}",
+                    requested.display()
+                )));
+                return;
+            }
+            let _ = document_path.try_set(Some(requested.clone()));
+            let _ = read_for_route.try_set(Some(route_filesystem.read_file_as_string(requested)));
+        },
+        true,
+    );
+
+    let read_result = read_document;
+    let read_version = read_result;
+    let recent_files = files.clone();
+    Effect::watch_sync(
+        move || {
+            read_version
+                .try_with(|operation| {
+                    operation
+                        .as_ref()
+                        .and_then(|operation| operation.version().try_get())
+                })
+                .flatten()
+                .unwrap_or_default()
+        },
+        move |version, _, _| {
+            if *version == 0 {
+                return;
+            }
+            let Some(Some(operation)) = read_result.try_get_untracked() else {
+                return;
+            };
+            operation.value().with_untracked(|result| {
+                let Some(result) = result else {
+                    return;
+                };
+                match result {
+                    Ok(_) => {
+                        if let Some(Some(path)) = document_path.try_get_untracked() {
+                            record_recent_file(&recent_files, path, notifications);
+                        }
+                        let _ = load_error.try_set(None);
+                    }
+                    Err(error) => {
+                        let path = document_path
+                            .try_get_untracked()
+                            .flatten()
+                            .unwrap_or_else(|| PathBuf::from("unknown"));
+                        let _ = load_error.try_set(Some(format!(
+                            "failed to read Markdown file `{}`: {error}",
+                            path.display()
+                        )));
+                    }
+                }
+            });
+        },
+        true,
+    );
+
+    let document_files = files.clone();
+    let document_read = read_document;
+    let document_key_read = read_document;
+    let document_key_files = files.clone();
+    let document = keyed(
+        move || {
+            let version = document_key_read
+                .try_get_untracked()
+                .flatten()
+                .and_then(|operation| operation.version().try_get_untracked())
+                .unwrap_or_default();
+            let generation = load_generation.try_get_untracked().unwrap_or_default();
+            let path = document_path.try_get_untracked().flatten();
+            let load_error = load_error.try_get_untracked().flatten();
+            let editor_error = matching_editor_error(&document_key_files, path.as_deref());
+            (generation, version, load_error, editor_error)
+        },
+        move || {
+            let path = document_path.try_get_untracked().flatten();
+            let operation = document_read.try_get_untracked().flatten();
+            let source = operation
+                .as_ref()
+                .and_then(|operation| {
+                    operation.value().try_with_untracked(|result| {
+                        result.as_ref().map(|result| match result {
+                            Ok(source) => Ok(source.clone()),
+                            Err(error) => Err(error.to_string()),
+                        })
+                    })
+                })
+                .flatten();
+            let source = load_error
+                .try_get_untracked()
+                .flatten()
+                .map_or(source, |error| Some(Err(error)));
+            let editor_error = matching_editor_error(&document_files, path.as_deref());
+            let loading = operation
+                .as_ref()
+                .and_then(|operation| operation.pending().try_get_untracked())
+                .unwrap_or(false);
+            viewer_document(path, source, loading, editor_error)
         },
     );
     let page_style = routed_page_style();
@@ -97,7 +208,7 @@ pub(crate) fn ViewerPage() -> impl IntoView {
 
         match key.code {
             KeyCode::Char('e') => {
-                if let Some(path) = requested_path(&shortcut_workspace, route_params) {
+                if let Some(Some(path)) = document_path.try_get_untracked() {
                     editor_session.edit(path, move |path, result| {
                         let failure = result.err().map(|error| {
                             let error = Arc::new(anyhow::Error::new(error));
@@ -137,16 +248,7 @@ pub(crate) fn ViewerPage() -> impl IntoView {
     view! {
         <Div class="page" style=page_style>
             <Text class="page-title">"Markdown viewer"</Text>
-            {move || {
-                let open_path = requested_path(&header_workspace, route_params)
-                    .map_or_else(
-                        || String::from("none"),
-                        |path| relative_path(header_workspace.root(), &path),
-                    );
-                view! {
-                    <Text class="path-context">{format!("Open: {open_path}")}</Text>
-                }
-            }}
+            <Text class="path-context">{format!("Open: {open_path}")}</Text>
             {document}
             <Div class="actions">
                 <Button on_press=move || {
@@ -191,70 +293,25 @@ pub(crate) fn viewer_location(root: &Path, path: &Path) -> String {
     format!("/view/{encoded}")
 }
 
-/// Returns the workspace path requested by the active Viewer route.
+/// Promotes one successfully loaded path through shared recent-file signals.
 ///
 /// # Arguments
 ///
-/// * `workspace` — Workspace used to resolve the relative route path.
-/// * `params` — Active route parameters.
-///
-/// # Returns
-///
-/// An optional requested [`PathBuf`].
-fn requested_path(workspace: &Workspace, params: Memo<ParamsMap>) -> Option<PathBuf> {
-    params
-        .get_untracked()
-        .get("path")
-        .map(|relative| workspace.root().join(relative))
-}
-
-/// Synchronizes the active Viewer route with shared recent-file signals.
-///
-/// # Arguments
-///
-/// * `workspace` — Workspace bounding the route path.
-/// * `filesystem` — Service used to validate the route path.
 /// * `files` — Shared recent-file signals and persistence service.
-/// * `params` — Active route parameters.
+/// * `canonical` — Successfully loaded canonical Markdown path.
 /// * `notifications` — Shared notification state for persistence failures.
-///
-/// # Returns
-///
-/// An optional canonical or requested path for the document view.
-fn synchronize_route(
-    workspace: &Workspace,
-    filesystem: FileSystem,
-    files: &Files,
-    params: Memo<ParamsMap>,
-    notifications: NotificationContext,
-) -> Option<PathBuf> {
-    let requested = requested_path(workspace, params)?;
-    match filesystem.validate_markdown(workspace, &requested) {
-        Ok(canonical) => {
-            files.recent_files.update(|entries| {
-                entries.retain(|entry| entry != &canonical);
-                entries.insert(0, canonical.clone());
-                entries.truncate(RECENT_FILE_LIMIT);
-            });
-            files.stored_recent_files.update(|entries| {
-                entries.retain(|entry| entry != &canonical);
-                entries.insert(0, canonical.clone());
-                entries.truncate(RECENT_FILE_LIMIT);
-            });
-            save_recent_files(files, notifications);
-            Some(canonical)
-        }
-        Err(_) => {
-            files
-                .recent_files
-                .update(|entries| entries.retain(|entry| entry != &requested));
-            files
-                .stored_recent_files
-                .update(|entries| entries.retain(|entry| entry != &requested));
-            save_recent_files(files, notifications);
-            Some(requested)
-        }
-    }
+fn record_recent_file(files: &Files, canonical: PathBuf, notifications: NotificationContext) {
+    files.recent_files.update(|entries| {
+        entries.retain(|entry| entry != &canonical);
+        entries.insert(0, canonical.clone());
+        entries.truncate(RECENT_FILE_LIMIT);
+    });
+    files.stored_recent_files.update(|entries| {
+        entries.retain(|entry| entry != &canonical);
+        entries.insert(0, canonical);
+        entries.truncate(RECENT_FILE_LIMIT);
+    });
+    save_recent_files(files, notifications);
 }
 
 /// Persists shared recent-file ordering and records a recoverable error.

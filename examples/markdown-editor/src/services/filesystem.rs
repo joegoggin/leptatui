@@ -1,15 +1,16 @@
-//! Filesystem boundary for the Markdown editor.
+//! Markdown-specific policy layered over Leptatui's scoped filesystem.
 //!
-//! The service validates the workspace root and discovers safe directory
-//! entries below it. Every navigation target is canonicalized before use so
-//! traversal and symlink resolution cannot escape the configured boundary.
+//! Leptatui owns path containment and asynchronous I/O. This module retains
+//! only the Markdown editor's workspace value, entry classification, filtering,
+//! and directory-first presentation policy.
 
 use std::{
     cmp::Ordering,
     ffi::{OsStr, OsString},
-    fs, io,
     path::{Path, PathBuf},
 };
+
+use leptatui::prelude::{FileEntry, FileKind};
 
 /// Validated directory that anchors one Markdown editing session.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -19,7 +20,7 @@ pub(crate) struct Workspace {
 }
 
 impl Workspace {
-    /// Creates a workspace from a validated canonical root.
+    /// Creates a workspace from a canonical filesystem root.
     ///
     /// # Arguments
     ///
@@ -28,7 +29,7 @@ impl Workspace {
     /// # Returns
     ///
     /// A [`Workspace`] anchored at the supplied directory.
-    fn new(root: PathBuf) -> Self {
+    pub(crate) fn new(root: PathBuf) -> Self {
         Self { root }
     }
 
@@ -51,7 +52,7 @@ pub(crate) enum ExplorerEntryKind {
     Markdown,
 }
 
-/// Safe filesystem entry discovered below a validated workspace root.
+/// Safe filesystem entry displayed by the Markdown explorer.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ExplorerEntry {
     /// Name shown in the explorer for the directory entry.
@@ -63,21 +64,6 @@ pub(crate) struct ExplorerEntry {
 }
 
 impl ExplorerEntry {
-    /// Creates a discovered explorer entry.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` — Filesystem name shown to the user.
-    /// * `path` — Canonical absolute target path.
-    /// * `kind` — Directory or Markdown classification.
-    ///
-    /// # Returns
-    ///
-    /// An [`ExplorerEntry`] containing the safe discovered target.
-    pub(crate) fn new(name: OsString, path: PathBuf, kind: ExplorerEntryKind) -> Self {
-        Self { name, path, kind }
-    }
-
     /// Returns the filesystem name shown to the user.
     ///
     /// # Returns
@@ -111,22 +97,38 @@ impl ExplorerEntry {
 pub(crate) struct DirectoryListing {
     /// Canonical directory represented by this listing.
     directory: PathBuf,
-    /// Safe entries in display order.
+    /// Safe Markdown-editor entries in display order.
     entries: Vec<ExplorerEntry>,
 }
 
 impl DirectoryListing {
-    /// Creates a successful directory listing.
+    /// Filters generic filesystem entries into Markdown explorer entries.
     ///
     /// # Arguments
     ///
     /// * `directory` — Canonical directory represented by the listing.
-    /// * `entries` — Safe entries in display order.
+    /// * `entries` — Generic safe entries returned by Leptatui.
     ///
     /// # Returns
     ///
-    /// A [`DirectoryListing`] containing the discovered directory data.
-    fn new(directory: PathBuf, entries: Vec<ExplorerEntry>) -> Self {
+    /// A [`DirectoryListing`] containing directories followed by Markdown files.
+    pub(crate) fn from_file_entries(directory: PathBuf, entries: Vec<FileEntry>) -> Self {
+        let mut entries = entries
+            .into_iter()
+            .filter_map(|entry| {
+                let kind = match entry.kind() {
+                    FileKind::Directory => ExplorerEntryKind::Directory,
+                    FileKind::File if is_markdown_name(entry.name()) => ExplorerEntryKind::Markdown,
+                    FileKind::File | FileKind::Other => return None,
+                };
+                Some(ExplorerEntry {
+                    name: entry.name().to_os_string(),
+                    path: entry.path().to_path_buf(),
+                    kind,
+                })
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(compare_entries);
         Self { directory, entries }
     }
 
@@ -140,7 +142,10 @@ impl DirectoryListing {
     ///
     /// An empty [`DirectoryListing`] for `directory`.
     pub(crate) fn empty(directory: PathBuf) -> Self {
-        Self::new(directory, Vec::new())
+        Self {
+            directory,
+            entries: Vec::new(),
+        }
     }
 
     /// Returns the listed directory.
@@ -162,250 +167,17 @@ impl DirectoryListing {
     }
 }
 
-/// Filesystem operations available to page-owned application behavior.
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct FileSystem;
-
-impl FileSystem {
-    /// Creates the filesystem service.
-    ///
-    /// # Returns
-    ///
-    /// A stateless [`FileSystem`] service.
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-
-    /// Validates and canonicalizes a requested workspace root.
-    ///
-    /// # Arguments
-    ///
-    /// * `requested_root` — User-selected path that should anchor browsing.
-    ///
-    /// # Returns
-    ///
-    /// A [`Workspace`] containing the canonical absolute root.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`io::Error`] if the path cannot be resolved, inspected, or is
-    /// not a directory.
-    pub(crate) fn validate_root(&self, requested_root: &Path) -> io::Result<Workspace> {
-        let canonical_root =
-            canonicalize_with_context(requested_root, "failed to resolve browsing root")?;
-        let metadata = fs::metadata(&canonical_root).map_err(|source| {
-            path_error(source, "failed to inspect browsing root", &canonical_root)
-        })?;
-
-        if !metadata.is_dir() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "browsing root is not a directory: {}",
-                    canonical_root.display()
-                ),
-            ));
-        }
-
-        Ok(Workspace::new(canonical_root))
-    }
-
-    /// Discovers safe explorer entries in a directory below a workspace root.
-    ///
-    /// The requested directory and every retained entry target are
-    /// canonicalized. Broken symlinks and symlinks that resolve outside the
-    /// workspace are omitted so they cannot block access to valid entries.
-    ///
-    /// # Arguments
-    ///
-    /// * `workspace` — Validated root that bounds discovery.
-    /// * `requested_directory` — Directory to canonicalize and list.
-    ///
-    /// # Returns
-    ///
-    /// A [`DirectoryListing`] containing directories followed by Markdown
-    /// files in deterministic name order.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`io::Error`] if the directory cannot be resolved, lies outside
-    /// the workspace, is not a directory, or cannot be read.
-    pub(crate) fn list_directory(
-        &self,
-        workspace: &Workspace,
-        requested_directory: &Path,
-    ) -> io::Result<DirectoryListing> {
-        let canonical_directory =
-            canonicalize_with_context(requested_directory, "failed to resolve directory")?;
-        ensure_within_root(workspace.root(), &canonical_directory)?;
-
-        let metadata = fs::metadata(&canonical_directory).map_err(|source| {
-            path_error(source, "failed to inspect directory", &canonical_directory)
-        })?;
-        if !metadata.is_dir() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "explorer path is not a directory: {}",
-                    canonical_directory.display()
-                ),
-            ));
-        }
-
-        let read_directory = fs::read_dir(&canonical_directory).map_err(|source| {
-            path_error(source, "failed to read directory", &canonical_directory)
-        })?;
-        let mut entries = Vec::new();
-
-        for entry_result in read_directory {
-            let entry = entry_result.map_err(|source| {
-                path_error(
-                    source,
-                    "failed to read directory entry",
-                    &canonical_directory,
-                )
-            })?;
-            let visible_path = entry.path();
-            let file_type = entry.file_type().map_err(|source| {
-                path_error(source, "failed to inspect directory entry", &visible_path)
-            })?;
-            let canonical_target = match fs::canonicalize(&visible_path) {
-                Ok(path) => path,
-                Err(_) if file_type.is_symlink() => continue,
-                Err(source) => {
-                    return Err(path_error(
-                        source,
-                        "failed to resolve directory entry",
-                        &visible_path,
-                    ));
-                }
-            };
-
-            if !canonical_target.starts_with(workspace.root()) {
-                continue;
-            }
-
-            let target_metadata = fs::metadata(&canonical_target).map_err(|source| {
-                path_error(
-                    source,
-                    "failed to inspect directory entry target",
-                    &visible_path,
-                )
-            })?;
-            let name = entry.file_name();
-            let kind = if target_metadata.is_dir() {
-                ExplorerEntryKind::Directory
-            } else if target_metadata.is_file() && is_markdown_name(&name) {
-                ExplorerEntryKind::Markdown
-            } else {
-                continue;
-            };
-
-            entries.push(ExplorerEntry::new(name, canonical_target, kind));
-        }
-
-        entries.sort_by(compare_entries);
-        Ok(DirectoryListing::new(canonical_directory, entries))
-    }
-
-    /// Validates a Markdown file below a workspace root.
-    ///
-    /// The requested path is canonicalized and checked for containment,
-    /// regular-file metadata, and a supported Markdown extension.
-    ///
-    /// # Arguments
-    ///
-    /// * `workspace` — Validated root that bounds the file.
-    /// * `requested_file` — Markdown path to validate.
-    ///
-    /// # Returns
-    ///
-    /// A canonical [`PathBuf`] for the validated Markdown file.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`io::Error`] if the path cannot be resolved, escapes the
-    /// workspace, is not a regular file, or has an unsupported extension.
-    pub(crate) fn validate_markdown(
-        &self,
-        workspace: &Workspace,
-        requested_file: &Path,
-    ) -> io::Result<PathBuf> {
-        let canonical_file =
-            canonicalize_with_context(requested_file, "failed to resolve Markdown file")?;
-        ensure_within_root(workspace.root(), &canonical_file)?;
-
-        let metadata = fs::metadata(&canonical_file).map_err(|source| {
-            path_error(source, "failed to inspect Markdown file", &canonical_file)
-        })?;
-        if !metadata.is_file() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "preview path is not a regular file: {}",
-                    canonical_file.display()
-                ),
-            ));
-        }
-        if !canonical_file.file_name().is_some_and(is_markdown_name) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "preview path is not a Markdown file: {}",
-                    canonical_file.display()
-                ),
-            ));
-        }
-
-        Ok(canonical_file)
-    }
-}
-
-/// Canonicalizes a path while retaining it in the error message.
+/// Returns whether a path has a supported Markdown extension.
 ///
 /// # Arguments
 ///
-/// * `path` — Path that should resolve to an existing filesystem entry.
-/// * `operation` — Description of the canonicalization operation.
+/// * `path` — Path whose final extension should be checked.
 ///
 /// # Returns
 ///
-/// A canonical absolute [`PathBuf`].
-///
-/// # Errors
-///
-/// Returns [`io::Error`] if the path cannot be canonicalized.
-fn canonicalize_with_context(path: &Path, operation: &str) -> io::Result<PathBuf> {
-    fs::canonicalize(path).map_err(|source| path_error(source, operation, path))
-}
-
-/// Rejects a canonical path that lies outside a workspace root.
-///
-/// # Arguments
-///
-/// * `root` — Canonical workspace boundary.
-/// * `path` — Canonical path requested by the explorer.
-///
-/// # Returns
-///
-/// An empty [`Result`] when `path` is contained by `root`.
-///
-/// # Errors
-///
-/// Returns [`io::ErrorKind::PermissionDenied`] if `path` lies outside `root`.
-fn ensure_within_root(root: &Path, path: &Path) -> io::Result<()> {
-    if path.starts_with(root) {
-        return Ok(());
-    }
-
-    Err(io::Error::new(
-        io::ErrorKind::PermissionDenied,
-        format!(
-            "explorer path is outside browsing root '{}': {}",
-            root.display(),
-            path.display()
-        ),
-    ))
+/// A boolean indicating whether the extension is `md` or `markdown`.
+pub(crate) fn is_markdown_path(path: &Path) -> bool {
+    path.file_name().is_some_and(is_markdown_name)
 }
 
 /// Returns whether a directory-entry name has a Markdown extension.
@@ -416,8 +188,7 @@ fn ensure_within_root(root: &Path, path: &Path) -> io::Result<()> {
 ///
 /// # Returns
 ///
-/// A boolean indicating whether the extension is `md` or `markdown`, ignoring
-/// ASCII case.
+/// A boolean indicating whether the extension is `md` or `markdown`.
 fn is_markdown_name(name: &OsStr) -> bool {
     Path::new(name)
         .extension()
@@ -427,11 +198,7 @@ fn is_markdown_name(name: &OsStr) -> bool {
         })
 }
 
-/// Compares explorer entries in deterministic display order.
-///
-/// Directories sort before Markdown files. Names then sort by their lossy
-/// lowercase display value, with the original operating-system string as a
-/// stable tie-breaker.
+/// Compares explorer entries in deterministic directory-first display order.
 ///
 /// # Arguments
 ///
@@ -442,18 +209,18 @@ fn is_markdown_name(name: &OsStr) -> bool {
 ///
 /// An [`Ordering`] suitable for sorting explorer entries.
 fn compare_entries(left: &ExplorerEntry, right: &ExplorerEntry) -> Ordering {
-    entry_kind_rank(left.kind())
-        .cmp(&entry_kind_rank(right.kind()))
+    entry_kind_rank(left.kind)
+        .cmp(&entry_kind_rank(right.kind))
         .then_with(|| {
-            left.name()
+            left.name
                 .to_string_lossy()
                 .to_lowercase()
-                .cmp(&right.name().to_string_lossy().to_lowercase())
+                .cmp(&right.name.to_string_lossy().to_lowercase())
         })
-        .then_with(|| left.name().cmp(right.name()))
+        .then_with(|| left.name.cmp(&right.name))
 }
 
-/// Returns the directory-first sort rank for an explorer entry kind.
+/// Returns the directory-first rank for one explorer entry kind.
 ///
 /// # Arguments
 ///
@@ -467,23 +234,4 @@ const fn entry_kind_rank(kind: ExplorerEntryKind) -> u8 {
         ExplorerEntryKind::Directory => 0,
         ExplorerEntryKind::Markdown => 1,
     }
-}
-
-/// Adds operation and path context to a filesystem error.
-///
-/// # Arguments
-///
-/// * `source` — Original operating-system error.
-/// * `operation` — Description of the failed filesystem operation.
-/// * `path` — Path involved in the failure.
-///
-/// # Returns
-///
-/// An [`io::Error`] retaining the original error kind with a contextual
-/// message.
-fn path_error(source: io::Error, operation: &str, path: &Path) -> io::Error {
-    io::Error::new(
-        source.kind(),
-        format!("{operation} '{}': {source}", path.display()),
-    )
 }

@@ -7,7 +7,7 @@
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use leptos::prelude::{Get, GetUntracked, ReadSignal, Set, Update, WriteSignal, signal};
+use leptos::prelude::{ArcReadSignal, ArcWriteSignal, Get, GetUntracked, Set, Update, arc_signal};
 
 use crate::{
     app::request_redraw,
@@ -26,21 +26,21 @@ type ActionHandler<I, O> = Arc<dyn Fn(&I) -> BoxActionFuture<O> + Send + Sync>;
 /// handle that result in their own components or contexts.
 pub struct Action<I, O> {
     /// Signal indicating whether the latest dispatch is running.
-    pending: ReadSignal<bool>,
+    pending: ArcReadSignal<bool>,
     /// Setter for the pending signal.
-    set_pending: WriteSignal<bool>,
+    set_pending: ArcWriteSignal<bool>,
     /// Signal containing the latest in-flight input.
-    input: ReadSignal<Option<I>>,
+    input: ArcReadSignal<Option<I>>,
     /// Setter for the input signal.
-    set_input: WriteSignal<Option<I>>,
+    set_input: ArcWriteSignal<Option<I>>,
     /// Signal containing the latest completed output.
-    value: ReadSignal<Option<O>>,
+    value: ArcReadSignal<Option<O>>,
     /// Setter for the output signal.
-    set_value: WriteSignal<Option<O>>,
+    set_value: ArcWriteSignal<Option<O>>,
     /// Signal containing the number of visible completions.
-    version: ReadSignal<usize>,
+    version: ArcReadSignal<usize>,
     /// Setter for the completion-version signal.
-    set_version: WriteSignal<usize>,
+    set_version: ArcWriteSignal<usize>,
     /// Asynchronous handler invoked for each dispatch.
     handler: ActionHandler<I, O>,
     /// Monotonic dispatch identifier used to ignore stale completions.
@@ -51,14 +51,14 @@ impl<I, O> Clone for Action<I, O> {
     /// Clones the action signals and shared handler.
     fn clone(&self) -> Self {
         Self {
-            pending: self.pending,
-            set_pending: self.set_pending,
-            input: self.input,
-            set_input: self.set_input,
-            value: self.value,
-            set_value: self.set_value,
-            version: self.version,
-            set_version: self.set_version,
+            pending: self.pending.clone(),
+            set_pending: self.set_pending.clone(),
+            input: self.input.clone(),
+            set_input: self.set_input.clone(),
+            value: self.value.clone(),
+            set_value: self.set_value.clone(),
+            version: self.version.clone(),
+            set_version: self.set_version.clone(),
             handler: Arc::clone(&self.handler),
             latest_dispatch: self.latest_dispatch.clone(),
         }
@@ -87,10 +87,10 @@ where
     {
         init_tokio_executor();
 
-        let (pending, set_pending) = signal(false);
-        let (input, set_input) = signal(None);
-        let (value, set_value) = signal(None);
-        let (version, set_version) = signal(0);
+        let (pending, set_pending) = arc_signal(false);
+        let (input, set_input) = arc_signal(None);
+        let (value, set_value) = arc_signal(None);
+        let (version, set_version) = arc_signal(0);
         let handler: ActionHandler<I, O> = Arc::new(move |input| Box::pin(handler(input)));
 
         Self {
@@ -129,10 +129,10 @@ where
         request_redraw();
 
         let latest_dispatch = self.latest_dispatch.clone();
-        let set_pending = self.set_pending;
-        let set_input = self.set_input;
-        let set_value = self.set_value;
-        let set_version = self.set_version;
+        let set_pending = self.set_pending.clone();
+        let set_input = self.set_input.clone();
+        let set_value = self.set_value.clone();
+        let set_version = self.set_version.clone();
 
         tokio::spawn(async move {
             let output = future.await;
@@ -141,7 +141,7 @@ where
                 let _ = set_value.try_set(Some(output));
                 let _ = set_input.try_set(None);
                 let _ = set_pending.try_set(false);
-                set_version.update(|version| *version += 1);
+                let _ = set_version.try_update(|version| *version += 1);
                 request_redraw();
             }
         });
@@ -159,37 +159,37 @@ where
     ///
     /// # Returns
     ///
-    /// A [`ReadSignal<bool>`] containing the pending state.
-    pub fn pending(&self) -> ReadSignal<bool> {
-        self.pending
+    /// An [`ArcReadSignal<bool>`] containing the pending state.
+    pub fn pending(&self) -> ArcReadSignal<bool> {
+        self.pending.clone()
     }
 
     /// Returns the signal containing the latest in-flight input.
     ///
     /// # Returns
     ///
-    /// A [`ReadSignal<Option<I>>`] that clears after the latest completion.
-    pub fn input(&self) -> ReadSignal<Option<I>> {
-        self.input
+    /// An [`ArcReadSignal<Option<I>>`] that clears after the latest completion.
+    pub fn input(&self) -> ArcReadSignal<Option<I>> {
+        self.input.clone()
     }
 
     /// Returns the signal containing the latest completed output.
     ///
     /// # Returns
     ///
-    /// A [`ReadSignal<Option<O>>`] that retains its value during later
+    /// An [`ArcReadSignal<Option<O>>`] that retains its value during later
     /// dispatches.
-    pub fn value(&self) -> ReadSignal<Option<O>> {
-        self.value
+    pub fn value(&self) -> ArcReadSignal<Option<O>> {
+        self.value.clone()
     }
 
     /// Returns the signal containing the visible completion count.
     ///
     /// # Returns
     ///
-    /// A [`ReadSignal<usize>`] incremented after each latest completion.
-    pub fn version(&self) -> ReadSignal<usize> {
-        self.version
+    /// An [`ArcReadSignal<usize>`] incremented after each latest completion.
+    pub fn version(&self) -> ArcReadSignal<usize> {
+        self.version.clone()
     }
 
     /// Returns whether the latest dispatch is running.
@@ -267,6 +267,46 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn error_completion_requests_redraw() {
         assert_completion_requests_redraw(Err("offline")).await;
+    }
+
+    /// Verifies cloned action state remains usable after its creation owner is dropped.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// owner.with(Action::new)
+    /// drop(owner)
+    /// action.dispatch(7)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The action completes after its creation owner is dropped.
+    /// - The completion version remains readable and increments to one.
+    /// - The retained output remains readable and contains the handler result.
+    ///
+    /// # Why
+    ///
+    /// Asynchronous actions retained by dynamic views can outlive the component
+    /// owner under which they were constructed.
+    #[tokio::test(flavor = "current_thread")]
+    async fn action_state_outlives_creation_owner() {
+        let _redraw_guard = redraw_test_lock().await;
+        let owner = Owner::new();
+        let action = owner.with(|| Action::new(|input: &usize| std::future::ready(input + 1)));
+        drop(owner);
+
+        action.dispatch(7);
+        timeout(Duration::from_secs(1), async {
+            while action.version().get_untracked() == 0 {
+                yield_now().await;
+            }
+        })
+        .await
+        .expect("owner-independent action should complete");
+
+        assert_eq!(action.version().get_untracked(), 1);
+        assert_eq!(action.value().get_untracked(), Some(8));
     }
 
     /// Verifies redraw behavior for one controlled action response.

@@ -1691,6 +1691,7 @@ dependencies = [
  "anyhow",
  "criterion",
  "crossterm",
+ "directories",
  "futures-util",
  "image",
  "leptatui-macros",

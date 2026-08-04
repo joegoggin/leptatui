@@ -10,9 +10,10 @@ use std::{
 };
 
 use directories::ProjectDirs;
+use leptatui::prelude::FileSystem;
 use serde::{Deserialize, Serialize};
 
-use super::{FileSystem, Workspace};
+use super::{Workspace, is_markdown_path};
 
 /// Current on-disk recent-file document version.
 const DOCUMENT_VERSION: u8 = 1;
@@ -132,7 +133,7 @@ impl RecentFilesStore {
     /// ordering, and an optional recoverable load error.
     pub(crate) fn load_for_workspace(
         &self,
-        filesystem: FileSystem,
+        filesystem: &FileSystem,
         workspace: &Workspace,
     ) -> (Vec<PathBuf>, Vec<PathBuf>, Option<io::Error>) {
         let (stored_paths, error) = match self.load() {
@@ -149,9 +150,14 @@ impl RecentFilesStore {
 
         let mut visible = Vec::new();
         for path in &stored {
-            if let Ok(canonical) = filesystem.validate_markdown(workspace, path)
-                && !visible.contains(&canonical)
-            {
+            let Ok(canonical) = fs::canonicalize(path) else {
+                continue;
+            };
+            let valid = canonical.starts_with(filesystem.root())
+                && canonical.starts_with(workspace.root())
+                && fs::metadata(&canonical).is_ok_and(|metadata| metadata.is_file())
+                && is_markdown_path(&canonical);
+            if valid && !visible.contains(&canonical) {
                 visible.push(canonical);
             }
         }

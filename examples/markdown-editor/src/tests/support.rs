@@ -6,24 +6,49 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     process::{self, Command},
-    sync::{Arc, Mutex},
+    rc::{Rc, Weak},
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
+    thread,
+    time::Duration,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use leptatui::prelude::{AnyView, Owner, RenderCtx};
+use leptatui::prelude::{AnyView, Owner, RenderCtx, use_file_system};
 use ratatui::{Terminal, backend::TestBackend};
+use tokio::runtime::Runtime;
 
 use crate::{
     app::{app_view, app_view_at_path},
     hooks::{Files, WorkspaceContext},
     services::{
-        EditorProcess, EditorSession, EnvironmentReader, ExplorerEntry, FileSystem,
-        ProcessLauncher, RecentFilesStore,
+        EditorProcess, EditorSession, EnvironmentReader, ExplorerEntry, ProcessLauncher,
+        RecentFilesStore, Workspace,
     },
 };
 
+thread_local! {
+    /// Whether the current synchronous test worker entered the shared runtime.
+    static TEST_RUNTIME_ENTERED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Weak lease used to make the test lock reentrant on one worker thread.
+    static TEST_CONTEXT_LEASE: std::cell::RefCell<Weak<TestLease>> =
+        const { std::cell::RefCell::new(Weak::new()) };
+}
+
+/// Shared background runtime used by synchronous rendering tests.
+static TEST_RUNTIME: OnceLock<&'static Runtime> = OnceLock::new();
+/// Lock serializing tests that mount asynchronous filesystem components.
+static TEST_CONTEXT_LOCK: Mutex<()> = Mutex::new(());
+
+/// Reentrant lease for the asynchronous component-test lock.
+struct TestLease {
+    /// Global lock guard retained while any same-thread contexts remain alive.
+    _guard: MutexGuard<'static, ()>,
+}
+
 /// Shared-context fixture that keeps its signal owner alive.
 pub(super) struct TestContexts {
+    /// Lease serializing asynchronous component tests across worker threads.
+    _test_lease: Rc<TestLease>,
     /// Owner backing every arena-allocated shared file signal.
     _owner: Owner,
     /// Validated workspace resources provided through the shared hook.
@@ -57,19 +82,20 @@ impl TestContexts {
     ///
     /// A [`TestContexts`] retaining the shared file signals.
     pub(super) fn with_store(root: &Path, recent_files_store: RecentFilesStore) -> Self {
+        let test_lease = acquire_test_lease();
+        enter_test_runtime();
         let owner = Owner::new();
-        let filesystem = FileSystem::new();
-        let workspace = filesystem
-            .validate_root(root)
-            .expect("the workspace should initialize");
+        let filesystem = use_file_system(root).expect("the workspace should initialize");
+        let workspace = Workspace::new(filesystem.root().to_path_buf());
         let (recent_paths, stored_paths, recent_error) =
-            recent_files_store.load_for_workspace(filesystem, &workspace);
+            recent_files_store.load_for_workspace(&filesystem, &workspace);
         let recent_error = recent_error.map(|error| Arc::new(anyhow::Error::new(error)));
-        let workspace = WorkspaceContext::new(workspace, filesystem);
+        let workspace = WorkspaceContext::new(workspace);
         let files =
             owner.with(|| Files::new(recent_paths, stored_paths, recent_error, recent_files_store));
 
         Self {
+            _test_lease: test_lease,
             _owner: owner,
             workspace,
             files,
@@ -120,6 +146,25 @@ impl TestContexts {
             "/",
         )
     }
+}
+
+/// Acquires or reuses the asynchronous component-test lock on this thread.
+///
+/// # Returns
+///
+/// A shared [`TestLease`] retained by the constructed test context.
+fn acquire_test_lease() -> Rc<TestLease> {
+    TEST_CONTEXT_LEASE.with(|slot| {
+        if let Some(lease) = slot.borrow().upgrade() {
+            return lease;
+        }
+        let guard = TEST_CONTEXT_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let lease = Rc::new(TestLease { _guard: guard });
+        *slot.borrow_mut() = Rc::downgrade(&lease);
+        lease
+    })
 }
 
 /// Program and argument values captured from one process launch.
@@ -313,12 +358,37 @@ pub(super) fn draw_editor(
 ) -> leptatui::Result<()> {
     let mut render_result = Ok(());
 
-    terminal.draw(|frame| {
-        let mut context = RenderCtx::new(frame);
-        render_result = view.render(&mut context);
-    })?;
+    for _ in 0..3 {
+        thread::sleep(Duration::from_millis(20));
+        terminal.draw(|frame| {
+            let mut context = RenderCtx::new(frame);
+            render_result = view.render(&mut context);
+        })?;
+    }
 
     render_result
+}
+
+/// Enters a shared background Tokio runtime on the current test thread.
+///
+/// Synchronous rendering tests predate filesystem operations. Retaining the entry
+/// guard lets those tests dispatch real actions while the background workers
+/// complete I/O between draws.
+fn enter_test_runtime() {
+    TEST_RUNTIME_ENTERED.with(|entered| {
+        if entered.replace(true) {
+            return;
+        }
+        let runtime = *TEST_RUNTIME.get_or_init(|| {
+            Box::leak(Box::new(
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("filesystem test runtime should initialize"),
+            ))
+        });
+        let _ = Box::leak(Box::new(runtime.enter()));
+    });
 }
 
 /// Returns all rendered terminal rows as plain strings.

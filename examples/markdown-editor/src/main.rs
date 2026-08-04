@@ -23,7 +23,7 @@ use crate::app::{AppRouter, AppRouterProps};
 use crate::{
     cli::Cli,
     hooks::{Files, WorkspaceContext},
-    services::{EditorProcess, FileSystem, RecentFilesStore},
+    services::{EditorProcess, RecentFilesStore, Workspace},
 };
 
 /// Parses startup arguments and initializes services needed by the Markdown editor.
@@ -49,18 +49,20 @@ where
     let requested_root = cli
         .requested_root()
         .context("failed to determine the browsing root")?;
-    let filesystem = FileSystem::new();
+    let filesystem = use_file_system(&requested_root)
+        .context("failed to resolve browsing root")
+        .with_context(|| {
+            format!(
+                "failed to initialize workspace from '{}'",
+                requested_root.display()
+            )
+        })?;
     let recent_files_store = RecentFilesStore::standard();
-    let workspace = filesystem.validate_root(&requested_root).with_context(|| {
-        format!(
-            "failed to initialize workspace from '{}'",
-            requested_root.display()
-        )
-    })?;
+    let workspace = Workspace::new(filesystem.root().to_path_buf());
     let (recent_paths, stored_paths, recent_error) =
-        recent_files_store.load_for_workspace(filesystem, &workspace);
+        recent_files_store.load_for_workspace(&filesystem, &workspace);
     let recent_error = recent_error.map(|error| Arc::new(anyhow::Error::new(error)));
-    let workspace = WorkspaceContext::new(workspace, filesystem);
+    let workspace = WorkspaceContext::new(workspace);
     let files = Files::new(recent_paths, stored_paths, recent_error, recent_files_store);
 
     Ok((workspace, files, EditorProcess::new()))

@@ -2,8 +2,8 @@
 //!
 //! # Modules
 //!
-//! - [`document`] — Path-backed Markdown content and editor diagnostics.
+//! - [`document`] — Action-loaded Markdown content and editor diagnostics.
 
 mod document;
 
-pub(super) use document::{ViewerDocument, ViewerDocumentProps};
+pub(super) use document::viewer_document;

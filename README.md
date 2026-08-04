@@ -1153,6 +1153,75 @@ See `cargo run --example async_redraw` for a small async redraw example and
 `cargo run --example async_crud` for resources, actions, context, stylesheets,
 and app startup working together.
 
+## Root-Scoped File System
+
+`use_file_system()` canonicalizes a directory boundary and returns a cloneable
+handle whose methods start blocking I/O outside the terminal event thread.
+Call it directly inside any component that needs filesystem access rather than
+passing a handle through the component tree. Relative paths resolve below that
+root. Absolute paths and symlink
+targets are accepted only when their canonical targets remain contained.
+An exact leading `~` or `~/` expands to the current user's home directory for
+both root initialization and every action path; named-user forms such as
+`~alice` remain literal. Expanded paths still must remain within the configured
+root.
+
+```rust,no_run
+use leptatui::prelude::*;
+
+#[component]
+fn ConfigDirButton() -> ViewResult<impl IntoView> {
+    let files = use_file_system("~/.config")?;
+
+    view! {
+        <Button on_press=move || {
+            // Ignoring the handle is valid for fire-and-forget work.
+            files.create_dir("my-app/cache");
+            AppControl::Continue
+        }>
+            "Create config directory"
+        </Button>
+    }
+}
+
+#[component]
+fn ProjectsDirButton() -> ViewResult<impl IntoView> {
+    let files = use_file_system("~/Projects")?;
+    let latest_read = RwSignal::new(None::<FileOperation<String>>);
+
+    view! {
+        <Button on_press=move || {
+            // Retain the already-started operation to render pending/value/version.
+            latest_read.set(Some(files.read_file_as_string("README.md")));
+            AppControl::Continue
+        }>
+            "Read project guide"
+        </Button>
+    }
+}
+```
+
+Every operation method returns an already-dispatched `FileOperation<T>`, an
+alias for `Action<(), std::io::Result<T>>`. Keep it to observe reactive state,
+call `dispatch(())` to retry the same captured arguments, or ignore it when no
+result is needed.
+
+The API includes path resolution, metadata, deterministic directory listings,
+binary and UTF-8 reads, recursive directory creation, truncating, appending,
+and atomic writes, non-overwriting copy and rename, and file or recursive
+directory deletion. `rename()` supports files, directories, and symbolic links.
+Missing roots remain an error unless `FileSystemOptions::create_root(true)` is
+selected, and recursive deletion can never target the scoped root itself.
+
+Run `cargo run --example file_system_showcase` for a guided demonstration that
+executes every operation in dependency order, retains reactive results, and
+offers a separate expected-failure tour.
+
+Useful follow-up capabilities include filesystem watching for automatic UI
+reloads, recursive walking and glob matching, streaming and configurable open
+options for large files, permission and symlink management, and platform
+config/cache/data-directory discovery.
+
 ## Examples
 
 Run the Hello World example:

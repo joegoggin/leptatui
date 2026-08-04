@@ -82,6 +82,44 @@ impl MarkdownView {
         }
     }
 
+    /// Creates a file-identified Markdown boundary from preloaded source.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Markdown path used for identity and relative links.
+    /// * `source` — Preloaded UTF-8 CommonMark source.
+    /// * `options` — Rendering options applied to every page.
+    ///
+    /// # Returns
+    ///
+    /// A [`MarkdownView`] displaying the supplied source without initial I/O.
+    pub(in crate::markdown) fn from_source(
+        path: &Path,
+        source: &str,
+        options: MarkdownOptions,
+    ) -> Self {
+        let root_path = absolute_path(path);
+        let link_base = root_path.parent().unwrap_or_else(|| Path::new("."));
+        let current = MarkdownPage {
+            path: root_path.clone(),
+            document: markdown_with_options_and_source(
+                source,
+                options,
+                link_base,
+                Some(&root_path),
+            ),
+        };
+        Self {
+            state: Rc::new(RefCell::new(MarkdownState {
+                root_path,
+                options,
+                current,
+                back: Vec::new(),
+                forward: Vec::new(),
+            })),
+        }
+    }
+
     /// Returns the path of the currently displayed Markdown page.
     ///
     /// # Returns

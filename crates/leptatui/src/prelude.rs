@@ -47,11 +47,16 @@ pub use crate::{
     TuiSize, TuiSpacing, TuiStyle, View, ViewError, ViewResult, ViewType, ViewportSize, VimMode,
     ZIndex, block, button, code_block,
     context::{expect_context, provide_context, use_context},
-    div, form, h1, h2, h3, h4, h5, h6, image, input, keyed, link, list_item, markdown,
-    markdown_file, markdown_file_with_options, markdown_with_options, ordered_list, paragraph,
-    progress_bar, route_link, spawn, spawn_local, table, table_body, table_cell, table_head,
-    table_row, text, text_area, theme_color, unordered_list, use_app_handle, use_history,
-    use_key_event, use_location, use_navigate, use_params_map, use_query_map,
+    div,
+    file_system::{
+        FileEntry, FileKind, FileMetadata, FileOperation, FileSystem, FileSystemOptions,
+        use_file_system, use_file_system_with_options,
+    },
+    form, h1, h2, h3, h4, h5, h6, image, input, keyed, link, list_item, markdown, markdown_file,
+    markdown_file_with_options, markdown_source_with_options, markdown_with_options, ordered_list,
+    paragraph, progress_bar, route_link, spawn, spawn_local, table, table_body, table_cell,
+    table_head, table_row, text, text_area, theme_color, unordered_list, use_app_handle,
+    use_history, use_key_event, use_location, use_navigate, use_params_map, use_query_map,
     view::{component, dynamic},
     view_error,
 };
@@ -61,7 +66,7 @@ pub use leptatui_macros::{component, stylesheet, view};
 pub use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 pub use leptos::prelude::{
-    Callback, Effect, Get, GetUntracked, IntoSignalSetter, Memo, Owner, ReadSignal, RenderEffect,
-    RwSignal, Set, Signal, SignalSetter, Update, With, WithUntracked, WriteSignal, signal,
-    signal_local, untrack,
+    ArcRwSignal, Callback, Effect, Get, GetUntracked, IntoSignalSetter, Memo, Owner, ReadSignal,
+    RenderEffect, RwSignal, Set, Signal, SignalSetter, Update, With, WithUntracked, WriteSignal,
+    signal, signal_local, untrack,
 };

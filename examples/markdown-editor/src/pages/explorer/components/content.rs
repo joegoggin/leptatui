@@ -26,36 +26,51 @@ use super::{ExplorerList, ExplorerListProps};
 #[component]
 pub(in crate::pages::explorer) fn ExplorerContent(
     workspace: Workspace,
-    listing: RwSignal<DirectoryListing>,
-    selection: RwSignal<Option<usize>>,
-    error: RwSignal<Option<Arc<anyhow::Error>>>,
+    listing: ArcRwSignal<DirectoryListing>,
+    selection: ArcRwSignal<Option<usize>>,
+    error: ArcRwSignal<Option<Arc<anyhow::Error>>>,
 ) -> impl IntoView {
     let home_navigate = use_navigate();
     let root = workspace.root().to_path_buf();
     let directory_workspace = workspace.clone();
     let page_style = routed_page_style();
+    let directory_listing = listing.clone();
+    let list_listing = listing.clone();
+    let list_selection = selection.clone();
+    let list_error = error.clone();
 
     view! {
         <Div class="page" style=page_style>
             <Text class="page-title">"File explorer"</Text>
             <Text class="path-context">{format!("Root: {}", root.display())}</Text>
             {move || {
-                let current = listing.get_untracked();
-                let directory =
-                    relative_path(directory_workspace.root(), current.directory());
+                let directory = directory_listing
+                    .try_get_untracked()
+                    .map(|current| {
+                        relative_path(directory_workspace.root(), current.directory())
+                    })
+                    .unwrap_or_default();
                 view! {
                     <Text class="path-context">{format!("Directory: {directory}")}</Text>
                 }
             }}
             <Block class="page-content scroll-content">
                 {move || {
+                    let Some(listing) = list_listing.try_get_untracked() else {
+                        return div(()).into_view();
+                    };
+                    let selection = list_selection.try_get_untracked().flatten();
+                    let error = list_error
+                        .try_get_untracked()
+                        .flatten()
+                        .map(|error| error.to_string());
                     view! {
                         <ExplorerList
-                            listing=listing.get_untracked()
-                            selection=selection.get_untracked()
-                            error=error.get_untracked().map(|error| error.to_string())
+                            listing=listing
+                            selection=selection
+                            error=error
                         />
-                    }
+                    }.into_view()
                 }}
             </Block>
             <Div class="actions">

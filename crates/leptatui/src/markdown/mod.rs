@@ -199,5 +199,29 @@ pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptio
     MarkdownView::new(path.as_ref(), options).into_view()
 }
 
+/// Creates a navigable Markdown view from already-loaded UTF-8 source.
+///
+/// The supplied path establishes relative-link resolution and navigation
+/// identity without reading the initial page from the filesystem. Activating a
+/// later local Markdown link continues to use the file-backed navigation
+/// behavior of [`MarkdownView`].
+///
+/// # Arguments
+///
+/// * `path` — Path represented by the loaded source.
+/// * `source` — UTF-8 CommonMark source that has already been read.
+/// * `options` — Code-block presentation defaults for the document.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing a navigable [`MarkdownView`].
+pub fn markdown_source_with_options(
+    path: impl AsRef<Path>,
+    source: impl AsRef<str>,
+    options: MarkdownOptions,
+) -> AnyView {
+    MarkdownView::from_source(path.as_ref(), source.as_ref(), options).into_view()
+}
+
 #[cfg(test)]
 mod tests;
