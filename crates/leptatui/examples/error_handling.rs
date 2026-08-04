@@ -44,7 +44,9 @@ fn ErrorHandlingExample() -> impl IntoView {
                     <Text class="title">"Leptatui error handling"</Text>
                     <NavigationKeys />
                     <Div class="nav">
-                        <A href="/" exact=true>"Home"</A>
+                        <A href="/" exact=true>
+                            "Home"
+                        </A>
                         <A href="/propagated">"Propagated error"</A>
                         <A href="/custom">"Custom error"</A>
                         <A href="/source">"Context error"</A>
@@ -57,9 +59,7 @@ fn ErrorHandlingExample() -> impl IntoView {
                         <Route path="/source" view=ContextErrorPage />
                         <Route path="/panic" view=PanicPage />
                     </Routes>
-                    <Text>
-                        "h home | e propagated | c custom | s source | p panic | q quit"
-                    </Text>
+                    <Text>"h home | e propagated | c custom | s source | p panic | q quit"</Text>
                 </Div>
             </Block>
         </Router>
@@ -183,9 +183,9 @@ fn PanicPage() -> impl IntoView {
             <Paragraph class="warning">
                 "Activating this button intentionally panics. Leptatui will restore the terminal before Rust prints the diagnostic."
             </Paragraph>
-            <Button on_press=|| panic!("intentional error_handling example panic")>
-                "Trigger panic"
-            </Button>
+            <Button on_press=|| {
+                panic!("intentional error_handling example panic")
+            }>"Trigger panic"</Button>
         </Div>
     }
 }
