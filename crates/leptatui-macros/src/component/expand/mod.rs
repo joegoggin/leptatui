@@ -260,6 +260,22 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
 
             #[doc(hidden)]
+            fn reconcile(&mut self, previous: &dyn #leptatui::View) {
+                let ::core::option::Option::Some(previous) =
+                    previous.as_any().downcast_ref::<Self>()
+                else {
+                    return;
+                };
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+                let __leptatui_previous_view = &previous.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.reconcile_from(__leptatui_previous_view);
+                });
+            }
+
+            #[doc(hidden)]
             fn __focused_index_inner(&self, index: &mut usize) -> ::core::option::Option<usize> {
                 let __leptatui_owner = &self.__leptatui_owner;
                 let __leptatui_view = &self.__leptatui_view;

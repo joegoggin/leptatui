@@ -422,11 +422,31 @@ impl ComponentView {
         self.with_component_mut(|component| component.__navigate_markdown_history(back))
     }
 
-    /// Returns whether reconciliation may preserve these component boundaries.
+    /// Returns whether these component boundaries contain the same component type.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` — Component boundary considered as reconciliation input.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether descendant reconciliation may proceed.
     pub(crate) fn can_reconcile_from(&self, other: &Self) -> bool {
-        self.inner.preserve_on_reconcile
-            && other.inner.preserve_on_reconcile
-            && self.inner.component_type == other.inner.component_type
+        self.inner.component_type == other.inner.component_type
+    }
+
+    /// Returns whether reconciliation may preserve the complete previous instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` — Compatible previous component boundary.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether the previous component instance may be reused.
+    fn can_preserve_instance_from(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+            || (self.inner.preserve_on_reconcile && other.inner.preserve_on_reconcile)
     }
 
     /// Reads the materialized component inside its persistent context scope.
@@ -579,11 +599,25 @@ impl View for ComponentView {
     }
 
     fn reconcile(&mut self, previous: &dyn View) {
-        if let Some(previous) = previous.as_any().downcast_ref::<Self>()
-            && self.can_reconcile_from(previous)
-        {
-            self.inner = previous.inner.clone();
+        let Some(previous) = previous.as_any().downcast_ref::<Self>() else {
+            return;
+        };
+        if !self.can_reconcile_from(previous) {
+            return;
         }
+
+        if self.can_preserve_instance_from(previous) {
+            self.inner = previous.inner.clone();
+            return;
+        }
+
+        let component = self.component();
+        let previous_component = previous.component();
+        self.inner.context.with(|| {
+            component
+                .borrow_mut()
+                .reconcile_from(&previous_component.borrow());
+        });
     }
 
     fn can_reconcile_from(&self, previous: &dyn View) -> bool {

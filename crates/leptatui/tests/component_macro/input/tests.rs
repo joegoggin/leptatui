@@ -257,6 +257,57 @@ fn generated_component_focus_mixes_static_and_component_buttons() -> leptatui::a
     Ok(())
 }
 
+/// Verifies redraws preserve focus inside rebuilt prop-bearing components.
+///
+/// # Example Under Test
+///
+/// ```text
+/// dynamic(|| <MacroWrappedButton label=signal_value />)
+/// render, Tab, update signal, render, Enter
+/// ```
+///
+/// # Assertions
+///
+/// - The redraw renders the component's current prop value.
+/// - The compatible nested button retains focus across the redraw.
+/// - Enter activates the focused button after reconciliation.
+///
+/// # Why
+///
+/// Replacing a prop-bearing component must not discard descendant focus between
+/// a focus event and the following redraw.
+#[test]
+fn generated_dynamic_component_redraw_preserves_nested_button_focus()
+-> leptatui::app::Result<()> {
+    MACRO_DYNAMIC_WRAPPED_BUTTON_PRESSES.store(0, Ordering::SeqCst);
+
+    let mut component = MacroDynamicWrappedButtonRoot::new();
+    let terminal = render_component(&mut component, 16, 3)?;
+    assert!(rendered_text(&terminal).contains("Before"));
+
+    assert_eq!(
+        View::handle_event(&mut component, key(KeyCode::Tab))?,
+        AppControl::Continue
+    );
+    assert_eq!(
+        View::handle_event(&mut component, key(KeyCode::Char('u')))?,
+        AppControl::Continue
+    );
+
+    let terminal = render_component(&mut component, 16, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(text.contains("After"), "rendered text: {text:?}");
+    assert!(!text.contains("Before"), "rendered text: {text:?}");
+
+    assert_eq!(
+        View::handle_event(&mut component, key(KeyCode::Enter))?,
+        AppControl::Continue
+    );
+    assert_eq!(MACRO_DYNAMIC_WRAPPED_BUTTON_PRESSES.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
 /// Verifies local hooks can override default Tab focus movement.
 ///
 /// # Example Under Test

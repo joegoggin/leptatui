@@ -56,6 +56,33 @@ fn MacroMixedButtonSiblings() -> impl leptatui::IntoView {
     }
 }
 
+/// Root that rebuilds a prop-bearing button component on every draw.
+///
+/// # Returns
+///
+/// A dynamic Leptatui view containing the current wrapped button.
+#[component]
+fn MacroDynamicWrappedButtonRoot() -> impl leptatui::IntoView {
+    let (label, set_label) = signal(String::from("Before"));
+    use_key_event(KeyEventKind::Press, move |key| {
+        if key.code == KeyCode::Char('u') {
+            set_label.update(|label| *label = String::from("After"));
+            return KeyControl::Handled;
+        }
+
+        KeyControl::Pass
+    });
+
+    dynamic(move || {
+        view! {
+            <MacroWrappedButton
+                label=label.get_untracked()
+                on_press=macro_dynamic_wrapped_button_press
+            />
+        }
+    })
+}
+
 /// View whose key map handles Tab before focus can move.
 #[component]
 fn MacroTabOverrideButtonRoot() -> impl leptatui::IntoView {

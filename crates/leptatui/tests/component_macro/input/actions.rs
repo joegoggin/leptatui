@@ -21,3 +21,13 @@ fn macro_mixed_wrapped_button_press() -> AppControl {
     MACRO_MIXED_WRAPPED_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
     AppControl::Continue
 }
+
+/// Records activation for a component-wrapped button rebuilt by a dynamic view.
+///
+/// # Returns
+///
+/// An [`AppControl`] value that keeps the test application running.
+fn macro_dynamic_wrapped_button_press() -> AppControl {
+    MACRO_DYNAMIC_WRAPPED_BUTTON_PRESSES.fetch_add(1, Ordering::SeqCst);
+    AppControl::Continue
+}
