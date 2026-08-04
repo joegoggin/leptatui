@@ -6,7 +6,7 @@ use crossterm::event::{
 
 use crate::{
     Axes,
-    app::{AppControl, Result},
+    app::{AppControl, EventOutcome, LayoutMode, Result},
     component::KeyControl,
 };
 
@@ -16,18 +16,43 @@ pub(crate) fn handle_view_event<V>(view: &mut V, event: Event) -> Result<AppCont
 where
     V: View + ?Sized,
 {
+    handle_view_event_with_layout(view, event).map(|outcome| outcome.control)
+}
+
+/// Dispatches one event and reports whether the next frame may reuse layout.
+///
+/// # Arguments
+///
+/// * `view` — View tree receiving the event.
+/// * `event` — Crossterm event to dispatch.
+///
+/// # Returns
+///
+/// An [`EventOutcome`] containing application control and layout requirements.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] if custom handling or activation fails.
+pub(crate) fn handle_view_event_with_layout<V>(view: &mut V, event: Event) -> Result<EventOutcome>
+where
+    V: View + ?Sized,
+{
     if let Event::Key(key) = event {
-        return Ok(handle_view_key_event(view, key)?.into());
+        let outcome = handle_view_key_event_with_layout(view, key)?;
+        return Ok(EventOutcome {
+            control: outcome.control.into(),
+            layout: outcome.layout,
+        });
     }
     if let Event::Mouse(mouse) = event {
         let control = view.__dispatch_event(&event)?;
         if control == AppControl::Exit {
-            return Ok(control);
+            return Ok(EventOutcome::recompute(control));
         }
-        return view.__handle_mouse_event(mouse);
+        return handle_default_view_mouse_event_with_layout(view, mouse);
     }
 
-    view.__dispatch_event(&event)
+    view.__dispatch_event(&event).map(EventOutcome::recompute)
 }
 
 /// Handles built-in mouse focus, activation, and positioned scrolling.
@@ -52,42 +77,91 @@ pub(crate) fn handle_default_view_mouse_event<V>(
 where
     V: View + ?Sized,
 {
+    handle_default_view_mouse_event_with_layout(view, mouse).map(|outcome| outcome.control)
+}
+
+/// Handles built-in mouse behavior and reports scroll-only repaint eligibility.
+///
+/// # Arguments
+///
+/// * `view` — View tree receiving built-in mouse behavior.
+/// * `mouse` — Mouse event to handle.
+///
+/// # Returns
+///
+/// An [`EventOutcome`] containing application control and layout requirements.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] if activating a focused control fails.
+fn handle_default_view_mouse_event_with_layout<V>(
+    view: &mut V,
+    mouse: MouseEvent,
+) -> Result<EventOutcome>
+where
+    V: View + ?Sized,
+{
     match mouse.kind {
         MouseEventKind::Moved => {
             view.__focus_control_at_position(mouse.column, mouse.row);
-            Ok(AppControl::Continue)
+            Ok(EventOutcome::recompute(AppControl::Continue))
         }
         MouseEventKind::Down(MouseButton::Left) => {
             if view.__focus_control_at_position(mouse.column, mouse.row) {
-                return view
-                    .__activate_focused_button()
-                    .map(|control| control.unwrap_or(AppControl::Continue));
+                return view.__activate_focused_button().map(|control| {
+                    EventOutcome::recompute(control.unwrap_or(AppControl::Continue))
+                });
             }
-            Ok(AppControl::Continue)
+            Ok(EventOutcome::recompute(AppControl::Continue))
         }
         MouseEventKind::Up(MouseButton::Left) => {
             view.__focus_control_at_position(mouse.column, mouse.row);
-            Ok(AppControl::Continue)
+            Ok(EventOutcome::recompute(AppControl::Continue))
         }
-        MouseEventKind::ScrollDown => {
-            scroll_at_position(view, mouse.column, mouse.row, Axes::new(0, 1));
-            Ok(AppControl::Continue)
-        }
-        MouseEventKind::ScrollUp => {
-            scroll_at_position(view, mouse.column, mouse.row, Axes::new(0, -1));
-            Ok(AppControl::Continue)
-        }
-        MouseEventKind::ScrollLeft => {
-            scroll_at_position(view, mouse.column, mouse.row, Axes::new(-1, 0));
-            Ok(AppControl::Continue)
-        }
-        MouseEventKind::ScrollRight => {
-            scroll_at_position(view, mouse.column, mouse.row, Axes::new(1, 0));
-            Ok(AppControl::Continue)
-        }
+        MouseEventKind::ScrollDown => Ok(scroll_mouse_outcome(scroll_at_position(
+            view,
+            mouse.column,
+            mouse.row,
+            Axes::new(0, 1),
+        ))),
+        MouseEventKind::ScrollUp => Ok(scroll_mouse_outcome(scroll_at_position(
+            view,
+            mouse.column,
+            mouse.row,
+            Axes::new(0, -1),
+        ))),
+        MouseEventKind::ScrollLeft => Ok(scroll_mouse_outcome(scroll_at_position(
+            view,
+            mouse.column,
+            mouse.row,
+            Axes::new(-1, 0),
+        ))),
+        MouseEventKind::ScrollRight => Ok(scroll_mouse_outcome(scroll_at_position(
+            view,
+            mouse.column,
+            mouse.row,
+            Axes::new(1, 0),
+        ))),
         MouseEventKind::Down(_) | MouseEventKind::Up(_) | MouseEventKind::Drag(_) => {
-            Ok(AppControl::Continue)
+            Ok(EventOutcome::recompute(AppControl::Continue))
         }
+    }
+}
+
+/// Converts a mouse-scroll result into its next-frame layout requirement.
+///
+/// # Arguments
+///
+/// * `scrolled` — Whether an overflowing container changed offset.
+///
+/// # Returns
+///
+/// An [`EventOutcome`] permitting reuse only after successful scrolling.
+fn scroll_mouse_outcome(scrolled: bool) -> EventOutcome {
+    if scrolled {
+        EventOutcome::reuse(AppControl::Continue)
+    } else {
+        EventOutcome::recompute(AppControl::Continue)
     }
 }
 
@@ -102,12 +176,60 @@ where
 /// * `column` — Zero-based terminal column under the pointer.
 /// * `row` — Zero-based terminal row under the pointer.
 /// * `delta` — Signed horizontal and vertical cell deltas.
-fn scroll_at_position<V>(view: &mut V, column: u16, row: u16, delta: Axes<i16>)
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether an overflowing container changed offset.
+fn scroll_at_position<V>(view: &mut V, column: u16, row: u16, delta: Axes<i16>) -> bool
 where
     V: View + ?Sized,
 {
-    if !view.__scroll_overflowing_at_position(column, row, delta) {
-        view.__scroll_first_overflowing(delta);
+    if view.__scroll_overflowing_at_position(column, row, delta) {
+        true
+    } else {
+        view.__scroll_first_overflowing(delta)
+    }
+}
+
+/// Key propagation result paired with the next frame's layout requirement.
+struct KeyEventOutcome {
+    /// Resulting key propagation control.
+    control: KeyControl,
+    /// Required work before painting the next frame.
+    layout: LayoutMode,
+}
+
+impl KeyEventOutcome {
+    /// Creates an outcome that conservatively recomputes layout.
+    ///
+    /// # Arguments
+    ///
+    /// * `control` — Key propagation control emitted by built-in handling.
+    ///
+    /// # Returns
+    ///
+    /// A [`KeyEventOutcome`] requiring complete layout recomputation.
+    const fn recompute(control: KeyControl) -> Self {
+        Self {
+            control,
+            layout: LayoutMode::Recompute,
+        }
+    }
+
+    /// Creates an outcome that reuses retained layout.
+    ///
+    /// # Arguments
+    ///
+    /// * `control` — Key propagation control emitted by built-in handling.
+    ///
+    /// # Returns
+    ///
+    /// A [`KeyEventOutcome`] permitting retained-layout reuse.
+    const fn reuse(control: KeyControl) -> Self {
+        Self {
+            control,
+            layout: LayoutMode::Reuse,
+        }
     }
 }
 
@@ -116,12 +238,33 @@ pub(crate) fn handle_view_key_event<V>(view: &mut V, key: KeyEvent) -> Result<Ke
 where
     V: View + ?Sized,
 {
+    handle_view_key_event_with_layout(view, key).map(|outcome| outcome.control)
+}
+
+/// Dispatches one key and reports whether its redraw may reuse layout.
+///
+/// # Arguments
+///
+/// * `view` — View tree receiving the key.
+/// * `key` — Key event to dispatch.
+///
+/// # Returns
+///
+/// A [`KeyEventOutcome`] containing propagation and layout requirements.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] if custom key handling fails.
+fn handle_view_key_event_with_layout<V>(view: &mut V, key: KeyEvent) -> Result<KeyEventOutcome>
+where
+    V: View + ?Sized,
+{
     let control = view.__dispatch_key_event(key)?;
     if control == KeyControl::Pass {
-        return handle_default_view_key_event(view, key);
+        return handle_default_view_key_event_with_layout(view, key);
     }
 
-    Ok(control)
+    Ok(KeyEventOutcome::recompute(control))
 }
 
 /// Handles built-in scrolling, focus, editing, and activation keys.
@@ -129,18 +272,42 @@ pub(crate) fn handle_default_view_key_event<V>(view: &mut V, key: KeyEvent) -> R
 where
     V: View + ?Sized,
 {
+    handle_default_view_key_event_with_layout(view, key).map(|outcome| outcome.control)
+}
+
+/// Handles built-in key behavior and reports scroll-only repaint eligibility.
+///
+/// # Arguments
+///
+/// * `view` — View tree receiving built-in key behavior.
+/// * `key` — Key event to handle.
+///
+/// # Returns
+///
+/// A [`KeyEventOutcome`] containing propagation and layout requirements.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] if activating a focused control fails.
+fn handle_default_view_key_event_with_layout<V>(
+    view: &mut V,
+    key: KeyEvent,
+) -> Result<KeyEventOutcome>
+where
+    V: View + ?Sized,
+{
     if key.kind != KeyEventKind::Press {
-        return Ok(KeyControl::Pass);
+        return Ok(KeyEventOutcome::recompute(KeyControl::Pass));
     }
 
     if let Some(control) = view.__handle_form_key(key) {
         clear_scroll_to_top_key_pending(view);
-        return Ok(control);
+        return Ok(KeyEventOutcome::recompute(control));
     }
 
     if let Some(control) = view.__handle_focused_input_key(key) {
         clear_scroll_to_top_key_pending(view);
-        return Ok(control);
+        return Ok(KeyEventOutcome::recompute(control));
     }
 
     let history_direction = match key.code {
@@ -154,10 +321,10 @@ where
         && view.__navigate_markdown_history(back)
     {
         clear_scroll_to_top_key_pending(view);
-        return Ok(KeyControl::Handled);
+        return Ok(KeyEventOutcome::recompute(KeyControl::Handled));
     }
 
-    let control = match key.code {
+    let outcome = match key.code {
         KeyCode::Down | KeyCode::Char('j') => handle_scroll_key(view, 1),
         KeyCode::Up | KeyCode::Char('k') => handle_scroll_key(view, -1),
         KeyCode::PageDown => handle_scroll_key(view, 5),
@@ -167,13 +334,13 @@ where
         KeyCode::Char('g') => handle_scroll_to_top_key(view),
         KeyCode::Char('G') => {
             clear_scroll_to_top_key_pending(view);
-            key_control_from_bool(view.__scroll_first_overflowing_to_bottom())
+            scroll_key_outcome(view.__scroll_first_overflowing_to_bottom())
         }
         KeyCode::Tab | KeyCode::BackTab => {
             clear_scroll_to_top_key_pending(view);
             let count = view.__focusable_count();
             if count == 0 {
-                KeyControl::Pass
+                KeyEventOutcome::recompute(KeyControl::Pass)
             } else {
                 let direction = if key.code == KeyCode::Tab {
                     FocusDirection::Forward
@@ -181,21 +348,23 @@ where
                     FocusDirection::Backward
                 };
                 move_focus(view, direction, count);
-                KeyControl::Handled
+                KeyEventOutcome::recompute(KeyControl::Handled)
             }
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             clear_scroll_to_top_key_pending(view);
-            view.__activate_focused_button()?
-                .map_or(KeyControl::Pass, KeyControl::from)
+            KeyEventOutcome::recompute(
+                view.__activate_focused_button()?
+                    .map_or(KeyControl::Pass, KeyControl::from),
+            )
         }
         _ => {
             clear_scroll_to_top_key_pending(view);
-            KeyControl::Pass
+            KeyEventOutcome::recompute(KeyControl::Pass)
         }
     };
 
-    Ok(control)
+    Ok(outcome)
 }
 
 /// Moves focus by one position in the requested direction.
@@ -217,26 +386,60 @@ where
 }
 
 /// Handles a relative scroll key.
-fn handle_scroll_key<V>(view: &mut V, delta: i16) -> KeyControl
+///
+/// # Arguments
+///
+/// * `view` — View tree containing the scroll target.
+/// * `delta` — Signed vertical terminal-cell delta.
+///
+/// # Returns
+///
+/// A [`KeyEventOutcome`] describing propagation and layout reuse.
+fn handle_scroll_key<V>(view: &mut V, delta: i16) -> KeyEventOutcome
 where
     V: View + ?Sized,
 {
     clear_scroll_to_top_key_pending(view);
-    key_control_from_bool(view.__scroll_first_overflowing(Axes::new(0, delta)))
+    scroll_key_outcome(view.__scroll_first_overflowing(Axes::new(0, delta)))
+}
+
+/// Converts a built-in scroll result into its next-frame layout requirement.
+///
+/// # Arguments
+///
+/// * `scrolled` — Whether an overflowing container changed offset.
+///
+/// # Returns
+///
+/// A [`KeyEventOutcome`] permitting reuse only after successful scrolling.
+fn scroll_key_outcome(scrolled: bool) -> KeyEventOutcome {
+    if scrolled {
+        KeyEventOutcome::reuse(KeyControl::Handled)
+    } else {
+        KeyEventOutcome::recompute(KeyControl::Pass)
+    }
 }
 
 /// Handles the two-key `gg` scroll-to-top sequence.
-fn handle_scroll_to_top_key<V>(view: &mut V) -> KeyControl
+///
+/// # Arguments
+///
+/// * `view` — View tree containing the scroll target.
+///
+/// # Returns
+///
+/// A [`KeyEventOutcome`] describing sequence handling and layout reuse.
+fn handle_scroll_to_top_key<V>(view: &mut V) -> KeyEventOutcome
 where
     V: View + ?Sized,
 {
     if take_scroll_to_top_key_pending(view) {
-        key_control_from_bool(view.__scroll_first_overflowing_to_top())
+        scroll_key_outcome(view.__scroll_first_overflowing_to_top())
     } else if view.__has_overflowing_scroll_target() {
         set_scroll_to_top_key_pending(view, true);
-        KeyControl::Handled
+        KeyEventOutcome::reuse(KeyControl::Handled)
     } else {
-        KeyControl::Pass
+        KeyEventOutcome::recompute(KeyControl::Pass)
     }
 }
 
@@ -263,6 +466,7 @@ where
 {
     set_scroll_to_top_key_pending(view, false);
 }
+
 /// Direction used to move focus through focusable controls.
 #[derive(Clone, Copy)]
 enum FocusDirection {
@@ -270,13 +474,4 @@ enum FocusDirection {
     Forward,
     /// Move focus to the previous focusable control.
     Backward,
-}
-
-/// Converts a handled flag into the matching key traversal control.
-fn key_control_from_bool(handled: bool) -> KeyControl {
-    if handled {
-        KeyControl::Handled
-    } else {
-        KeyControl::Pass
-    }
 }

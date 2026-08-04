@@ -2,7 +2,7 @@
 //!
 //! This module owns terminal setup, event polling, root rendering, and cleanup
 //! for Leptatui applications. It adapts either an [`AppRoot`] implementation or
-//! a [`View`](crate::View) to a managed Ratatui/Crossterm terminal session.
+//! a [`View`] to a managed Ratatui/Crossterm terminal session.
 //!
 //! # Modules
 //!
@@ -37,6 +37,7 @@ pub use error::{Error, Result};
 pub(crate) use error_screen::ErrorScreenRegistry;
 pub use handle::{AppHandle, use_app_handle};
 pub use root::AppRoot;
+pub(crate) use root::{EventOutcome, LayoutMode};
 #[cfg(test)]
 pub(crate) use wakeup::redraw_test_lock;
 pub(crate) use wakeup::{request_redraw, subscribe_redraws};
@@ -45,8 +46,8 @@ use event::next_events;
 use render::draw_root;
 use terminal::TerminalSession;
 
-/// Time between event polls when no input is available.
-const DEFAULT_REDRAW_INTERVAL: Duration = Duration::from_millis(16);
+/// Time between pending-input flush checks when no terminal input is available.
+const DEFAULT_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(16);
 
 /// Runs a root value in a managed terminal session.
 #[derive(Debug)]
@@ -57,8 +58,10 @@ pub struct App<R> {
     handle: AppHandle,
     /// Active standalone error screen scoped to this runner.
     error_screens: ErrorScreenRegistry,
-    /// Polling timeout that also controls idle redraw cadence.
+    /// Event polling timeout and, when enabled, idle redraw cadence.
     redraw_interval: Duration,
+    /// Whether a timed-out event poll requests an idle redraw.
+    redraw_on_timeout: bool,
 }
 
 impl App<AnyView> {
@@ -70,13 +73,14 @@ impl App<AnyView> {
     ///
     /// # Returns
     ///
-    /// An [`App`] configured with the default redraw interval.
+    /// An [`App`] configured for event-driven redraws and default input polling.
     pub fn new(root: impl IntoView) -> Self {
         Self {
             root: root.into_view(),
             handle: AppHandle::new(),
             error_screens: ErrorScreenRegistry::new(),
-            redraw_interval: DEFAULT_REDRAW_INTERVAL,
+            redraw_interval: DEFAULT_EVENT_POLL_INTERVAL,
+            redraw_on_timeout: false,
         }
     }
 }
@@ -90,26 +94,28 @@ impl<R> App<R> {
     ///
     /// # Returns
     ///
-    /// An [`App`] configured with the default redraw interval.
+    /// An [`App`] configured for event-driven redraws and default input polling.
     pub fn from_root(root: R) -> Self {
         Self {
             root,
             handle: AppHandle::new(),
             error_screens: ErrorScreenRegistry::new(),
-            redraw_interval: DEFAULT_REDRAW_INTERVAL,
+            redraw_interval: DEFAULT_EVENT_POLL_INTERVAL,
+            redraw_on_timeout: false,
         }
     }
 
-    /// Overrides the polling timeout that drives periodic redraws.
+    /// Enables periodic idle redraws at the requested interval.
     ///
     /// # Arguments
     ///
     /// * `redraw_interval` — Non-zero event polling timeout and idle redraw
-    ///   cadence. Async redraw requests can wake the runner before this timeout.
+    ///   cadence. Input and async redraw requests can wake the runner before
+    ///   this timeout.
     ///
     /// # Returns
     ///
-    /// An [`App`] configured with the provided redraw interval.
+    /// An [`App`] configured to redraw periodically at the provided interval.
     ///
     /// # Panics
     ///
@@ -120,6 +126,7 @@ impl<R> App<R> {
             "redraw interval must be greater than zero"
         );
         self.redraw_interval = redraw_interval;
+        self.redraw_on_timeout = true;
         self
     }
 }
@@ -142,11 +149,19 @@ where
     ///
     /// Returns [`Error::Io`] if event handling performs terminal I/O that
     /// fails. Returns [`Error::LinkOpen`] if an activated link cannot open.
-    fn handle_active_event(&mut self, event: crossterm::event::Event) -> Result<AppControl> {
+    fn handle_active_event(&mut self, event: crossterm::event::Event) -> Result<EventOutcome> {
         if let Some(mut screen) = self.error_screens.active() {
-            View::handle_event(&mut screen, event)
+            View::handle_event(&mut screen, event).map(EventOutcome::recompute)
         } else {
-            self.root.handle_event(event)
+            self.root
+                .__handle_event(event)
+                .map(|(control, reuse_layout)| {
+                    if reuse_layout {
+                        EventOutcome::reuse(control)
+                    } else {
+                        EventOutcome::recompute(control)
+                    }
+                })
         }
     }
 
@@ -161,6 +176,14 @@ where
         } else {
             self.root.__flush_pending_input()
         }
+    }
+
+    /// Returns whether one completed event poll requires a redraw.
+    ///
+    /// Real events and flushed pending input always redraw. A timeout without
+    /// either redraws only when periodic idle redraws were explicitly enabled.
+    fn should_redraw_after_poll(&self, had_events: bool, flushed_input: bool) -> bool {
+        had_events || flushed_input || self.redraw_on_timeout
     }
 
     /// Runs the app until the root requests exit or a runtime error occurs.
@@ -233,48 +256,73 @@ where
     async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
         let mut redraw_requests = subscribe_redraws();
         let mut should_draw = true;
+        let mut next_layout = LayoutMode::Recompute;
+        let mut last_viewport = None;
         let event_poll = next_events(self.redraw_interval);
         tokio::pin!(event_poll);
 
         'app: loop {
             if should_draw {
+                let viewport = session.terminal.size()?;
+                let layout = if next_layout == LayoutMode::Reuse && last_viewport == Some(viewport)
+                {
+                    LayoutMode::Reuse
+                } else {
+                    LayoutMode::Recompute
+                };
                 draw_root(
                     &mut self.root,
                     &mut session.terminal,
                     &session.terminal_images,
                     &self.handle,
                     &self.error_screens,
+                    layout,
                 )?;
+                last_viewport = Some(viewport);
                 should_draw = false;
+                next_layout = LayoutMode::Recompute;
             }
 
             tokio::select! {
                 events = &mut event_poll => {
                     let events = events?;
-                    if events.is_empty() {
-                        if let Some(control) = self.flush_active_input()
-                            && control == AppControl::Exit
-                        {
-                            break;
-                        }
-                    } else {
+                    let had_events = !events.is_empty();
+                    let flushed_input = if had_events {
+                        let mut batch_layout = LayoutMode::Reuse;
                         for event in events {
-                            if self.handle_active_event(event)? == AppControl::Exit {
+                            let outcome = self.handle_active_event(event)?;
+                            if outcome.control == AppControl::Exit {
                                 break 'app;
                             }
+                            batch_layout = batch_layout.merge(outcome.layout);
 
                             if self.run_suspended_tasks(session)? {
+                                batch_layout = LayoutMode::Recompute;
                                 break;
                             }
                         }
-                    }
 
-                    should_draw = true;
+                        next_layout = batch_layout;
+                        false
+                    } else {
+                        let flushed_input = self.flush_active_input();
+                        if flushed_input == Some(AppControl::Exit) {
+                            break;
+                        }
+
+                        flushed_input.is_some()
+                    };
+
+                    should_draw = self.should_redraw_after_poll(had_events, flushed_input);
+                    if flushed_input || self.redraw_on_timeout {
+                        next_layout = LayoutMode::Recompute;
+                    }
                     event_poll.set(next_events(self.redraw_interval));
                 }
                 changed = redraw_requests.changed() => {
                     if changed.is_ok() {
                         should_draw = true;
+                        next_layout = LayoutMode::Recompute;
                     }
                 }
             }
@@ -411,6 +459,31 @@ mod tests {
         Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
     }
 
+    /// Verifies default redraws are event driven and explicit intervals remain periodic.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// default app: timeout, event, flushed input
+    /// periodic app: timeout
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - An idle timeout does not redraw a default app.
+    /// - Real events and flushed pending input redraw a default app.
+    /// - An explicit redraw interval retains periodic idle redraws.
+    #[test]
+    fn redraws_are_event_driven_unless_periodic_redraws_are_enabled() {
+        let default_app = App::new(text("test"));
+        assert!(!default_app.should_redraw_after_poll(false, false));
+        assert!(default_app.should_redraw_after_poll(true, false));
+        assert!(default_app.should_redraw_after_poll(false, true));
+
+        let periodic_app = App::new(text("test")).with_redraw_interval(Duration::from_millis(50));
+        assert!(periodic_app.should_redraw_after_poll(false, false));
+    }
+
     /// Verifies terminal suspension surrounds queued component work.
     ///
     /// # Example Under Test
@@ -528,7 +601,7 @@ mod tests {
         assert_eq!(
             app.handle_active_event(key(KeyCode::Enter))
                 .expect("error-screen event dispatch should succeed"),
-            AppControl::Exit,
+            EventOutcome::recompute(AppControl::Exit),
         );
         assert_eq!(event_count.get(), 0);
 
@@ -536,7 +609,7 @@ mod tests {
         assert_eq!(
             app.handle_active_event(key(KeyCode::Enter))
                 .expect("ordinary root event dispatch should succeed"),
-            AppControl::Continue,
+            EventOutcome::recompute(AppControl::Continue),
         );
         assert_eq!(event_count.get(), 1);
     }

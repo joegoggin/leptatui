@@ -15,7 +15,9 @@ use crate::{
     view::{ComponentView, core::layout::render_with_layout},
 };
 
-use super::{AppHandle, AppRoot, ErrorScreenRegistry, Result, terminal::DefaultTerminal};
+use super::{
+    AppHandle, AppRoot, ErrorScreenRegistry, LayoutMode, Result, terminal::DefaultTerminal,
+};
 
 /// Draws a root application into the terminal.
 ///
@@ -26,6 +28,7 @@ use super::{AppHandle, AppRoot, ErrorScreenRegistry, Result, terminal::DefaultTe
 /// * `terminal_images` — Terminal image support detected for the session.
 /// * `app_handle` — Runtime handle provided to managed components.
 /// * `error_screens` — Runner registry for standalone error screens.
+/// * `layout` — Whether the ordinary root may reuse retained geometry.
 ///
 /// # Returns
 ///
@@ -41,6 +44,7 @@ pub(super) fn draw_root<R>(
     terminal_images: &TerminalImageSupport,
     app_handle: &AppHandle,
     error_screens: &ErrorScreenRegistry,
+    layout: LayoutMode,
 ) -> Result<()>
 where
     R: AppRoot,
@@ -60,7 +64,7 @@ where
                 return;
             }
 
-            render_result = root.render(frame);
+            render_result = root.__render(frame, layout == LayoutMode::Reuse);
             if render_result.is_ok()
                 && let Some(screen) = error_screens.active()
             {
