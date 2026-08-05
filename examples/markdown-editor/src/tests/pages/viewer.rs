@@ -8,8 +8,7 @@ use super::*;
 ///
 /// ```text
 /// Home: e
-/// Home: o
-/// Explorer: Enter
+/// direct Viewer route
 /// Viewer: e
 /// Home: q
 /// ```
@@ -17,7 +16,7 @@ use super::*;
 /// # Assertions
 ///
 /// - `e` passes without an open Viewer document.
-/// - Explorer activation opens the selected Markdown document.
+/// - A direct Viewer route opens the selected Markdown document.
 /// - Viewer `e` queues a restored-terminal edit without exiting the session.
 /// - Global `q` still exits the mounted application.
 #[test]
@@ -35,16 +34,7 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
         KeyControl::Pass
     );
-
-    assert_eq!(
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE))?,
-        KeyControl::Handled
-    );
-    draw_editor(&mut terminal, &view)?;
-    assert_eq!(
-        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
-        KeyControl::Handled
-    );
+    view = contexts.view_at(crate::pages::viewer_location(&tree.root().join("guide.md")));
     draw_editor(&mut terminal, &view)?;
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
@@ -82,17 +72,10 @@ fn viewer_markdown_view_recovers_after_a_missing_file_returns() -> leptatui::Res
     let guide = tree.root().join("guide.md");
     fs::write(&guide, "# Original").expect("the Markdown file should be created");
     let contexts = TestContexts::new(tree.root());
-    let mut view = contexts.view();
+    let mut view = contexts.view_at(crate::pages::viewer_location(&guide));
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
 
     draw_editor(&mut terminal, &view)?;
-    for key in [KeyCode::Char('o'), KeyCode::Enter] {
-        assert_eq!(
-            view.handle_key_event(KeyEvent::new(key, KeyModifiers::NONE))?,
-            KeyControl::Handled
-        );
-        draw_editor(&mut terminal, &view)?;
-    }
     assert!(rendered_lines(&terminal).join("\n").contains("Original"));
 
     fs::remove_file(&guide).expect("the open Markdown file should be removed");
@@ -129,7 +112,7 @@ fn viewer_markdown_view_recovers_after_a_missing_file_returns() -> leptatui::Res
 ///
 /// # Assertions
 ///
-/// - Explorer opens the path in Viewer.
+/// - A direct Viewer route opens the path.
 /// - Viewer renders the shared Markdown file diagnostic.
 /// - The diagnostic identifies the path and invalid UTF-8 content.
 #[test]
@@ -138,17 +121,10 @@ fn viewer_markdown_view_renders_invalid_utf8_diagnostics() -> leptatui::Result<(
     let invalid = tree.root().join("invalid.md");
     fs::write(&invalid, [0xff, 0xfe, 0xfd]).expect("the invalid UTF-8 fixture should be created");
     let contexts = TestContexts::new(tree.root());
-    let mut view = contexts.view();
+    let view = contexts.view_at(crate::pages::viewer_location(&invalid));
     let mut terminal = Terminal::new(TestBackend::new(100, 18))?;
 
     draw_editor(&mut terminal, &view)?;
-    for key in [KeyCode::Char('o'), KeyCode::Enter] {
-        assert_eq!(
-            view.handle_key_event(KeyEvent::new(key, KeyModifiers::NONE))?,
-            KeyControl::Handled
-        );
-        draw_editor(&mut terminal, &view)?;
-    }
     let rendered = rendered_lines(&terminal).join("\n");
     assert!(rendered.contains("failed to read Markdown file"));
     assert!(rendered.contains("invalid.md"));
@@ -233,17 +209,10 @@ fn viewer_markdown_view_navigates_local_links_and_history() -> leptatui::Result<
     fs::write(tree.root().join("next.md"), "# Linked document")
         .expect("the linked Markdown file should be created");
     let contexts = TestContexts::new(tree.root());
-    let mut view = contexts.view();
+    let mut view = contexts.view_at(crate::pages::viewer_location(&tree.root().join("guide.md")));
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
 
     draw_editor(&mut terminal, &view)?;
-    for key in [KeyCode::Char('o'), KeyCode::Enter] {
-        assert_eq!(
-            view.handle_key_event(KeyEvent::new(key, KeyModifiers::NONE))?,
-            KeyControl::Handled
-        );
-        draw_editor(&mut terminal, &view)?;
-    }
     assert!(rendered_lines(&terminal).join("\n").contains("Next"));
 
     for key in [KeyCode::Tab, KeyCode::Enter] {

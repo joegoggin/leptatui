@@ -34,7 +34,7 @@ use crate::{AnyView, IntoView, View, view::VisitedLinkRegistry};
 
 pub use control::AppControl;
 pub use error::{Error, Result};
-pub(crate) use error_screen::ErrorScreenRegistry;
+pub(crate) use error_screen::StandaloneScreenRegistry;
 pub use handle::{AppHandle, use_app_handle};
 pub use root::AppRoot;
 pub(crate) use root::{EventOutcome, LayoutMode};
@@ -56,8 +56,8 @@ pub struct App<R> {
     root: R,
     /// Component-facing runtime handle scoped to this runner.
     handle: AppHandle,
-    /// Active standalone error screen scoped to this runner.
-    error_screens: ErrorScreenRegistry,
+    /// Active standalone screen scoped to this runner.
+    standalone_screens: StandaloneScreenRegistry,
     /// Destinations visited during this runner's lifetime.
     visited_links: VisitedLinkRegistry,
     /// Event polling timeout and, when enabled, idle redraw cadence.
@@ -80,7 +80,7 @@ impl App<AnyView> {
         Self {
             root: root.into_view(),
             handle: AppHandle::new(),
-            error_screens: ErrorScreenRegistry::new(),
+            standalone_screens: StandaloneScreenRegistry::new(),
             visited_links: VisitedLinkRegistry::new(),
             redraw_interval: DEFAULT_EVENT_POLL_INTERVAL,
             redraw_on_timeout: false,
@@ -102,7 +102,7 @@ impl<R> App<R> {
         Self {
             root,
             handle: AppHandle::new(),
-            error_screens: ErrorScreenRegistry::new(),
+            standalone_screens: StandaloneScreenRegistry::new(),
             visited_links: VisitedLinkRegistry::new(),
             redraw_interval: DEFAULT_EVENT_POLL_INTERVAL,
             redraw_on_timeout: false,
@@ -139,7 +139,7 @@ impl<R> App<R>
 where
     R: AppRoot,
 {
-    /// Dispatches an event to the active error screen or ordinary app root.
+    /// Dispatches an event to the active standalone screen or ordinary app root.
     ///
     /// # Arguments
     ///
@@ -156,7 +156,7 @@ where
     fn handle_active_event(&mut self, event: crossterm::event::Event) -> Result<EventOutcome> {
         let visited_links = self.visited_links.clone();
         visited_links.with(|| {
-            if let Some(mut screen) = self.error_screens.active() {
+            if let Some(mut screen) = self.standalone_screens.active() {
                 View::handle_event(&mut screen, event).map(EventOutcome::recompute)
             } else {
                 self.root
@@ -172,13 +172,13 @@ where
         })
     }
 
-    /// Flushes pending input from the active error screen or ordinary root.
+    /// Flushes pending input from the active standalone screen or ordinary root.
     ///
     /// # Returns
     ///
     /// An optional [`AppControl`] emitted by pending input handling.
     fn flush_active_input(&mut self) -> Option<AppControl> {
-        if let Some(mut screen) = self.error_screens.active() {
+        if let Some(mut screen) = self.standalone_screens.active() {
             View::__flush_pending_input(&mut screen)
         } else {
             self.root.__flush_pending_input()
@@ -284,7 +284,7 @@ where
                         &mut session.terminal,
                         &session.terminal_images,
                         &self.handle,
-                        &self.error_screens,
+                        &self.standalone_screens,
                         layout,
                     )
                 })?;
@@ -606,7 +606,7 @@ mod tests {
                 .on_press(|| AppControl::Exit)
                 .with_focus(true),
         );
-        app.error_screens.register(&screen);
+        app.standalone_screens.register(&screen);
 
         assert_eq!(
             app.handle_active_event(key(KeyCode::Enter))
@@ -615,7 +615,7 @@ mod tests {
         );
         assert_eq!(event_count.get(), 0);
 
-        app.error_screens.dismiss();
+        app.standalone_screens.dismiss();
         assert_eq!(
             app.handle_active_event(key(KeyCode::Enter))
                 .expect("ordinary root event dispatch should succeed"),

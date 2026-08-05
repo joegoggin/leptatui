@@ -50,7 +50,7 @@ pub(in crate::pages::viewer) fn ViewerDocument(
     } else {
         view! {
             <Text class="viewer-document__empty">
-                "Choose a Markdown file from Home or Explorer"
+                "Choose a Markdown file from Home or the file selector"
             </Text>
         }
         .into_view()

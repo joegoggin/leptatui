@@ -10,6 +10,7 @@
 //! - [`mod@component`] — Component construction support and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
 //! - [`file_system`] — Root-scoped asynchronous filesystem operations.
+//! - [`file_selector`] — Standalone reactive file selection.
 //! - `executor` — Leptos executor integration for async reactive work.
 //! - `markdown` — CommonMark parsing and semantic view conversion.
 //! - [`route`] — Signal-backed route state helpers for page switches.
@@ -265,6 +266,7 @@ pub mod action;
 pub mod app;
 pub mod component;
 pub mod context;
+pub mod file_selector;
 pub mod file_system;
 pub mod prelude;
 pub mod resource;
@@ -281,6 +283,7 @@ pub use anyhow::Error as ViewError;
 pub use app::{App, AppControl, AppHandle, AppRoot, Error, Result, use_app_handle};
 pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, use_key_event};
 pub use executor::{spawn, spawn_local};
+pub use file_selector::{FileSelector, FileSelectorOptions, use_file_selector};
 pub use leptatui_macros::{component, stylesheet, view};
 pub use markdown::{
     MarkdownOptions, MarkdownView, markdown, markdown_file, markdown_file_with_options,

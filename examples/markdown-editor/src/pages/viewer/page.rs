@@ -70,7 +70,10 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
     let revision = RwSignal::new(0_u64);
     let shortcut_navigate = use_navigate();
     let home_navigate = use_navigate();
-    let explorer_navigate = use_navigate();
+    let file_selector = use_file_selector();
+    let shortcut_file_selector = file_selector.clone();
+    let button_file_selector = file_selector.clone();
+    let selected_navigate = use_navigate();
     let open_path = route_params
         .get_untracked()
         .get("path")
@@ -80,6 +83,12 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
     let load_error = RwSignal::new(None::<String>);
     let load_generation = RwSignal::new(0_u64);
     let read_document = ArcRwSignal::new(None::<FileOperation<String>>);
+
+    Effect::new(move || {
+        if let Some(file) = file_selector.get_file() {
+            selected_navigate(&viewer_location(&file), NavigateOptions::default());
+        }
+    });
     let read_for_route = read_document.clone();
     let route_filesystem = filesystem.clone();
     let route_current_directory = std::env::current_dir()?;
@@ -263,7 +272,8 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
                 KeyControl::Handled
             }
             KeyCode::Char('b') => {
-                shortcut_navigate("/files", NavigateOptions::default());
+                shortcut_file_selector
+                    .select_with_options(FileSelectorOptions::new().extensions(["md", "markdown"]));
                 KeyControl::Handled
             }
             _ => KeyControl::Pass,
@@ -281,7 +291,9 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
                     AppControl::Continue
                 }>"Home"</Button>
                 <Button on_press=move || {
-                    explorer_navigate("/files", NavigateOptions::default());
+                    button_file_selector.select_with_options(
+                        FileSelectorOptions::new().extensions(["md", "markdown"]),
+                    );
                     AppControl::Continue
                 }>"Browse files"</Button>
             </Div>

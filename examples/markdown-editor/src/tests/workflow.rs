@@ -16,7 +16,7 @@ use super::support::{
     rendered_lines,
 };
 
-/// Verifies the explorer, preview, editor, and renderer complete one workflow.
+/// Verifies the preview, editor, and renderer complete one workflow.
 ///
 /// # Example Under Test
 ///
@@ -25,16 +25,14 @@ use super::support::{
 /// └── docs/
 ///     └── guide.md = "# Before edit"
 ///
-/// Enter docs
-/// Enter guide.md
+/// open /view/docs/guide.md
 /// e
 /// configured-editor -- /absolute/workspace/docs/guide.md
 /// ```
 ///
 /// # Assertions
 ///
-/// - Home routes to Explorer before key events enter the nested directory.
-/// - Explorer opens the Markdown file in Viewer.
+/// - The encoded route opens the Markdown file in Viewer.
 /// - Test-backend rendering exposes the original document.
 /// - The edit key is handled without exiting the component tree.
 /// - The injected editor receives the canonical path and replaces the source.
@@ -65,32 +63,9 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
         },
     );
     let contexts = TestContexts::new(tree.root());
-    let mut view = contexts.view_with_editor(editor_process);
+    let mut view = contexts.view_at_with_editor(viewer_location(&canonical_guide), editor_process);
     let mut terminal = Terminal::new(TestBackend::new(90, 24))?;
 
-    draw_editor(&mut terminal, &view)?;
-    let home = rendered_lines(&terminal).join("\n");
-    assert!(
-        home.contains("No recent Markdown files"),
-        "rendered text: {home:?}"
-    );
-
-    assert_eq!(
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE))?,
-        KeyControl::Handled
-    );
-    draw_editor(&mut terminal, &view)?;
-    assert!(rendered_lines(&terminal).join("\n").contains("> [D] docs"));
-    assert_eq!(
-        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
-        KeyControl::Handled
-    );
-    draw_editor(&mut terminal, &view)?;
-    assert!(rendered_lines(&terminal).join("\n").contains("guide.md"));
-    assert_eq!(
-        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
-        KeyControl::Handled
-    );
     draw_editor(&mut terminal, &view)?;
     let before_edit = rendered_lines(&terminal).join("\n");
     assert!(before_edit.contains("Before edit"));

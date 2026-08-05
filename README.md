@@ -1252,6 +1252,56 @@ See `cargo run --example async_redraw` for a small async redraw example and
 `cargo run --example async_crud` for resources, actions, context, stylesheets,
 and app startup working together.
 
+## File Selector
+
+`use_file_selector()` returns a cloneable handle for Leptatui's
+standalone file picker. The picker temporarily owns the complete terminal and
+event stream, so application styles and layouts cannot affect it. `Enter`
+selects the highlighted file, `Esc` or `Ctrl-C` cancels without changing the
+previously stored path, and `q` exits the application.
+
+```rust,no_run
+use leptatui::prelude::*;
+
+#[component]
+fn OpenDocument() -> impl IntoView {
+    let selector = use_file_selector();
+    let button_selector = selector.clone();
+    let navigate = use_navigate();
+
+    Effect::new(move || {
+        if let Some(path) = selector.get_file() {
+            navigate(
+                &format!("/documents/{}", path.display()),
+                NavigateOptions::default(),
+            );
+        }
+    });
+
+    view! {
+        <Div>
+            <Button on_press=move || {
+                button_selector.select_with_options(
+                    FileSelectorOptions::new()
+                        .starting_directory("docs")
+                        .extensions(["md", "markdown"]),
+                );
+                AppControl::Continue
+            }>
+                "Select a file"
+            </Button>
+        </Div>
+    }
+}
+```
+
+`select()` starts in the process current directory and accepts any regular
+file. `select_with_options()` can choose the initial directory, extension
+allowlist, and initial hidden-file visibility. A successful selection replaces
+the stored canonical `PathBuf`; `get_file()` reactively reads it and `clear()`
+removes it explicitly. Reading it inside an `Effect` reruns that effect after a
+selection or clear. Opening or cancelling never clears an existing value.
+
 ## Root-Scoped File System
 
 `use_file_system()` canonicalizes a directory boundary and returns a cloneable

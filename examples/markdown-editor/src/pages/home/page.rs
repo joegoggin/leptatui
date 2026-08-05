@@ -2,7 +2,7 @@
 
 use leptatui::prelude::*;
 
-use crate::{contexts::use_notifications, services::RecentFilesStore};
+use crate::{contexts::use_notifications, pages::viewer_location, services::RecentFilesStore};
 
 use super::{
     components::{RecentFilesList, RecentFilesListProps},
@@ -16,8 +16,10 @@ use super::{
 /// A Home page component.
 #[component]
 pub(crate) fn HomePage() -> impl IntoView {
-    let shortcut_navigate = use_navigate();
-    let button_navigate = use_navigate();
+    let file_selector = use_file_selector();
+    let shortcut_file_selector = file_selector.clone();
+    let button_file_selector = file_selector.clone();
+    let selected_navigate = use_navigate();
     let notifications = use_notifications();
     let recent_files_store = expect_context::<RecentFilesStore>();
     let current_directory = std::env::current_dir().unwrap_or_default();
@@ -26,9 +28,16 @@ pub(crate) fn HomePage() -> impl IntoView {
         notifications.show_warning("Recent files unavailable", error.to_string());
     }
 
+    Effect::new(move || {
+        if let Some(file) = file_selector.get_file() {
+            selected_navigate(&viewer_location(&file), NavigateOptions::default());
+        }
+    });
+
     use_key_event(KeyEventKind::Press, move |key| {
         if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::NONE {
-            shortcut_navigate("/files", NavigateOptions::default());
+            shortcut_file_selector
+                .select_with_options(FileSelectorOptions::new().extensions(["md", "markdown"]));
             return KeyControl::Handled;
         }
 
@@ -46,7 +55,10 @@ pub(crate) fn HomePage() -> impl IntoView {
             <Text class="home-page__path">{directory_label}</Text>
             <Div class="home-page__actions">
                 <Button on_press=move || {
-                    button_navigate("/files", NavigateOptions::default());
+                    button_file_selector
+                        .select_with_options(
+                            FileSelectorOptions::new().extensions(["md", "markdown"]),
+                        );
                     AppControl::Continue
                 }>"Open file"</Button>
             </Div>

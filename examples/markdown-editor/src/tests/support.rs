@@ -15,13 +15,12 @@ use std::{
 
 use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
-use tokio::runtime::Runtime;
+use tokio::{runtime::Runtime, task::LocalSet};
 
 use crate::{
     app::{AppRouter, AppRouterProps},
     services::{
-        EditorProcess, EditorSession, EnvironmentReader, ExplorerEntry, ProcessLauncher,
-        RecentFilesStore,
+        EditorProcess, EditorSession, EnvironmentReader, ProcessLauncher, RecentFilesStore,
     },
 };
 
@@ -51,6 +50,9 @@ fn TestAppRouter(
 thread_local! {
     /// Whether the current synchronous test worker entered the shared runtime.
     static TEST_RUNTIME_ENTERED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Local executor used by effects spawned from synchronous component tests.
+    static TEST_LOCAL_SET: std::cell::OnceCell<&'static LocalSet> =
+        const { std::cell::OnceCell::new() };
     /// Weak lease used to make the test lock reentrant on one worker thread.
     static TEST_CONTEXT_LEASE: std::cell::RefCell<Weak<TestLease>> =
         const { std::cell::RefCell::new(Weak::new()) };
@@ -141,19 +143,6 @@ impl TestContexts {
                 .build(),
         )
         .into_view()
-    }
-
-    /// Creates an application view with an immediate injected editor process.
-    ///
-    /// # Arguments
-    ///
-    /// * `editor_process` — Process boundary executed without a real terminal.
-    ///
-    /// # Returns
-    ///
-    /// An [`AnyView`] whose Viewer completes editor requests synchronously.
-    pub(super) fn view_with_editor(&self, editor_process: EditorProcess) -> AnyView {
-        self.view_at_with_editor("/", editor_process)
     }
 
     /// Creates an application view at a route with an immediate editor process.
@@ -303,7 +292,7 @@ impl ProcessLauncher for RecordingLauncher {
     }
 }
 
-/// Temporary directory tree removed automatically after an explorer test.
+/// Temporary directory tree removed automatically after an application test.
 #[derive(Debug)]
 pub(super) struct TestTree {
     /// Root directory owned by this fixture.
@@ -364,22 +353,6 @@ pub(super) fn temporary_path(label: &str) -> PathBuf {
     ))
 }
 
-/// Converts explorer entry names into assertion-friendly strings.
-///
-/// # Arguments
-///
-/// * `entries` — Discovered entries whose display order should be asserted.
-///
-/// # Returns
-///
-/// A [`Vec`] containing lossy entry names in their existing order.
-pub(super) fn explorer_entry_names(entries: &[ExplorerEntry]) -> Vec<String> {
-    entries
-        .iter()
-        .map(|entry| entry.name().to_string_lossy().into_owned())
-        .collect()
-}
-
 /// Draws a Markdown editor view into a fixed-size test terminal.
 ///
 /// # Arguments
@@ -401,11 +374,13 @@ pub(super) fn draw_editor(
     let mut render_result = Ok(());
 
     for _ in 0..3 {
+        drive_test_local_tasks();
         thread::sleep(Duration::from_millis(20));
         terminal.draw(|frame| {
             let mut context = RenderCtx::new(frame);
             render_result = view.render(&mut context);
         })?;
+        drive_test_local_tasks();
     }
 
     render_result
@@ -430,7 +405,27 @@ fn enter_test_runtime() {
             ))
         });
         let _ = Box::leak(Box::new(runtime.enter()));
+        let _ = Box::leak(Box::new(test_local_set().enter()));
     });
+}
+
+/// Returns the persistent local executor for the current test worker.
+///
+/// # Returns
+///
+/// A leaked [`LocalSet`] whose lifetime matches the synchronous test worker.
+fn test_local_set() -> &'static LocalSet {
+    TEST_LOCAL_SET.with(|local_set| *local_set.get_or_init(|| Box::leak(Box::new(LocalSet::new()))))
+}
+
+/// Runs locally spawned component effects until they have yielded once.
+fn drive_test_local_tasks() {
+    let runtime = *TEST_RUNTIME
+        .get()
+        .expect("filesystem test runtime should be entered before rendering");
+    runtime.block_on(test_local_set().run_until(async {
+        tokio::task::yield_now().await;
+    }));
 }
 
 /// Returns all rendered terminal rows as plain strings.

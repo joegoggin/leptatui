@@ -5,7 +5,7 @@ use leptatui::prelude::*;
 use crate::{
     contexts::{Notifications, provide_notification_context},
     layouts::{RootLayout, RootLayoutProps},
-    pages::{ExplorerPage, HomePage, NotFoundPage, ViewerPage},
+    pages::{HomePage, NotFoundPage, ViewerPage},
     services::{EditorProcess, EditorSession, RecentFilesStore},
 };
 
@@ -48,7 +48,6 @@ pub(crate) fn AppRouter(#[prop(into)] initial_path: String) -> impl IntoView {
             <RootLayout>
                 <Routes fallback=NotFoundPage>
                     <Route path="/" view=HomePage />
-                    <Route path="/files" view=ExplorerPage />
                     <Route path="/view/*path" view=ViewerPage />
                 </Routes>
                 <Notifications />

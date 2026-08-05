@@ -11,7 +11,7 @@ use crate::{
     AnyView, AppControl, Axes, BorderType, Borders, BoxSizing, Color, Dimension, Display, Edges,
     FlexDirection, IntoView, JustifyContent, KeyControl, LayoutSize, Length, LengthAuto, Modifier,
     Overflow, Position, StyleMetadata, TuiSpacing, TuiStyle, View, ViewError, ViewType, ZIndex,
-    app::{ErrorScreenRegistry, Result},
+    app::{Result, StandaloneScreenRegistry},
     block, button,
     component::RenderCtx,
     context, div, h1, paragraph, use_key_event,
@@ -33,7 +33,7 @@ use super::boundary::component::ComponentView;
 #[doc(hidden)]
 pub fn __view_error(error: ViewError, source_file: &'static str, source_line: u32) -> AnyView {
     let history = crate::route::try_use_history();
-    let error_screens = context::use_context::<ErrorScreenRegistry>();
+    let error_screens = context::use_context::<StandaloneScreenRegistry>();
     let screen = ComponentView::new_style_isolated(ErrorScreen::with_props(ErrorScreenProps {
         message: format!("{error:#}"),
         source_file: source_file.to_owned(),
@@ -69,7 +69,7 @@ fn ErrorScreen(
     source_file: String,
     source_line: u32,
     history: Option<crate::History>,
-    error_screens: Option<ErrorScreenRegistry>,
+    error_screens: Option<StandaloneScreenRegistry>,
 ) -> impl IntoView {
     crate::stylesheet! {
         Paragraph => { fg: Color::Red }
@@ -331,7 +331,7 @@ mod tests {
     /// - Dropping the owning view invalidates the weak registry entry.
     #[test]
     fn view_error_registers_managed_screen_with_its_own_shortcuts() {
-        let registry = ErrorScreenRegistry::new();
+        let registry = StandaloneScreenRegistry::new();
         let view = context::hooks::__with_context_scope(|| {
             context::provide_context(registry.clone());
             __view_error(anyhow::anyhow!("managed failure"), "src/managed.rs", 42)

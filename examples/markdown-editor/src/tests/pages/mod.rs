@@ -2,7 +2,6 @@
 //!
 //! # Modules
 //!
-//! - [`explorer`] — Explorer destination behavior.
 //! - [`home`] — Home workflow and recent-file behavior.
 //! - [`viewer`] — Viewer editing, reload, diagnostics, and Markdown history.
 
@@ -13,6 +12,5 @@ use ratatui::{Terminal, backend::TestBackend};
 
 use super::support::{TestContexts, TestTree, draw_editor, rendered_lines};
 
-mod explorer;
 mod home;
 mod viewer;

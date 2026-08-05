@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::{
-    AppHandle, AppRoot, ErrorScreenRegistry, LayoutMode, Result, terminal::DefaultTerminal,
+    AppHandle, AppRoot, LayoutMode, Result, StandaloneScreenRegistry, terminal::DefaultTerminal,
 };
 
 /// Draws a root application into the terminal.
@@ -27,7 +27,7 @@ use super::{
 /// * `terminal` — Ratatui terminal backend receiving the draw call.
 /// * `terminal_images` — Terminal image support detected for the session.
 /// * `app_handle` — Runtime handle provided to managed components.
-/// * `error_screens` — Runner registry for standalone error screens.
+/// * `standalone_screens` — Runner registry for standalone screens.
 /// * `layout` — Whether the ordinary root may reuse retained geometry.
 ///
 /// # Returns
@@ -43,7 +43,7 @@ pub(super) fn draw_root<R>(
     terminal: &mut DefaultTerminal,
     terminal_images: &TerminalImageSupport,
     app_handle: &AppHandle,
-    error_screens: &ErrorScreenRegistry,
+    standalone_screens: &StandaloneScreenRegistry,
     layout: LayoutMode,
 ) -> Result<()>
 where
@@ -56,9 +56,9 @@ where
         context::hooks::__with_context_scope(|| {
             context::provide_context(terminal_images.clone());
             context::provide_context(app_handle.clone());
-            context::provide_context(error_screens.clone());
+            context::provide_context(standalone_screens.clone());
 
-            if let Some(screen) = error_screens.active() {
+            if let Some(screen) = standalone_screens.active() {
                 render_result = render_error_screen(&screen, frame);
                 focused_control = screen.focused_control();
                 return;
@@ -66,7 +66,7 @@ where
 
             render_result = root.__render(frame, layout == LayoutMode::Reuse);
             if render_result.is_ok()
-                && let Some(screen) = error_screens.active()
+                && let Some(screen) = standalone_screens.active()
             {
                 render_result = render_error_screen(&screen, frame);
                 focused_control = screen.focused_control();

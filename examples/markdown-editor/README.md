@@ -1,7 +1,7 @@
 # Markdown Editor
 
 The Markdown editor is a standalone, multi-page Leptatui reference application.
-It combines a current-directory filesystem explorer, semantic Markdown viewer,
+It combines Leptatui's standalone file selector, a semantic Markdown viewer,
 persistent recent files, recoverable errors, and restored-terminal editing
 behind focused project layers.
 
@@ -18,7 +18,7 @@ Neovim is one supported choice:
 export VISUAL="nvim -f"
 ```
 
-The explorer and preview remain fully usable when no editor is configured; an
+The file selector and preview remain fully usable when no editor is configured; an
 editor is launched only after pressing `e` with a Markdown document open.
 
 ## Start the Application
@@ -42,8 +42,8 @@ cargo run -p markdown-editor -- --help
 ```
 
 The command accepts zero or one positional `FILE_PATH`. With no path, the
-application starts on Home and File Explorer begins in the process current
-directory. A supplied relative path is made absolute and lexically normalized,
+application starts on Home and the file selector opens in the process current
+directory when requested. A supplied relative path is made absolute and lexically normalized,
 then encoded into the initial Viewer route. Startup does not require the target
 to exist; read and Markdown-validation failures render as recoverable Viewer
 diagnostics. Additional positional arguments are rejected.
@@ -51,15 +51,14 @@ diagnostics. Additional positional arguments are rejected.
 ## Pages and Controls
 
 The application starts on Home and uses Leptatui's URL-like router to switch
-between three component pages:
+between two component pages while Leptatui owns the standalone file selector:
 
-- **Home** — Press `o` or activate **Open file** to visit the File Explorer.
+- **Home** — Press `o` or activate **Open file** to open the file selector.
   Recent-file buttons open their documents directly in the Markdown Viewer.
-- **File Explorer** — Use `Up`/`k` and `Down`/`j` to select entries, `Enter` to
-  enter a directory or open a Markdown file, `Left`/`h` to visit the parent
-  directory, and `Esc` to return Home. Explorer starts in the process current
-  directory each time it is mounted, but parent navigation can continue to the
-  filesystem or drive root.
+- **File Selector** — Use `Up`/`k` and `Down`/`j` to highlight entries,
+  `Enter` to enter a directory or select a Markdown file, `Left`/`h` to visit
+  the parent directory, and `Esc` to cancel. It starts in the process current
+  directory and can continue to the filesystem or drive root.
 - **Markdown Viewer** — Use `Page Up`, `Page Down`, `Ctrl-U`, `Ctrl-D`, `gg`,
   or `G` to scroll; `e` to edit; `r` to reload; `h` for Home; and `b` to browse
   files. Focus a Markdown link and press `Enter` to activate it; `Shift-H` and
@@ -76,11 +75,11 @@ errors remain recoverable and appear as a warning on Home.
 
 ## Filesystem and Failure Behavior
 
-The explorer lists directories before case-insensitive `.md` and `.markdown`
+The file selector lists directories before case-insensitive `.md` and `.markdown`
 files using deterministic name ordering. The first entry in each non-empty
 directory is selected automatically, and selection stops at listing boundaries.
 
-Explorer discovery follows symlinks only when their canonical targets remain
+File-selector discovery follows symlinks only when their canonical targets remain
 on the current filesystem or drive root. Broken or escaping symlinks are
 hidden. Failed directory reads preserve the last valid listing and render a
 recoverable error.
@@ -90,8 +89,7 @@ filesystem handle, then constructs a path-identified Markdown view so relative
 links, local navigation, and history keep their normal behavior. Missing-file
 and invalid UTF-8 failures remain recoverable diagnostics. Pressing `r`
 dispatches a fresh read and rebuilds the document after the problem is
-corrected, while Home and File Explorer remain available as explicit
-destinations.
+corrected, while Home and the standalone file selector remain available.
 
 Editor values can contain shell-word quoted arguments, such as
 `VISUAL="nvim -f"`, but they are executed directly without shell expansion,
@@ -110,28 +108,27 @@ spacing is reduced.
 - `cli` contains optional startup-file parsing.
 - `layouts/root` owns the application shell component and its co-located
   `root-layout` stylesheet.
-- `services` contains Markdown-specific filesystem filtering, persistent
+- `services` contains Markdown path validation, persistent
   recent-file storage, external editor process boundaries, restored-terminal
-  session coordination, and explorer result values. Leptatui owns volume-root
-  containment and asynchronous filesystem I/O.
+  session coordination. Leptatui owns file selection, volume-root containment,
+  and asynchronous filesystem I/O.
 - `contexts` owns shared notification state and user-facing feedback.
-- `app` defines `AppRouter`, provides application services, and declares `/`,
-  `/files`, and `/view/*path`. Each routed page and supporting component owns
+- `app` defines `AppRouter`, provides application services, and declares `/`
+  and `/view/*path`. Each routed page and supporting component owns
   its BEM-prefixed presentation classes. Styled components use co-located
   `component.rs`, `style.rs`, and `mod.rs` files; styled pages use `page.rs`,
   `style.rs`, and `mod.rs`.
 - `pages` organizes each routed feature around a `page` module with co-located
   state, stylesheet, and child components. Components without local style
-  rules remain flat files. Explorer owns its listing, selection, and error
-  signals; Viewer derives its document from the route and owns its reload
-  revision and editor error. Explorer and Viewer create component-local
-  filesystem handles at the containing volume root, while Home alone loads and
-  displays recent-file history.
+  rules remain flat files. Leptatui owns selector state; Viewer derives its
+  document from the route and owns its reload revision and editor error. Viewer
+  creates a component-local filesystem handle at the containing volume root,
+  while Home loads and displays recent-file history.
 - `main` parses the CLI, converts an optional file path into the initial route,
   constructs `<AppRouter />`, and starts Leptatui.
 
 The normal data flow is optional CLI file path → encoded initial Viewer route →
-operation-loaded Markdown source. Explorer routes selected absolute Markdown
+operation-loaded Markdown source. The file selector routes selected absolute Markdown
 paths through the same encoder. Successful Viewer reads record directly through
 `RecentFilesStore`; Home loads, validates, and displays that global MRU list.
 Editing queues the route-derived path through the contextual editor session,

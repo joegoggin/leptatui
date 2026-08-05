@@ -2,7 +2,7 @@
 
 use std::{fmt, rc::Rc};
 
-use ratatui::widgets::Paragraph;
+use ratatui::{layout::Alignment, widgets::Paragraph};
 
 use crate::view::core::{
     capabilities::impl_styled_view,
@@ -25,8 +25,10 @@ pub type ButtonAction = Rc<dyn Fn() -> AppControl>;
 
 /// Focusable bordered button.
 pub struct ButtonView {
-    /// Centered button label.
+    /// Button label.
     pub(crate) label: String,
+    /// Horizontal alignment applied to the button label.
+    pub(crate) label_alignment: Alignment,
     /// Selector and runtime metadata.
     pub(crate) metadata: StyleMetadata,
     /// Optional activation callback.
@@ -34,6 +36,20 @@ pub struct ButtonView {
 }
 
 impl ButtonView {
+    /// Sets the button label's horizontal alignment for crate-owned controls.
+    ///
+    /// # Arguments
+    ///
+    /// * `alignment` — Alignment applied within the button's content area.
+    ///
+    /// # Returns
+    ///
+    /// This button with the requested label alignment.
+    pub(crate) const fn with_label_alignment(mut self, alignment: Alignment) -> Self {
+        self.label_alignment = alignment;
+        self
+    }
+
     /// Stores an activation callback.
     ///
     /// # Arguments
@@ -61,6 +77,7 @@ impl ButtonView {
 pub fn button(label: impl Into<String>) -> ButtonView {
     ButtonView {
         label: label.into(),
+        label_alignment: Alignment::Center,
         metadata: StyleMetadata::new(ViewType::Button),
         on_press: None,
     }
@@ -69,6 +86,7 @@ pub fn button(label: impl Into<String>) -> ButtonView {
 impl PartialEq for ButtonView {
     fn eq(&self, other: &Self) -> bool {
         self.label == other.label
+            && self.label_alignment == other.label_alignment
             && self.metadata == other.metadata
             && super::actions_equal(&self.on_press, &other.on_press)
     }
@@ -79,6 +97,7 @@ impl fmt::Debug for ButtonView {
         formatter
             .debug_struct("ButtonView")
             .field("label", &self.label)
+            .field("label_alignment", &self.label_alignment)
             .field("metadata", &self.metadata)
             .field("has_on_press", &self.on_press.is_some())
             .finish()
@@ -107,14 +126,14 @@ impl View for ButtonView {
             ctx.with_area(geometry.content_box, |ctx| {
                 ctx.render_widget(
                     Paragraph::new(self.label.as_str())
-                        .centered()
+                        .alignment(self.label_alignment)
                         .style(style.to_ratatui_style()),
                 );
             });
         } else {
             ctx.render_widget(
                 Paragraph::new(self.label.as_str())
-                    .centered()
+                    .alignment(self.label_alignment)
                     .style(style.to_ratatui_style())
                     .block(style.to_block_with_default_borders(Borders::ALL)),
             );

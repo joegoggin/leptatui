@@ -32,6 +32,7 @@ tokio = { version = "1.52.3", default-features = false, features = [
     "macros",
     "rt",
     "sync",
+    "time",
 ] }
 unicode-width = "0.2.2"
 

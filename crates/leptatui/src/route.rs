@@ -16,7 +16,10 @@ use std::{
 use leptos::prelude::{Get, GetUntracked, Memo, RwSignal, Set};
 use percent_encoding::percent_decode_str;
 
-use crate::{AnyView, AvailableSpace, Children, IntoView, LayoutSize, RenderCtx, View, keyed};
+use crate::{
+    AnyView, AvailableSpace, Children, IntoView, LayoutSize, RenderCtx, View, app::request_redraw,
+    keyed,
+};
 
 /// String map used by path-parameter and query hooks.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -242,6 +245,7 @@ impl RouterContext {
         self.search.set(location.search);
         self.revision
             .set(self.revision.get_untracked().wrapping_add(1));
+        request_redraw();
     }
 }
 
@@ -1069,6 +1073,13 @@ fn parse_query(search: &str) -> ParamsMap {
 #[cfg(test)]
 /// Unit tests for route matching and location parsing.
 mod tests {
+    use std::time::Duration;
+
+    use leptos::prelude::Owner;
+    use tokio::time::timeout;
+
+    use crate::app::{redraw_test_lock, subscribe_redraws};
+
     use super::*;
 
     /// Creates a route definition without render behavior.
@@ -1175,5 +1186,42 @@ mod tests {
         let query = parse_query(&location.search);
         assert_eq!(query.get("mode"), Some("dark"));
         assert_eq!(query.get("name"), Some("Ada Lovelace"));
+    }
+
+    /// Verifies publishing a programmatic route change requests a redraw.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// initial route = /
+    /// navigate(/docs)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Programmatic navigation publishes `/docs` immediately.
+    /// - The navigation wakes a subscribed terminal redraw listener.
+    ///
+    /// # Why
+    ///
+    /// Navigation can originate in a reactive effect after input-triggered
+    /// drawing has finished, so route publication must independently wake the
+    /// application loop.
+    #[tokio::test(flavor = "current_thread")]
+    async fn published_route_requests_redraw() {
+        let _redraw_guard = redraw_test_lock().await;
+        let mut redraws = subscribe_redraws();
+        redraws.borrow_and_update();
+
+        Owner::new().with(|| {
+            let router = RouterContext::new("/");
+            router.navigate("/docs", NavigateOptions::default());
+            assert_eq!(router.current().pathname, "/docs");
+        });
+
+        timeout(Duration::from_secs(1), redraws.changed())
+            .await
+            .expect("route redraw request should arrive")
+            .expect("redraw sender should stay available");
     }
 }

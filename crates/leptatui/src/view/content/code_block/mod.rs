@@ -6,6 +6,8 @@
 
 mod highlight;
 
+use std::sync::Arc;
+
 use ratatui::{
     layout::Rect,
     style::Style,
@@ -39,9 +41,16 @@ pub struct CodeBlockView {
     /// Whether one-based line numbers are displayed.
     pub(crate) line_numbers: bool,
     /// Retained highlighted logical source lines.
-    pub(crate) highlighted_lines: Vec<ratatui::text::Line<'static>>,
+    pub(crate) highlighted_lines: Arc<[ratatui::text::Line<'static>]>,
     /// Selector and runtime metadata.
     pub(crate) metadata: StyleMetadata,
+}
+
+/// Shareable syntax-highlighted lines prepared outside view construction.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PreparedCodeBlock {
+    /// Retained highlighted logical source lines.
+    highlighted_lines: Arc<[Line<'static>]>,
 }
 
 impl CodeBlockView {
@@ -56,7 +65,8 @@ impl CodeBlockView {
     /// This code block with refreshed highlighted lines.
     pub fn language(mut self, language: impl Into<String>) -> Self {
         self.language = Some(language.into());
-        self.highlighted_lines = highlighted_source_lines(&self.source, self.language.as_deref());
+        self.highlighted_lines =
+            highlighted_source_lines(&self.source, self.language.as_deref()).into();
         self
     }
 
@@ -87,10 +97,45 @@ impl CodeBlockView {
 pub fn code_block(source: impl Into<String>) -> CodeBlockView {
     let source = source.into();
     CodeBlockView {
-        highlighted_lines: highlighted_source_lines(&source, None),
+        highlighted_lines: highlighted_source_lines(&source, None).into(),
         source,
         language: None,
         line_numbers: false,
+        metadata: StyleMetadata::new(ViewType::CodeBlock),
+    }
+}
+
+/// Prepares shareable syntax-highlighted lines without constructing a view.
+///
+/// # Arguments
+///
+/// * `source` — Source text to highlight.
+/// * `language` — Optional bundled grammar token or alias.
+///
+/// # Returns
+///
+/// A [`PreparedCodeBlock`] containing retained highlighted logical lines.
+pub(crate) fn prepare_code_block(source: &str, language: Option<&str>) -> PreparedCodeBlock {
+    PreparedCodeBlock {
+        highlighted_lines: highlighted_source_lines(source, language).into(),
+    }
+}
+
+/// Creates a code-block view from previously prepared highlighted lines.
+///
+/// # Arguments
+///
+/// * `prepared` — Highlighted logical lines prepared outside view construction.
+///
+/// # Returns
+///
+/// A borderless-ready [`CodeBlockView`] without a displayed language label.
+pub(crate) fn code_block_from_prepared(prepared: PreparedCodeBlock) -> CodeBlockView {
+    CodeBlockView {
+        source: String::new(),
+        language: None,
+        line_numbers: false,
+        highlighted_lines: prepared.highlighted_lines,
         metadata: StyleMetadata::new(ViewType::CodeBlock),
     }
 }
