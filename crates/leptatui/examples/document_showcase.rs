@@ -29,6 +29,11 @@ fn DocumentShowcase() -> impl IntoView {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                border_type: BorderType::Plain,
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .help => { fg: Color::DarkGray }
@@ -46,12 +51,6 @@ fn DocumentShowcase() -> impl IntoView {
         TableHead => { fg: Color::LightCyan }
         CodeBlock => { fg: Color::LightBlue }
 
-        @media (max-width: 60) {
-            .document-shell => {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
-            }
-        }
     }
 
     view! {

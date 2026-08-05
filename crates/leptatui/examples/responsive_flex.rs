@@ -21,6 +21,11 @@ fn ResponsiveFlex() -> impl IntoView {
         .app-shell => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                border_type: BorderType::Plain,
+                padding: TuiSpacing::ZERO
+            }
         }
         .app-title => {
             fg: Color::LightCyan,
@@ -30,21 +35,40 @@ fn ResponsiveFlex() -> impl IntoView {
             display: Display::Flex,
             gap: Axes::new(Length::cells(1.0), Length::cells(0.0)),
             align_items: AlignItems::Center
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Stretch
+            }
         }
         .workspace => {
             display: Display::Flex,
             gap: Axes::new(Length::cells(1.0), Length::cells(0.0)),
             align_items: AlignItems::Stretch
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column,
+                gap: Axes::new(Length::cells(0.0), Length::cells(1.0))
+            }
         }
         .content => {
             flex_basis: Dimension::from(Length::cells(0.0)),
             flex_grow: 1.0,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                flex_basis: Dimension::Auto
+            }
         }
         .sidebar => {
             flex_basis: Dimension::from(Length::cells(24.0)),
             flex_shrink: 0.0,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                flex_basis: Dimension::Auto,
+                flex_shrink: 1.0
+            }
         }
         .section-title => {
             fg: Color::Yellow,
@@ -55,27 +79,10 @@ fn ResponsiveFlex() -> impl IntoView {
         Button => {
             borders: Borders::ALL,
             padding: TuiSpacing::horizontal(1)
-        }
 
-        @media (max-width: 60) {
-            .app-shell => {
-                border_type: BorderType::Plain,
+            @media (max-width: 60) {
                 padding: TuiSpacing::ZERO
             }
-            .nav => {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Stretch
-            }
-            .workspace => {
-                flex_direction: FlexDirection::Column,
-                gap: Axes::new(Length::cells(0.0), Length::cells(1.0))
-            }
-            .content => { flex_basis: Dimension::Auto }
-            .sidebar => {
-                flex_basis: Dimension::Auto,
-                flex_shrink: 1.0
-            }
-            Button => { padding: TuiSpacing::ZERO }
         }
     }
 

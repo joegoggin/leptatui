@@ -65,6 +65,10 @@ fn ControlledForm() -> impl IntoView {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .title => {
@@ -80,18 +84,30 @@ fn ControlledForm() -> impl IntoView {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         TextArea => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Button => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Input:focus => {
@@ -113,24 +129,6 @@ fn ControlledForm() -> impl IntoView {
             bg: Color::Yellow,
             modifier: Modifier::BOLD,
             border_type: BorderType::Thick
-        }
-
-        @media (max-width: 60) {
-            .form-shell => {
-                padding: TuiSpacing::ZERO
-            }
-
-            Input => {
-                padding: TuiSpacing::ZERO
-            }
-
-            TextArea => {
-                padding: TuiSpacing::ZERO
-            }
-
-            Button => {
-                padding: TuiSpacing::ZERO
-            }
         }
     }
 

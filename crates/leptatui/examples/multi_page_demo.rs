@@ -78,15 +78,37 @@ fn MultiPageDemo() -> impl IntoView {
             bg: $surface,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .app-title => { fg: $accent, modifier: Modifier::BOLD }
         .nav => {
             display: Display::Flex,
             flex_direction: FlexDirection::Row
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
-        .actions => { display: Display::Flex }
-        .page => { fg: $text, bg: $panel, padding: TuiSpacing::uniform(1) }
+        .actions => {
+            display: Display::Flex
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
+        }
+        .page => {
+            fg: $text,
+            bg: $panel,
+            padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+        }
         .page-title => { fg: $accent, modifier: Modifier::BOLD }
         .body => { fg: $text }
         .muted => { fg: $muted }
@@ -100,20 +122,16 @@ fn MultiPageDemo() -> impl IntoView {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1),
 
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+
             &:focus => {
                 fg: $focus_text,
                 bg: $focus_surface,
                 modifier: Modifier::BOLD,
                 border_type: BorderType::Thick
             }
-        }
-
-        @media (max-width: 60) {
-            .app-shell => { padding: TuiSpacing::ZERO }
-            .nav => { flex_direction: FlexDirection::Column }
-            .actions => { flex_direction: FlexDirection::Column }
-            .page => { padding: TuiSpacing::ZERO }
-            Button => { padding: TuiSpacing::ZERO }
         }
     }
 

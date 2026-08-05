@@ -851,6 +851,10 @@ fn FileSystemShowcase(root: PathBuf) -> ViewResult<impl IntoView> {
             borders: Borders::ALL,
             padding: TuiSpacing::uniform(1),
             overflow: Axes::new(Overflow::Hidden, Overflow::Auto)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
         .title => { fg: Color::LightCyan, modifier: Modifier::BOLD }
         .root => { fg: Color::LightGreen }
@@ -860,10 +864,6 @@ fn FileSystemShowcase(root: PathBuf) -> ViewResult<impl IntoView> {
         .failed => { fg: Color::LightRed }
         .pending => { fg: Color::Yellow }
         .locked => { fg: Color::DarkGray }
-
-        @media (max-width: 60) {
-            .screen => { padding: TuiSpacing::ZERO }
-        }
     }
 
     let root = filesystem.root().display().to_string();

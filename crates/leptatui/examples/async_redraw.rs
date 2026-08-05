@@ -62,15 +62,15 @@ fn AsyncRedraw() -> impl IntoView {
         .panel => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
         .title => { fg: Color::LightCyan, modifier: Modifier::BOLD }
         .help => { fg: Color::Gray }
         .error => { fg: Color::LightRed }
         .ready => { fg: Color::LightGreen }
-
-        @media (max-width: 60) {
-            .panel => { padding: TuiSpacing::ZERO }
-        }
     }
 
     view! {

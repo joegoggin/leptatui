@@ -17,24 +17,30 @@ fn ErrorHandlingExample() -> impl IntoView {
         .shell => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
         .title => { fg: Color::LightCyan, modifier: Modifier::BOLD }
         .nav => {
             display: Display::Flex,
             flex_direction: FlexDirection::Row
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
         .page => {
             borders: Borders::ALL,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
         .warning => { fg: Color::LightYellow }
         .danger => { fg: Color::LightRed, modifier: Modifier::BOLD }
-
-        @media (max-width: 60) {
-            .shell => { padding: TuiSpacing::ZERO }
-            .nav => { flex_direction: FlexDirection::Column }
-            .page => { padding: TuiSpacing::ZERO }
-        }
     }
 
     view! {

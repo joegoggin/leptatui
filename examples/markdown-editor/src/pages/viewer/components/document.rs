@@ -16,20 +16,39 @@ use leptatui::prelude::*;
 /// # Returns
 ///
 /// A path-backed Markdown document, editor error, or empty hint.
-pub(in crate::pages::viewer) fn viewer_document(
+#[component]
+pub(in crate::pages::viewer) fn ViewerDocument(
     path: Option<PathBuf>,
     source: Option<Result<String, String>>,
     loading: bool,
     editor_error: Option<String>,
-) -> AnyView {
+) -> impl IntoView {
+    stylesheet! {
+        .viewer-document => {
+            flex_basis: Dimension::from(Length::cells(0.0)),
+            flex_grow: 1.0,
+            borders: Borders::ALL,
+            padding: TuiSpacing::horizontal(1),
+            overflow: Axes::new(Overflow::Hidden, Overflow::Auto)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+
+            &__error => { fg: Color::LightRed }
+            &__loading => { fg: Color::LightCyan }
+            &__empty => { fg: Color::DarkGray }
+        }
+    }
+
     let body = if let Some(error) = editor_error {
         view! {
-            <Text class="error">{format!("Error: {error}")}</Text>
+            <Text class="viewer-document__error">{format!("Error: {error}")}</Text>
         }
         .into_view()
     } else if loading {
         text("Loading Markdown file...")
-            .with_classes("info")
+            .with_classes("viewer-document__loading")
             .into_view()
     } else if let (Some(path), Some(source)) = (path, source) {
         match source {
@@ -39,21 +58,17 @@ pub(in crate::pages::viewer) fn viewer_document(
                 MarkdownOptions::default().line_numbers(true),
             ),
             Err(error) => text(format!("Error: {error}"))
-                .with_classes("error")
+                .with_classes("viewer-document__error")
                 .into_view(),
         }
     } else {
         view! {
-            <Text class="empty">"Choose a Markdown file from Home or Explorer"</Text>
+            <Text class="viewer-document__empty">
+                "Choose a Markdown file from Home or Explorer"
+            </Text>
         }
         .into_view()
     };
-    let content_style = TuiStyle::new()
-        .flex_basis(Dimension::from(Length::cells(0.0)))
-        .flex_grow(1.0)
-        .borders(Borders::ALL)
-        .padding(TuiSpacing::horizontal(1))
-        .overflow(Axes::new(Overflow::Hidden, Overflow::Auto));
 
-    view! { <Block style=content_style>{body}</Block> }.into_view()
+    view! { <Block class="viewer-document">{body}</Block> }
 }

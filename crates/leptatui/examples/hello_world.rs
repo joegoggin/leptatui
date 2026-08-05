@@ -19,10 +19,8 @@ fn Root() -> impl IntoView {
         .hello-panel => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
-        }
 
-        @media (max-width: 60) {
-            .hello-panel => {
+            @media (max-width: 60) {
                 border_type: BorderType::Plain,
                 padding: TuiSpacing::ZERO
             }

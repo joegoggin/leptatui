@@ -2,10 +2,7 @@
 
 use leptatui::prelude::*;
 
-use crate::{
-    hooks::{use_files, use_workspace},
-    pages::shared::routed_page_style,
-};
+use crate::hooks::{use_files, use_workspace};
 
 use super::components::{RecentFilesList, RecentFilesListProps};
 
@@ -33,19 +30,64 @@ pub(crate) fn HomePage() -> impl IntoView {
     let root = workspace.root().to_path_buf();
     let root_label = format!("Root: {}", root.display());
     let recent_root = root.clone();
-    let page_style = routed_page_style();
+
+    stylesheet! {
+        .home-page => {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            size: LayoutSize::new(
+                Dimension::from(Length::percent(100.0)),
+                Dimension::from(Length::percent(100.0))
+            )
+
+            @media (max-width: 60) {
+                Button => { padding: TuiSpacing::ZERO }
+            }
+
+            &__title => {
+                fg: Color::LightCyan,
+                modifier: Modifier::BOLD
+            }
+
+            &__path => { fg: Color::LightGreen }
+
+            &__actions => {
+                display: Display::Flex,
+                flex_direction: FlexDirection::Row,
+                gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
+
+                @media (max-width: 60) {
+                    flex_direction: FlexDirection::Column
+                }
+            }
+
+            &__content => {
+                flex_basis: Dimension::from(Length::cells(0.0)),
+                flex_grow: 1.0,
+                borders: Borders::ALL,
+                padding: TuiSpacing::horizontal(1),
+                overflow: Axes::new(Overflow::Hidden, Overflow::Auto)
+
+                @media (max-width: 60) {
+                    padding: TuiSpacing::ZERO
+                }
+            }
+
+            &__help => { fg: Color::Gray }
+        }
+    }
 
     view! {
-        <Div class="page" style=page_style>
-            <Text class="page-title">"Markdown editor"</Text>
-            <Text class="path-context">{root_label}</Text>
-            <Div class="actions">
+        <Div class="home-page">
+            <Text class="home-page__title">"Markdown editor"</Text>
+            <Text class="home-page__path">{root_label}</Text>
+            <Div class="home-page__actions">
                 <Button on_press=move || {
                     button_navigate("/files", NavigateOptions::default());
                     AppControl::Continue
                 }>"Open file"</Button>
             </Div>
-            <Block class="page-content scroll-content">
+            <Block class="home-page__content">
                 {move || {
                     let root = recent_root.clone();
                     view! {
@@ -60,7 +102,7 @@ pub(crate) fn HomePage() -> impl IntoView {
                     }
                 }}
             </Block>
-            <Text class="help">"o open file | Tab/Enter actions | q quit"</Text>
+            <Text class="home-page__help">"o open file | Tab/Enter actions | q quit"</Text>
         </Div>
     }
 }

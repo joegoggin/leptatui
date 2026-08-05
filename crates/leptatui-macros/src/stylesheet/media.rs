@@ -1,9 +1,9 @@
 //! Media query model for `stylesheet!` syntax.
 //!
-//! This module parses top-level `@media` blocks and expands their contained
-//! rules into media-gated stylesheet builder calls.
+//! This module parses viewport queries and top-level `@media` blocks. Rules
+//! reuse the query parser for media blocks nested inside selector bodies.
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
     Error, Ident, LitInt, Result, Token, braced, parenthesized,
@@ -28,7 +28,7 @@ pub(super) struct MediaBlock {
 }
 
 /// Parsed media query containing one or more `and`-combined conditions.
-struct MediaQuery {
+pub(super) struct MediaQuery {
     conditions: Vec<MediaCondition>,
 }
 
@@ -42,10 +42,21 @@ enum MediaCondition {
 
 impl Parse for MediaBlock {
     /// Parses a top-level `@media (...) { ... }` block.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Macro input stream positioned at the `@media` token.
+    ///
+    /// # Returns
+    ///
+    /// A [`MediaBlock`] containing the viewport query and gated rules.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the query or rules are malformed or the block
+    /// contains no rules.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        input.parse::<Token![@]>()?;
-        input.parse::<kw::media>()?;
-        let query = input.parse()?;
+        let (query, _) = parse_media_query(input)?;
 
         let content;
         braced!(content in input);
@@ -69,6 +80,18 @@ impl Parse for MediaBlock {
 
 impl Parse for MediaQuery {
     /// Parses `(feature: value) and (feature: value)` query syntax.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Macro input stream positioned at the first condition.
+    ///
+    /// # Returns
+    ///
+    /// A [`MediaQuery`] containing one or more viewport conditions.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if any condition is malformed.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let mut conditions = vec![input.parse()?];
 
@@ -83,6 +106,19 @@ impl Parse for MediaQuery {
 
 impl Parse for MediaCondition {
     /// Parses one parenthesized terminal viewport condition.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — Macro input stream positioned at the condition.
+    ///
+    /// # Returns
+    ///
+    /// A [`MediaCondition`] containing the supported feature and cell count.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if the feature is unsupported, the syntax is
+    /// malformed, or the value does not fit in a [`u16`].
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let content;
         parenthesized!(content in input);
@@ -116,14 +152,57 @@ impl Parse for MediaCondition {
     }
 }
 
-/// Returns whether the stream starts with a top-level `@media` block.
+/// Returns whether the stream starts with an `@media` block.
+///
+/// # Arguments
+///
+/// * `input` — Macro input stream to inspect without consuming.
+///
+/// # Returns
+///
+/// A [`bool`] indicating whether `@media` is next.
 pub(super) fn starts_media(input: ParseStream<'_>) -> bool {
     let fork = input.fork();
     fork.parse::<Token![@]>().is_ok() && fork.parse::<kw::media>().is_ok()
 }
 
+/// Parses an `@media` prefix and its viewport query.
+///
+/// # Arguments
+///
+/// * `input` — Macro input stream positioned at the `@media` token.
+///
+/// # Returns
+///
+/// A [`MediaQuery`] and source [`Span`] for the media block.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the media keyword or query is malformed.
+pub(super) fn parse_media_query(input: ParseStream<'_>) -> Result<(MediaQuery, Span)> {
+    let span = input.span();
+    input.parse::<Token![@]>()?;
+    input.parse::<kw::media>()?;
+    Ok((input.parse()?, span))
+}
+
 impl MediaBlock {
     /// Appends this media block's rules to an in-progress stylesheet expression.
+    ///
+    /// # Arguments
+    ///
+    /// * `stylesheet` — Existing stylesheet expression to wrap with this block.
+    /// * `variables` — Stylesheet variables available to rule declarations.
+    /// * `imports` — Imported stylesheet modules available to values and mixins.
+    /// * `mixins` — Stylesheet mixins available to rule includes.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the updated stylesheet expression.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] if a contained rule cannot be expanded.
     pub(super) fn expand(
         &self,
         mut stylesheet: TokenStream,
@@ -143,7 +222,11 @@ impl MediaBlock {
 
 impl MediaQuery {
     /// Expands this query into a public `MediaQuery` builder expression.
-    fn expand(&self) -> TokenStream {
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the viewport-query builder expression.
+    pub(super) fn expand(&self) -> TokenStream {
         let leptatui = crate::crate_path::leptatui();
         let mut conditions = self.conditions.iter();
         let Some(first) = conditions.next() else {
@@ -162,6 +245,14 @@ impl MediaQuery {
 
 impl MediaCondition {
     /// Expands this condition into a public `MediaQuery` builder expression.
+    ///
+    /// # Arguments
+    ///
+    /// * `leptatui` — Token path to the Leptatui crate used in generated code.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the condition builder expression.
     fn expand(&self, leptatui: &TokenStream) -> TokenStream {
         match self {
             Self::MinWidth(width) => quote! { #leptatui::MediaQuery::min_width(#width) },

@@ -63,6 +63,10 @@ fn StyleCascadeShowcase() -> impl IntoView {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1),
 
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+
             // Baseline type rule. Class, id, descendant, inline, and important
             // cases below deliberately override it.
             Text => { fg: Color::DarkGray }
@@ -124,15 +128,27 @@ fn StyleCascadeShowcase() -> impl IntoView {
             }
         }
 
-        .case-row => { display: Display::Flex }
-        .focus-actions => { display: Display::Flex }
+        .case-row => {
+            display: Display::Flex
 
-        @media (max-width: 60) {
-            .screen => { padding: TuiSpacing::ZERO }
-            .case-row => { flex_direction: FlexDirection::Column }
-            .inheritance-parent => { padding: TuiSpacing::ZERO }
-            .focus-actions => { flex_direction: FlexDirection::Column }
-            Button => {
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
+        }
+        .focus-actions => {
+            display: Display::Flex
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
+        }
+        .inheritance-parent => {
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+        }
+        Button => {
+            @media (max-width: 60) {
                 padding: TuiSpacing::ZERO
             }
         }

@@ -11,11 +11,11 @@ use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use crate::{
     contexts::{NotificationContext, use_notifications},
     hooks::{Files, use_files, use_workspace},
-    pages::shared::{relative_path, routed_page_style},
+    pages::shared::relative_path,
     services::{EditorSession, RECENT_FILE_LIMIT, is_markdown_path},
 };
 
-use super::components::viewer_document;
+use super::components::{ViewerDocument, ViewerDocumentProps};
 
 /// Characters encoded inside one viewer route path segment.
 const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
@@ -196,10 +196,48 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
                 .as_ref()
                 .and_then(|operation| operation.pending().try_get_untracked())
                 .unwrap_or(false);
-            viewer_document(path, source, loading, editor_error)
+            view! {
+                <ViewerDocument
+                    path=path
+                    source=source
+                    loading=loading
+                    editor_error=editor_error
+                />
+            }
+            .into_view()
         },
     );
-    let page_style = routed_page_style();
+
+    stylesheet! {
+        .viewer-page => {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            size: LayoutSize::new(
+                Dimension::from(Length::percent(100.0)),
+                Dimension::from(Length::percent(100.0))
+            )
+
+            @media (max-width: 60) {
+                Button => { padding: TuiSpacing::ZERO }
+            }
+
+            &__title => {
+                fg: Color::LightCyan,
+                modifier: Modifier::BOLD
+            }
+            &__path => { fg: Color::LightGreen }
+            &__actions => {
+                display: Display::Flex,
+                flex_direction: FlexDirection::Row,
+                gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
+
+                @media (max-width: 60) {
+                    flex_direction: FlexDirection::Column
+                }
+            }
+            &__help => { fg: Color::Gray }
+        }
+    }
 
     use_key_event(KeyEventKind::Press, move |key| {
         if key.modifiers != KeyModifiers::NONE {
@@ -246,11 +284,11 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
     });
 
     view! {
-        <Div class="page" style=page_style>
-            <Text class="page-title">"Markdown viewer"</Text>
-            <Text class="path-context">{format!("Open: {open_path}")}</Text>
+        <Div class="viewer-page">
+            <Text class="viewer-page__title">"Markdown viewer"</Text>
+            <Text class="viewer-page__path">{format!("Open: {open_path}")}</Text>
             {document}
-            <Div class="actions">
+            <Div class="viewer-page__actions">
                 <Button on_press=move || {
                     home_navigate("/", NavigateOptions::default());
                     AppControl::Continue
@@ -260,7 +298,7 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
                     AppControl::Continue
                 }>"Browse files"</Button>
             </Div>
-            <Text class="help">
+            <Text class="viewer-page__help">
                 "PgUp/Dn scroll | e edit | r reload | h home | b browse | q quit"
             </Text>
         </Div>

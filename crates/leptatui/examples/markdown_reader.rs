@@ -30,6 +30,11 @@ fn MarkdownReader(document: AnyView) -> impl IntoView {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                border_type: BorderType::Plain,
+                padding: TuiSpacing::ZERO
+            }
         }
 
         H1 => { fg: Color::LightCyan }
@@ -46,12 +51,6 @@ fn MarkdownReader(document: AnyView) -> impl IntoView {
         CodeBlock => { fg: Color::LightBlue }
         Link:focus => { fg: Color::Black, bg: Color::LightCyan }
 
-        @media (max-width: 60) {
-            .reader-shell => {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
-            }
-        }
     }
 
     view! { <Block class="reader-shell">{document}</Block> }

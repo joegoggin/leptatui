@@ -19,15 +19,27 @@ pub(in crate::pages::explorer) fn ExplorerEntryRow(
     entry: ExplorerEntry,
     selected: bool,
 ) -> impl IntoView {
-    let (marker, class) = match entry.kind() {
-        ExplorerEntryKind::Directory => ("[D]", "directory-entry"),
-        ExplorerEntryKind::Markdown => ("[M]", "markdown-entry"),
+    stylesheet! {
+        .explorer-entry => {
+            &--directory => { fg: Color::LightBlue }
+            &--markdown => { fg: Color::White }
+            &--selected => {
+                fg: Color::Black,
+                bg: Color::LightCyan,
+                modifier: Modifier::BOLD
+            }
+        }
+    }
+
+    let (marker, modifier) = match entry.kind() {
+        ExplorerEntryKind::Directory => ("[D]", "explorer-entry--directory"),
+        ExplorerEntryKind::Markdown => ("[M]", "explorer-entry--markdown"),
     };
     let selection_marker = if selected { ">" } else { " " };
     let classes = if selected {
-        format!("{class} selected")
+        format!("explorer-entry {modifier} explorer-entry--selected")
     } else {
-        String::from(class)
+        format!("explorer-entry {modifier}")
     };
 
     let label = format!(

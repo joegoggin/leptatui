@@ -89,7 +89,7 @@ pub(crate) fn app_view_at_path(
     }
 }
 
-/// Provides routing, shared styling, contexts, and global controls.
+/// Provides routing, shell styling, contexts, and global controls.
 ///
 /// # Arguments
 ///
@@ -126,7 +126,7 @@ fn MarkdownEditor(
     });
 
     stylesheet! {
-        .app-shell => {
+        .markdown-editor => {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1),
@@ -135,92 +135,26 @@ fn MarkdownEditor(
                 Dimension::from(Length::percent(100.0)),
                 Dimension::from(Length::percent(100.0))
             )
-        }
-        .page => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Column,
-            size: LayoutSize::new(
-                Dimension::from(Length::percent(100.0)),
-                Dimension::from(Length::percent(100.0))
-            )
-        }
-        .route-shell => {
-            position: Position::Relative,
-            size: LayoutSize::new(
-                Dimension::from(Length::percent(100.0)),
-                Dimension::from(Length::percent(100.0))
-            )
-        }
-        .page-title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
-        }
-        .path-context => { fg: Color::LightGreen }
-        .page-content => {
-            flex_basis: Dimension::from(Length::cells(0.0)),
-            flex_grow: 1.0,
-            borders: Borders::ALL,
-            padding: TuiSpacing::horizontal(1)
-        }
-        .scroll-content => {
-            overflow: Axes::new(Overflow::Hidden, Overflow::Auto)
-        }
-        .actions => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Row,
-            gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
-        }
-        .section-title => {
-            fg: Color::White,
-            modifier: Modifier::BOLD
-        }
-        .directory-entry => { fg: Color::LightBlue }
-        .markdown-entry => { fg: Color::White }
-        .selected => {
-            fg: Color::Black,
-            bg: Color::LightCyan,
-            modifier: Modifier::BOLD
-        }
-        .empty => { fg: Color::DarkGray }
-        .error => { fg: Color::LightRed }
-        .success => { fg: Color::LightGreen }
-        .info => { fg: Color::LightCyan }
-        .warning => { fg: Color::Yellow }
-        .notifications => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Column,
-            position: Position::Fixed,
-            inset: Edges::new(
-                Length::cells(1.0).into(),
-                Length::cells(1.0).into(),
-                LengthAuto::Auto,
-                LengthAuto::Auto
-            ),
-            z_index: ZIndex::Integer(10)
-        }
-        .notification => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
-        }
-        .help => { fg: Color::Gray }
 
-        @media (max-width: 60) {
-            .app-shell => {
+            @media (max-width: 60) {
                 border_type: BorderType::Plain,
                 padding: TuiSpacing::ZERO
             }
-            .page-content => { padding: TuiSpacing::ZERO }
-            .actions => { flex_direction: FlexDirection::Column }
-            Button => { padding: TuiSpacing::ZERO }
-            TextArea => { padding: TuiSpacing::ZERO }
+
+            &__routes => {
+                position: Position::Relative,
+                size: LayoutSize::new(
+                    Dimension::from(Length::percent(100.0)),
+                    Dimension::from(Length::percent(100.0))
+                )
+            }
         }
     }
 
     view! {
         <Router initial_path=initial_path>
-            <Block class="app-shell">
-                <Div class="route-shell">
+            <Block class="markdown-editor">
+                <Div class="markdown-editor__routes">
                     <Routes fallback=NotFoundPage>
                         <Route path="/" view=HomePage />
                         <Route path="/files" view=ExplorerPage />

@@ -10,10 +10,28 @@ use leptatui::prelude::*;
 #[component]
 pub(crate) fn NotFoundPage() -> impl IntoView {
     let location = use_location();
+
+    stylesheet! {
+        .not-found-page => {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            size: LayoutSize::new(
+                Dimension::from(Length::percent(100.0)),
+                Dimension::from(Length::percent(100.0))
+            )
+
+            &__title => {
+                fg: Color::LightCyan,
+                modifier: Modifier::BOLD
+            }
+            &__error => { fg: Color::LightRed }
+        }
+    }
+
     view! {
-        <Div class="page">
-            <Text class="page-title">"Page not found"</Text>
-            <Text class="error">
+        <Div class="not-found-page">
+            <Text class="not-found-page__title">"Page not found"</Text>
+            <Text class="not-found-page__error">
                 {move || format!("No page matches {}", location.pathname().get_untracked())}
             </Text>
             <A href="/" exact=true>

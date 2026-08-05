@@ -1,8 +1,9 @@
 //! Parser and expander for the `stylesheet!` macro.
 //!
-//! The stylesheet macro accepts flat terminal selector rules, lowers them into
-//! Leptatui stylesheet builder calls, and registers them when invoked during
-//! generated component setup.
+//! The stylesheet macro accepts terminal selector rules, including nested
+//! descendants, parent pseudo-classes, BEM class suffixes, and selector-local
+//! media queries. It lowers them into Leptatui stylesheet builder calls and
+//! registers them when invoked during generated component setup.
 //!
 //! # Modules
 //!
@@ -12,7 +13,7 @@
 //! - [`mixin`] — Mixin definitions, includes, and cycle detection.
 //! - [`root`] — Complete stylesheet invocation parsing and expansion.
 //! - [`rule`] — Selector rule parsing and media-aware expansion.
-//! - [`selector`] — Type, class, id, state pseudo-class, and descendant selectors.
+//! - [`selector`] — Type, class, id, pseudo-class, descendant, and BEM selectors.
 //! - [`value`] — Literal, local-variable, and imported-variable values.
 //! - [`variable`] — Stylesheet variable definitions and references.
 

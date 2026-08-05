@@ -433,25 +433,67 @@ fn Panel() -> impl IntoView {
 }
 ```
 
-Stylesheets also support top-level media query blocks for responsive terminal
-UIs. Width and height values are terminal-cell counts from the root viewport,
-and `flex_direction` can switch a flex container's axis at a breakpoint.
+Nested class rules also support BEM-style `&__element` and `&--modifier`
+suffixes. These concatenate with the nearest parent class rather than creating
+a descendant selector, and may be chained or combined with the supported
+pseudo-classes. Parent suffixes require a class selector; they cannot be used at
+the top level or beneath a type or id selector.
+
+```rust
+#[component]
+fn ExamplePage() -> impl IntoView {
+    stylesheet! {
+        .example-page => {
+            &__button => {
+                &:focus => { bg: Color::Black }
+                &--submit => { fg: Color::Green }
+                &--cancel => { fg: Color::Red }
+            }
+        }
+    }
+
+    view! {
+        <Div class="example-page">
+            <Button class="example-page__button example-page__button--submit">
+                "Submit"
+            </Button>
+            <Button class="example-page__button example-page__button--cancel">
+                "Cancel"
+            </Button>
+        </Div>
+    }
+}
+```
+
+Stylesheets support media queries nested within selector blocks for responsive
+terminal UIs. Direct declarations apply to the containing selector, while
+nested rules retain its selector path. Width and height values are terminal-cell
+counts from the root viewport. Top-level media blocks remain supported for
+backward compatibility.
 
 ```rust
 #[component]
 fn ResponsivePanel() -> impl IntoView {
     stylesheet! {
-        .panel => { padding: TuiSpacing::uniform(1) }
-        .actions => { display: Display::Flex }
+        .panel => {
+            padding: TuiSpacing::uniform(1)
 
-        @media (max-width: 80) {
-            .panel => { padding: TuiSpacing::ZERO }
-            .actions => { flex_direction: FlexDirection::Column }
-            Text => { fg: Color::Yellow }
+            @media (max-width: 80) {
+                padding: TuiSpacing::ZERO
+                Text => { fg: Color::Yellow }
+            }
         }
+        .actions => {
+            display: Display::Flex
 
-        @media (min-width: 81) and (min-height: 24) {
-            Button:focus => { bg: Color::Yellow }
+            @media (max-width: 80) {
+                flex_direction: FlexDirection::Column
+            }
+        }
+        Button:focus => {
+            @media (min-width: 81) and (min-height: 24) {
+                bg: Color::Yellow
+            }
         }
     }
 

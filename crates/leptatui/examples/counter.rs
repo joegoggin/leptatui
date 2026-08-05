@@ -31,25 +31,32 @@ fn Counter() -> impl IntoView {
         .counter-panel => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
         .counter-value => { fg: Color::LightCyan, modifier: Modifier::BOLD }
         .counter-help => { fg: Color::Gray }
-        .counter-controls => { display: Display::Flex }
+        .counter-controls => {
+            display: Display::Flex
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
+        }
         Button => {
             fg: Color::White,
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
         }
-        .danger => { fg: Color::LightRed }
-
-        @media (max-width: 60) {
-            .counter-panel => { padding: TuiSpacing::ZERO }
-            .counter-controls => { flex_direction: FlexDirection::Column }
-            .counter-button => {
+        .counter-button => {
+            @media (max-width: 60) {
                 padding: TuiSpacing::ZERO
             }
         }
+        .danger => { fg: Color::LightRed }
     }
 
     view! {

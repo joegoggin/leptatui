@@ -115,7 +115,9 @@ spacing is reduced.
   containment and asynchronous filesystem I/O.
 - `contexts` owns shared notification state and user-facing feedback.
 - `app` owns the application shell, provides typed contexts, and declares `/`,
-  `/files`, and `/view/*path`.
+  `/files`, and `/view/*path`. Each routed page and supporting component owns
+  its `stylesheet!` rules and BEM-prefixed presentation classes; the app-level
+  stylesheet contains only shell and route-container styling.
 - `pages` organizes each routed feature around a `page` module with co-located
   state and child components. Explorer owns its listing, selection, and error
   signals; Viewer derives its document from the route and owns its reload

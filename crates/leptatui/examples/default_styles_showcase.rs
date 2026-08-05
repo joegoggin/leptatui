@@ -38,12 +38,20 @@ fn DefaultStylesShowcase() -> impl IntoView {
             overflow: Axes::new(Overflow::Hidden, Overflow::Auto),
             padding: TuiSpacing::uniform(1),
             box_sizing: BoxSizing::BorderBox
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .row => {
             display: Display::Flex,
             flex_direction: FlexDirection::Row,
             gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
 
         .text-area => {
@@ -54,12 +62,12 @@ fn DefaultStylesShowcase() -> impl IntoView {
             box_sizing: BoxSizing::BorderBox
         }
 
-        .showcase-image => { image_size: TuiSize::new(32, 10) }
+        .showcase-image => {
+            image_size: TuiSize::new(32, 10)
 
-        @media (max-width: 60) {
-            .showcase => { padding: TuiSpacing::ZERO }
-            .row => { flex_direction: FlexDirection::Column }
-            .showcase-image => { image_size: TuiSize::new(20, 6) }
+            @media (max-width: 60) {
+                image_size: TuiSize::new(20, 6)
+            }
         }
     }
 

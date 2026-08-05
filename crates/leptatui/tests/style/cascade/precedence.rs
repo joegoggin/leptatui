@@ -235,8 +235,10 @@ fn authored_insert_and_media_rules_override_control_defaults() {
             bg: Color::Blue,
             border_type: BorderType::Plain
         }
-        @media (max-width: 20) {
-            Input => { padding: TuiSpacing::ZERO }
+        Input => {
+            @media (max-width: 20) {
+                padding: TuiSpacing::ZERO
+            }
         }
     };
 

@@ -6,4 +6,4 @@
 
 mod document;
 
-pub(super) use document::viewer_document;
+pub(super) use document::{ViewerDocument, ViewerDocumentProps};

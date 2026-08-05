@@ -23,12 +23,19 @@ pub(in crate::pages::explorer) fn ExplorerList(
     selection: Option<usize>,
     error: Option<String>,
 ) -> impl IntoView {
+    stylesheet! {
+        .explorer-list => {
+            &__empty => { fg: Color::DarkGray }
+            &__error => { fg: Color::LightRed }
+        }
+    }
+
     let mut rows = Vec::new();
 
     if listing.entries().is_empty() {
         rows.push(
             view! {
-                <Text class="empty">"No directories or Markdown files"</Text>
+                <Text class="explorer-list__empty">"No directories or Markdown files"</Text>
             }
             .into_view(),
         );
@@ -51,11 +58,11 @@ pub(in crate::pages::explorer) fn ExplorerList(
     if let Some(error) = error {
         rows.push(
             view! {
-                <Text class="error">{format!("Error: {error}")}</Text>
+                <Text class="explorer-list__error">{format!("Error: {error}")}</Text>
             }
             .into_view(),
         );
     }
 
-    div(rows)
+    div(rows).with_classes("explorer-list")
 }

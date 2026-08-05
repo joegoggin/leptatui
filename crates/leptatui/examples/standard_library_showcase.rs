@@ -86,6 +86,10 @@ fn StandardLibraryShowcase() -> impl IntoView {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .title => {
@@ -98,32 +102,66 @@ fn StandardLibraryShowcase() -> impl IntoView {
         .caption => { fg: Color::DarkGray }
         .help => { fg: Color::DarkGray }
         .meter => { fg: Color::LightGreen, bg: Color::DarkGray }
-        .image-small => { image_size: TuiSize::new(24, 8) }
-        .image-medium => { image_size: TuiSize::new(36, 12) }
-        .image-large => { image_size: TuiSize::new(48, 16) }
+        .image-small => {
+            image_size: TuiSize::new(24, 8)
+
+            @media (max-width: 60) {
+                image_size: TuiSize::new(20, 6)
+            }
+        }
+        .image-medium => {
+            image_size: TuiSize::new(36, 12)
+
+            @media (max-width: 60) {
+                image_size: TuiSize::new(28, 8)
+            }
+        }
+        .image-large => {
+            image_size: TuiSize::new(48, 16)
+
+            @media (max-width: 60) {
+                image_size: TuiSize::new(36, 10)
+            }
+        }
 
         Input => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         TextArea => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Image => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Button => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Input:focus => {
@@ -153,19 +191,12 @@ fn StandardLibraryShowcase() -> impl IntoView {
             modifier: Modifier::BOLD | Modifier::UNDERLINED
         }
 
-        .actions => { display: Display::Flex }
+        .actions => {
+            display: Display::Flex
 
-        @media (max-width: 60) {
-            .showcase-shell => { padding: TuiSpacing::ZERO }
-            .actions => { flex_direction: FlexDirection::Column }
-
-            Input => { padding: TuiSpacing::ZERO }
-            TextArea => { padding: TuiSpacing::ZERO }
-            Image => { padding: TuiSpacing::ZERO }
-            .image-small => { image_size: TuiSize::new(20, 6) }
-            .image-medium => { image_size: TuiSize::new(28, 8) }
-            .image-large => { image_size: TuiSize::new(36, 10) }
-            Button => { padding: TuiSpacing::ZERO }
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
     }
 

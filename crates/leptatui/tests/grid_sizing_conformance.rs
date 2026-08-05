@@ -564,16 +564,8 @@ fn ResponsiveGridFixture() -> impl IntoView {
                 GridTemplateTrack::from(GridTrackSize::from(Length::cells(1.0)))
             ],
             gap: Axes::all(Length::cells(1.0))
-        }
-        .fixture-heading => {
-            grid_column: GridLine::new(
-                GridPlacement::line(1),
-                GridPlacement::line(-1)
-            )
-        }
 
-        @media (max-width: 60) {
-            .fixture-dashboard => {
+            @media (max-width: 60) {
                 grid_template_columns: vec![
                     GridTemplateTrack::from(
                         GridTrackSize::from(Fraction::new(1.0))
@@ -591,6 +583,12 @@ fn ResponsiveGridFixture() -> impl IntoView {
                     )
                 ]
             }
+        }
+        .fixture-heading => {
+            grid_column: GridLine::new(
+                GridPlacement::line(1),
+                GridPlacement::line(-1)
+            )
         }
     }
 

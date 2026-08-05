@@ -413,29 +413,34 @@ fn ResponsiveFlexFixture() -> impl IntoView {
         .fixture-nav => {
             display: Display::Flex,
             gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
         .fixture-workspace => {
             display: Display::Flex,
             gap: Axes::new(Length::cells(1.0), Length::cells(0.0)),
             align_items: AlignItems::FlexStart
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column,
+                gap: Axes::new(Length::cells(0.0), Length::cells(1.0))
+            }
         }
         .fixture-content => {
             flex_basis: Dimension::from(Length::cells(0.0)),
             flex_grow: 1.0
+
+            @media (max-width: 60) {
+                flex_basis: Dimension::Auto
+            }
         }
         .fixture-sidebar => {
             flex_basis: Dimension::from(Length::cells(14.0)),
             flex_shrink: 0.0
-        }
 
-        @media (max-width: 60) {
-            .fixture-nav => { flex_direction: FlexDirection::Column }
-            .fixture-workspace => {
-                flex_direction: FlexDirection::Column,
-                gap: Axes::new(Length::cells(0.0), Length::cells(1.0))
-            }
-            .fixture-content => { flex_basis: Dimension::Auto }
-            .fixture-sidebar => {
+            @media (max-width: 60) {
                 flex_basis: Dimension::Auto,
                 flex_shrink: 1.0
             }

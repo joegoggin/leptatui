@@ -1,8 +1,8 @@
 //! Selector model for `stylesheet!` syntax.
 //!
 //! This module parses type, class, id, focus, active, insert, visual, visited,
-//! compound pseudo, and nested parent-pseudo selectors and lowers them into
-//! public `StyleSelector` constructor calls.
+//! compound pseudo, nested parent-pseudo, and BEM parent-suffix selectors and
+//! lowers them into public `StyleSelector` constructor calls.
 
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
@@ -34,6 +34,8 @@ pub(super) enum Selector {
     /// selectors such as `&:focus`, `&:active`, `&:insert`, `&:visual`, or
     /// `&:visited`.
     ParentPseudo(Ident),
+    /// Nested BEM suffix concatenated with the nearest parent class selector.
+    ParentSuffix(SelectorSuffix),
 }
 
 impl Parse for Selector {
@@ -50,8 +52,8 @@ impl Parse for Selector {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the selector is not a supported type, class,
-    /// id, focus, active, insert, visual, visited, type-pseudo, or nested
-    /// parent-pseudo selector.
+    /// id, focus, active, insert, visual, visited, type-pseudo, nested
+    /// parent-pseudo, or BEM parent-suffix selector.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         if input.peek(Token![&]) {
             input.parse::<Token![&]>()?;
@@ -61,8 +63,40 @@ impl Parse for Selector {
                 return Ok(Self::ParentPseudo(input.parse()?));
             }
 
+            if input.peek(Ident) {
+                let suffix: Ident = input.parse()?;
+                let value = suffix.to_string();
+                if value.starts_with("__") && value.len() > 2 {
+                    return Ok(Self::ParentSuffix(SelectorSuffix {
+                        value,
+                        span: suffix.span(),
+                    }));
+                }
+
+                return Err(Error::new_spanned(
+                    suffix,
+                    "stylesheet! parent class suffix must use &__element or &--modifier",
+                ));
+            }
+
+            if input.peek(Token![-]) {
+                let first: Token![-] = input.parse()?;
+                if !input.peek(Token![-]) {
+                    return Err(Error::new_spanned(
+                        first,
+                        "stylesheet! parent class suffix must use &__element or &--modifier",
+                    ));
+                }
+                input.parse::<Token![-]>()?;
+                let name = SelectorName::parse(input)?;
+                return Ok(Self::ParentSuffix(SelectorSuffix {
+                    value: format!("--{}", name.value),
+                    span: name.span,
+                }));
+            }
+
             return Err(input.error(
-                "stylesheet! parent selector only supports &:focus, &:active, &:insert, &:visual, or &:visited in nested rules",
+                "stylesheet! parent selector only supports &:focus, &:active, &:insert, &:visual, &:visited, &__element, or &--modifier in nested rules",
             ));
         }
 
@@ -93,7 +127,7 @@ impl Parse for Selector {
         }
 
         Err(input.error(
-            "stylesheet! selector must be a type, .class, #id, :focus, :active, :insert, :visual, :visited, Type:pseudo, or nested &:pseudo selector",
+            "stylesheet! selector must be a type, .class, #id, :focus, :active, :insert, :visual, :visited, Type:pseudo, nested &:pseudo, or nested BEM parent-suffix selector",
         ))
     }
 }
@@ -138,9 +172,9 @@ impl Selector {
                     ])
                 })
             }
-            Self::ParentPseudo(_) => Err(Error::new_spanned(
+            Self::ParentPseudo(_) | Self::ParentSuffix(_) => Err(Error::new_spanned(
                 self.span_tokens(),
-                "stylesheet! parent pseudo-selector can only appear inside a nested rule",
+                "stylesheet! parent-reference selector can only appear inside a nested rule",
             )),
         }
     }
@@ -161,7 +195,7 @@ impl Selector {
     /// parent selector or any selector segment cannot be expanded.
     pub(super) fn expand_path(path: &[&Selector]) -> Result<TokenStream> {
         let leptatui = crate::crate_path::leptatui();
-        let mut segments: Vec<Vec<TokenStream>> = Vec::new();
+        let mut segments = Vec::<SelectorSegment>::new();
 
         for selector in path {
             match selector {
@@ -174,9 +208,33 @@ impl Selector {
                         ));
                     };
 
-                    segment.push(pseudo);
+                    segment.compounds.push(pseudo);
                 }
-                _ => segments.push(vec![selector.expand()?]),
+                Self::ParentSuffix(suffix) => {
+                    let Some(segment) = segments.last_mut() else {
+                        return Err(Error::new_spanned(
+                            selector.span_tokens(),
+                            "stylesheet! parent class suffix requires a parent selector",
+                        ));
+                    };
+
+                    let Some(class) = segment.class.as_mut() else {
+                        return Err(Error::new_spanned(
+                            selector.span_tokens(),
+                            "stylesheet! parent class suffix requires a class selector",
+                        ));
+                    };
+                    if !segment.compounds.is_empty() {
+                        return Err(Error::new_spanned(
+                            selector.span_tokens(),
+                            "stylesheet! parent class suffix cannot follow a pseudo-selector",
+                        ));
+                    }
+
+                    class.value.push_str(&suffix.value);
+                }
+                Self::Class(class) => segments.push(SelectorSegment::class(class)),
+                _ => segments.push(SelectorSegment::expanded(selector.expand()?)),
             }
         }
 
@@ -187,14 +245,14 @@ impl Selector {
             ));
         };
 
-        let target = expand_selector_segment(&leptatui, target);
+        let target = target.expand(&leptatui);
         if segments.is_empty() {
             return Ok(target);
         }
 
         let ancestors = segments
             .into_iter()
-            .map(|segment| expand_selector_segment(&leptatui, segment));
+            .map(|segment| segment.expand(&leptatui));
 
         Ok(quote! {
             #leptatui::StyleSelector::descendant(
@@ -259,7 +317,27 @@ impl Selector {
             }
             Self::Class(name) | Self::Id(name) => name.to_token_stream(),
             Self::TypePseudo { view_type, pseudo } => quote! { #view_type : #pseudo },
+            Self::ParentSuffix(suffix) => suffix.to_token_stream(),
         }
+    }
+}
+
+/// Parsed BEM suffix from a nested parent-reference selector.
+pub(super) struct SelectorSuffix {
+    /// Suffix text, including the leading `__` or `--` delimiter.
+    value: String,
+    /// Source span used for generated literals and diagnostics.
+    span: Span,
+}
+
+impl ToTokens for SelectorSuffix {
+    /// Appends this selector suffix as a string literal token.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` — Token stream receiving the suffix literal.
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        LitStr::new(&self.value, self.span).to_tokens(tokens);
     }
 }
 
@@ -267,6 +345,77 @@ impl Selector {
 pub(super) struct SelectorName {
     value: String,
     span: Span,
+}
+
+/// One normalized descendant-selector segment during macro expansion.
+struct SelectorSegment {
+    /// Class name when the segment supports BEM suffix concatenation.
+    class: Option<SelectorName>,
+    /// Expanded non-class base selector.
+    expanded: Option<TokenStream>,
+    /// Pseudo-selectors compounded with the base selector.
+    compounds: Vec<TokenStream>,
+}
+
+impl SelectorSegment {
+    /// Creates a segment backed by a class selector.
+    ///
+    /// # Arguments
+    ///
+    /// * `class` — Parsed class selector name.
+    ///
+    /// # Returns
+    ///
+    /// A [`SelectorSegment`] that accepts nested BEM suffixes.
+    fn class(class: &SelectorName) -> Self {
+        Self {
+            class: Some(SelectorName {
+                value: class.value.clone(),
+                span: class.span,
+            }),
+            expanded: None,
+            compounds: Vec::new(),
+        }
+    }
+
+    /// Creates a segment backed by an already expanded selector.
+    ///
+    /// # Arguments
+    ///
+    /// * `expanded` — Runtime selector constructor expression.
+    ///
+    /// # Returns
+    ///
+    /// A [`SelectorSegment`] that does not accept BEM suffixes.
+    fn expanded(expanded: TokenStream) -> Self {
+        Self {
+            class: None,
+            expanded: Some(expanded),
+            compounds: Vec::new(),
+        }
+    }
+
+    /// Expands the normalized segment into a runtime selector expression.
+    ///
+    /// # Arguments
+    ///
+    /// * `leptatui` — Token path to the Leptatui crate used in generated code.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the class or non-class base and compounds.
+    fn expand(self, leptatui: &TokenStream) -> TokenStream {
+        let base = self.class.map_or_else(
+            || self.expanded.expect("selector segment requires a base"),
+            |class| {
+                let class = class.literal();
+                quote! { #leptatui::StyleSelector::class(#class) }
+            },
+        );
+        let mut selectors = vec![base];
+        selectors.extend(self.compounds);
+        expand_selector_segment(leptatui, selectors)
+    }
 }
 
 impl SelectorName {

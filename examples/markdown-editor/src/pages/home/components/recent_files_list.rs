@@ -23,9 +23,20 @@ pub(in crate::pages::home) fn RecentFilesList(
     error: Option<String>,
     root: PathBuf,
 ) -> impl IntoView {
+    stylesheet! {
+        .recent-files => {
+            &__title => {
+                fg: Color::White,
+                modifier: Modifier::BOLD
+            }
+            &__empty => { fg: Color::DarkGray }
+            &__error => { fg: Color::LightRed }
+        }
+    }
+
     let mut rows = vec![
         view! {
-            <Text class="section-title">"Recent files"</Text>
+            <Text class="recent-files__title">"Recent files"</Text>
         }
         .into_view(),
     ];
@@ -33,7 +44,7 @@ pub(in crate::pages::home) fn RecentFilesList(
     if entries.is_empty() {
         rows.push(
             view! {
-                <Text class="empty">"No recent Markdown files"</Text>
+                <Text class="recent-files__empty">"No recent Markdown files"</Text>
             }
             .into_view(),
         );
@@ -52,11 +63,11 @@ pub(in crate::pages::home) fn RecentFilesList(
     if let Some(error) = error {
         rows.push(
             view! {
-                <Text class="error">{format!("Recent files warning: {error}")}</Text>
+                <Text class="recent-files__error">{format!("Recent files warning: {error}")}</Text>
             }
             .into_view(),
         );
     }
 
-    div(rows)
+    div(rows).with_classes("recent-files")
 }

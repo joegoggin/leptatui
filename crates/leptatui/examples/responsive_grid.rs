@@ -43,6 +43,11 @@ fn ResponsiveGrid() -> impl IntoView {
         .app-shell => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                border_type: BorderType::Plain,
+                padding: TuiSpacing::ZERO
+            }
         }
         .app-title => {
             fg: Color::LightCyan,
@@ -62,6 +67,15 @@ fn ResponsiveGrid() -> impl IntoView {
             ],
             gap: Axes::all(Length::cells(1.0)),
             align_items: AlignItems::Stretch
+
+            @media (max-width: 60) {
+                grid_template_columns: vec![fractional_track(1.0)],
+                grid_template_rows: vec![
+                    automatic_track(),
+                    automatic_track(),
+                    automatic_track()
+                ]
+            }
         }
         .dashboard-title => {
             grid_column: GridLine::new(
@@ -71,9 +85,17 @@ fn ResponsiveGrid() -> impl IntoView {
         }
         .summary => {
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
         .activity => {
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
         .section-title => {
             fg: Color::Yellow,
@@ -85,22 +107,6 @@ fn ResponsiveGrid() -> impl IntoView {
         }
         .hint => { fg: Color::DarkGray }
 
-        @media (max-width: 60) {
-            .app-shell => {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
-            }
-            .dashboard => {
-                grid_template_columns: vec![fractional_track(1.0)],
-                grid_template_rows: vec![
-                    automatic_track(),
-                    automatic_track(),
-                    automatic_track()
-                ]
-            }
-            .summary => { padding: TuiSpacing::ZERO }
-            .activity => { padding: TuiSpacing::ZERO }
-        }
     }
 
     view! {

@@ -1,0 +1,5 @@
+error: stylesheet! parent class suffix requires a class selector
+ --> tests/fixtures/stylesheet_macro/fail/bem_parent_suffix_type.rs:9:16
+  |
+9 |             &--primary => { fg: Color::White }
+  |                ^^^^^^^

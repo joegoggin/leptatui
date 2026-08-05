@@ -62,6 +62,10 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
             bg: Color::Black,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .crud-title => { fg: Color::LightCyan, modifier: Modifier::BOLD }
@@ -77,6 +81,10 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
         .crud-actions => {
             display: Display::Flex,
             flex_direction: FlexDirection::Row
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
 
         Button => {
@@ -85,6 +93,10 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Button:focus => {
@@ -92,12 +104,6 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
             bg: Color::Yellow,
             modifier: Modifier::BOLD,
             border_type: BorderType::Thick
-        }
-
-        @media (max-width: 60) {
-            .crud-screen => { padding: TuiSpacing::ZERO }
-            .crud-actions => { flex_direction: FlexDirection::Column }
-            Button => { padding: TuiSpacing::ZERO }
         }
     }
 

@@ -1,0 +1,5 @@
+error: stylesheet! nested @media blocks cannot contain another @media block; combine conditions with `and`
+  --> tests/fixtures/stylesheet_macro/fail/nested_media_in_media.rs:10:17
+   |
+10 |                 @media (min-height: 24) {
+   |                 ^
