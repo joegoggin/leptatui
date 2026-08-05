@@ -92,7 +92,7 @@ fn explicit_destinations_navigate_between_pages() -> leptatui::Result<()> {
 /// # Assertions
 ///
 /// - Entering `docs` displays its nested Markdown file.
-/// - Leaving and returning displays the workspace root.
+/// - Leaving and returning displays the process current directory.
 /// - The root's first entry receives a fresh selection.
 #[test]
 fn explorer_resets_to_root_after_leaving_the_route() -> leptatui::Result<()> {
@@ -175,6 +175,49 @@ fn explorer_selection_clamps_at_listing_boundaries() -> leptatui::Result<()> {
         rendered_lines(&terminal)
             .join("\n")
             .contains("> [M] beta.md")
+    );
+
+    Ok(())
+}
+
+/// Verifies Explorer can leave the process current directory through its parent.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Home --o--> Explorer --Left--> parent directory
+/// ```
+///
+/// # Assertions
+///
+/// - Explorer starts at the process current directory.
+/// - Left navigates to the current directory's parent rather than clamping at
+///   the startup directory.
+#[test]
+fn explorer_can_browse_above_the_current_directory() -> leptatui::Result<()> {
+    let tree = TestTree::new("explorer-parent-navigation");
+    let current = fs::canonicalize(tree.root()).expect("the current directory should resolve");
+    let parent = current
+        .parent()
+        .expect("the temporary directory should have a parent")
+        .to_path_buf();
+    let contexts = TestContexts::new(tree.root());
+    let mut view = contexts.view();
+    let mut terminal = Terminal::new(TestBackend::new(180, 18))?;
+    draw_editor(&mut terminal, &view)?;
+
+    for key in [KeyCode::Char('o'), KeyCode::Left] {
+        assert_eq!(
+            view.handle_key_event(KeyEvent::new(key, KeyModifiers::NONE))?,
+            KeyControl::Handled
+        );
+        draw_editor(&mut terminal, &view)?;
+    }
+
+    let rendered = rendered_lines(&terminal).join("\n");
+    assert!(
+        rendered.contains(&format!("Directory: {}", parent.display())),
+        "rendered text: {rendered:?}"
     );
 
     Ok(())

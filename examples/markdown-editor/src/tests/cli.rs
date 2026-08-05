@@ -1,14 +1,12 @@
-//! Command-line behavior tests.
+//! Command-line path and startup-route behavior tests.
 
-use std::{env, ffi::OsString, path::PathBuf};
+use std::{env, path::PathBuf};
 
 use clap::Parser;
 
-use crate::{cli::Cli, initialize};
+use crate::{absolute_file_path, cli::Cli};
 
-use super::support::TestTree;
-
-/// Verifies the CLI accepts no browsing root and uses the current directory.
+/// Verifies the CLI accepts an omitted Markdown path.
 ///
 /// # Example Under Test
 ///
@@ -18,118 +16,70 @@ use super::support::TestTree;
 ///
 /// # Assertions
 ///
-/// - Parsing succeeds without a positional root.
-/// - Root resolution returns the process current directory.
+/// - Parsing succeeds without a positional path.
+/// - No startup file path is selected.
 #[test]
-fn cli_defaults_to_current_directory() {
+fn cli_defaults_to_home() {
     let cli = Cli::try_parse_from(["markdown-editor"])
-        .expect("the command should accept an omitted browsing root");
+        .expect("the command should accept an omitted Markdown path");
 
-    assert_eq!(
-        cli.requested_root()
-            .expect("the current directory should be readable"),
-        env::current_dir().expect("the current directory should be readable")
-    );
+    assert_eq!(cli.file_path, None);
 }
 
-/// Verifies the CLI accepts exactly one explicit browsing root.
+/// Verifies the CLI accepts exactly one Markdown path.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// markdown-editor docs
+/// markdown-editor docs/guide.md
 /// ```
 ///
 /// # Assertions
 ///
-/// - Parsing succeeds with one positional root.
-/// - The resolved root equals `docs`.
+/// - Parsing succeeds with one positional path.
+/// - The supplied path is retained without filesystem validation.
 #[test]
-fn cli_accepts_one_explicit_root() {
-    let cli = Cli::try_parse_from(["markdown-editor", "docs"])
-        .expect("the command should accept one browsing root");
+fn cli_accepts_one_file_path() {
+    let cli = Cli::try_parse_from(["markdown-editor", "docs/guide.md"])
+        .expect("the command should accept one Markdown path");
 
-    assert_eq!(
-        cli.requested_root()
-            .expect("an explicit root should not query the current directory"),
-        PathBuf::from("docs")
-    );
+    assert_eq!(cli.file_path, Some(PathBuf::from("docs/guide.md")));
 }
 
-/// Verifies the CLI rejects additional positional roots.
+/// Verifies the CLI rejects additional positional paths.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// markdown-editor docs notes
+/// markdown-editor docs/guide.md notes.md
 /// ```
 ///
 /// # Assertions
 ///
-/// - Parsing fails when two roots are supplied.
+/// - Parsing fails when two paths are supplied.
 #[test]
-fn cli_rejects_additional_roots() {
-    let result = Cli::try_parse_from(["markdown-editor", "docs", "notes"]);
+fn cli_rejects_additional_paths() {
+    let result = Cli::try_parse_from(["markdown-editor", "docs/guide.md", "notes.md"]);
 
     assert!(result.is_err());
 }
 
-/// Verifies startup wraps invalid command-line arguments with `anyhow` context.
-///
-/// # Example Under Test
-///
-/// ```text
-/// markdown-editor docs notes
-/// ```
+/// Verifies startup makes relative paths absolute without requiring a file.
 ///
 /// # Assertions
 ///
-/// - Initialization fails before workspace setup.
-/// - The outer diagnostic identifies command-line parsing.
-/// - The source chain retains Clap's unexpected-argument diagnostic.
+/// - Resolution anchors the path at the process current directory.
+/// - Lexical parent components are removed.
+/// - The missing target does not cause an error.
 #[test]
-fn initialization_contextualizes_invalid_arguments() {
-    let error = initialize(["markdown-editor", "docs", "notes"])
-        .expect_err("initialization should reject additional roots");
+fn startup_normalizes_relative_file_paths_without_validation() {
+    let resolved = absolute_file_path(PathBuf::from("missing/../draft.md").as_path())
+        .expect("lexical path resolution should not access the target");
 
-    assert_eq!(error.to_string(), "failed to parse command-line arguments");
-    assert!(
-        error
-            .chain()
-            .skip(1)
-            .any(|source| source.to_string().contains("unexpected argument"))
+    assert_eq!(
+        resolved,
+        env::current_dir()
+            .expect("the current directory should resolve")
+            .join("draft.md")
     );
-}
-
-/// Verifies startup wraps workspace validation failures with path context.
-///
-/// # Example Under Test
-///
-/// ```text
-/// markdown-editor /temporary/workspace/missing
-/// ```
-///
-/// # Assertions
-///
-/// - Initialization fails for the missing browsing root.
-/// - The outer diagnostic includes the requested path.
-/// - The source chain retains the filesystem resolution diagnostic.
-#[test]
-fn initialization_contextualizes_workspace_failures() {
-    let tree = TestTree::new("initialization-context");
-    let missing = tree.root().join("missing");
-    let error = initialize([
-        OsString::from("markdown-editor"),
-        missing.clone().into_os_string(),
-    ])
-    .expect_err("initialization should reject a missing root");
-
-    let diagnostic = error.to_string();
-    assert!(diagnostic.contains("failed to initialize workspace"));
-    assert!(diagnostic.contains(&missing.display().to_string()));
-    assert!(error.chain().skip(1).any(|source| {
-        source
-            .to_string()
-            .contains("failed to resolve browsing root")
-    }));
 }

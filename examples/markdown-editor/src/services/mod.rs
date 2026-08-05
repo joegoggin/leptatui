@@ -4,7 +4,7 @@
 //!
 //! - [`editor_process`] — External editor configuration and process launching.
 //! - [`editor_session`] — Managed-terminal coordination for editor processes.
-//! - [`filesystem`] — Anchored workspace and Markdown path access.
+//! - [`filesystem`] — Volume boundaries and Markdown entry classification.
 //! - [`recent_files`] — Persistent recent-file storage.
 
 mod editor_process;
@@ -17,6 +17,8 @@ pub(crate) use editor_process::EditorProcess;
 pub(crate) use editor_process::{EnvironmentReader, ProcessLauncher};
 pub(crate) use editor_session::EditorSession;
 pub(crate) use filesystem::{
-    DirectoryListing, ExplorerEntry, ExplorerEntryKind, Workspace, is_markdown_path,
+    DirectoryListing, ExplorerEntry, ExplorerEntryKind, is_markdown_path, volume_root,
 };
-pub(crate) use recent_files::{RECENT_FILE_LIMIT, RecentFilesStore};
+#[cfg(test)]
+pub(crate) use recent_files::RECENT_FILE_LIMIT;
+pub(crate) use recent_files::RecentFilesStore;

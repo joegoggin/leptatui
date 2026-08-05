@@ -1,11 +1,11 @@
-//! Markdown editor shell stylesheet registration.
+//! Root layout stylesheet registration.
 
 use leptatui::prelude::*;
 
-/// Registers the Markdown editor shell stylesheet with the active component.
-pub(super) fn use_markdown_editor_styles() {
+/// Registers the root layout stylesheet with the active component.
+pub(super) fn use_root_layout_styles() {
     stylesheet! {
-        .markdown-editor => {
+        .root-layout => {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1),

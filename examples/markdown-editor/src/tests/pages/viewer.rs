@@ -35,7 +35,6 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
         KeyControl::Pass
     );
-    assert!(contexts.files.editor_failure.get_untracked().is_none());
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE))?,
@@ -51,7 +50,6 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
         KeyControl::Handled
     );
-    assert!(contexts.files.editor_failure.get_untracked().is_none());
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))?,

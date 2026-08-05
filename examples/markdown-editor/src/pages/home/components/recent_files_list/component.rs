@@ -15,7 +15,7 @@ use super::{
 ///
 /// * `entries` — Recent paths in most-recent-first order.
 /// * `error` — Optional recoverable persistence error.
-/// * `root` — Active workspace root.
+/// * `base` — Current directory used to shorten displayed paths.
 ///
 /// # Returns
 ///
@@ -24,7 +24,7 @@ use super::{
 pub(in crate::pages::home) fn RecentFilesList(
     entries: Vec<PathBuf>,
     error: Option<String>,
-    root: PathBuf,
+    base: PathBuf,
 ) -> impl IntoView {
     use_recent_files_list_styles();
 
@@ -45,10 +45,10 @@ pub(in crate::pages::home) fn RecentFilesList(
     } else {
         rows.extend(entries.iter().map(|path| {
             let entry_path = PathBuf::clone(path);
-            let entry_root = root.clone();
+            let entry_base = base.clone();
 
             view! {
-                <RecentFileEntry path=entry_path root=entry_root />
+                <RecentFileEntry path=entry_path base=entry_base />
             }
             .into_view()
         }));

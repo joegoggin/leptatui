@@ -11,16 +11,16 @@ use crate::pages::{shared::relative_path, viewer_location};
 /// # Arguments
 ///
 /// * `path` — Canonical recent Markdown path.
-/// * `root` — Active workspace root.
+/// * `base` — Current directory used to shorten the displayed path.
 ///
 /// # Returns
 ///
 /// A button that opens `path` in Viewer.
 #[component]
-pub(in crate::pages::home) fn RecentFileEntry(path: PathBuf, root: PathBuf) -> impl IntoView {
+pub(in crate::pages::home) fn RecentFileEntry(path: PathBuf, base: PathBuf) -> impl IntoView {
     let navigate = use_navigate();
-    let label = relative_path(&root, &path);
-    let target = viewer_location(&root, &path);
+    let label = relative_path(&base, &path);
+    let target = viewer_location(&path);
 
     view! {
         <Button on_press=move || {

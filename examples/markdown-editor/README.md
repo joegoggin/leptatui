@@ -1,7 +1,7 @@
 # Markdown Editor
 
 The Markdown editor is a standalone, multi-page Leptatui reference application.
-It combines an anchored filesystem explorer, semantic Markdown viewer,
+It combines a current-directory filesystem explorer, semantic Markdown viewer,
 persistent recent files, recoverable errors, and restored-terminal editing
 behind focused project layers.
 
@@ -29,10 +29,10 @@ Run from the current directory:
 cargo run -p markdown-editor
 ```
 
-Or provide an explicit browsing root:
+Or open a Markdown file directly:
 
 ```sh
-cargo run -p markdown-editor -- examples/markdown-editor
+cargo run -p markdown-editor -- examples/markdown-editor/README.md
 ```
 
 Pass `--help` after Cargo's separator to inspect the CLI:
@@ -41,12 +41,12 @@ Pass `--help` after Cargo's separator to inspect the CLI:
 cargo run -p markdown-editor -- --help
 ```
 
-The command accepts zero or one positional `ROOT`. An omitted root resolves to
-the process current directory. Before terminal startup, the path is
-expanded when it begins with exact `~` or `~/`, canonicalized, and verified as
-a directory. Named-user forms such as `~alice` remain literal. Missing paths,
-regular files, and additional positional arguments fail without entering
-managed terminal mode.
+The command accepts zero or one positional `FILE_PATH`. With no path, the
+application starts on Home and File Explorer begins in the process current
+directory. A supplied relative path is made absolute and lexically normalized,
+then encoded into the initial Viewer route. Startup does not require the target
+to exist; read and Markdown-validation failures render as recoverable Viewer
+diagnostics. Additional positional arguments are rejected.
 
 ## Pages and Controls
 
@@ -57,8 +57,9 @@ between three component pages:
   Recent-file buttons open their documents directly in the Markdown Viewer.
 - **File Explorer** — Use `Up`/`k` and `Down`/`j` to select entries, `Enter` to
   enter a directory or open a Markdown file, `Left`/`h` to visit the parent
-  directory, and `Esc` to return Home. Explorer state belongs to the active
-  page, so returning to File Explorer starts again at the workspace root.
+  directory, and `Esc` to return Home. Explorer starts in the process current
+  directory each time it is mounted, but parent navigation can continue to the
+  filesystem or drive root.
 - **Markdown Viewer** — Use `Page Up`, `Page Down`, `Ctrl-U`, `Ctrl-D`, `gg`,
   or `G` to scroll; `e` to edit; `r` to reload; `h` for Home; and `b` to browse
   files. Focus a Markdown link and press `Enter` to activate it; `Shift-H` and
@@ -69,9 +70,9 @@ between three component pages:
 
 Opening a document successfully promotes it to the front of a ten-item recent
 list. The list is stored as versioned JSON in the platform-local application
-data directory for `io.github.joegoggin/leptatui-markdown-editor`. Missing,
-unsupported, and out-of-workspace entries are omitted when the application
-starts. Storage errors remain recoverable and appear as a warning on Home.
+data directory for `io.github.joegoggin/leptatui-markdown-editor`. Missing and
+unsupported entries are omitted when Home loads the global history. Storage
+errors remain recoverable and appear as a warning on Home.
 
 ## Filesystem and Failure Behavior
 
@@ -80,8 +81,9 @@ files using deterministic name ordering. The first entry in each non-empty
 directory is selected automatically, and selection stops at listing boundaries.
 
 Explorer discovery follows symlinks only when their canonical targets remain
-below the configured root. Broken and escaping symlinks are hidden. Failed
-directory reads preserve the last valid listing and render a recoverable error.
+on the current filesystem or drive root. Broken or escaping symlinks are
+hidden. Failed directory reads preserve the last valid listing and render a
+recoverable error.
 
 The Viewer loads its initial UTF-8 source through a component-local Leptatui
 filesystem handle, then constructs a path-identified Markdown view so relative
@@ -105,48 +107,43 @@ spacing is reduced.
 
 ## Architecture and Data Flow
 
-- `cli` contains command-line parsing and browsing-root selection.
-- `hooks` exposes two domain contexts: `use_workspace()` supplies the validated
-  workspace root, while `use_files()` supplies recent-file
-  signals, persistence diagnostics, and external-editor failures.
+- `cli` contains optional startup-file parsing.
+- `layouts/root` owns the application shell component and its co-located
+  `root-layout` stylesheet.
 - `services` contains Markdown-specific filesystem filtering, persistent
   recent-file storage, external editor process boundaries, restored-terminal
-  session coordination, and explorer result values. Leptatui owns root
+  session coordination, and explorer result values. Leptatui owns volume-root
   containment and asynchronous filesystem I/O.
 - `contexts` owns shared notification state and user-facing feedback.
-- `app` owns the application shell, provides typed contexts, and declares `/`,
+- `app` defines `AppRouter`, provides application services, and declares `/`,
   `/files`, and `/view/*path`. Each routed page and supporting component owns
   its BEM-prefixed presentation classes. Styled components use co-located
   `component.rs`, `style.rs`, and `mod.rs` files; styled pages use `page.rs`,
-  `style.rs`, and `mod.rs`. The app-level stylesheet contains only shell and
-  route-container styling.
+  `style.rs`, and `mod.rs`.
 - `pages` organizes each routed feature around a `page` module with co-located
   state, stylesheet, and child components. Components without local style
   rules remain flat files. Explorer owns its listing, selection, and error
   signals; Viewer derives its document from the route and owns its reload
-  revision. Explorer and Viewer each call `use_file_system(workspace.root())`
-  locally, and Viewer builds a navigable Markdown view from operation-loaded
-  source.
-- `main` uses `anyhow` to add startup and runtime context while it parses the
-  CLI, validates the workspace, initializes services and signals, constructs
-  `<AppRouter />`, and starts Leptatui.
+  revision and editor error. Explorer and Viewer create component-local
+  filesystem handles at the containing volume root, while Home alone loads and
+  displays recent-file history.
+- `main` parses the CLI, converts an optional file path into the initial route,
+  constructs `<AppRouter />`, and starts Leptatui.
 
-The normal data flow is CLI root validation → `use_workspace()` context →
-component-local `use_file_system()` handles and page-owned operations → encoded
-Viewer route → operation-loaded Markdown source. Successful Viewer reads update
-and persist recent-file values through `use_files()`. Editing queues the
-route-derived path through the contextual editor session, temporarily restores
-the terminal, appends `--` and the path to the resolved editor command, and
-resumes the same Viewer component. Completion updates the Viewer revision and
-path-associated failure signal so the mounted document reloads in place.
-Recoverable failures retain their `anyhow` source chains in shared pointers
-until the page renders them inline or sends them through the notification
-context.
+The normal data flow is optional CLI file path → encoded initial Viewer route →
+operation-loaded Markdown source. Explorer routes selected absolute Markdown
+paths through the same encoder. Successful Viewer reads record directly through
+`RecentFilesStore`; Home loads, validates, and displays that global MRU list.
+Editing queues the route-derived path through the contextual editor session,
+temporarily restores the terminal, appends `--` and the path to the resolved
+editor command, and resumes the same Viewer component. Completion updates the
+Viewer-local revision and path-associated failure so the document reloads in
+place. Recoverable failures render inline or through the notification context.
 
 ## Verification
 
-The package's tests use temporary filesystem trees, page-owned signals, the two
-domain hooks, injectable editor services, and Ratatui's test backend, so
+The package's tests use temporary filesystem trees, page-owned signals,
+injectable stores and editor services, and Ratatui's test backend, so
 filesystem, editor, and representative rendering behavior do not require an
 interactive terminal.
 

@@ -13,18 +13,40 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use leptatui::prelude::{AnyView, Owner, RenderCtx, use_file_system};
+use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
 use tokio::runtime::Runtime;
 
 use crate::{
-    app::{app_view, app_view_at_path},
-    hooks::{Files, WorkspaceContext},
+    app::{AppRouter, AppRouterProps},
     services::{
         EditorProcess, EditorSession, EnvironmentReader, ExplorerEntry, ProcessLauncher,
-        RecentFilesStore, Workspace,
+        RecentFilesStore,
     },
 };
+
+/// Provides deterministic services to the routed application during tests.
+///
+/// # Arguments
+///
+/// * `initial_path` — First router location for the test application.
+/// * `editor_session` — Headless editor session supplied to Viewer.
+/// * `recent_files_store` — Isolated recent-file store supplied to routed pages.
+///
+/// # Returns
+///
+/// A routed application using the supplied service contexts.
+#[component]
+fn TestAppRouter(
+    initial_path: String,
+    editor_session: EditorSession,
+    recent_files_store: RecentFilesStore,
+) -> impl IntoView {
+    provide_context(editor_session);
+    provide_context(recent_files_store);
+
+    view! { <AppRouter initial_path=initial_path /> }
+}
 
 thread_local! {
     /// Whether the current synchronous test worker entered the shared runtime.
@@ -45,60 +67,50 @@ struct TestLease {
     _guard: MutexGuard<'static, ()>,
 }
 
-/// Shared-context fixture that keeps its signal owner alive.
+/// Application fixture scoped to one temporary current directory.
 pub(super) struct TestContexts {
     /// Lease serializing asynchronous component tests across worker threads.
     _test_lease: Rc<TestLease>,
-    /// Owner backing every arena-allocated shared file signal.
-    _owner: Owner,
-    /// Validated workspace resources provided through the shared hook.
-    pub(super) workspace: WorkspaceContext,
-    /// File-related signals and persistence provided through the shared hook.
-    pub(super) files: Files,
+    /// Process directory restored when this fixture is dropped.
+    previous_directory: PathBuf,
+    /// Recent-file persistence injected into every constructed application.
+    pub(super) recent_files_store: RecentFilesStore,
 }
 
 impl TestContexts {
-    /// Initializes a memory-backed shared file hook for `root`.
+    /// Initializes an application fixture rooted at `root`.
     ///
     /// # Arguments
     ///
-    /// * `root` — Workspace root used to initialize the signals.
+    /// * `root` — Directory selected as the process current directory.
     ///
     /// # Returns
     ///
-    /// A [`TestContexts`] retaining the shared file signals.
+    /// A [`TestContexts`] retaining the scoped current directory.
     pub(super) fn new(root: &Path) -> Self {
         Self::with_store(root, RecentFilesStore::memory())
     }
 
-    /// Initializes shared file signals with an explicit recent-file store.
+    /// Initializes an application fixture with an explicit recent-file store.
     ///
     /// # Arguments
     ///
-    /// * `root` — Workspace root used to initialize the signals.
-    /// * `recent_files_store` — Persistence service bundled with file signals.
+    /// * `root` — Directory selected as the process current directory.
+    /// * `recent_files_store` — Persistence service provided to the application.
     ///
     /// # Returns
     ///
-    /// A [`TestContexts`] retaining the shared file signals.
+    /// A [`TestContexts`] retaining the scoped current directory.
     pub(super) fn with_store(root: &Path, recent_files_store: RecentFilesStore) -> Self {
         let test_lease = acquire_test_lease();
         enter_test_runtime();
-        let owner = Owner::new();
-        let filesystem = use_file_system(root).expect("the workspace should initialize");
-        let workspace = Workspace::new(filesystem.root().to_path_buf());
-        let (recent_paths, stored_paths, recent_error) =
-            recent_files_store.load_for_workspace(&filesystem, &workspace);
-        let recent_error = recent_error.map(|error| Arc::new(anyhow::Error::new(error)));
-        let workspace = WorkspaceContext::new(workspace);
-        let files =
-            owner.with(|| Files::new(recent_paths, stored_paths, recent_error, recent_files_store));
+        let previous_directory = env::current_dir().expect("the current directory should resolve");
+        env::set_current_dir(root).expect("the test current directory should be selected");
 
         Self {
             _test_lease: test_lease,
-            _owner: owner,
-            workspace,
-            files,
+            previous_directory,
+            recent_files_store,
         }
     }
 
@@ -108,7 +120,7 @@ impl TestContexts {
     ///
     /// An [`AnyView`] using this fixture's shared values.
     pub(super) fn view(&self) -> AnyView {
-        app_view(self.workspace.clone(), self.files.clone())
+        self.view_at("/")
     }
 
     /// Creates an application view starting at an explicit route.
@@ -121,12 +133,14 @@ impl TestContexts {
     ///
     /// An [`AnyView`] using this fixture's shared values.
     pub(super) fn view_at(&self, path: impl Into<String>) -> AnyView {
-        app_view_at_path(
-            self.workspace.clone(),
-            self.files.clone(),
-            EditorSession::deferred(EditorProcess::new()),
-            path,
+        TestAppRouter::with_props(
+            TestAppRouterProps::builder()
+                .initial_path(path.into())
+                .editor_session(EditorSession::deferred(EditorProcess::new()))
+                .recent_files_store(self.recent_files_store.clone())
+                .build(),
         )
+        .into_view()
     }
 
     /// Creates an application view with an immediate injected editor process.
@@ -139,12 +153,40 @@ impl TestContexts {
     ///
     /// An [`AnyView`] whose Viewer completes editor requests synchronously.
     pub(super) fn view_with_editor(&self, editor_process: EditorProcess) -> AnyView {
-        app_view_at_path(
-            self.workspace.clone(),
-            self.files.clone(),
-            EditorSession::immediate(editor_process),
-            "/",
+        self.view_at_with_editor("/", editor_process)
+    }
+
+    /// Creates an application view at a route with an immediate editor process.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Initial router location.
+    /// * `editor_process` — Process boundary executed without a real terminal.
+    ///
+    /// # Returns
+    ///
+    /// An [`AnyView`] whose Viewer completes editor requests synchronously.
+    pub(super) fn view_at_with_editor(
+        &self,
+        path: impl Into<String>,
+        editor_process: EditorProcess,
+    ) -> AnyView {
+        TestAppRouter::with_props(
+            TestAppRouterProps::builder()
+                .initial_path(path.into())
+                .editor_session(EditorSession::immediate(editor_process))
+                .recent_files_store(self.recent_files_store.clone())
+                .build(),
         )
+        .into_view()
+    }
+}
+
+impl Drop for TestContexts {
+    /// Restores the process current directory before releasing the test lease.
+    fn drop(&mut self) {
+        env::set_current_dir(&self.previous_directory)
+            .expect("the previous current directory should be restored");
     }
 }
 

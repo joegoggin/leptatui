@@ -5,7 +5,7 @@
 //!
 //! # Modules
 //!
-//! - [`explorer`] — Workspace file explorer page.
+//! - [`explorer`] — Current-directory file explorer page.
 //! - [`home`] — Landing page and recent-file actions.
 //! - [`not_found`] — Unmatched-route fallback page.
 //! - [`shared`] — Presentation helpers shared by routed pages.

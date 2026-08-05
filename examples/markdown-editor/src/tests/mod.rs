@@ -6,7 +6,7 @@
 //! # Modules
 //!
 //! - [`app`] — Application routing and responsive rendering.
-//! - [`cli`] — Command-line parsing, root selection, and startup errors.
+//! - [`cli`] — Command-line parsing and startup-path normalization.
 //! - [`editor_process`] — Editor configuration and process construction.
 //! - [`filesystem`] — Anchored discovery and filesystem failure behavior.
 //! - [`pages`] — Page-specific keyboard handling and rendering.

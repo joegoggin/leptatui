@@ -7,13 +7,13 @@
 use std::{
     fs, io,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use directories::ProjectDirs;
-use leptatui::prelude::FileSystem;
 use serde::{Deserialize, Serialize};
 
-use super::{Workspace, is_markdown_path};
+use super::is_markdown_path;
 
 /// Current on-disk recent-file document version.
 const DOCUMENT_VERSION: u8 = 1;
@@ -34,6 +34,8 @@ struct RecentFilesDocument {
 pub(crate) struct RecentFilesStore {
     /// Optional JSON document path.
     path: Option<PathBuf>,
+    /// In-memory history used when persistent storage is disabled.
+    memory: Arc<Mutex<Vec<PathBuf>>>,
 }
 
 impl RecentFilesStore {
@@ -47,7 +49,10 @@ impl RecentFilesStore {
         let path = ProjectDirs::from("io.github", "joegoggin", "leptatui-markdown-editor")
             .map(|directories| directories.data_local_dir().join("recent-files.json"));
 
-        Self { path }
+        Self {
+            path,
+            memory: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     /// Creates a store that retains recent files only in application memory.
@@ -56,8 +61,11 @@ impl RecentFilesStore {
     ///
     /// A [`RecentFilesStore`] without an on-disk location.
     #[cfg(test)]
-    pub(crate) const fn memory() -> Self {
-        Self { path: None }
+    pub(crate) fn memory() -> Self {
+        Self {
+            path: None,
+            memory: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     /// Creates a store at an explicit JSON document path.
@@ -71,7 +79,10 @@ impl RecentFilesStore {
     /// A [`RecentFilesStore`] using `path`.
     #[cfg(test)]
     pub(crate) fn at(path: PathBuf) -> Self {
-        Self { path: Some(path) }
+        Self {
+            path: Some(path),
+            memory: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     /// Loads persisted recent paths.
@@ -88,7 +99,11 @@ impl RecentFilesStore {
     /// unsupported version.
     pub(crate) fn load(&self) -> io::Result<Vec<PathBuf>> {
         let Some(path) = &self.path else {
-            return Ok(Vec::new());
+            return Ok(self
+                .memory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone());
         };
 
         let source = match fs::read_to_string(path) {
@@ -120,49 +135,54 @@ impl RecentFilesStore {
         Ok(document.entries.into_iter().map(PathBuf::from).collect())
     }
 
-    /// Loads and filters recent paths for one workspace.
-    ///
-    /// # Arguments
-    ///
-    /// * `filesystem` — Service used to validate persisted Markdown paths.
-    /// * `workspace` — Active workspace used to filter visible paths.
+    /// Loads and validates globally visible recent Markdown paths.
     ///
     /// # Returns
     ///
-    /// A tuple containing workspace-visible paths, the complete persisted
-    /// ordering, and an optional recoverable load error.
-    pub(crate) fn load_for_workspace(
-        &self,
-        filesystem: &FileSystem,
-        workspace: &Workspace,
-    ) -> (Vec<PathBuf>, Vec<PathBuf>, Option<io::Error>) {
+    /// A tuple containing valid paths and an optional recoverable load error.
+    pub(crate) fn load_valid(&self) -> (Vec<PathBuf>, Option<io::Error>) {
         let (stored_paths, error) = match self.load() {
             Ok(paths) => (paths, None),
             Err(error) => (Vec::new(), Some(error)),
         };
-        let mut stored = Vec::new();
-        for path in stored_paths {
-            if !stored.contains(&path) {
-                stored.push(path);
-            }
-        }
-        stored.truncate(RECENT_FILE_LIMIT);
+        (valid_recent_paths(stored_paths), error)
+    }
 
-        let mut visible = Vec::new();
-        for path in &stored {
-            let Ok(canonical) = fs::canonicalize(path) else {
-                continue;
-            };
-            let valid = canonical.starts_with(filesystem.root())
-                && canonical.starts_with(workspace.root())
-                && fs::metadata(&canonical).is_ok_and(|metadata| metadata.is_file())
-                && is_markdown_path(&canonical);
-            if valid && !visible.contains(&canonical) {
-                visible.push(canonical);
-            }
+    /// Records one successfully opened Markdown file in bounded MRU order.
+    ///
+    /// Existing malformed history is replaced with a valid document containing
+    /// the newly opened path.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Successfully opened Markdown file.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`io::Result`] after the updated history is persisted.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if `path` cannot be canonicalized, is not a
+    /// Markdown file, or the updated history cannot be saved.
+    pub(crate) fn record(&self, path: &Path) -> io::Result<()> {
+        let canonical = fs::canonicalize(path)
+            .map_err(|source| path_error(source, "failed to resolve recent file", path))?;
+        if !fs::metadata(&canonical).is_ok_and(|metadata| metadata.is_file())
+            || !is_markdown_path(&canonical)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("recent path is not a Markdown file: {}", path.display()),
+            ));
         }
 
-        (visible, stored, error)
+        let stored = self.load().unwrap_or_default();
+        let mut entries = valid_recent_paths(stored);
+        entries.retain(|entry| entry != &canonical);
+        entries.insert(0, canonical);
+        entries.truncate(RECENT_FILE_LIMIT);
+        self.save(&entries)
     }
 
     /// Persists recent paths in most-recent-first order.
@@ -183,6 +203,10 @@ impl RecentFilesStore {
     /// temporary document, serialization, or atomic replacement fails.
     pub(crate) fn save(&self, entries: &[PathBuf]) -> io::Result<()> {
         let Some(path) = &self.path else {
+            *self
+                .memory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = entries.to_vec();
             return Ok(());
         };
 
@@ -220,6 +244,33 @@ impl RecentFilesStore {
         })?;
         replace_file(&temporary, path)
     }
+}
+
+/// Canonicalizes, filters, deduplicates, and bounds persisted recent paths.
+///
+/// # Arguments
+///
+/// * `paths` — Persisted paths in most-recent-first order.
+///
+/// # Returns
+///
+/// A [`Vec`] containing valid canonical Markdown paths.
+fn valid_recent_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut valid = Vec::new();
+    for path in paths {
+        let Ok(canonical) = fs::canonicalize(path) else {
+            continue;
+        };
+        let is_valid = fs::metadata(&canonical).is_ok_and(|metadata| metadata.is_file())
+            && is_markdown_path(&canonical);
+        if is_valid && !valid.contains(&canonical) {
+            valid.push(canonical);
+        }
+        if valid.len() == RECENT_FILE_LIMIT {
+            break;
+        }
+    }
+    valid
 }
 
 /// Returns a sibling temporary path for an atomic save.

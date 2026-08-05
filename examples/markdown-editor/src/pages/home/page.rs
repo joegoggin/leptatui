@@ -2,7 +2,7 @@
 
 use leptatui::prelude::*;
 
-use crate::hooks::{use_files, use_workspace};
+use crate::{contexts::use_notifications, services::RecentFilesStore};
 
 use super::{
     components::{RecentFilesList, RecentFilesListProps},
@@ -18,8 +18,13 @@ use super::{
 pub(crate) fn HomePage() -> impl IntoView {
     let shortcut_navigate = use_navigate();
     let button_navigate = use_navigate();
-    let workspace = use_workspace().workspace;
-    let files = use_files();
+    let notifications = use_notifications();
+    let recent_files_store = expect_context::<RecentFilesStore>();
+    let current_directory = std::env::current_dir().unwrap_or_default();
+    let (recent_files, recent_error) = recent_files_store.load_valid();
+    if let Some(error) = &recent_error {
+        notifications.show_warning("Recent files unavailable", error.to_string());
+    }
 
     use_key_event(KeyEventKind::Press, move |key| {
         if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::NONE {
@@ -30,16 +35,15 @@ pub(crate) fn HomePage() -> impl IntoView {
         KeyControl::Pass
     });
 
-    let root = workspace.root().to_path_buf();
-    let root_label = format!("Root: {}", root.display());
-    let recent_root = root.clone();
+    let directory_label = format!("Current directory: {}", current_directory.display());
+    let recent_error = recent_error.map(|error| error.to_string());
 
     use_home_page_styles();
 
     view! {
         <Div class="home-page">
             <Text class="home-page__title">"Markdown editor"</Text>
-            <Text class="home-page__path">{root_label}</Text>
+            <Text class="home-page__path">{directory_label}</Text>
             <Div class="home-page__actions">
                 <Button on_press=move || {
                     button_navigate("/files", NavigateOptions::default());
@@ -47,19 +51,7 @@ pub(crate) fn HomePage() -> impl IntoView {
                 }>"Open file"</Button>
             </Div>
             <Block class="home-page__content">
-                {move || {
-                    let root = recent_root.clone();
-                    view! {
-                        <RecentFilesList
-                            entries=files.recent_files.get_untracked()
-                            error=files
-                                .recent_files_error
-                                .get_untracked()
-                                .map(|error| error.to_string())
-                            root=root
-                        />
-                    }
-                }}
+                <RecentFilesList entries=recent_files error=recent_error base=current_directory />
             </Block>
             <Text class="home-page__help">"o open file | Tab/Enter actions | q quit"</Text>
         </Div>

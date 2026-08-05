@@ -1,8 +1,8 @@
 //! Markdown-specific policy layered over Leptatui's scoped filesystem.
 //!
 //! Leptatui owns path containment and asynchronous I/O. This module retains
-//! only the Markdown editor's workspace value, entry classification, filtering,
-//! and directory-first presentation policy.
+//! only volume-boundary discovery, entry classification, filtering, and
+//! directory-first presentation policy.
 
 use std::{
     cmp::Ordering,
@@ -12,35 +12,17 @@ use std::{
 
 use leptatui::prelude::{FileEntry, FileKind};
 
-/// Validated directory that anchors one Markdown editing session.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct Workspace {
-    /// Canonical absolute directory that bounds application browsing.
-    root: PathBuf,
-}
-
-impl Workspace {
-    /// Creates a workspace from a canonical filesystem root.
-    ///
-    /// # Arguments
-    ///
-    /// * `root` — Canonical absolute directory used as the browsing boundary.
-    ///
-    /// # Returns
-    ///
-    /// A [`Workspace`] anchored at the supplied directory.
-    pub(crate) fn new(root: PathBuf) -> Self {
-        Self { root }
-    }
-
-    /// Returns the canonical browsing root.
-    ///
-    /// # Returns
-    ///
-    /// A [`Path`] containing the workspace boundary.
-    pub(crate) fn root(&self) -> &Path {
-        &self.root
-    }
+/// Returns the filesystem or drive root containing an absolute path.
+///
+/// # Arguments
+///
+/// * `path` — Absolute path whose containment boundary should be discovered.
+///
+/// # Returns
+///
+/// A [`PathBuf`] containing the outermost ancestor of `path`.
+pub(crate) fn volume_root(path: &Path) -> PathBuf {
+    path.ancestors().last().unwrap_or(path).to_path_buf()
 }
 
 /// Kind of filesystem entry displayed by the Markdown explorer.
@@ -92,7 +74,7 @@ impl ExplorerEntry {
     }
 }
 
-/// Successful directory discovery below a workspace root.
+/// Successful directory discovery below a filesystem-volume root.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DirectoryListing {
     /// Canonical directory represented by this listing.

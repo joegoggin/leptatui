@@ -6,6 +6,4 @@
 
 mod notification;
 
-pub(crate) use notification::{
-    NotificationContext, Notifications, provide_notification_context, use_notifications,
-};
+pub(crate) use notification::{Notifications, provide_notification_context, use_notifications};

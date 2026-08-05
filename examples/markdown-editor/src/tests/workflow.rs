@@ -6,10 +6,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use leptatui::prelude::{GetUntracked, KeyCode, KeyControl, KeyEvent, KeyModifiers, Set};
+use leptatui::prelude::{KeyCode, KeyControl, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
 
-use crate::{hooks::EditorFailure, pages::viewer_location, services::EditorProcess};
+use crate::{pages::viewer_location, services::EditorProcess};
 
 use super::support::{
     RecordingLauncher, TestContexts, TestEnvironment, TestLaunchOutcome, TestTree, draw_editor,
@@ -35,7 +35,7 @@ use super::support::{
 ///
 /// - Home routes to Explorer before key events enter the nested directory.
 /// - Explorer opens the Markdown file in Viewer.
-/// - Test-backend rendering exposes the current path and original document.
+/// - Test-backend rendering exposes the original document.
 /// - The edit key is handled without exiting the component tree.
 /// - The injected editor receives the canonical path and replaces the source.
 /// - The mounted Viewer reloads and renders the edited source.
@@ -93,7 +93,6 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
     );
     draw_editor(&mut terminal, &view)?;
     let before_edit = rendered_lines(&terminal).join("\n");
-    assert!(before_edit.contains("Open: docs/guide.md"));
     assert!(before_edit.contains("Before edit"));
 
     assert_eq!(
@@ -115,29 +114,27 @@ fn workflow_browses_previews_edits_and_renders_without_a_terminal() -> leptatui:
     );
     draw_editor(&mut terminal, &view)?;
     let after_edit = rendered_lines(&terminal).join("\n");
-    assert!(after_edit.contains("Open: docs/guide.md"));
     assert!(after_edit.contains("After edit"));
 
     Ok(())
 }
 
-/// Verifies external-editor failures survive the terminal-session rebuild.
+/// Verifies external-editor failures render after the terminal session resumes.
 ///
 /// # Example Under Test
 ///
 /// ```text
 /// missing editor
 /// non-zero editor
-/// rebuild /view/guide.md
+/// e
 /// ```
 ///
 /// # Assertions
 ///
 /// - Each injected editor failure contains its distinct diagnostic.
-/// - The failure is associated with the requested canonical path.
-/// - A rebuilt Viewer renders the shared failure signal.
+/// - The mounted Viewer renders the contextual failure after the edit request.
 #[test]
-fn workflow_rebuilds_viewer_with_external_editor_failures() -> leptatui::Result<()> {
+fn workflow_renders_external_editor_failures() -> leptatui::Result<()> {
     for (label, outcome, expected) in [
         (
             "workflow-editor-missing",
@@ -166,25 +163,13 @@ fn workflow_rebuilds_viewer_with_external_editor_failures() -> leptatui::Result<
             },
         );
         let contexts = TestContexts::new(tree.root());
-        let error = editor_process
-            .edit(&canonical)
-            .expect_err("the injected editor should fail");
-        contexts.files.editor_failure.set(Some(EditorFailure {
-            path: canonical.clone(),
-            error: Arc::new(anyhow::Error::new(error)),
-        }));
-        assert_eq!(
-            contexts
-                .files
-                .editor_failure
-                .get_untracked()
-                .expect("the shared editor failure should be retained")
-                .path,
-            canonical
-        );
-
-        let view = contexts.view_at(viewer_location(contexts.workspace.root(), &canonical));
+        let mut view = contexts.view_at_with_editor(viewer_location(&canonical), editor_process);
         let mut terminal = Terminal::new(TestBackend::new(100, 18))?;
+        draw_editor(&mut terminal, &view)?;
+        assert_eq!(
+            view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
+            KeyControl::Handled
+        );
         draw_editor(&mut terminal, &view)?;
         let rendered = rendered_lines(&terminal).join("\n");
         assert!(rendered.contains(expected));

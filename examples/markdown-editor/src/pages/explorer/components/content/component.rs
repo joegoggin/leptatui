@@ -1,13 +1,10 @@
 //! Explorer page content rendered from page-owned signals.
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use leptatui::prelude::*;
 
-use crate::{
-    pages::shared::relative_path,
-    services::{DirectoryListing, Workspace},
-};
+use crate::{pages::shared::relative_path, services::DirectoryListing};
 
 use super::{
     super::{ExplorerList, ExplorerListProps},
@@ -18,7 +15,7 @@ use super::{
 ///
 /// # Arguments
 ///
-/// * `workspace` — Validated workspace displayed by the page.
+/// * `initial_directory` — Process directory where browsing began.
 /// * `listing` — Page-owned directory listing signal.
 /// * `selection` — Page-owned selected index signal.
 /// * `error` — Page-owned recoverable error signal.
@@ -28,14 +25,13 @@ use super::{
 /// Explorer headings and the scrollable listing.
 #[component]
 pub(in crate::pages::explorer) fn ExplorerContent(
-    workspace: Workspace,
+    initial_directory: PathBuf,
     listing: ArcRwSignal<DirectoryListing>,
     selection: ArcRwSignal<Option<usize>>,
     error: ArcRwSignal<Option<Arc<anyhow::Error>>>,
 ) -> impl IntoView {
     let home_navigate = use_navigate();
-    let root = workspace.root().to_path_buf();
-    let directory_workspace = workspace.clone();
+    let directory_base = initial_directory.clone();
     let directory_listing = listing.clone();
     let list_listing = listing.clone();
     let list_selection = selection.clone();
@@ -46,12 +42,14 @@ pub(in crate::pages::explorer) fn ExplorerContent(
     view! {
         <Div class="explorer-page">
             <Text class="explorer-page__title">"File explorer"</Text>
-            <Text class="explorer-page__path">{format!("Root: {}", root.display())}</Text>
+            <Text class="explorer-page__path">
+                {format!("Started in: {}", initial_directory.display())}
+            </Text>
             {move || {
                 let directory = directory_listing
                     .try_get_untracked()
                     .map(|current| {
-                        relative_path(directory_workspace.root(), current.directory())
+                        relative_path(&directory_base, current.directory())
                     })
                     .unwrap_or_default();
                 view! {

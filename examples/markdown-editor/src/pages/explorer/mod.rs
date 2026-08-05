@@ -1,4 +1,4 @@
-//! Workspace file explorer feature.
+//! Current-directory file explorer feature.
 //!
 //! # Modules
 //!

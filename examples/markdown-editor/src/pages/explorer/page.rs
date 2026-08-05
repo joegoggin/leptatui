@@ -9,34 +9,31 @@ use leptatui::prelude::*;
 
 use crate::{
     contexts::use_notifications,
-    hooks::use_workspace,
     pages::viewer_location,
-    services::{DirectoryListing, ExplorerEntryKind, Workspace},
+    services::{DirectoryListing, ExplorerEntryKind, volume_root},
 };
 
 use super::components::{ExplorerContent, ExplorerContentProps};
 
-/// Renders the standalone workspace file explorer.
+/// Renders the standalone current-directory file explorer.
 ///
 /// The listing, selection, and recoverable navigation error belong to this
-/// routed page instance. Leaving and returning to the route creates fresh
-/// signals rooted at the workspace.
+/// routed page instance. Leaving and returning creates fresh signals starting
+/// from the process current directory.
 ///
 /// # Returns
 ///
 /// An Explorer page component or a filesystem initialization error.
 #[component]
 pub(crate) fn ExplorerPage() -> ViewResult<impl IntoView> {
-    let workspace_context = use_workspace();
     let notifications = use_notifications();
-    let workspace = workspace_context.workspace;
-    let filesystem = use_file_system(workspace.root())?;
-    let root = workspace.root().to_path_buf();
-    let listing = ArcRwSignal::new(DirectoryListing::empty(root.clone()));
+    let current_directory = std::fs::canonicalize(std::env::current_dir()?)?;
+    let filesystem = use_file_system(volume_root(&current_directory))?;
+    let listing = ArcRwSignal::new(DirectoryListing::empty(current_directory.clone()));
     let selection = ArcRwSignal::new(None);
     let error = ArcRwSignal::new(None);
-    let requested_directory = ArcRwSignal::new(root.clone());
-    let read_directory = ArcRwSignal::new(Some(filesystem.read_dir(&root)));
+    let requested_directory = ArcRwSignal::new(current_directory.clone());
+    let read_directory = ArcRwSignal::new(Some(filesystem.read_dir(&current_directory)));
     let read_directory_result = read_directory.clone();
     let read_directory_version = read_directory.clone();
     let result_requested_directory = requested_directory.clone();
@@ -90,8 +87,6 @@ pub(crate) fn ExplorerPage() -> ViewResult<impl IntoView> {
         },
         true,
     );
-    let shortcut_workspace = workspace.clone();
-    let content_workspace = workspace.clone();
     let shortcut_navigate = use_navigate();
     let shortcut_filesystem = filesystem.clone();
     let shortcut_listing = listing.clone();
@@ -125,7 +120,7 @@ pub(crate) fn ExplorerPage() -> ViewResult<impl IntoView> {
                             );
                         }
                         ExplorerEntryKind::Markdown => {
-                            let target = viewer_location(shortcut_workspace.root(), entry.path());
+                            let target = viewer_location(entry.path());
                             shortcut_navigate(&target, NavigateOptions::default());
                         }
                     }
@@ -134,7 +129,6 @@ pub(crate) fn ExplorerPage() -> ViewResult<impl IntoView> {
             }
             KeyCode::Left | KeyCode::Char('h') => {
                 browse_parent(
-                    &shortcut_workspace,
                     &shortcut_listing,
                     &shortcut_requested_directory,
                     &shortcut_read_directory,
@@ -152,7 +146,7 @@ pub(crate) fn ExplorerPage() -> ViewResult<impl IntoView> {
 
     view! {
         <ExplorerContent
-            workspace=content_workspace
+            initial_directory=current_directory
             listing=listing.clone()
             selection=selection.clone()
             error=error.clone()
@@ -236,7 +230,6 @@ fn browse(
 ///
 /// # Arguments
 ///
-/// * `workspace` — Workspace bounding parent navigation.
 /// * `listing` — Page-local directory listing signal.
 /// * `requested` — Signal retaining the latest requested directory.
 /// * `read_directory` — Signal retaining the latest directory operation.
@@ -246,14 +239,13 @@ fn browse(
 ///
 /// A [`bool`] indicating whether the explorer moved to its parent.
 fn browse_parent(
-    workspace: &Workspace,
     listing: &ArcRwSignal<DirectoryListing>,
     requested: &ArcRwSignal<PathBuf>,
     read_directory: &ArcRwSignal<Option<FileOperation<Vec<FileEntry>>>>,
     filesystem: &FileSystem,
 ) -> bool {
     let directory: PathBuf = listing.with_untracked(|listing| listing.directory().to_path_buf());
-    if directory == workspace.root() {
+    if directory == filesystem.root() {
         return false;
     }
     let Some(parent) = directory.parent() else {

@@ -2,16 +2,16 @@
 
 use std::path::Path;
 
-/// Formats a workspace path relative to its root.
+/// Formats a path relative to a display base.
 ///
 /// # Arguments
 ///
-/// * `root` — Canonical workspace root.
+/// * `root` — Canonical display base.
 /// * `path` — Canonical directory or Markdown path to display.
 ///
 /// # Returns
 ///
-/// A [`String`] containing `.`, a relative workspace path, or the original
+/// A [`String`] containing `.`, a relative path, or the original
 /// absolute path when it is not below `root`.
 pub(super) fn relative_path(root: &Path, path: &Path) -> String {
     match path.strip_prefix(root) {

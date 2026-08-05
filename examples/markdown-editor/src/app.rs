@@ -1,96 +1,58 @@
-//! Markdown editor application entry components.
-//!
-//! # Modules
-//!
-//! - [`markdown_editor`] — Routed application shell and its stylesheet.
-
-mod markdown_editor;
+//! Routed Markdown editor application component.
 
 use leptatui::prelude::*;
 
 use crate::{
-    hooks::{Files, WorkspaceContext},
-    services::{EditorProcess, EditorSession},
+    contexts::{Notifications, provide_notification_context},
+    layouts::{RootLayout, RootLayoutProps},
+    pages::{ExplorerPage, HomePage, NotFoundPage, ViewerPage},
+    services::{EditorProcess, EditorSession, RecentFilesStore},
 };
 
-use self::markdown_editor::{MarkdownEditor, MarkdownEditorProps};
-
-/// Renders the initialized Markdown editor root.
+/// Provides application services, routing, notifications, and global controls.
+///
+/// Existing editor and recent-file contexts are retained. Missing contexts are
+/// initialized with their production implementations.
 ///
 /// # Arguments
 ///
-/// * `workspace` — Validated workspace resources shared by routed pages.
-/// * `files` — File-related signals and persistence shared by routed pages.
-/// * `editor_process` — External editor process service.
+/// * `initial_path` — First router location for the application session.
 ///
 /// # Returns
 ///
-/// An [`AnyView`] containing the routed editor.
+/// A routed Markdown editor application.
 #[component]
-pub(crate) fn AppRouter(
-    workspace: WorkspaceContext,
-    files: Files,
-    editor_process: EditorProcess,
-) -> AnyView {
-    let app_handle = use_app_handle();
-
-    view! {
-        <MarkdownEditor
-            workspace=workspace
-            files=files
-            editor_session=EditorSession::managed(app_handle, editor_process)
-            initial_path=String::from("/")
-        />
+pub(crate) fn AppRouter(#[prop(into)] initial_path: String) -> impl IntoView {
+    if use_context::<EditorSession>().is_none() {
+        provide_context(EditorSession::managed(
+            use_app_handle(),
+            EditorProcess::new(),
+        ));
     }
-}
+    if use_context::<RecentFilesStore>().is_none() {
+        provide_context(RecentFilesStore::standard());
+    }
 
-/// Creates the root Markdown editor view.
-///
-/// # Arguments
-///
-/// * `workspace` — Validated workspace resources shared by routed pages.
-/// * `files` — File-related signals and persistence shared by routed pages.
-///
-/// # Returns
-///
-/// A routed Leptatui view starting on Home.
-#[cfg(test)]
-pub(crate) fn app_view(workspace: WorkspaceContext, files: Files) -> AnyView {
-    app_view_at_path(
-        workspace,
-        files,
-        EditorSession::deferred(EditorProcess::new()),
-        "/",
-    )
-}
+    provide_notification_context();
 
-/// Creates the root Markdown editor view at an explicit path.
-///
-/// # Arguments
-///
-/// * `workspace` — Validated workspace resources shared by routed pages.
-/// * `files` — File-related signals and persistence shared by routed pages.
-/// * `editor_session` — Editor handoff service used by the Viewer.
-/// * `initial_path` — Location shown when the managed session starts.
-///
-/// # Returns
-///
-/// A routed Leptatui view starting on `initial_path`.
-#[cfg(test)]
-pub(crate) fn app_view_at_path(
-    workspace: WorkspaceContext,
-    files: Files,
-    editor_session: EditorSession,
-    initial_path: impl Into<String>,
-) -> AnyView {
-    let initial_path = initial_path.into();
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') && key.modifiers == KeyModifiers::NONE {
+            return KeyControl::Exit;
+        }
+
+        KeyControl::Pass
+    });
 
     view! {
-        <MarkdownEditor
-            workspace=workspace
-            files=files
-            editor_session=editor_session
-            initial_path=initial_path
-        />
+        <Router initial_path=initial_path>
+            <RootLayout>
+                <Routes fallback=NotFoundPage>
+                    <Route path="/" view=HomePage />
+                    <Route path="/files" view=ExplorerPage />
+                    <Route path="/view/*path" view=ViewerPage />
+                </Routes>
+                <Notifications />
+            </RootLayout>
+        </Router>
     }
 }
