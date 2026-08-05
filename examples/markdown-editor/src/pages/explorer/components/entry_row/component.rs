@@ -4,6 +4,8 @@ use leptatui::prelude::*;
 
 use crate::services::{ExplorerEntry, ExplorerEntryKind};
 
+use super::style::use_explorer_entry_row_styles;
+
 /// Renders one selected or unselected explorer entry.
 ///
 /// # Arguments
@@ -19,17 +21,7 @@ pub(in crate::pages::explorer) fn ExplorerEntryRow(
     entry: ExplorerEntry,
     selected: bool,
 ) -> impl IntoView {
-    stylesheet! {
-        .explorer-entry => {
-            &--directory => { fg: Color::LightBlue }
-            &--markdown => { fg: Color::White }
-            &--selected => {
-                fg: Color::Black,
-                bg: Color::LightCyan,
-                modifier: Modifier::BOLD
-            }
-        }
-    }
+    use_explorer_entry_row_styles();
 
     let (marker, modifier) = match entry.kind() {
         ExplorerEntryKind::Directory => ("[D]", "explorer-entry--directory"),

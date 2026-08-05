@@ -400,11 +400,13 @@ Tables default to white and progress bars to light green on dark gray. Links are
 blue and underlined until visited, then magenta and underlined. These remain
 low-precedence defaults.
 
-Styles live with components. Put `stylesheet!` inside a `#[component]` body to
-register those rules for that component subtree, including descendant
-components. The same macro still returns a `Stylesheet` value for direct
-construction and tests. It supports flat terminal selectors and nested rules
-that lower into explicit descendant selectors. Use `&:focus`, `&:active`,
+Styles live with components. Invoke `stylesheet!` directly inside a
+`#[component]` body, or call a synchronous helper that invokes it, to register
+those rules for that component subtree, including descendant components. The
+helper must run during component setup, before the component returns its view.
+The same macro still returns a `Stylesheet` value for direct construction and
+tests. It supports flat terminal selectors and nested rules that lower into
+explicit descendant selectors. Use `&:focus`, `&:active`,
 `&:insert`, `&:visual`, or `&:visited` inside a nested rule to combine a
 pseudo-class with the current terminal selector. `:insert` matches `Input` and
 `TextArea` views whose retained Vim mode is `Insert`; `:visual` matches either
@@ -413,6 +415,59 @@ destination was opened during the current app session. Matching rules use
 CSS-style specificity and source order; inline styles override normal
 stylesheet declarations, and stylesheet declarations marked `!important`
 override normal inline styles.
+
+Larger components can keep their Rust stylesheet in a sibling `style.rs`.
+Styled child components use a directory containing `component.rs`, `style.rs`,
+and `mod.rs`; routed pages use the equivalent `page.rs`, `style.rs`, and
+`mod.rs`. Components without local rules can omit `style.rs` and remain in a
+flat module.
+
+```text
+example_card/
+├── component.rs
+├── mod.rs
+└── style.rs
+```
+
+```rust
+// example_card/mod.rs
+mod component;
+mod style;
+
+pub use component::ExampleCard;
+
+// example_card/component.rs
+use leptatui::prelude::*;
+
+use super::style::use_example_card_styles;
+
+/// Renders an example card with co-located styles.
+#[component]
+pub fn ExampleCard() -> impl IntoView {
+    use_example_card_styles();
+
+    view! {
+        <Div class="example-card">
+            <Text class="example-card__content">"Example card"</Text>
+        </Div>
+    }
+}
+
+// example_card/style.rs
+use leptatui::prelude::*;
+
+/// Registers the example card stylesheet with the active component.
+pub(super) fn use_example_card_styles() {
+    stylesheet! {
+        .example-card => {
+            &__content => { fg: Color::LightCyan }
+        }
+    };
+}
+```
+
+The trailing semicolon in the helper keeps its return type as `()`;
+`stylesheet!` remains value-producing for direct stylesheet construction.
 
 ```rust
 #[component]

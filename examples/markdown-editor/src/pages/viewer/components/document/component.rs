@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use leptatui::prelude::*;
 
+use super::style::use_viewer_document_styles;
+
 /// Renders an open path through the existing file-backed Markdown view.
 ///
 /// # Arguments
@@ -23,23 +25,7 @@ pub(in crate::pages::viewer) fn ViewerDocument(
     loading: bool,
     editor_error: Option<String>,
 ) -> impl IntoView {
-    stylesheet! {
-        .viewer-document => {
-            flex_basis: Dimension::from(Length::cells(0.0)),
-            flex_grow: 1.0,
-            borders: Borders::ALL,
-            padding: TuiSpacing::horizontal(1),
-            overflow: Axes::new(Overflow::Hidden, Overflow::Auto)
-
-            @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
-            }
-
-            &__error => { fg: Color::LightRed }
-            &__loading => { fg: Color::LightCyan }
-            &__empty => { fg: Color::DarkGray }
-        }
-    }
+    use_viewer_document_styles();
 
     let body = if let Some(error) = editor_error {
         view! {

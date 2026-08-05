@@ -4,7 +4,10 @@ use std::path::PathBuf;
 
 use leptatui::prelude::*;
 
-use super::{RecentFileEntry, RecentFileEntryProps};
+use super::{
+    super::{RecentFileEntry, RecentFileEntryProps},
+    style::use_recent_files_list_styles,
+};
 
 /// Renders the recent-file section on Home.
 ///
@@ -23,16 +26,7 @@ pub(in crate::pages::home) fn RecentFilesList(
     error: Option<String>,
     root: PathBuf,
 ) -> impl IntoView {
-    stylesheet! {
-        .recent-files => {
-            &__title => {
-                fg: Color::White,
-                modifier: Modifier::BOLD
-            }
-            &__empty => { fg: Color::DarkGray }
-            &__error => { fg: Color::LightRed }
-        }
-    }
+    use_recent_files_list_styles();
 
     let mut rows = vec![
         view! {

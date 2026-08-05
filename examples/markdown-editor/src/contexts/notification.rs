@@ -1,8 +1,16 @@
 //! Shared notification state and terminal rendering.
+//!
+//! # Modules
+//!
+//! - [`notifications`] — Notification overlay and its stylesheet.
+
+mod notifications;
 
 use std::time::Duration;
 
 use leptatui::prelude::*;
+
+pub(crate) use notifications::Notifications;
 
 /// Visual severity assigned to a notification.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -156,76 +164,6 @@ pub(crate) fn provide_notification_context() -> NotificationContext {
 /// Panics if no notification context exists.
 pub(crate) fn use_notifications() -> NotificationContext {
     expect_context::<NotificationContext>()
-}
-
-/// Renders active notifications above routed page content.
-///
-/// # Returns
-///
-/// A dynamic notification list.
-#[component]
-pub(crate) fn Notifications() -> impl IntoView {
-    let notifications = use_notifications();
-
-    stylesheet! {
-        .notifications => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Column,
-            position: Position::Fixed,
-            inset: Edges::new(
-                Length::cells(1.0).into(),
-                Length::cells(1.0).into(),
-                LengthAuto::Auto,
-                LengthAuto::Auto
-            ),
-            z_index: ZIndex::Integer(10)
-
-            &__item => {
-                borders: Borders::ALL,
-                border_type: BorderType::Rounded,
-                padding: TuiSpacing::horizontal(1)
-
-                &--success => { fg: Color::LightGreen }
-                &--error => { fg: Color::LightRed }
-                &--info => { fg: Color::LightCyan }
-                &--warning => { fg: Color::Yellow }
-            }
-        }
-    }
-
-    dynamic(move || {
-        let rows = notifications.notifications.get_untracked();
-        div(rows
-            .into_iter()
-            .map(render_notification)
-            .collect::<Vec<_>>())
-        .with_classes("notifications")
-    })
-}
-
-/// Renders one notification row.
-///
-/// # Arguments
-///
-/// * `notification` — Notification snapshot to render.
-///
-/// # Returns
-///
-/// An [`AnyView`] containing the notification title and message.
-fn render_notification(notification: Notification) -> AnyView {
-    let class = match notification.level {
-        NotificationLevel::Success => "notifications__item notifications__item--success",
-        NotificationLevel::Error => "notifications__item notifications__item--error",
-        NotificationLevel::Info => "notifications__item notifications__item--info",
-        NotificationLevel::Warning => "notifications__item notifications__item--warning",
-    };
-
-    view! {
-        <Div class={class}>
-            <Text>{format!("{}: {}", notification.title, notification.message)}</Text>
-        </Div>
-    }
-    .into_view()
 }
 
 #[cfg(test)]

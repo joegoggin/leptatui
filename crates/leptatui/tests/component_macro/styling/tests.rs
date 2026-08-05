@@ -24,6 +24,43 @@ fn generated_component_stylesheet_styles_own_views() -> leptatui::app::Result<()
     Ok(())
 }
 
+/// Verifies a stylesheet helper in a sibling Rust module registers component styles.
+///
+/// # Example Under Test
+///
+/// ```text
+/// MacroSeparateStyleRoot
+/// ├── MacroSeparateStyledText -> style::use_separate_style_fixture_styles()
+/// └── Plain text with the same BEM content class
+/// ```
+///
+/// # Assertions
+///
+/// - The styled component inherits the root rule's yellow foreground.
+/// - Its BEM content element receives the nested rule's blue background.
+/// - The plain sibling keeps default colors despite sharing the BEM class.
+///
+/// # Why
+///
+/// Co-located `style.rs` helpers must register during component setup without
+/// widening the component stylesheet scope.
+#[test]
+fn generated_component_registers_stylesheet_from_sibling_module() -> leptatui::app::Result<()> {
+    let mut component = MacroSeparateStyleRoot::new();
+    let terminal = render_component(&mut component, 24, 4)?;
+
+    assert_eq!(
+        rendered_cell_colors(&terminal, "S"),
+        (Color::Yellow, Color::Blue)
+    );
+    assert_eq!(
+        rendered_cell_colors(&terminal, "P"),
+        (Color::Reset, Color::Reset)
+    );
+
+    Ok(())
+}
+
 /// Verifies layout traversal enters generated component stylesheet scopes.
 ///
 /// # Example Under Test

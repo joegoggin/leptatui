@@ -4,7 +4,10 @@ use leptatui::prelude::*;
 
 use crate::services::DirectoryListing;
 
-use super::{ExplorerEntryRow, ExplorerEntryRowProps};
+use super::{
+    super::{ExplorerEntryRow, ExplorerEntryRowProps},
+    style::use_explorer_list_styles,
+};
 
 /// Renders explorer rows and any recoverable directory error.
 ///
@@ -23,12 +26,7 @@ pub(in crate::pages::explorer) fn ExplorerList(
     selection: Option<usize>,
     error: Option<String>,
 ) -> impl IntoView {
-    stylesheet! {
-        .explorer-list => {
-            &__empty => { fg: Color::DarkGray }
-            &__error => { fg: Color::LightRed }
-        }
-    }
+    use_explorer_list_styles();
 
     let mut rows = Vec::new();
 

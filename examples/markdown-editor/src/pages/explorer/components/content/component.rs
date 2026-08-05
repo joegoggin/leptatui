@@ -9,7 +9,10 @@ use crate::{
     services::{DirectoryListing, Workspace},
 };
 
-use super::{ExplorerList, ExplorerListProps};
+use super::{
+    super::{ExplorerList, ExplorerListProps},
+    style::use_explorer_content_styles,
+};
 
 /// Renders the current explorer state inside a stable scroll boundary.
 ///
@@ -38,51 +41,7 @@ pub(in crate::pages::explorer) fn ExplorerContent(
     let list_selection = selection.clone();
     let list_error = error.clone();
 
-    stylesheet! {
-        .explorer-page => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Column,
-            size: LayoutSize::new(
-                Dimension::from(Length::percent(100.0)),
-                Dimension::from(Length::percent(100.0))
-            )
-
-            @media (max-width: 60) {
-                Button => { padding: TuiSpacing::ZERO }
-            }
-
-            &__title => {
-                fg: Color::LightCyan,
-                modifier: Modifier::BOLD
-            }
-
-            &__path => { fg: Color::LightGreen }
-
-            &__content => {
-                flex_basis: Dimension::from(Length::cells(0.0)),
-                flex_grow: 1.0,
-                borders: Borders::ALL,
-                padding: TuiSpacing::horizontal(1),
-                overflow: Axes::new(Overflow::Hidden, Overflow::Auto)
-
-                @media (max-width: 60) {
-                    padding: TuiSpacing::ZERO
-                }
-            }
-
-            &__actions => {
-                display: Display::Flex,
-                flex_direction: FlexDirection::Row,
-                gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
-
-                @media (max-width: 60) {
-                    flex_direction: FlexDirection::Column
-                }
-            }
-
-            &__help => { fg: Color::Gray }
-        }
-    }
+    use_explorer_content_styles();
 
     view! {
         <Div class="explorer-page">

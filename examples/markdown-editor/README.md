@@ -116,10 +116,13 @@ spacing is reduced.
 - `contexts` owns shared notification state and user-facing feedback.
 - `app` owns the application shell, provides typed contexts, and declares `/`,
   `/files`, and `/view/*path`. Each routed page and supporting component owns
-  its `stylesheet!` rules and BEM-prefixed presentation classes; the app-level
-  stylesheet contains only shell and route-container styling.
+  its BEM-prefixed presentation classes. Styled components use co-located
+  `component.rs`, `style.rs`, and `mod.rs` files; styled pages use `page.rs`,
+  `style.rs`, and `mod.rs`. The app-level stylesheet contains only shell and
+  route-container styling.
 - `pages` organizes each routed feature around a `page` module with co-located
-  state and child components. Explorer owns its listing, selection, and error
+  state, stylesheet, and child components. Components without local style
+  rules remain flat files. Explorer owns its listing, selection, and error
   signals; Viewer derives its document from the route and owns its reload
   revision. Explorer and Viewer each call `use_file_system(workspace.root())`
   locally, and Viewer builds a navigable Markdown view from operation-loaded

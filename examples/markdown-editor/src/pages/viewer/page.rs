@@ -15,7 +15,10 @@ use crate::{
     services::{EditorSession, RECENT_FILE_LIMIT, is_markdown_path},
 };
 
-use super::components::{ViewerDocument, ViewerDocumentProps};
+use super::{
+    components::{ViewerDocument, ViewerDocumentProps},
+    style::use_viewer_page_styles,
+};
 
 /// Characters encoded inside one viewer route path segment.
 const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
@@ -208,36 +211,7 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
         },
     );
 
-    stylesheet! {
-        .viewer-page => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Column,
-            size: LayoutSize::new(
-                Dimension::from(Length::percent(100.0)),
-                Dimension::from(Length::percent(100.0))
-            )
-
-            @media (max-width: 60) {
-                Button => { padding: TuiSpacing::ZERO }
-            }
-
-            &__title => {
-                fg: Color::LightCyan,
-                modifier: Modifier::BOLD
-            }
-            &__path => { fg: Color::LightGreen }
-            &__actions => {
-                display: Display::Flex,
-                flex_direction: FlexDirection::Row,
-                gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
-
-                @media (max-width: 60) {
-                    flex_direction: FlexDirection::Column
-                }
-            }
-            &__help => { fg: Color::Gray }
-        }
-    }
+    use_viewer_page_styles();
 
     use_key_event(KeyEventKind::Press, move |key| {
         if key.modifiers != KeyModifiers::NONE {

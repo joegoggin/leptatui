@@ -2,6 +2,8 @@
 
 use leptatui::prelude::*;
 
+use super::style::use_not_found_page_styles;
+
 /// Renders an unmatched Markdown editor location.
 ///
 /// # Returns
@@ -11,22 +13,7 @@ use leptatui::prelude::*;
 pub(crate) fn NotFoundPage() -> impl IntoView {
     let location = use_location();
 
-    stylesheet! {
-        .not-found-page => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Column,
-            size: LayoutSize::new(
-                Dimension::from(Length::percent(100.0)),
-                Dimension::from(Length::percent(100.0))
-            )
-
-            &__title => {
-                fg: Color::LightCyan,
-                modifier: Modifier::BOLD
-            }
-            &__error => { fg: Color::LightRed }
-        }
-    }
+    use_not_found_page_styles();
 
     view! {
         <Div class="not-found-page">
