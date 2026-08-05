@@ -34,6 +34,50 @@ fn generated_component_props_render() -> leptatui::app::Result<()> {
     Ok(())
 }
 
+/// Verifies vector child expressions splice views directly into a container.
+///
+/// # Assertions
+///
+/// - A `Children` callback contributes each returned view in source order.
+/// - A general homogeneous vector expression is flattened the same way.
+/// - An empty vector contributes no retained wrapper or child.
+#[test]
+fn vector_child_expressions_splice_directly_into_containers() {
+    let children: Children = Box::new(|| {
+        vec![
+            text("First").into_view(),
+            text("Second").into_view(),
+        ]
+    });
+    let from_callback = view! { <Div>{children()}</Div> };
+
+    assert_eq!(from_callback.children().len(), 2);
+    assert_eq!(
+        from_callback.children()[0]
+            .downcast_ref::<leptatui::TextView>()
+            .expect("expected first text child")
+            .content()
+            .to_string(),
+        "First"
+    );
+    assert_eq!(
+        from_callback.children()[1]
+            .downcast_ref::<leptatui::TextView>()
+            .expect("expected second text child")
+            .content()
+            .to_string(),
+        "Second"
+    );
+
+    let values = vec![text("Third"), text("Fourth")];
+    let from_vector = view! { <Div>{values}</Div> };
+    assert_eq!(from_vector.children().len(), 2);
+
+    let empty = Vec::<AnyView>::new();
+    let from_empty = view! { <Div>{empty}</Div> };
+    assert!(from_empty.children().is_empty());
+}
+
 /// Verifies generated component boundaries report responsive internal height.
 ///
 /// # Example Under Test

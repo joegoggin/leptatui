@@ -50,10 +50,9 @@ impl Element {
                 TokenStream::new()
             } else {
                 let children = self.expand_component_children()?;
+                let children = Self::flatten_child_values(&children);
                 quote! {
-                    .children(::std::boxed::Box::new(move || {
-                        ::std::vec![#(#leptatui::IntoView::into_view(#children)),*]
-                    }))
+                    .children(::std::boxed::Box::new(move || #children))
                 }
             };
 

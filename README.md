@@ -127,7 +127,7 @@ fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
         <Block>
             <Div>
                 <Text>{title}</Text>
-                {div(children())}
+                {children()}
             </Div>
         </Block>
     }
@@ -153,8 +153,10 @@ PascalCase `view!` tags.
 types such as `TextView`, `DivView`, `InputView`, and `TextAreaView`, so their
 type-specific configuration remains available without pattern matching.
 Containers accept homogeneous collections or heterogeneous tuples through
-`IntoViews`; type erasure occurs only when children enter the tree as
-`AnyView` values. Application-defined views can implement `View` directly,
+`IntoViews`. Braced `Vec<V>` expressions inside `Div`, `Form`, `ListItem`, or
+component children splice their views directly into the surrounding child list.
+Type erasure occurs only when children enter the tree as `AnyView` values.
+Application-defined views can implement `View` directly,
 optionally implement `StyledView` or `ContainerView`, and use
 `RenderCtx::resolve_style` to participate in the normal stylesheet cascade.
 Custom selector names are created with `ViewType::new("Name")`, and the same

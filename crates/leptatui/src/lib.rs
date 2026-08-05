@@ -358,7 +358,7 @@ macro_rules! view_error {
 #[doc(hidden)]
 /// Hidden implementation details used by generated macro code.
 pub mod __private {
-    use crate::{AnyView, View};
+    use crate::{AnyView, IntoView, View};
 
     pub use crate::component::{
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
@@ -370,6 +370,40 @@ pub mod __private {
     pub use crate::route::{__outlet, __route_definition, __routes};
     pub use crate::view::error::__view_error;
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};
+
+    /// Converts one generated child expression into zero or more retained views.
+    #[doc(hidden)]
+    pub trait IntoViewChildren {
+        /// Converts this value into the views contributed at one child position.
+        fn into_view_children(self) -> Vec<AnyView>;
+    }
+
+    impl<V> IntoViewChildren for V
+    where
+        V: IntoView,
+    {
+        fn into_view_children(self) -> Vec<AnyView> {
+            vec![self.into_view()]
+        }
+    }
+
+    impl<V> IntoViewChildren for Vec<V>
+    where
+        V: IntoView,
+    {
+        fn into_view_children(self) -> Vec<AnyView> {
+            self.into_iter().map(IntoView::into_view).collect()
+        }
+    }
+
+    /// Converts a generated scalar or vector child expression into retained views.
+    #[doc(hidden)]
+    pub fn __into_view_children<C>(children: C) -> Vec<AnyView>
+    where
+        C: IntoViewChildren,
+    {
+        children.into_view_children()
+    }
 
     /// Creates a component view from a generated component factory.
     ///

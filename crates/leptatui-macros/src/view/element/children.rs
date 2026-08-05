@@ -60,7 +60,7 @@ impl Element {
     pub(super) fn expand_child_list(
         &self,
         element_name: &str,
-        wrap: impl FnOnce(Vec<TokenStream>) -> TokenStream,
+        wrap: impl FnOnce(TokenStream) -> TokenStream,
     ) -> Result<TokenStream> {
         if self.children.is_empty() {
             return Err(Error::new_spanned(
@@ -74,7 +74,25 @@ impl Element {
             expanded.push(self.expand_view_child(child, element_name)?);
         }
 
-        Ok(wrap(expanded))
+        Ok(wrap(Self::flatten_child_values(&expanded)))
+    }
+
+    /// Expands child expressions into one ordered, flattened view list.
+    ///
+    /// Scalar expressions contribute one view, while vector expressions splice
+    /// all of their views into the surrounding child position.
+    pub(super) fn flatten_child_values(children: &[TokenStream]) -> TokenStream {
+        let leptatui = crate::crate_path::leptatui();
+
+        quote! {{
+            let mut __leptatui_children = ::std::vec::Vec::new();
+            #(
+                __leptatui_children.extend(
+                    #leptatui::__private::__into_view_children(#children)
+                );
+            )*
+            __leptatui_children
+        }}
     }
 
     /// Expands a non-empty list of specifically named element children.
@@ -209,9 +227,7 @@ impl Element {
             {
                 Ok(Some(quote! { #leptatui::dynamic(#expr) }))
             }
-            Child::Text(TextContent::Expr(expr)) => {
-                Ok(Some(quote! { #leptatui::IntoView::into_view(#expr) }))
-            }
+            Child::Text(TextContent::Expr(expr)) => Ok(Some(quote! { #expr })),
             Child::Text(TextContent::Literal(_)) => Ok(None),
         }
     }

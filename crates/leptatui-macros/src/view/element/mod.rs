@@ -192,11 +192,11 @@ impl Element {
             }),
             "Div" => self.expand_child_list("Div", |children| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::div(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
+                quote! { #leptatui::div(#children) }
             }),
             "Form" => self.expand_child_list("Form", |children| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::form(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
+                quote! { #leptatui::form(#children) }
             }),
             "Text" => self.expand_text_like("Text", |content| {
                 let leptatui = crate::crate_path::leptatui();
@@ -252,7 +252,7 @@ impl Element {
             ),
             "ListItem" => self.expand_child_list("ListItem", |children| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::list_item(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
+                quote! { #leptatui::list_item(#children) }
             }),
             "Table" => self.expand_element_child_list(
                 "Table",

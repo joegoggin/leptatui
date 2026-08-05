@@ -7,5 +7,10 @@ fn MacroPropLabel(#[prop(into)] label: String) -> impl leptatui::IntoView {
 /// View that renders a prop and nested children.
 #[component]
 fn MacroPropPanel(#[prop(into)] title: String, children: Children) -> impl leptatui::IntoView {
-    div((text(title), div(children())))
+    view! {
+        <Div>
+            <Text>{title}</Text>
+            {children()}
+        </Div>
+    }
 }
