@@ -4,7 +4,7 @@ use std::{path::PathBuf, rc::Rc};
 
 use leptatui::prelude::*;
 
-use crate::{contexts::use_notifications, pages::viewer_location, services::RecentFilesStore};
+use crate::{pages::viewer_location, services::RecentFilesStore};
 
 use super::{
     components::{RecentFilesList, RecentFilesListProps},
@@ -16,29 +16,30 @@ use super::{
 /// # Returns
 ///
 /// A Home page component.
+///
+/// # Errors
+///
+/// Returns [`ViewError`] if the current directory or recent-file history
+/// cannot be loaded.
 #[component]
-pub(crate) fn HomePage() -> impl IntoView {
+pub(crate) fn HomePage() -> ViewResult<impl IntoView> {
     let file_selector = use_file_selector();
     let shortcut_file_selector = file_selector.clone();
     let button_file_selector = file_selector.clone();
     let selected_navigate = use_navigate();
-    let notifications = use_notifications();
     let recent_files_store = RecentFilesStore::standard();
-    let current_directory = std::env::current_dir().unwrap_or_default();
-    let (recent_files, recent_error) = recent_files_store.load_valid();
-    if let Some(error) = &recent_error {
-        notifications.show_warning("Recent files unavailable", error.to_string());
-    }
+    let current_directory = std::env::current_dir()?;
+    let recent_files = recent_files_store.load_valid()?;
 
     let open_error = RwSignal::new(None::<String>);
     let open_store = recent_files_store.clone();
-    let open_file: Rc<dyn Fn(PathBuf)> =
-        Rc::new(
-            move |file| match recorded_viewer_location(&open_store, &file) {
-                Ok(target) => selected_navigate(&target, NavigateOptions::default()),
-                Err(error) => open_error.set(Some(format!("{error:#}"))),
-            },
-        );
+    let open_file: Rc<dyn Fn(PathBuf)> = Rc::new(move |file| {
+        open_error.set(None);
+        match recorded_viewer_location(&open_store, &file) {
+            Ok(target) => selected_navigate(&target, NavigateOptions::default()),
+            Err(error) => open_error.set(Some(format!("{error:#}"))),
+        }
+    });
     let selected_open_file = Rc::clone(&open_file);
     let selected_file_selector = file_selector.clone();
     Effect::new(move || {
@@ -59,20 +60,8 @@ pub(crate) fn HomePage() -> impl IntoView {
     });
 
     let directory_label = format!("Current directory: {}", current_directory.display());
-    let recent_error = recent_error.map(|error| error.to_string());
     let open_error_view = dynamic(move || {
-        open_error.with(|error| {
-            error.as_ref().map_or_else(
-                || text("").into_view(),
-                |error| {
-                    leptatui::__private::__view_error(
-                        ViewError::msg(error.clone()),
-                        file!(),
-                        line!(),
-                    )
-                },
-            )
-        })
+        view! { <OpenFileError error=open_error.get() /> }
     });
 
     use_home_page_styles();
@@ -93,7 +82,6 @@ pub(crate) fn HomePage() -> impl IntoView {
             <Block class="home-page__content">
                 <RecentFilesList
                     entries=recent_files
-                    error=recent_error
                     base=current_directory
                     on_open=open_file
                 />
@@ -104,12 +92,47 @@ pub(crate) fn HomePage() -> impl IntoView {
     }
 }
 
+/// Propagates a file-opening failure through a fallible component boundary.
+///
+/// # Arguments
+///
+/// * `error` — Optional diagnostic produced while recording the selected file.
+///
+/// # Returns
+///
+/// An empty view when no file-opening failure is present.
+///
+/// # Errors
+///
+/// Returns [`ViewError`] when `error` contains a file-opening diagnostic.
+#[component]
+fn OpenFileError(error: Option<String>) -> ViewResult<impl IntoView> {
+    if let Some(error) = error {
+        Err(ViewError::msg(error))?;
+    }
+
+    text("")
+}
+
 /// Records a Home-selected path before producing its Viewer location.
+///
+/// # Arguments
+///
+/// * `store` — Recent-file store that records the opened path.
+/// * `path` — Markdown path selected on Home.
+///
+/// # Returns
+///
+/// A [`ViewResult`] containing the encoded Viewer location.
+///
+/// # Errors
+///
+/// Returns [`ViewError`] if the path cannot be recorded.
 fn recorded_viewer_location(
     store: &RecentFilesStore,
     path: &std::path::Path,
 ) -> ViewResult<String> {
-    store.record(path).map_err(ViewError::from)?;
+    store.record(path)?;
     Ok(viewer_location(path))
 }
 
@@ -123,6 +146,20 @@ mod tests {
     use super::*;
 
     /// Verifies a Viewer location is returned only after the path is persisted.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// open guide.md from an in-memory recent-files store
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The fixture directory and Markdown file are created successfully.
+    /// - Recording succeeds and returns the encoded Viewer location.
+    /// - Recorded history loads and the fixture path canonicalizes successfully.
+    /// - The canonical Markdown path is retained in recent history.
+    /// - The fixture directory is removed after verification.
     #[test]
     fn selected_file_is_recorded_before_viewer_location_is_returned() {
         static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
@@ -142,7 +179,9 @@ mod tests {
 
         assert_eq!(target, viewer_location(&path));
         assert_eq!(
-            store.load_valid().0,
+            store
+                .load_valid()
+                .expect("recorded history should load successfully"),
             [fs::canonicalize(&path).expect("fixture path should canonicalize")]
         );
 
@@ -150,6 +189,17 @@ mod tests {
     }
 
     /// Verifies a failed record does not produce a Viewer location.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// open a missing Markdown path from Home
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The generated fixture path does not exist.
+    /// - Recording the missing path returns an error.
     #[test]
     fn failed_record_does_not_produce_viewer_location() {
         static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);

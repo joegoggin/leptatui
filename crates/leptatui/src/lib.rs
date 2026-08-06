@@ -214,9 +214,9 @@
 //! [`markdown()`] and [`markdown_with_options`] convert in-memory CommonMark.
 //! [`markdown_file`] and [`markdown_file_with_options`] synchronously load
 //! UTF-8 paths before returning a view. The path-backed `Markdown` tag loads
-//! asynchronously through a volume-rooted [`FileSystem`]:
+//! asynchronously through a volume-rooted [`file_system::FileSystem`]:
 //!
-//! ```
+//! ```no_run
 //! use leptatui::prelude::*;
 //!
 //! let source = "# Guide\n\n```rust\nfn main() {}\n```";
@@ -227,10 +227,15 @@
 //! );
 //! let file_document = markdown_file("README.md");
 //! let tagged_document = view! {
-//!     <Markdown src="README.md" line_numbers=true />
+//!     <Markdown src="README.md" editable=true line_numbers=true />
 //! };
 //! # let _ = (default_document, configured_document, file_document, tagged_document);
 //! ```
+//!
+//! The `editable` attribute defaults to `false`. When enabled, the Markdown
+//! element handles unmodified `e` by editing its original `src` and unmodified
+//! `r` by refetching it. A successful editor session also triggers a refetch;
+//! editor and reload failures use the standard [`ViewError`] screen.
 //!
 //! Markdown compatibility covers CommonMark plus tables. Optional GFM
 //! extensions are deferred. Links retain their inline labels and participate

@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Verifies editing is available only from Viewer and preserves global quit.
+/// Verifies editing is available only from Viewer and propagates failures.
 ///
 /// # Example Under Test
 ///
@@ -10,14 +10,15 @@ use super::*;
 /// Home: e
 /// direct Viewer route
 /// Viewer: e
-/// Home: q
+/// error screen: q
 /// ```
 ///
 /// # Assertions
 ///
 /// - `e` passes without an open Viewer document.
 /// - A direct Viewer route opens the selected Markdown document.
-/// - Viewer `e` queues a restored-terminal edit without exiting the session.
+/// - Viewer `e` requests an external edit without exiting the session.
+/// - A headless editor launch failure renders the standard error screen.
 /// - Global `q` still exits the mounted application.
 #[test]
 fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> leptatui::Result<()>
@@ -35,16 +36,49 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
         KeyControl::Pass
     );
     view = contexts.view_at(crate::pages::viewer_location(&tree.root().join("guide.md")));
-    draw_editor(&mut terminal, &view)?;
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))?,
         KeyControl::Handled
     );
+    draw_editor(&mut terminal, &view)?;
+    let rendered = rendered_lines(&terminal).join("\n");
+    assert!(rendered.contains("Error"));
+    assert!(rendered.contains("external editing requires a managed Leptatui application"));
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))?,
         KeyControl::Exit
     );
+
+    Ok(())
+}
+
+/// Verifies Viewer route validation uses the standard error screen.
+///
+/// # Example Under Test
+///
+/// ```text
+/// /view/notes.txt
+/// ```
+///
+/// # Assertions
+///
+/// - The Viewer renders the standard error screen.
+/// - The diagnostic identifies the unsupported Markdown path.
+#[test]
+fn viewer_non_markdown_path_renders_standard_error_screen() -> leptatui::Result<()> {
+    let tree = TestTree::new("viewer-non-markdown");
+    let notes = tree.root().join("notes.txt");
+    fs::write(&notes, "Notes").expect("the non-Markdown file should be created");
+    let contexts = TestContexts::new(tree.root());
+    let view = contexts.view_at(crate::pages::viewer_location(&notes));
+    let mut terminal = Terminal::new(TestBackend::new(100, 18))?;
+
+    draw_editor(&mut terminal, &view)?;
+    let rendered = rendered_lines(&terminal).join("\n");
+    assert!(rendered.contains("Error"));
+    assert!(rendered.contains("preview path is not a Markdown file"));
+    assert!(rendered.contains("notes.txt"));
 
     Ok(())
 }
@@ -57,14 +91,14 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
 /// open guide.md
 /// delete guide.md
 /// r
-/// recreate guide.md
-/// r
 /// ```
 ///
 /// # Assertions
 ///
+/// - The Markdown fixture is created and removed successfully.
 /// - The initial document renders successfully.
-/// - Reloading after deletion renders a standard ViewError screen.
+/// - Reload is handled after the source is deleted.
+/// - Reloading after deletion renders a standard error screen naming the path.
 #[test]
 fn viewer_markdown_view_throws_view_error_after_reload_failure() -> leptatui::Result<()> {
     let tree = TestTree::new("viewer-reload-recovery");
@@ -123,6 +157,18 @@ fn viewer_markdown_view_renders_invalid_utf8_diagnostics() -> leptatui::Result<(
 }
 
 /// Verifies Viewer disables line-number gutters on Markdown code blocks.
+///
+/// # Example Under Test
+///
+/// ```text
+/// guide.md = fenced text block containing alpha and beta lines
+/// ```
+///
+/// # Assertions
+///
+/// - The Markdown fixture is created successfully.
+/// - The source content renders in Viewer.
+/// - The rendered code block omits its line-number gutter.
 #[test]
 fn viewer_markdown_view_disables_code_line_numbers() -> leptatui::Result<()> {
     let tree = TestTree::new("viewer-no-line-numbers");

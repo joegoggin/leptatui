@@ -25,6 +25,8 @@ use crate::view::{AnyView, IntoView, View};
 
 /// Mutation applied to each child produced by a dynamic text-like element.
 type DynamicConfigurator = Box<dyn Fn(&mut AnyView)>;
+/// Key callback applied after the current dynamic child passes an event.
+type DynamicKeyHandler = Box<dyn FnMut(KeyEvent) -> KeyControl>;
 
 /// Shared dynamic child that preserves compatible child state between refreshes.
 #[derive(Clone)]
@@ -40,6 +42,7 @@ struct DynamicViewInner {
     current: RefCell<Option<AnyView>>,
     subscriber: DynamicSubscriber,
     configurators: RefCell<Vec<DynamicConfigurator>>,
+    key_handler: RefCell<Option<DynamicKeyHandler>>,
 }
 
 /// Dependency policy used by one dynamic boundary.
@@ -206,6 +209,7 @@ impl DynamicView {
                 current: RefCell::new(None),
                 subscriber: DynamicSubscriber::new(),
                 configurators: RefCell::new(Vec::new()),
+                key_handler: RefCell::new(None),
             }),
         }
     }
@@ -234,8 +238,26 @@ impl DynamicView {
                 current: RefCell::new(None),
                 subscriber: DynamicSubscriber::new(),
                 configurators: RefCell::new(Vec::new()),
+                key_handler: RefCell::new(None),
             }),
         }
+    }
+
+    /// Installs a key handler after the current child receives each key.
+    ///
+    /// # Arguments
+    ///
+    /// * `handler` — Callback invoked when the materialized child passes a key.
+    ///
+    /// # Returns
+    ///
+    /// A [`DynamicView`] containing the requested key handler.
+    pub(crate) fn on_key_event(
+        self,
+        handler: impl FnMut(KeyEvent) -> KeyControl + 'static,
+    ) -> Self {
+        *self.inner.key_handler.borrow_mut() = Some(Box::new(handler));
+        self
     }
 
     /// Applies an id to every child produced by this dynamic boundary.
@@ -540,7 +562,17 @@ impl View for DynamicView {
     }
 
     fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        self.with_current_view_mut(|child| child.__dispatch_key_event(key))
+        let control = self.with_current_view_mut(|child| child.__dispatch_key_event(key))?;
+        if control != KeyControl::Pass {
+            return Ok(control);
+        }
+
+        Ok(self
+            .inner
+            .key_handler
+            .borrow_mut()
+            .as_mut()
+            .map_or(KeyControl::Pass, |handler| handler(key)))
     }
 
     fn __flush_pending_input(&mut self) -> Option<AppControl> {

@@ -282,9 +282,15 @@ let configured_file = markdown_file_with_options(
     MarkdownOptions::default().line_numbers(true),
 );
 let tagged_file = view! {
-    <Markdown src="README.md" line_numbers=true />
+    <Markdown src="README.md" editable=true line_numbers=true />
 };
 ```
+
+`editable` defaults to `false`. With `editable=true`, unmodified `e` opens the
+original `src` through Leptatui's external-editor support and unmodified `r`
+refetches it. A successful editor exit also refetches the file. Reloading
+replaces the local Markdown view, including its navigation history, focus, and
+scroll state; failures render the standard error screen.
 
 Markdown support targets CommonMark plus tables. Optional GFM extensions such
 as task lists, strikethrough, and footnotes are deferred. Markdown links retain

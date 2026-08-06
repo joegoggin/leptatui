@@ -88,6 +88,13 @@ impl Element {
             self.validate_required_attr_element("Markdown", AttrKind::MarkdownSrc, "src")?;
         let leptatui = crate::crate_path::leptatui();
         let mut options = quote! { #leptatui::MarkdownOptions::default() };
+        let editable = attrs
+            .iter()
+            .find(|validated| validated.kind == AttrKind::Editable)
+            .map_or_else(
+                || quote! { false },
+                |validated| validated.attr.value.to_tokens(),
+            );
 
         if let Some(line_numbers) = attrs
             .iter()
@@ -102,6 +109,7 @@ impl Element {
                 #leptatui::__private::__markdown_element(
                     #source,
                     #options,
+                    #editable,
                     ::core::file!(),
                     ::core::line!(),
                 )

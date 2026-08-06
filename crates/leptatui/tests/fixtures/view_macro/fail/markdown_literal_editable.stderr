@@ -1,0 +1,5 @@
+error: view! editable attribute must be a bool expression
+ --> tests/fixtures/view_macro/fail/markdown_literal_editable.rs:8:34
+  |
+8 |         <Markdown src="guide.md" editable="true" />
+  |                                  ^^^^^^^^

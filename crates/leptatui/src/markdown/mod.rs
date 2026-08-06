@@ -7,6 +7,8 @@
 //! In-memory and explicit file readers are infallible; file failures become
 //! path-aware semantic fallback content. File-backed views navigate local
 //! Markdown targets and heading fragments in-app with cached page history.
+//! Declarative `Markdown` tags may opt into external editing and source reload
+//! shortcuts with `editable=true`.
 //! The compatibility promise is core CommonMark plus tables. Optional GFM
 //! extensions are deferred. Links retain focusable target metadata, while
 //! images become descriptive text without fetching local or remote targets.
@@ -31,12 +33,13 @@ mod table;
 
 use std::path::{Component, Path, PathBuf};
 
-use leptos::prelude::{Get, With};
+use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+use leptos::prelude::{Effect, Get, GetUntracked, RwSignal, Set, WithUntracked};
 use pulldown_cmark::{Options, Parser};
 
 use crate::{
-    AnyView, IntoView, ViewError, div, dynamic, file_system::use_file_system, text,
-    view::error::__view_error,
+    AnyView, EditorStatus, IntoView, KeyControl, ViewError, div, dynamic,
+    file_system::use_file_system, keyed, text, use_editor, view::error::__view_error,
 };
 
 use self::block::parse_blocks;
@@ -207,40 +210,139 @@ pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptio
 ///
 /// This generated-code entry point resolves the source against the process
 /// working directory, scopes filesystem access to its volume, and converts
-/// initialization or read failures into Leptatui's standard view-error screen.
+/// initialization, read, or editor failures into Leptatui's standard
+/// view-error screen. Editable elements open their original source with `e`
+/// and refetch it with `r` or after a successful editor session.
+///
+/// # Arguments
+///
+/// * `path` — Markdown file path supplied through `src`.
+/// * `options` — Presentation options applied to each loaded document.
+/// * `editable` — Whether unmodified `e` and `r` edit and reload `path`.
+/// * `source_file` — Rust source file containing the declarative element.
+/// * `source_line` — Rust source line containing the declarative element.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing the loaded Markdown document or standard error
+/// screen.
 #[doc(hidden)]
 pub fn __markdown_element(
     path: impl AsRef<Path>,
     options: MarkdownOptions,
+    editable: bool,
     source_file: &'static str,
     source_line: u32,
 ) -> AnyView {
     let path = match absolute_markdown_path(path.as_ref()) {
         Ok(path) => path,
-        Err(error) => return __view_error(error.into(), source_file, source_line),
+        Err(error) => {
+            return markdown_element_error(error.to_string(), source_file, source_line);
+        }
     };
     let filesystem = match use_file_system(volume_root(&path)) {
         Ok(filesystem) => filesystem,
-        Err(error) => return __view_error(error.into(), source_file, source_line),
+        Err(error) => {
+            return markdown_element_error(error.to_string(), source_file, source_line);
+        }
     };
     let operation = filesystem.read_file_as_string(path.clone());
     let pending = operation.pending();
     let value = operation.value();
+    let version = operation.version();
+    let editor_error = RwSignal::new(None::<String>);
+    let keyed_pending = pending.clone();
+    let keyed_error = editor_error;
+    let child_pending = pending;
+    let child_error = editor_error;
+    let child_path = path.clone();
 
-    dynamic(move || {
-        if pending.get() {
-            return text("Loading Markdown file...").into_view();
+    let view = keyed(
+        move || (version.get(), keyed_pending.get(), keyed_error.get()),
+        move || {
+            if let Some(error) = child_error.get_untracked() {
+                return __view_error(ViewError::msg(error), source_file, source_line);
+            }
+            if child_pending.get_untracked() {
+                return text("Loading Markdown file...").into_view();
+            }
+
+            value.with_untracked(|result| match result {
+                Some(Ok(source)) => markdown_source_with_options(&child_path, source, options),
+                Some(Err(error)) => {
+                    __view_error(ViewError::msg(error.to_string()), source_file, source_line)
+                }
+                None => text("Loading Markdown file...").into_view(),
+            })
+        },
+    );
+
+    if !editable {
+        return view.into_view();
+    }
+
+    let editor = use_editor();
+    let status_editor = editor.clone();
+    let clear_editor = editor.clone();
+    let completed_operation = operation.clone();
+    let completed_error = editor_error;
+    Effect::watch_sync(
+        move || status_editor.status(),
+        move |status, _, _| match status {
+            Some(EditorStatus::Complete) => {
+                completed_error.set(None);
+                completed_operation.dispatch(());
+                clear_editor.clear();
+            }
+            Some(EditorStatus::Error(error)) => {
+                completed_error.set(Some(error.clone()));
+                clear_editor.clear();
+            }
+            Some(EditorStatus::Pending) | None => {}
+        },
+        true,
+    );
+
+    let edit_editor = editor;
+    let edit_path = path.clone();
+    let edit_error = editor_error;
+    let reload_operation = operation;
+    view.on_key_event(move |key| {
+        if key.kind != KeyEventKind::Press || key.modifiers != KeyModifiers::NONE {
+            return KeyControl::Pass;
         }
 
-        value.with(|result| match result {
-            Some(Ok(source)) => markdown_source_with_options(&path, source, options),
-            Some(Err(error)) => {
-                __view_error(ViewError::msg(error.to_string()), source_file, source_line)
+        match key.code {
+            KeyCode::Char('e') => {
+                edit_error.set(None);
+                edit_editor.edit_file(edit_path.clone());
+                KeyControl::Handled
             }
-            None => text("Loading Markdown file...").into_view(),
-        })
+            KeyCode::Char('r') => {
+                edit_error.set(None);
+                reload_operation.dispatch(());
+                KeyControl::Handled
+            }
+            _ => KeyControl::Pass,
+        }
     })
     .into_view()
+}
+
+/// Creates a reactive standard error screen for Markdown setup failures.
+///
+/// # Arguments
+///
+/// * `message` — Diagnostic displayed by the standard error screen.
+/// * `source_file` — Rust source file containing the declarative element.
+/// * `source_line` — Rust source line containing the declarative element.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing the standard error screen.
+fn markdown_element_error(message: String, source_file: &'static str, source_line: u32) -> AnyView {
+    dynamic(move || __view_error(ViewError::msg(message.clone()), source_file, source_line))
+        .into_view()
 }
 
 /// Resolves a Markdown source path without requiring the source to exist.

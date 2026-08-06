@@ -2,7 +2,7 @@
 //!
 //! # Modules
 //!
-//! - [`component`] — Recent-file list, empty state, and persistence warning.
+//! - [`component`] — Recent-file list and empty state.
 //! - [`style`] — Recent-files list stylesheet registration.
 
 mod component;

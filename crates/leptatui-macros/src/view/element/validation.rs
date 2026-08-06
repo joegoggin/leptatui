@@ -142,6 +142,8 @@ mod attr_validation {
         Language,
         /// Code-block line-number visibility.
         LineNumbers,
+        /// Declarative Markdown external-editor behavior.
+        Editable,
         /// Button activation callback.
         OnPress,
         /// Form submit callback.

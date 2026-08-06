@@ -14,6 +14,7 @@ use super::*;
 ///
 /// - Viewer opens the requested Markdown file.
 /// - Viewer scrolling and reload retain their existing behavior.
+/// - Reloading does not display a notification.
 /// - Returning Home does not record a direct Viewer route.
 #[test]
 fn routed_pages_open_reload_without_recording_direct_routes() -> leptatui::Result<()> {
@@ -50,11 +51,9 @@ fn routed_pages_open_reload_without_recording_direct_routes() -> leptatui::Resul
         KeyControl::Handled
     );
     draw_editor(&mut terminal, &view)?;
-    assert!(
-        rendered_lines(&terminal)
-            .join("\n")
-            .contains("Reloaded Beta")
-    );
+    let reloaded = rendered_lines(&terminal).join("\n");
+    assert!(reloaded.contains("Reloaded Beta"));
+    assert!(!reloaded.contains("Preview reloaded"));
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE))?,

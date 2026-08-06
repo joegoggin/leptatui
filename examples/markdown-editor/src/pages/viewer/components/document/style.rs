@@ -16,7 +16,6 @@ pub(super) fn use_viewer_document_styles() {
                 padding: TuiSpacing::ZERO
             }
 
-            &__error => { fg: Color::LightRed }
             &__empty => { fg: Color::DarkGray }
         }
     };

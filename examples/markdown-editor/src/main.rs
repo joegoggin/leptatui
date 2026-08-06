@@ -5,7 +5,6 @@
 
 mod app;
 mod cli;
-mod contexts;
 mod layouts;
 mod pages;
 mod services;
@@ -71,9 +70,9 @@ fn absolute_file_path(path: &Path) -> io::Result<PathBuf> {
 ///
 /// # Errors
 ///
-/// Returns an [`anyhow::Error`] if application initialization, terminal setup,
-/// rendering, input, or cleanup fails. Editor launch and exit failures remain
-/// recoverable preview errors after the TUI resumes.
+/// Returns an [`anyhow::Error`] if command parsing, path resolution, terminal
+/// setup, rendering, input, or cleanup fails. Fallible component errors render
+/// inside the application through Leptatui's standard error screen.
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let cli = Cli::try_parse().context("failed to parse command-line arguments")?;

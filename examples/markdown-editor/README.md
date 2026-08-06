@@ -2,7 +2,7 @@
 
 The Markdown editor is a standalone, multi-page Leptatui reference application.
 It combines Leptatui's standalone file selector, a semantic Markdown viewer,
-persistent recent files, recoverable errors, and restored-terminal editing
+persistent recent files, standard error screens, and restored-terminal editing
 behind focused project layers.
 
 ## Prerequisites
@@ -45,9 +45,9 @@ The command accepts zero or one positional `FILE_PATH`. With no path, the
 application starts on Home and the file selector opens in the process current
 directory when requested. A supplied relative path is made absolute and
 lexically normalized, then encoded into the initial Viewer route. Startup does
-not require the target to exist; read failures raise the standard `ViewError`
-screen, while Markdown-extension validation remains an inline Viewer
-diagnostic. Additional positional arguments are rejected.
+not require the target to exist; read failures and Markdown-extension
+validation raise the standard `ViewError` screen. Additional positional
+arguments are rejected.
 
 ## Pages and Controls
 
@@ -74,8 +74,8 @@ it the same way; direct Viewer routes do not change history. The list is stored
 as versioned JSON in the platform-local application
 data directory for `io.github.joegoggin/leptatui-markdown-editor`. Missing and
 unsupported entries are omitted when Home loads the global history. History
-load errors remain recoverable warnings on Home. A failure to record a selected
-document raises a `ViewError` and prevents navigation.
+load and record failures raise the standard `ViewError` screen, and a record
+failure prevents navigation.
 
 ## Filesystem and Failure Behavior
 
@@ -85,21 +85,23 @@ directory is selected automatically, and selection stops at listing boundaries.
 
 File-selector discovery follows symlinks only when their canonical targets remain
 on the current filesystem or drive root. Broken or escaping symlinks are
-hidden. Failed directory reads preserve the last valid listing and render a
-recoverable error.
+hidden. Failed directory reads preserve the last valid listing and render the
+file selector's built-in diagnostic.
 
-The Viewer delegates its document to `<Markdown src=path line_numbers=false />`.
-The component loads its initial UTF-8 source asynchronously through a
-volume-rooted Leptatui filesystem handle, then constructs a path-identified
-Markdown view so relative links, local navigation, and history keep their
-normal behavior. Missing-file and invalid UTF-8 failures raise the standard
-`ViewError` screen. Pressing `r` rebuilds the component and starts a fresh read.
+The Viewer delegates its document to
+`<Markdown src=path editable=true line_numbers=false />`. The component loads
+its initial UTF-8 source asynchronously through a volume-rooted Leptatui
+filesystem handle, then constructs a path-identified Markdown view so relative
+links, local navigation, and history keep their normal behavior. The component
+owns `e` and `r`: editing always targets the original `src`, while reload and a
+successful editor exit refetch it and reset local Markdown navigation, focus,
+and scroll state. Missing-file, invalid UTF-8, editor, and reload failures raise
+the standard `ViewError` screen.
 
 Editor values can contain shell-word quoted arguments, such as
 `VISUAL="nvim -f"`, but they are executed directly without shell expansion,
 pipelines, or functions. Invalid configuration, a missing executable, or a
-non-zero exit becomes a recoverable preview error; pressing `e` retries the same
-open path.
+non-zero exit raises the standard `ViewError` screen.
 
 ## Responsive Layout
 
@@ -115,7 +117,6 @@ spacing is reduced.
 - `services` contains Markdown path validation and persistent recent-file
   storage. Leptatui owns external editor sessions, file selection, volume-root
   containment, and asynchronous filesystem I/O.
-- `contexts` owns shared notification state and user-facing feedback.
 - `app` defines `AppRouter`, provides application services, and declares `/`
   and `/view/*path`. Each routed page and supporting component owns
   its BEM-prefixed presentation classes. Styled components use co-located
@@ -124,9 +125,10 @@ spacing is reduced.
 - `pages` organizes each routed feature around a `page` module with co-located
   state, stylesheet, and child components. Components without local style
   rules remain flat files. Leptatui owns selector state; Viewer derives its
-  document from the route and owns its reload revision and editor error. The
-  Markdown component owns filesystem loading, while Home creates the recent
-  store and owns loading, recording, promotion, and navigation.
+  document from the route. The editable Markdown component owns filesystem
+  loading, editing, reloading, and their standard error screens, while Home
+  creates the recent store and owns loading, recording, promotion, and
+  navigation.
 - `main` parses the CLI, converts an optional file path into the initial route,
   constructs `<AppRouter />`, and starts Leptatui.
 
@@ -135,12 +137,12 @@ asynchronously loaded `<Markdown />`. On Home, the file selector returns an
 absolute Markdown path → `RecentFilesStore` records it → Viewer navigation uses
 the shared route encoder. Home also loads, validates, and displays that global
 MRU list without providing the store through context.
-Editing passes the route-derived path to Leptatui's `use_editor()` hook, which
-temporarily restores the terminal, appends `--` and the path to the resolved
-editor command, and resumes the same Viewer component. The handle's reactive
-status updates the Viewer-local revision and path-associated failure so the
-document reloads in place, then the Viewer clears the consumed status.
-Recoverable failures render inline or through the notification context.
+The editable Markdown element passes its original route-derived `src` to
+Leptatui's `use_editor()` hook, which temporarily restores the terminal,
+appends `--` and the path to the resolved editor command, and resumes the same
+Viewer component. Its reactive status triggers a source refetch after success
+or the standard error screen after failure. Other fallible page and document
+components likewise propagate failures to Leptatui's standard error screen.
 
 ## Verification
 

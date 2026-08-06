@@ -3,7 +3,7 @@
 //! # Modules
 //!
 //! - [`recent_file_entry`] — One actionable recent-file row.
-//! - [`recent_files_list`] — Recent-file list, empty state, and warning.
+//! - [`recent_files_list`] — Recent-file list and empty state.
 
 mod recent_file_entry;
 mod recent_files_list;

@@ -1,4 +1,4 @@
-//! Path-backed Markdown content and editor diagnostics.
+//! Path-backed editable Markdown content and fallible route diagnostics.
 
 use std::path::PathBuf;
 
@@ -10,26 +10,25 @@ use super::style::use_viewer_document_styles;
 ///
 /// # Arguments
 ///
-/// * `path` — Canonical or requested document path.
-/// * `error` — Recoverable route or external-editor diagnostic for `path`.
+/// * `path` — Resolved document path or route validation failure.
 ///
 /// # Returns
 ///
-/// A path-backed Markdown document, editor error, or empty hint.
+/// A path-backed Markdown document or empty hint.
+///
+/// # Errors
+///
+/// Returns [`ViewError`] if route validation fails.
 #[component]
 pub(in crate::pages::viewer) fn ViewerDocument(
-    path: Option<PathBuf>,
-    error: Option<String>,
-) -> impl IntoView {
+    path: Result<Option<PathBuf>, String>,
+) -> ViewResult<impl IntoView> {
     use_viewer_document_styles();
 
-    let body = if let Some(error) = error {
-        view! {
-            <Text class="viewer-document__error">{format!("Error: {error}")}</Text>
-        }
-        .into_view()
-    } else if let Some(path) = path {
-        view! { <Markdown src=path line_numbers=false /> }.into_view()
+    let path = path.map_err(ViewError::msg)?;
+
+    let body = if let Some(path) = path {
+        view! { <Markdown src=path editable=true line_numbers=false /> }.into_view()
     } else {
         view! {
             <Text class="viewer-document__empty">

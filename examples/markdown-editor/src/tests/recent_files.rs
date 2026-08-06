@@ -8,8 +8,16 @@ use super::support::TestTree;
 
 /// Verifies the store persists bounded, deduplicated MRU file order.
 ///
+/// # Example Under Test
+///
+/// ```text
+/// record file-00.md through file-11.md, then reopen file-05.md
+/// ```
+///
 /// # Assertions
 ///
+/// - Each fixture is created, canonicalized, and recorded successfully.
+/// - Recent history loads successfully after initial and promoted records.
 /// - Persisted history retains at most the configured limit.
 /// - Reopening moves one path to the front without duplication.
 /// - A new store instance restores the same ordering.
@@ -29,8 +37,9 @@ fn recent_files_persist_in_bounded_mru_order() {
     for path in &paths {
         store.record(path).expect("each file should be recorded");
     }
-    let (recent, error) = store.load_valid();
-    assert!(error.is_none());
+    let recent = store
+        .load_valid()
+        .expect("bounded recent history should load");
     assert_eq!(recent.len(), RECENT_FILE_LIMIT);
     assert_eq!(recent[0], paths[11]);
     assert!(!recent.contains(&paths[0]));
@@ -39,21 +48,32 @@ fn recent_files_persist_in_bounded_mru_order() {
     store
         .record(&paths[5])
         .expect("the reopened file should be promoted");
-    let expected = store.load_valid().0;
+    let expected = store
+        .load_valid()
+        .expect("promoted recent history should load");
     assert_eq!(expected[0], paths[5]);
     assert_eq!(expected.iter().filter(|path| *path == &paths[5]).count(), 1);
 
-    let restored = RecentFilesStore::at(store_path).load_valid().0;
+    let restored = RecentFilesStore::at(store_path)
+        .load_valid()
+        .expect("persisted recent history should load");
     assert_eq!(restored, expected);
 }
 
 /// Verifies recent history filters invalid paths but remains global.
 ///
+/// # Example Under Test
+///
+/// ```text
+/// recent files = [guide.md, notes.txt, missing.md, ../outside.md]
+/// ```
+///
 /// # Assertions
 ///
+/// - The fixtures are created, canonicalized, and persisted successfully.
+/// - The persisted fixture loads successfully.
 /// - Valid Markdown files inside and outside the current directory remain.
 /// - Non-Markdown and missing paths are omitted.
-/// - Filtering otherwise valid persisted data does not create an error.
 #[test]
 fn recent_files_filter_invalid_paths_without_directory_scoping() {
     let tree = TestTree::new("recent-filter");
@@ -77,15 +97,24 @@ fn recent_files_filter_invalid_paths_without_directory_scoping() {
         ])
         .expect("the recent document should be written");
 
-    let (recent, error) = store.load_valid();
+    let recent = store
+        .load_valid()
+        .expect("valid persisted history should load");
     assert_eq!(recent, [canonical_guide, canonical_outside]);
-    assert!(error.is_none());
 }
 
 /// Verifies history records files from different directory trees.
 ///
+/// # Example Under Test
+///
+/// ```text
+/// record first/alpha.md, then second/beta.md
+/// ```
+///
 /// # Assertions
 ///
+/// - Both files are created and recorded successfully.
+/// - Recent history loads successfully.
 /// - Both valid paths remain in one global MRU list.
 /// - The most recently opened path sorts first.
 #[test]
@@ -104,17 +133,30 @@ fn recent_files_preserve_global_history() {
     store.record(&alpha).expect("alpha should be recorded");
     store.record(&beta).expect("beta should be recorded");
 
-    assert_eq!(store.load_valid().0, [canonical_beta, canonical_alpha]);
+    assert_eq!(
+        store
+            .load_valid()
+            .expect("global recent history should load"),
+        [canonical_beta, canonical_alpha]
+    );
 }
 
-/// Verifies malformed recent data is replaced by the next successful record.
+/// Verifies malformed recent data propagates through loading and recording.
+///
+/// # Example Under Test
+///
+/// ```text
+/// recent-files.json = {bad json
+/// record guide.md
+/// ```
 ///
 /// # Assertions
 ///
-/// - Loading exposes the parse warning with an empty list.
-/// - Recording a document repairs the persisted history.
+/// - The Markdown and malformed-state fixtures are created successfully.
+/// - Loading returns a contextual parse error.
+/// - Recording returns the same parse error instead of replacing the document.
 #[test]
-fn malformed_recent_data_recovers_after_a_successful_open() {
+fn malformed_recent_data_propagates_from_load_and_record() {
     let tree = TestTree::new("recent-malformed");
     let guide = tree.root().join("guide.md");
     let store_path = tree.root().join("recent-files.json");
@@ -122,31 +164,41 @@ fn malformed_recent_data_recovers_after_a_successful_open() {
     fs::write(&store_path, "{bad json").expect("the malformed state should be created");
     let store = RecentFilesStore::at(store_path);
 
-    let (recent, error) = store.load_valid();
-    assert!(recent.is_empty());
+    let load_error = store
+        .load_valid()
+        .expect_err("malformed recent history should fail to load");
     assert!(
-        error
-            .expect("the parse error should be retained")
+        load_error
             .to_string()
             .contains("failed to parse recent files")
     );
 
-    store
+    let record_error = store
         .record(&guide)
-        .expect("a successful record should repair history");
-    let (restored, error) = store.load_valid();
-    assert_eq!(restored.len(), 1);
-    assert!(error.is_none());
+        .expect_err("recording should propagate malformed recent history");
+    assert!(
+        record_error
+            .to_string()
+            .contains("failed to parse recent files")
+    );
 }
 
-/// Verifies recent-file write failures return a contextual storage error.
+/// Verifies inaccessible recent-file storage returns a contextual error.
+///
+/// # Example Under Test
+///
+/// ```text
+/// blocked = regular file
+/// storage = blocked/recent-files.json
+/// ```
 ///
 /// # Assertions
 ///
+/// - The Markdown fixture and blocked parent are created successfully.
 /// - Recording fails when the storage parent is a regular file.
-/// - The diagnostic identifies directory creation.
+/// - The diagnostic identifies the failed recent-history read.
 #[test]
-fn recent_write_failure_is_recoverable() {
+fn recent_storage_parent_failure_is_propagated() {
     let tree = TestTree::new("recent-write-failure");
     let guide = tree.root().join("guide.md");
     let blocked_parent = tree.root().join("blocked");
@@ -157,9 +209,5 @@ fn recent_write_failure_is_recoverable() {
     let error = store
         .record(&guide)
         .expect_err("the blocked storage directory should reject writes");
-    assert!(
-        error
-            .to_string()
-            .contains("failed to create recent-files directory")
-    );
+    assert!(error.to_string().contains("failed to read recent files"));
 }

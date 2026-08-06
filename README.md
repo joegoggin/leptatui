@@ -349,9 +349,18 @@ let configured_file = markdown_file_with_options(
     MarkdownOptions::default().line_numbers(true),
 );
 let tagged_file = view! {
-    <Markdown src="README.md" line_numbers=true />
+    <Markdown src="README.md" editable=true line_numbers=true />
 };
 ```
+
+`editable` defaults to `false`. When enabled, the element consumes an
+unmodified `e` to open its original `src` through `use_editor()` and an
+unmodified `r` to refetch that source. A successful editor session also
+refetches the source. Each refetch replaces the Markdown view, resetting its
+local navigation history, focus, and scroll state. Editor and reload failures
+use the same standard error screen as the initial asynchronous read. If a view
+contains multiple editable Markdown elements, normal view-tree traversal gives
+the first eligible element the shortcut.
 
 Markdown readers use the same semantic defaults as their underlying elements:
 cyan-to-gray heading levels, white paragraphs, cyan ordered lists and table

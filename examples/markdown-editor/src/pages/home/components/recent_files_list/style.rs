@@ -11,7 +11,6 @@ pub(super) fn use_recent_files_list_styles() {
                 modifier: Modifier::BOLD
             }
             &__empty => { fg: Color::DarkGray }
-            &__error => { fg: Color::LightRed }
         }
     };
 }

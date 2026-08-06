@@ -7,8 +7,6 @@ fn main() {
     let heading_style = TuiStyle::new().foreground(Color::Cyan);
     let source = String::from("fn main() {}\n");
     let markdown_path = String::from("guide.md");
-    let markdown_class = String::from("markdown guide");
-    let markdown_id = String::from("markdown-guide");
     let markdown_style = TuiStyle::new().foreground(Color::Green);
 
     let view = view! {
@@ -20,13 +18,13 @@ fn main() {
             <H5>"Notes"</H5>
             <H6>"Aside"</H6>
             <Paragraph>{String::from("Semantic content")}</Paragraph>
-            <Markdown
-                src={markdown_path.clone()}
-                class={markdown_class}
-                id={markdown_id}
-                style={markdown_style.clone()}
-                line_numbers=true
-            />
+            {markdown_file_with_options(
+                markdown_path.clone(),
+                MarkdownOptions::default().line_numbers(true),
+            )
+            .with_classes("markdown guide")
+            .with_id("markdown-guide")
+            .with_inline_style(markdown_style.clone())}
             <OrderedList start=3>
                 <ListItem>
                     <Paragraph>"First"</Paragraph>
@@ -71,9 +69,9 @@ fn main() {
             markdown_path,
             MarkdownOptions::default().line_numbers(true),
         )
-            .with_classes("markdown guide")
-            .with_id("markdown-guide")
-            .with_inline_style(markdown_style),
+        .with_classes("markdown guide")
+        .with_id("markdown-guide")
+        .with_inline_style(markdown_style),
         ordered_list([list_item((
             paragraph("First"),
             unordered_list([list_item([paragraph("Nested")])]),
@@ -95,4 +93,24 @@ fn main() {
     ));
 
     assert_eq!(view, expected);
+}
+
+/// Compiles every supported declarative Markdown attribute.
+#[allow(dead_code)]
+fn compile_markdown_attributes() {
+    let markdown_path = String::from("guide.md");
+    let markdown_class = String::from("markdown guide");
+    let markdown_id = String::from("markdown-guide");
+    let markdown_style = TuiStyle::new().foreground(Color::Green);
+
+    let _ = view! {
+        <Markdown
+            src={markdown_path}
+            class={markdown_class}
+            id={markdown_id}
+            style={markdown_style}
+            line_numbers=true
+            editable=true
+        />
+    };
 }

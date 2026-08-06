@@ -147,19 +147,16 @@ impl RecentFilesStore {
     ///
     /// # Returns
     ///
-    /// A tuple containing valid paths and an optional recoverable load error.
-    pub(crate) fn load_valid(&self) -> (Vec<PathBuf>, Option<io::Error>) {
-        let (stored_paths, error) = match self.load() {
-            Ok(paths) => (paths, None),
-            Err(error) => (Vec::new(), Some(error)),
-        };
-        (valid_recent_paths(stored_paths), error)
+    /// A [`Vec`] containing valid recent Markdown paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if the recent-files document cannot be loaded.
+    pub(crate) fn load_valid(&self) -> io::Result<Vec<PathBuf>> {
+        Ok(valid_recent_paths(self.load()?))
     }
 
     /// Records one successfully opened Markdown file in bounded MRU order.
-    ///
-    /// Existing malformed history is replaced with a valid document containing
-    /// the newly opened path.
     ///
     /// # Arguments
     ///
@@ -171,21 +168,21 @@ impl RecentFilesStore {
     ///
     /// # Errors
     ///
-    /// Returns [`io::Error`] if `path` cannot be canonicalized, is not a
-    /// Markdown file, or the updated history cannot be saved.
+    /// Returns [`io::Error`] if `path` cannot be canonicalized or inspected,
+    /// is not a Markdown file, or the updated history cannot be saved.
     pub(crate) fn record(&self, path: &Path) -> io::Result<()> {
         let canonical = fs::canonicalize(path)
             .map_err(|source| path_error(source, "failed to resolve recent file", path))?;
-        if !fs::metadata(&canonical).is_ok_and(|metadata| metadata.is_file())
-            || !is_markdown_path(&canonical)
-        {
+        let metadata = fs::metadata(&canonical)
+            .map_err(|source| path_error(source, "failed to inspect recent file", &canonical))?;
+        if !metadata.is_file() || !is_markdown_path(&canonical) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("recent path is not a Markdown file: {}", path.display()),
             ));
         }
 
-        let stored = self.load().unwrap_or_default();
+        let stored = self.load()?;
         let mut entries = valid_recent_paths(stored);
         entries.retain(|entry| entry != &canonical);
         entries.insert(0, canonical);

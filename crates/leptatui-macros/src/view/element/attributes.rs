@@ -136,6 +136,13 @@ impl Element {
                         "view! line_numbers attribute is only supported on CodeBlock or Markdown",
                     ));
                 }
+                "editable" if element_name == "Markdown" => AttrKind::Editable,
+                "editable" => {
+                    return Err(Error::new_spanned(
+                        &attr.name,
+                        "view! editable attribute is only supported on Markdown",
+                    ));
+                }
                 _ => {
                     let message = match element_name.as_str() {
                         "Button" => {
@@ -155,7 +162,7 @@ impl Element {
                             "unsupported view! attribute; expected class, id, style, value, or label"
                         }
                         "Markdown" => {
-                            "unsupported view! attribute; expected class, id, style, src, or line_numbers"
+                            "unsupported view! attribute; expected class, id, style, src, line_numbers, or editable"
                         }
                         "OrderedList" => {
                             "unsupported view! attribute; expected class, id, style, or start"
@@ -268,6 +275,10 @@ impl Element {
                     reject_literal_typed_attr(attr, "line_numbers", "bool")?;
                     quote! { (#expanded).line_numbers(#value) }
                 }
+                AttrKind::Editable => {
+                    reject_literal_typed_attr(attr, "editable", "bool")?;
+                    expanded
+                }
                 AttrKind::OnInput => {
                     reject_literal_callback(attr, "on_input")?;
                     quote! { (#expanded).on_input(#value) }
@@ -290,6 +301,7 @@ impl Element {
                     | AttrKind::Alignment
                     | AttrKind::Language
                     | AttrKind::LineNumbers
+                    | AttrKind::Editable
             ) && attr.value.is_unbraced_expr()
             {
                 return Err(Error::new_spanned(
