@@ -31,7 +31,7 @@ pub(crate) fn AppRouter(#[prop(into)] initial_path: String) -> impl IntoView {
             <RootLayout>
                 <Routes fallback=NotFoundPage>
                     <Route path="/" view=HomePage />
-                    <Route path="/view/*path" view=ViewerPage />
+                    <Route path="/view" view=ViewerPage />
                 </Routes>
             </RootLayout>
         </Router>

@@ -1,0 +1,5 @@
+error: typed parameter derives do not support generic structs
+ --> tests/fixtures/route_params_macro/fail/generic.rs:7:21
+  |
+7 | struct GenericParams<T> {
+  |                     ^^^

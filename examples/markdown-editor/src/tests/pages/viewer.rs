@@ -58,7 +58,7 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
 /// # Example Under Test
 ///
 /// ```text
-/// /view/notes.txt
+/// /view?path=notes.txt
 /// ```
 ///
 /// # Assertions
@@ -215,7 +215,7 @@ fn viewer_scrolling_preserves_document_borders() -> leptatui::Result<()> {
     fs::write(tree.root().join("guide.md"), source)
         .expect("the long Markdown file should be created");
     let contexts = TestContexts::new(tree.root());
-    let mut view = contexts.view_at("/view/guide.md");
+    let mut view = contexts.view_at("/view?path=guide.md");
     let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
 
     draw_editor(&mut terminal, &view)?;

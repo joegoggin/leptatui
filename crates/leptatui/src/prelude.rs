@@ -40,12 +40,13 @@ pub use crate::{
     InputView, IntoView, IntoViews, JustifyContent, JustifyItems, JustifySelf, KeyControl,
     LayoutGeometry, LayoutSize, Length, LengthAuto, LinkTarget, LinkView, ListItemView, ListKind,
     ListView, Location, MarkdownOptions, MarkdownView, MediaQuery, Modifier, Navigate,
-    NavigateOptions, Outlet, Overflow, ParagraphView, ParamsMap, Position, ProgressBarView,
-    RenderCtx, Resource, RichText, RouteLinkView, Router, RouterProps, StyleDeclarations,
-    StyleMetadata, StyleModule, StyleRule, StyleSelector, StyleValue, StyledView, Stylesheet,
-    TableCellView, TableRowView, TableSectionKind, TableSectionView, TableView, TextAreaView,
-    TextView, TextualView, ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, View,
-    ViewError, ViewResult, ViewType, ViewportSize, VimMode, ZIndex, block, button, code_block,
+    NavigateOptions, Outlet, Overflow, ParagraphView, ParamsError, ParamsMap, Position,
+    ProgressBarView, QueryParams, RenderCtx, Resource, RichText, RouteLinkView, RouteParams,
+    Router, RouterProps, StyleDeclarations, StyleMetadata, StyleModule, StyleRule, StyleSelector,
+    StyleValue, StyledView, Stylesheet, TableCellView, TableRowView, TableSectionKind,
+    TableSectionView, TableView, TextAreaView, TextView, TextualView, ThemeValue, ThemeVariables,
+    TuiSize, TuiSpacing, TuiStyle, View, ViewError, ViewResult, ViewType, ViewportSize, VimMode,
+    ZIndex, block, button, code_block,
     context::{expect_context, provide_context, use_context},
     div,
     file_system::{
@@ -57,9 +58,9 @@ pub use crate::{
     paragraph, progress_bar, route_link, spawn, spawn_local, table, table_body, table_cell,
     table_head, table_row, text, text_area, theme_color, unordered_list, use_app_handle,
     use_editor, use_file_selector, use_history, use_key_event, use_location, use_navigate,
-    use_params_map, use_query_map,
+    use_params, use_query,
     view::{component, dynamic},
-    view_error,
+    view_error, with_query,
 };
 
 pub use leptatui_macros::{component, stylesheet, view};

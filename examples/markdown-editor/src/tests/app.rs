@@ -15,7 +15,7 @@ use super::support::{TestContexts, TestTree, draw_editor, rendered_lines};
 ///
 /// ```text
 /// viewport = 50x20
-/// /view/guide.md
+/// /view?path=guide.md
 /// ```
 ///
 /// # Assertions

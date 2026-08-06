@@ -1179,10 +1179,43 @@ async fn main() -> leptatui::app::Result<()> {
 ```
 
 Route patterns accept static segments, `:parameter` segments, and a terminal
-`*wildcard`. Read decoded matches with `use_params_map()`, query values with
-`use_query_map()`, and the current path with `use_location()`. Programmatic
-navigation uses `use_navigate()`, while `use_history()` exposes process-local
-back and forward controls.
+`*wildcard`. Matched pages read decoded path and query values through derived
+models:
+
+```rust
+use leptatui::prelude::*;
+
+#[derive(RouteParams)]
+struct ViewerParams {
+    path: String,
+}
+
+#[derive(QueryParams)]
+struct ViewerQuery {
+    line: Option<usize>,
+}
+
+#[component]
+fn ViewerPage() -> ViewResult<impl IntoView> {
+    let params = use_params::<ViewerParams>()?;
+    let query = use_query::<ViewerQuery>()?;
+
+    view! {
+        <Text>{format!("{} at {:?}", params.path, query.line)}</Text>
+    }
+}
+```
+
+Required fields implement `FromStr`; missing or malformed values propagate
+through `?` to the standard error screen. Optional fields use `Option<T>`, and
+`#[param(name = "page-number")]` maps a Rust field to a different parameter
+name. Derived query models also serialize their `Display` values with
+`to_query_string()`. Use `with_query("/view", &query)` to construct a location
+with percent-encoded keys and values; absent optional fields are omitted.
+Parameter or query changes remount matched route content while shared UI outside
+`<Routes>` remains mounted. Read the current raw location with `use_location()`.
+Programmatic navigation uses `use_navigate()`, while `use_history()` exposes
+process-local back and forward controls.
 
 See `crates/leptatui/examples/multi_page_demo.rs` or run
 `cargo run --example multi_page_demo` for a complete routing and context

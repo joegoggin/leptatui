@@ -1,0 +1,5 @@
+error: typed parameter derives require a struct with named fields
+ --> tests/fixtures/route_params_macro/fail/tuple.rs:7:18
+  |
+7 | struct TupleQuery(String);
+  |                  ^^^^^^^^

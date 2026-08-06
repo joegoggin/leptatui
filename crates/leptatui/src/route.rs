@@ -2,26 +2,35 @@
 //!
 //! [`Router`] provides an in-memory location and history stack. `Routes`
 //! matches declarative route definitions, while [`Outlet`] renders nested
-//! matches. Hooks expose reactive location, parameter, query, navigation, and
-//! history state to descendant components.
+//! matches. Hooks expose reactive location, typed route and query parameters,
+//! navigation, and history state to descendant components.
 
 use std::{
     cell::RefCell,
     collections::BTreeMap,
     fmt,
     rc::Rc,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 
 use leptos::prelude::{Get, GetUntracked, Memo, RwSignal, Set};
-use percent_encoding::percent_decode_str;
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
+use thiserror::Error;
 
 use crate::{
     AnyView, AvailableSpace, Children, IntoView, LayoutSize, RenderCtx, View, app::request_redraw,
     keyed,
 };
 
-/// String map used by path-parameter and query hooks.
+/// Characters percent-encoded inside one query key or value.
+const QUERY_COMPONENT_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
+
+/// Decoded string map used by typed path and query conversions.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ParamsMap(BTreeMap<String, String>);
 
@@ -49,6 +58,195 @@ impl ParamsMap {
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))
     }
+}
+
+/// Failure produced while converting decoded parameters into a typed model.
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
+pub enum ParamsError {
+    /// Indicates that a required parameter was not captured or provided.
+    #[error("missing required parameter `{name}`")]
+    Missing {
+        /// Route or query parameter name requested by the typed model.
+        name: String,
+    },
+    /// Indicates that a decoded value could not be converted to its field type.
+    #[error("failed to parse parameter `{name}` value `{value}` as `{target}`: {message}")]
+    Parse {
+        /// Route or query parameter name requested by the typed model.
+        name: String,
+        /// Decoded value that failed conversion.
+        value: String,
+        /// Rust field type requested by the typed model.
+        target: &'static str,
+        /// Conversion error returned by [`FromStr`].
+        message: String,
+    },
+}
+
+/// Converts decoded path parameters into an owned model.
+pub trait RouteParams: Sized {
+    /// Converts one decoded parameter map into this model.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` — Decoded parameters captured by the matched route chain.
+    ///
+    /// # Returns
+    ///
+    /// A typed parameter model.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParamsError`] if a required value is absent or a value cannot
+    /// be converted to its field type.
+    fn from_params(params: &ParamsMap) -> Result<Self, ParamsError>;
+}
+
+/// Converts between decoded query parameters and an owned model.
+///
+/// Derived implementations parse fields through [`FromStr`] and serialize
+/// them through [`fmt::Display`].
+pub trait QueryParams: Sized {
+    /// Converts one decoded query map into this model.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` — Decoded query parameters from the current location.
+    ///
+    /// # Returns
+    ///
+    /// A typed query model.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParamsError`] if a required value is absent or a value cannot
+    /// be converted to its field type.
+    fn from_query(params: &ParamsMap) -> Result<Self, ParamsError>;
+
+    /// Serializes this model as a percent-encoded query string.
+    ///
+    /// Optional fields containing `None` are omitted. The returned string does
+    /// not include a leading question mark.
+    ///
+    /// # Returns
+    ///
+    /// A percent-encoded query string.
+    fn to_query_string(&self) -> String;
+}
+
+/// Appends a typed query model to a location.
+///
+/// Empty query models leave the location unchanged. Non-empty models are
+/// inserted before a fragment and use `&` when the location already contains
+/// a query string.
+///
+/// # Arguments
+///
+/// * `location` — Path or location receiving the serialized query.
+/// * `query` — Typed query model to serialize.
+///
+/// # Returns
+///
+/// A location containing the percent-encoded query model.
+pub fn with_query<T>(location: &str, query: &T) -> String
+where
+    T: QueryParams,
+{
+    let query = query.to_query_string();
+    if query.is_empty() {
+        return location.to_owned();
+    }
+
+    let (base, fragment) = location
+        .split_once('#')
+        .map_or((location, None), |(base, fragment)| (base, Some(fragment)));
+    let separator = if base.ends_with(['?', '&']) {
+        ""
+    } else if base.contains('?') {
+        "&"
+    } else {
+        "?"
+    };
+    let fragment = fragment.map_or_else(String::new, |fragment| format!("#{fragment}"));
+    format!("{base}{separator}{query}{fragment}")
+}
+
+/// Parses one required value for generated parameter conversions.
+///
+/// # Arguments
+///
+/// * `params` — Decoded parameter map containing the requested value.
+/// * `name` — Parameter name to locate and report in diagnostics.
+///
+/// # Returns
+///
+/// A parsed `T` value.
+///
+/// # Errors
+///
+/// Returns [`ParamsError`] if `name` is absent or its value cannot be parsed.
+#[doc(hidden)]
+pub fn __required_param<T>(params: &ParamsMap, name: &str) -> Result<T, ParamsError>
+where
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    let value = params.get(name).ok_or_else(|| ParamsError::Missing {
+        name: name.to_owned(),
+    })?;
+    value.parse::<T>().map_err(|error| ParamsError::Parse {
+        name: name.to_owned(),
+        value: value.to_owned(),
+        target: std::any::type_name::<T>(),
+        message: error.to_string(),
+    })
+}
+
+/// Parses one optional value for generated parameter conversions.
+///
+/// # Arguments
+///
+/// * `params` — Decoded parameter map that may contain the requested value.
+/// * `name` — Parameter name to locate and report in diagnostics.
+///
+/// # Returns
+///
+/// An optional parsed `T` value.
+///
+/// # Errors
+///
+/// Returns [`ParamsError`] if a present value cannot be parsed.
+#[doc(hidden)]
+pub fn __optional_param<T>(params: &ParamsMap, name: &str) -> Result<Option<T>, ParamsError>
+where
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    params
+        .get(name)
+        .map(|_| __required_param(params, name))
+        .transpose()
+}
+
+/// Appends one displayable value to a generated query string.
+///
+/// # Arguments
+///
+/// * `query` — Query string receiving the encoded pair.
+/// * `name` — Query key to encode.
+/// * `value` — Query value to format and encode.
+#[doc(hidden)]
+pub fn __push_query_param<T>(query: &mut String, name: &str, value: &T)
+where
+    T: fmt::Display + ?Sized,
+{
+    if !query.is_empty() {
+        query.push('&');
+    }
+    query.push_str(&utf8_percent_encode(name, QUERY_COMPONENT_ENCODE_SET).to_string());
+    query.push('=');
+    query
+        .push_str(&utf8_percent_encode(&value.to_string(), QUERY_COMPONENT_ENCODE_SET).to_string());
 }
 
 /// Reactive URL-like location exposed by [`use_location`].
@@ -487,32 +685,52 @@ pub fn use_location() -> Location {
     }
 }
 
-/// Returns reactive path parameters for the current match.
+/// Returns typed path parameters for the current route match.
+///
+/// This snapshot hook is intended for matched route and fallback component
+/// trees. The matched route remounts when decoded path or query values change.
 ///
 /// # Returns
 ///
-/// A [`Memo<ParamsMap>`] containing decoded parameters.
+/// A decoded typed parameter model.
+///
+/// # Errors
+///
+/// Returns [`ParamsError`] if the current match cannot be converted to `T`.
 ///
 /// # Panics
 ///
 /// Panics if no [`Router`] exists in context.
-pub fn use_params_map() -> Memo<ParamsMap> {
+pub fn use_params<T>() -> Result<T, ParamsError>
+where
+    T: RouteParams,
+{
     let router = use_router();
-    Memo::new(move |_| router.params.get())
+    T::from_params(&router.params.get_untracked())
 }
 
-/// Returns reactive decoded query values for the current location.
+/// Returns typed query parameters for the current route match.
+///
+/// This snapshot hook is intended for matched route and fallback component
+/// trees. The matched route remounts when decoded path or query values change.
 ///
 /// # Returns
 ///
-/// A [`Memo<ParamsMap>`] containing query values.
+/// A decoded typed query model.
+///
+/// # Errors
+///
+/// Returns [`ParamsError`] if the current query cannot be converted to `T`.
 ///
 /// # Panics
 ///
 /// Panics if no [`Router`] exists in context.
-pub fn use_query_map() -> Memo<ParamsMap> {
+pub fn use_query<T>() -> Result<T, ParamsError>
+where
+    T: QueryParams,
+{
     let router = use_router();
-    Memo::new(move |_| parse_query(&router.search.get()))
+    T::from_query(&parse_query(&router.search.get_untracked()))
 }
 
 /// Returns a cloneable programmatic navigation callback.
@@ -704,12 +922,21 @@ pub fn __routes(fallback: RouteViewFactory, children: Vec<AnyView>) -> impl Into
         move || {
             key_router.revision.get();
             let matched = match_routes(&key_routes, &key_router.pathname.get());
+            let query = parse_query(&key_router.search.get());
             key_router.params.set(
                 matched
                     .as_ref()
                     .map_or_else(ParamsMap::default, |matched| matched.params.clone()),
             );
-            matched.map(|matched| matched.chain.first().copied().unwrap_or(usize::MAX))
+            (
+                matched.map(|matched| {
+                    (
+                        matched.chain.first().copied().unwrap_or(usize::MAX),
+                        matched.params,
+                    )
+                }),
+                query,
+            )
         },
         move || {
             let pathname = build_router.pathname.get_untracked();
@@ -1082,6 +1309,35 @@ mod tests {
 
     use super::*;
 
+    /// Route conversion fixture containing required, parsed, and optional fields.
+    #[derive(crate::RouteParams)]
+    struct TypedRouteFixture {
+        /// Required string value.
+        name: String,
+        /// Required parsed integer value.
+        count: usize,
+        /// Optional renamed integer value.
+        #[param(name = "page-number")]
+        page: Option<u16>,
+    }
+
+    /// Query conversion fixture containing one required numeric field.
+    #[derive(crate::QueryParams)]
+    struct TypedQueryFixture {
+        /// Required parsed page number.
+        page: usize,
+    }
+
+    /// Query conversion fixture containing encoded and optional fields.
+    #[derive(crate::QueryParams)]
+    struct SerializableQueryFixture {
+        /// Filesystem path containing reserved query characters.
+        path: String,
+        /// Optional renamed page number.
+        #[param(name = "page-number")]
+        page: Option<usize>,
+    }
+
     /// Creates a route definition without render behavior.
     ///
     /// # Arguments
@@ -1135,6 +1391,134 @@ mod tests {
         let wildcard = match_routes(&routes, "/files/docs/guide").unwrap();
         assert_eq!(wildcard.chain, [0]);
         assert_eq!(wildcard.params.get("path"), Some("docs/guide"));
+    }
+
+    /// Verifies derived models convert required, optional, and renamed values.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// name=Ada, count=42, page-number absent
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Required string and integer fields convert successfully.
+    /// - An absent optional renamed field becomes `None`.
+    #[test]
+    fn typed_parameter_models_convert_decoded_values() {
+        let mut params = ParamsMap::default();
+        params.0.insert(String::from("name"), String::from("Ada"));
+        params.0.insert(String::from("count"), String::from("42"));
+
+        let converted = TypedRouteFixture::from_params(&params)
+            .expect("valid typed route parameters should convert");
+
+        assert_eq!(converted.name, "Ada");
+        assert_eq!(converted.count, 42);
+        assert_eq!(converted.page, None);
+    }
+
+    /// Verifies typed conversion errors identify missing and malformed values.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// query = {}
+    /// query = { page = "many" }
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - A valid required field converts successfully.
+    /// - A missing required field returns its parameter name.
+    /// - A malformed value returns its name, value, target type, and parser error.
+    #[test]
+    fn typed_parameter_errors_retain_conversion_context() {
+        let mut valid_params = ParamsMap::default();
+        valid_params
+            .0
+            .insert(String::from("page"), String::from("3"));
+        let valid = TypedQueryFixture::from_query(&valid_params)
+            .expect("valid query parameter should convert");
+        assert_eq!(valid.page, 3);
+
+        let missing = TypedQueryFixture::from_query(&ParamsMap::default())
+            .err()
+            .expect("missing required query parameter should fail");
+        assert_eq!(
+            missing,
+            ParamsError::Missing {
+                name: String::from("page")
+            }
+        );
+
+        let mut params = ParamsMap::default();
+        params.0.insert(String::from("page"), String::from("many"));
+        let malformed = TypedQueryFixture::from_query(&params)
+            .err()
+            .expect("malformed query parameter should fail");
+        let ParamsError::Parse {
+            name,
+            value,
+            target,
+            message,
+        } = malformed
+        else {
+            panic!("expected a parse error");
+        };
+        assert_eq!(name, "page");
+        assert_eq!(value, "many");
+        assert_eq!(target, "usize");
+        assert!(!message.is_empty());
+    }
+
+    /// Verifies typed query models serialize and parse without losing values.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// path = "/tmp/a & #guide.md", page-number = 3
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Query keys and values percent-encode reserved characters.
+    /// - Renamed fields use their configured query key.
+    /// - The serialized query parses back into the original field values.
+    /// - `with_query` inserts the query before an existing fragment.
+    /// - `with_query` appends fields to an existing query string.
+    /// - An absent optional field is omitted.
+    #[test]
+    fn typed_query_models_serialize_and_round_trip() {
+        let query = SerializableQueryFixture {
+            path: String::from("/tmp/a & #guide.md"),
+            page: Some(3),
+        };
+
+        let serialized = query.to_query_string();
+        assert_eq!(
+            serialized,
+            "path=%2Ftmp%2Fa%20%26%20%23guide.md&page-number=3"
+        );
+        let parsed = SerializableQueryFixture::from_query(&parse_query(&serialized))
+            .expect("serialized query should parse back into its model");
+        assert_eq!(parsed.path, query.path);
+        assert_eq!(parsed.page, query.page);
+        assert_eq!(
+            with_query("/view#document", &query),
+            "/view?path=%2Ftmp%2Fa%20%26%20%23guide.md&page-number=3#document"
+        );
+        assert_eq!(
+            with_query("/view?mode=raw#document", &query),
+            "/view?mode=raw&path=%2Ftmp%2Fa%20%26%20%23guide.md&page-number=3#document"
+        );
+
+        let without_page = SerializableQueryFixture {
+            path: String::from("guide.md"),
+            page: None,
+        };
+        assert_eq!(without_page.to_query_string(), "path=guide.md");
     }
 
     /// Verifies nested definitions compose parent and child patterns.

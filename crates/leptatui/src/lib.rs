@@ -254,11 +254,14 @@
 //! [`context::provide_context`], [`context::use_context`], and
 //! [`context::expect_context`]. Multi-page apps declare URL-like paths with
 //! [`Router`], `Routes`, and `Route` tags, read reactive location state with
-//! [`use_location`], and navigate with [`use_navigate`]. Asynchronous reads and
-//! mutations use [`Resource::new`] and [`Action::new`] to expose loading,
-//! pending, and output state. Application errors remain ordinary typed
-//! [`std::result::Result`] values returned by resource fetchers or action
-//! handlers.
+//! [`use_location`], convert matched values through [`RouteParams`] and
+//! [`QueryParams`] models, and navigate with [`use_navigate`]. Matched route
+//! components call [`use_params`] and [`use_query`], propagating conversion
+//! failures with `?`. Derived query models serialize into locations through
+//! [`with_query`]. Asynchronous reads and mutations use [`Resource::new`] and
+//! [`Action::new`] to expose loading, pending, and output state.
+//! Application errors remain ordinary typed [`std::result::Result`] values
+//! returned by resource fetchers or action handlers.
 //!
 //! # Deferred Scope
 //!
@@ -293,15 +296,16 @@ pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, us
 pub use editor::{Editor, EditorStatus, use_editor};
 pub use executor::{spawn, spawn_local};
 pub use file_selector::{FileSelector, FileSelectorOptions, use_file_selector};
-pub use leptatui_macros::{component, stylesheet, view};
+pub use leptatui_macros::{QueryParams, RouteParams, component, stylesheet, view};
 pub use markdown::{
     MarkdownOptions, MarkdownView, markdown, markdown_file, markdown_file_with_options,
     markdown_source_with_options, markdown_with_options,
 };
 pub use resource::Resource;
 pub use route::{
-    History, Location, Navigate, NavigateOptions, Outlet, ParamsMap, RouteViewFactory, Router,
-    RouterProps, use_history, use_location, use_navigate, use_params_map, use_query_map,
+    History, Location, Navigate, NavigateOptions, Outlet, ParamsError, ParamsMap, QueryParams,
+    RouteParams, RouteViewFactory, Router, RouterProps, use_history, use_location, use_navigate,
+    use_params, use_query, with_query,
 };
 pub use style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
@@ -384,7 +388,10 @@ pub mod __private {
         __with_component_setup_context, __with_context_scope, __with_context_scope_if_missing,
     };
     pub use crate::markdown::__markdown_element;
-    pub use crate::route::{__outlet, __route_definition, __routes};
+    pub use crate::route::{
+        __optional_param, __outlet, __push_query_param, __required_param, __route_definition,
+        __routes,
+    };
     pub use crate::view::error::__view_error;
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};
 

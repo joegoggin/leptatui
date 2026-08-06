@@ -180,3 +180,104 @@ fn generated_route_link_renders_default_styles() -> leptatui::app::Result<()> {
 
     Ok(())
 }
+
+/// Verifies typed path and query changes remount only matched route content.
+///
+/// # Example Under Test
+///
+/// ```text
+/// /items/7?label=initial
+/// /items/7?label=query&page=4
+/// /items/8?label=path
+/// ```
+///
+/// # Assertions
+///
+/// - Initial route and query values convert and render successfully.
+/// - A query-only change remounts the matched page with new typed values.
+/// - A path-parameter change remounts the matched page with its parsed value.
+/// - Shared Router chrome remains mounted across both changes.
+#[test]
+fn typed_parameters_remount_only_the_matched_route() -> leptatui::app::Result<()> {
+    MACRO_TYPED_CHROME_SETUP_RUNS.store(0, Ordering::SeqCst);
+    MACRO_TYPED_PAGE_SETUP_RUNS.store(0, Ordering::SeqCst);
+    let mut component = MacroTypedParamsRoot::new();
+
+    let terminal = render_component(&mut component, 48, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(
+        text.contains("item=7 label=initial page=none"),
+        "rendered text: {text:?}"
+    );
+    assert_eq!(MACRO_TYPED_CHROME_SETUP_RUNS.load(Ordering::SeqCst), 1);
+    assert_eq!(MACRO_TYPED_PAGE_SETUP_RUNS.load(Ordering::SeqCst), 1);
+
+    assert_eq!(
+        View::handle_event(&mut component, key(KeyCode::Char('q')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 48, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(
+        text.contains("item=7 label=query page=4"),
+        "rendered text: {text:?}"
+    );
+    assert_eq!(MACRO_TYPED_CHROME_SETUP_RUNS.load(Ordering::SeqCst), 1);
+    assert_eq!(MACRO_TYPED_PAGE_SETUP_RUNS.load(Ordering::SeqCst), 2);
+
+    assert_eq!(
+        View::handle_event(&mut component, key(KeyCode::Char('p')))?,
+        AppControl::Continue
+    );
+    let terminal = render_component(&mut component, 48, 3)?;
+    let text = rendered_text(&terminal);
+    assert!(
+        text.contains("item=8 label=path page=none"),
+        "rendered text: {text:?}"
+    );
+    assert_eq!(MACRO_TYPED_CHROME_SETUP_RUNS.load(Ordering::SeqCst), 1);
+    assert_eq!(MACRO_TYPED_PAGE_SETUP_RUNS.load(Ordering::SeqCst), 3);
+
+    Ok(())
+}
+
+/// Verifies typed parameter failures reach the standard error screen.
+///
+/// # Example Under Test
+///
+/// ```text
+/// /items/many?label=valid
+/// /items/7
+/// ```
+///
+/// # Assertions
+///
+/// - A malformed route value renders the standard error screen.
+/// - The parse diagnostic identifies the route name and malformed value.
+/// - A missing required query value renders the standard error screen.
+/// - The missing-value diagnostic identifies the query name.
+#[test]
+fn typed_parameter_failures_render_the_standard_error_screen() -> leptatui::app::Result<()> {
+    let mut malformed = MacroTypedParamsErrorRoot::with_props(
+        MacroTypedParamsErrorRootProps::builder()
+            .initial_path("/items/many?label=valid")
+            .build(),
+    );
+    let terminal = render_component(&mut malformed, 80, 16)?;
+    let rendered = rendered_text(&terminal);
+    assert!(rendered.contains("Error"), "rendered text: {rendered:?}");
+    assert!(rendered.contains("item-id"), "rendered text: {rendered:?}");
+    assert!(rendered.contains("many"), "rendered text: {rendered:?}");
+
+    let mut missing = MacroTypedParamsErrorRoot::with_props(
+        MacroTypedParamsErrorRootProps::builder()
+            .initial_path("/items/7")
+            .build(),
+    );
+    let terminal = render_component(&mut missing, 80, 16)?;
+    let rendered = rendered_text(&terminal);
+    assert!(rendered.contains("Error"), "rendered text: {rendered:?}");
+    assert!(rendered.contains("label"), "rendered text: {rendered:?}");
+
+    Ok(())
+}

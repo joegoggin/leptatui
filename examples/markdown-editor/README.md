@@ -118,7 +118,7 @@ spacing is reduced.
   storage. Leptatui owns external editor sessions, file selection, volume-root
   containment, and asynchronous filesystem I/O.
 - `app` defines `AppRouter`, provides application services, and declares `/`
-  and `/view/*path`. Each routed page and supporting component owns
+  and `/view?path=...`. Each routed page and supporting component owns
   its BEM-prefixed presentation classes. Styled components use co-located
   `component.rs`, `style.rs`, and `mod.rs` files; styled pages use `page.rs`,
   `style.rs`, and `mod.rs`.

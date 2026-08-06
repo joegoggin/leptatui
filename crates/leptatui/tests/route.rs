@@ -1,8 +1,6 @@
 //! Public router hook and history tests.
 
-use leptatui::{
-    NavigateOptions, Router, RouterProps, use_history, use_location, use_navigate, use_query_map,
-};
+use leptatui::{NavigateOptions, Router, RouterProps, use_history, use_location, use_navigate};
 use leptos::prelude::{GetUntracked, Owner};
 
 /// Verifies location, query, navigation, and history hooks share router state.
@@ -28,16 +26,15 @@ fn router_hooks_navigate_through_in_memory_history() {
                     .initial_path("/docs?page=1")
                     .children(Box::new(|| {
                         let location = use_location();
-                        let query = use_query_map();
                         let navigate = use_navigate();
                         let history = use_history();
 
                         assert_eq!(location.pathname().get_untracked(), "/docs");
-                        assert_eq!(query.get_untracked().get("page"), Some("1"));
+                        assert_eq!(location.search().get_untracked(), "page=1");
 
                         navigate("/settings?mode=dark", NavigateOptions::default());
                         assert_eq!(location.pathname().get_untracked(), "/settings");
-                        assert_eq!(query.get_untracked().get("mode"), Some("dark"));
+                        assert_eq!(location.search().get_untracked(), "mode=dark");
                         assert!(history.can_go_back());
 
                         history.back();

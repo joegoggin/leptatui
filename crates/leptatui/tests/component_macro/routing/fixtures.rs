@@ -153,3 +153,101 @@ fn MacroRouteLinkRoot() -> impl leptatui::IntoView {
         </Router>
     }
 }
+
+/// Renders shared chrome and one route using typed path and query parameters.
+#[component]
+fn MacroTypedParamsRoot() -> impl leptatui::IntoView {
+    view! {
+        <Router initial_path="/items/7?label=initial">
+            <Div>
+                <MacroTypedParamsNav />
+                <Routes fallback=MacroRouteHomePage>
+                    <Route path="/items/:item-id" view=MacroTypedParamsPage />
+                </Routes>
+            </Div>
+        </Router>
+    }
+}
+
+/// Provides navigation controls outside the matched route boundary.
+#[component]
+fn MacroTypedParamsNav() -> impl leptatui::IntoView {
+    MACRO_TYPED_CHROME_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
+    let navigate = leptatui::use_navigate();
+
+    use_key_event(KeyEventKind::Press, move |key| {
+        match key.code {
+            KeyCode::Char('p') => {
+                navigate("/items/8?label=path", NavigateOptions::default());
+            }
+            KeyCode::Char('q') => {
+                navigate("/items/7?label=query&page=4", NavigateOptions::default());
+            }
+            _ => return KeyControl::Pass,
+        }
+        KeyControl::Handled
+    });
+
+    text("Typed route controls")
+}
+
+/// Renders one snapshot of typed path and query parameters.
+///
+/// # Returns
+///
+/// A matched route page containing the converted values.
+///
+/// # Errors
+///
+/// Returns [`leptatui::ParamsError`] if path or query conversion fails.
+#[component]
+fn MacroTypedParamsPage() -> leptatui::ViewResult<impl leptatui::IntoView> {
+    MACRO_TYPED_PAGE_SETUP_RUNS.fetch_add(1, Ordering::SeqCst);
+    let params = leptatui::use_params::<MacroTypedRouteParams>()?;
+    let query = leptatui::use_query::<MacroTypedQueryParams>()?;
+    let page = query
+        .page
+        .map_or_else(|| String::from("none"), |page| page.to_string());
+
+    text(format!(
+        "item={} label={} page={page}",
+        params.item_id, query.label
+    ))
+}
+
+/// Renders a typed route from an explicit location for conversion-error tests.
+///
+/// # Arguments
+///
+/// * `initial_path` — Initial location containing malformed or missing values.
+///
+/// # Returns
+///
+/// A routed fixture whose matched page propagates parameter errors.
+#[component]
+fn MacroTypedParamsErrorRoot(#[prop(into)] initial_path: String) -> impl leptatui::IntoView {
+    view! {
+        <Router initial_path=initial_path>
+            <Routes fallback=MacroRouteHomePage>
+                <Route path="/items/:item-id" view=MacroTypedParamsErrorPage />
+            </Routes>
+        </Router>
+    }
+}
+
+/// Converts typed values exclusively for standard-error rendering tests.
+///
+/// # Returns
+///
+/// A matched route page containing successfully converted values.
+///
+/// # Errors
+///
+/// Returns [`leptatui::ParamsError`] if path or query conversion fails.
+#[component]
+fn MacroTypedParamsErrorPage() -> leptatui::ViewResult<impl leptatui::IntoView> {
+    let params = leptatui::use_params::<MacroTypedRouteParams>()?;
+    let query = leptatui::use_query::<MacroTypedQueryParams>()?;
+
+    text(format!("item={} label={}", params.item_id, query.label))
+}

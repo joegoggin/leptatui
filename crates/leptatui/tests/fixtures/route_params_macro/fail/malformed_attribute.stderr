@@ -1,0 +1,5 @@
+error: unsupported param attribute; expected name = "..."
+ --> tests/fixtures/route_params_macro/fail/malformed_attribute.rs:9:13
+  |
+9 |     #[param(rename = "page-number")]
+  |             ^^^^^^

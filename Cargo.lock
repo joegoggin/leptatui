@@ -1990,7 +1990,6 @@ dependencies = [
  "clap",
  "directories",
  "leptatui",
- "percent-encoding",
  "ratatui",
  "serde",
  "serde_json",

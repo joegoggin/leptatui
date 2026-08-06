@@ -3,7 +3,6 @@
 use std::path::{Path, PathBuf};
 
 use leptatui::prelude::*;
-use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 use crate::services::is_markdown_path;
 
@@ -12,24 +11,12 @@ use super::{
     style::use_viewer_page_styles,
 };
 
-/// Characters encoded inside one viewer route path segment.
-const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
-    .add(b' ')
-    .add(b'"')
-    .add(b'#')
-    .add(b'%')
-    .add(b'/')
-    .add(b'<')
-    .add(b'>')
-    .add(b'?')
-    .add(b'[')
-    .add(b'\\')
-    .add(b']')
-    .add(b'^')
-    .add(b'`')
-    .add(b'{')
-    .add(b'|')
-    .add(b'}');
+/// Typed query parameters read by the Viewer route.
+#[derive(QueryParams)]
+struct ViewerQuery {
+    /// Percent-decoded Markdown path stored in the query string.
+    path: String,
+}
 
 /// Renders the standalone Markdown viewer and document actions.
 ///
@@ -38,30 +25,21 @@ const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
 ///
 /// # Returns
 ///
-/// A Viewer page component or a current-directory resolution error.
+/// A Viewer page component.
+///
+/// # Errors
+///
+/// Returns [`ViewError`] if typed route conversion or current-directory
+/// resolution fails.
 #[component]
 pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
-    let route_params = use_params_map();
+    let query = use_query::<ViewerQuery>()?;
     let current_directory = std::env::current_dir()?;
-    let document_directory = current_directory.clone();
-    let document_path = Memo::new(move |_| {
-        let route_path = route_params.get().get("path").map(str::to_owned);
-        resolve_viewer_path(route_path.as_deref(), &document_directory)
-    });
+    let document_path = resolve_viewer_path(Some(&query.path), &current_directory);
     let shortcut_navigate = use_navigate();
     let home_navigate = use_navigate();
     let browse_navigate = use_navigate();
-    let open_path = route_params
-        .get_untracked()
-        .get("path")
-        .map_or_else(|| String::from("none"), str::to_owned);
-    let document = keyed(
-        move || document_path.get(),
-        move || {
-            let path = document_path.get_untracked();
-            view! { <ViewerDocument path=path /> }.into_view()
-        },
-    );
+    let open_path = query.path;
 
     use_viewer_page_styles();
 
@@ -83,7 +61,7 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
         <Div class="viewer-page">
             <Text class="viewer-page__title">"Markdown viewer"</Text>
             <Text class="viewer-page__path">{format!("Open: {open_path}")}</Text>
-            {document}
+            <ViewerDocument path=document_path />
             <Div class="viewer-page__actions">
                 <Button on_press=move || {
                     home_navigate("/", NavigateOptions::default());
@@ -124,17 +102,18 @@ fn resolve_viewer_path(
     Ok(Some(requested))
 }
 
-/// Creates an encoded viewer location for an absolute Markdown path.
+/// Creates a Viewer location containing one encoded Markdown path query.
 ///
 /// # Arguments
 ///
-/// * `path` — Absolute Markdown path to encode.
+/// * `path` — Markdown path to encode.
 ///
 /// # Returns
 ///
-/// A [`String`] containing `/view/` and one encoded absolute path.
+/// A [`String`] containing `/view` and one encoded path query.
 pub(crate) fn viewer_location(path: &Path) -> String {
-    let path = path.as_os_str().to_string_lossy();
-    let encoded = utf8_percent_encode(&path, ROUTE_SEGMENT_ENCODE_SET);
-    format!("/view/{encoded}")
+    let query = ViewerQuery {
+        path: path.as_os_str().to_string_lossy().into_owned(),
+    };
+    with_query("/view", &query)
 }
