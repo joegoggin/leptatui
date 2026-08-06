@@ -75,6 +75,65 @@ fn markdown_file_reader_apis_load_utf8_source() {
     fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
 }
 
+/// Verifies the declarative Markdown element loads through reactive filesystem state.
+///
+/// # Assertions
+///
+/// - The selected UTF-8 file renders after its asynchronous operation completes.
+/// - Explicitly disabled line numbers omit the code-block gutter.
+#[tokio::test(flavor = "current_thread")]
+async fn markdown_element_loads_asynchronously_without_line_numbers() {
+    let fixture_dir = markdown_fixture_dir("element-reader");
+    let fixture_path = fixture_dir.join("guide.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    fs::write(&fixture_path, "```text\nalpha\nbeta\n```\n")
+        .expect("Markdown fixture should be written");
+    let owner = leptos::prelude::Owner::new();
+    let view = owner.with(|| {
+        __markdown_element(
+            &fixture_path,
+            MarkdownOptions::default().line_numbers(false),
+            file!(),
+            line!(),
+        )
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let rendered = rendered_view_lines(&view, 40, 8)
+        .expect("asynchronously loaded Markdown should render")
+        .join("\n");
+    assert!(rendered.contains("alpha"));
+    assert!(!rendered.contains("1 │"));
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+}
+
+/// Verifies declarative Markdown read failures become standard view errors.
+#[tokio::test(flavor = "current_thread")]
+async fn markdown_element_read_failure_renders_view_error() {
+    let fixture_dir = markdown_fixture_dir("element-error");
+    let missing_path = fixture_dir.join("missing.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    let owner = leptos::prelude::Owner::new();
+    let view = owner.with(|| {
+        __markdown_element(
+            &missing_path,
+            MarkdownOptions::default(),
+            file!(),
+            line!(),
+        )
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let rendered = rendered_view_lines(&view, 120, 20)
+        .expect("Markdown error screen should render")
+        .join("\n");
+    assert!(rendered.contains("Error"));
+    assert!(rendered.contains("missing.md"));
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+}
+
 /// Verifies Markdown file failures become path-aware semantic fallbacks.
 ///
 /// # Example Under Test

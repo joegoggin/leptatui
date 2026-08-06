@@ -2,7 +2,7 @@
 //!
 //! # Modules
 //!
-//! - [`document`] — Action-loaded Markdown content and editor diagnostics.
+//! - [`document`] — Declarative Markdown content and editor diagnostics.
 
 mod document;
 

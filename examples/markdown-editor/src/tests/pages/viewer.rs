@@ -49,7 +49,7 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
     Ok(())
 }
 
-/// Verifies the shared Markdown view owns file failures and reload recovery.
+/// Verifies asynchronous Markdown failures use the standard error screen.
 ///
 /// # Example Under Test
 ///
@@ -64,10 +64,9 @@ fn viewer_edit_key_requests_an_external_session_only_for_an_open_document() -> l
 /// # Assertions
 ///
 /// - The initial document renders successfully.
-/// - Reloading after deletion renders the shared Markdown file diagnostic.
-/// - Reloading after recreation renders the restored document.
+/// - Reloading after deletion renders a standard ViewError screen.
 #[test]
-fn viewer_markdown_view_recovers_after_a_missing_file_returns() -> leptatui::Result<()> {
+fn viewer_markdown_view_throws_view_error_after_reload_failure() -> leptatui::Result<()> {
     let tree = TestTree::new("viewer-reload-recovery");
     let guide = tree.root().join("guide.md");
     fs::write(&guide, "# Original").expect("the Markdown file should be created");
@@ -84,24 +83,14 @@ fn viewer_markdown_view_recovers_after_a_missing_file_returns() -> leptatui::Res
         KeyControl::Handled
     );
     draw_editor(&mut terminal, &view)?;
-    assert!(
-        rendered_lines(&terminal)
-            .join("\n")
-            .contains("failed to read Markdown file")
-    );
-
-    fs::write(&guide, "# Restored").expect("the Markdown file should be recreated");
-    assert_eq!(
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))?,
-        KeyControl::Handled
-    );
-    draw_editor(&mut terminal, &view)?;
-    assert!(rendered_lines(&terminal).join("\n").contains("Restored"));
+    let rendered = rendered_lines(&terminal).join("\n");
+    assert!(rendered.contains("Error"));
+    assert!(rendered.contains("guide.md"));
 
     Ok(())
 }
 
-/// Verifies invalid UTF-8 diagnostics come from the shared Markdown view.
+/// Verifies invalid UTF-8 produces the standard ViewError screen.
 ///
 /// # Example Under Test
 ///
@@ -113,7 +102,7 @@ fn viewer_markdown_view_recovers_after_a_missing_file_returns() -> leptatui::Res
 /// # Assertions
 ///
 /// - A direct Viewer route opens the path.
-/// - Viewer renders the shared Markdown file diagnostic.
+/// - Viewer renders the standard error screen.
 /// - The diagnostic identifies the path and invalid UTF-8 content.
 #[test]
 fn viewer_markdown_view_renders_invalid_utf8_diagnostics() -> leptatui::Result<()> {
@@ -126,9 +115,27 @@ fn viewer_markdown_view_renders_invalid_utf8_diagnostics() -> leptatui::Result<(
 
     draw_editor(&mut terminal, &view)?;
     let rendered = rendered_lines(&terminal).join("\n");
-    assert!(rendered.contains("failed to read Markdown file"));
+    assert!(rendered.contains("Error"));
     assert!(rendered.contains("invalid.md"));
     assert!(rendered.to_lowercase().contains("utf-8"));
+
+    Ok(())
+}
+
+/// Verifies Viewer disables line-number gutters on Markdown code blocks.
+#[test]
+fn viewer_markdown_view_disables_code_line_numbers() -> leptatui::Result<()> {
+    let tree = TestTree::new("viewer-no-line-numbers");
+    let guide = tree.root().join("guide.md");
+    fs::write(&guide, "```text\nalpha\nbeta\n```\n").expect("the Markdown file should be created");
+    let contexts = TestContexts::new(tree.root());
+    let view = contexts.view_at(crate::pages::viewer_location(&guide));
+    let mut terminal = Terminal::new(TestBackend::new(80, 18))?;
+
+    draw_editor(&mut terminal, &view)?;
+    let rendered = rendered_lines(&terminal).join("\n");
+    assert!(rendered.contains("alpha"));
+    assert!(!rendered.contains("1 │ alpha"));
 
     Ok(())
 }

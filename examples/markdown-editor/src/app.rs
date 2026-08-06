@@ -6,13 +6,9 @@ use crate::{
     contexts::{Notifications, provide_notification_context},
     layouts::{RootLayout, RootLayoutProps},
     pages::{HomePage, NotFoundPage, ViewerPage},
-    services::RecentFilesStore,
 };
 
-/// Provides application services, routing, notifications, and global controls.
-///
-/// An existing recent-file context is retained. A missing context is
-/// initialized with its production implementation.
+/// Provides routing, notifications, and global controls.
 ///
 /// # Arguments
 ///
@@ -23,10 +19,6 @@ use crate::{
 /// A routed Markdown editor application.
 #[component]
 pub(crate) fn AppRouter(#[prop(into)] initial_path: String) -> impl IntoView {
-    if use_context::<RecentFilesStore>().is_none() {
-        provide_context(RecentFilesStore::standard());
-    }
-
     provide_notification_context();
 
     use_key_event(KeyEventKind::Press, |key| {

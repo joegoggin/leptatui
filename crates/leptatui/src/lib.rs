@@ -213,8 +213,8 @@
 //!
 //! [`markdown()`] and [`markdown_with_options`] convert in-memory CommonMark.
 //! [`markdown_file`] and [`markdown_file_with_options`] synchronously load
-//! UTF-8 paths before returning a view, and `view!` provides the equivalent
-//! path-backed `Markdown` tag:
+//! UTF-8 paths before returning a view. The path-backed `Markdown` tag loads
+//! asynchronously through a volume-rooted [`FileSystem`]:
 //!
 //! ```
 //! use leptatui::prelude::*;
@@ -241,8 +241,9 @@
 //! handler; in-memory Markdown and standalone [`LinkView`] values keep that
 //! external behavior. Images become descriptive text without fetching local
 //! or remote targets, and raw HTML or unsupported blocks retain readable
-//! fallbacks. File readers are infallible and render a path-aware page for
-//! unreadable or non-UTF-8 input.
+//! fallbacks. Synchronous file readers render a path-aware fallback for
+//! unreadable or non-UTF-8 input; the `Markdown` tag surfaces those failures
+//! through the standard [`ViewError`] screen.
 //!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
@@ -377,6 +378,7 @@ pub mod __private {
     pub use crate::context::hooks::{
         __with_component_setup_context, __with_context_scope, __with_context_scope_if_missing,
     };
+    pub use crate::markdown::__markdown_element;
     pub use crate::route::{__outlet, __route_definition, __routes};
     pub use crate::view::error::__view_error;
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};

@@ -1,30 +1,12 @@
-//! Recent-file persistence and Viewer integration tests.
+//! Recent-file persistence tests.
 
-use std::{fs, path::Path};
+use std::fs;
 
-use ratatui::{Terminal, backend::TestBackend};
+use crate::services::{RECENT_FILE_LIMIT, RecentFilesStore};
 
-use crate::{
-    pages::viewer_location,
-    services::{RECENT_FILE_LIMIT, RecentFilesStore},
-};
+use super::support::TestTree;
 
-use super::support::{TestContexts, TestTree, draw_editor};
-
-/// Opens one Viewer route so a successful read records its path.
-///
-/// # Arguments
-///
-/// * `contexts` — Application fixture supplied to the Viewer.
-/// * `path` — Markdown path represented by the Viewer route.
-fn open(contexts: &TestContexts, path: &Path) {
-    let view = contexts.view_at(viewer_location(path));
-    let mut terminal =
-        Terminal::new(TestBackend::new(80, 18)).expect("the terminal should initialize");
-    draw_editor(&mut terminal, &view).expect("the Viewer should render");
-}
-
-/// Verifies Viewer persists bounded, deduplicated MRU file order.
+/// Verifies the store persists bounded, deduplicated MRU file order.
 ///
 /// # Assertions
 ///
@@ -44,10 +26,8 @@ fn recent_files_persist_in_bounded_mru_order() {
             fs::canonicalize(path).expect("each Markdown path should canonicalize")
         })
         .collect::<Vec<_>>();
-    let contexts = TestContexts::with_store(tree.root(), store.clone());
-
     for path in &paths {
-        open(&contexts, path);
+        store.record(path).expect("each file should be recorded");
     }
     let (recent, error) = store.load_valid();
     assert!(error.is_none());
@@ -56,7 +36,9 @@ fn recent_files_persist_in_bounded_mru_order() {
     assert!(!recent.contains(&paths[0]));
     assert!(!recent.contains(&paths[1]));
 
-    open(&contexts, &paths[5]);
+    store
+        .record(&paths[5])
+        .expect("the reopened file should be promoted");
     let expected = store.load_valid().0;
     assert_eq!(expected[0], paths[5]);
     assert_eq!(expected.iter().filter(|path| *path == &paths[5]).count(), 1);

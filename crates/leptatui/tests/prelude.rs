@@ -112,12 +112,12 @@ fn prelude_exposes_macros_and_required_context() -> leptatui::app::Result<()> {
 /// - A memo can derive from a prelude signal.
 /// - Context values can be provided and read from the prelude.
 /// - Standard-library builders, callback aliases, source types, Markdown
-///   options, and infallible file readers type-check from the prelude.
-/// - The Markdown view tag loads a path into the same document as its reader.
+///   options, and synchronous file readers type-check from the prelude.
+/// - The Markdown view tag creates a reactive asynchronous boundary.
 /// - The view and stylesheet macros support standard-library component names
 ///   from prelude imports.
-#[test]
-fn prelude_exposes_reactivity_and_context() {
+#[tokio::test(flavor = "current_thread")]
+async fn prelude_exposes_reactivity_and_context() {
     Owner::new().with(|| {
         let (count, set_count) = signal(0);
 
@@ -229,11 +229,7 @@ fn prelude_exposes_reactivity_and_context() {
                 line_numbers=true
             />
         };
-        let markdown_options = MarkdownOptions::default().line_numbers(true);
-        assert_eq!(
-            macro_markdown,
-            markdown_file_with_options(markdown_path, markdown_options)
-        );
+        assert!(macro_markdown.downcast_ref::<DynamicView>().is_some());
         let _default_file_reader = |path: &str| markdown_file(path);
         let _configured_file_reader =
             |path: &str, options: MarkdownOptions| markdown_file_with_options(path, options);

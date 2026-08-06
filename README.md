@@ -336,9 +336,9 @@ let highlighted_document = markdown_with_options(
 );
 ```
 
-For explicit UTF-8 path loading, use `markdown_file`,
-`markdown_file_with_options`, or the path-backed `Markdown` tag. Loading
-finishes before the view is returned:
+For synchronous UTF-8 path loading, use `markdown_file` or
+`markdown_file_with_options`. The path-backed `Markdown` tag instead loads
+asynchronously through `use_file_system()` at the containing volume root:
 
 ```rust
 use leptatui::prelude::*;
@@ -378,8 +378,9 @@ in-memory Markdown keep that external behavior. Empty destinations and a bare
 `#` remain inactive.
 Images become deterministic descriptive text; local and remote image targets
 are never fetched. Raw HTML and unsupported blocks remain readable fallbacks.
-Unreadable paths and invalid UTF-8 also render a path-aware in-app page instead
-of returning an error, so back navigation remains available.
+Synchronous file readers render unreadable paths and invalid UTF-8 as a
+path-aware in-app page. The asynchronous `Markdown` tag shows its loading state
+and then raises a `ViewError`, producing the standard interactive error screen.
 
 ```rust
 use leptatui::prelude::*;

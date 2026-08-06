@@ -2,7 +2,7 @@
 //!
 //! # Modules
 //!
-//! - [`component`] — Action-loaded Markdown content and editor diagnostics.
+//! - [`component`] — Declarative Markdown content and editor diagnostics.
 //! - [`style`] — Viewer document stylesheet registration.
 
 mod component;

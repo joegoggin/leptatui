@@ -8,7 +8,7 @@
 mod filesystem;
 mod recent_files;
 
-pub(crate) use filesystem::{is_markdown_path, volume_root};
+pub(crate) use filesystem::is_markdown_path;
 #[cfg(test)]
 pub(crate) use recent_files::RECENT_FILE_LIMIT;
 pub(crate) use recent_files::RecentFilesStore;

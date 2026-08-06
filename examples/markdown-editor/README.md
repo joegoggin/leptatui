@@ -43,10 +43,11 @@ cargo run -p markdown-editor -- --help
 
 The command accepts zero or one positional `FILE_PATH`. With no path, the
 application starts on Home and the file selector opens in the process current
-directory when requested. A supplied relative path is made absolute and lexically normalized,
-then encoded into the initial Viewer route. Startup does not require the target
-to exist; read and Markdown-validation failures render as recoverable Viewer
-diagnostics. Additional positional arguments are rejected.
+directory when requested. A supplied relative path is made absolute and
+lexically normalized, then encoded into the initial Viewer route. Startup does
+not require the target to exist; read failures raise the standard `ViewError`
+screen, while Markdown-extension validation remains an inline Viewer
+diagnostic. Additional positional arguments are rejected.
 
 ## Pages and Controls
 
@@ -60,18 +61,21 @@ between two component pages while Leptatui owns the standalone file selector:
   the parent directory, and `Esc` to cancel. It starts in the process current
   directory and can continue to the filesystem or drive root.
 - **Markdown Viewer** — Use `Page Up`, `Page Down`, `Ctrl-U`, `Ctrl-D`, `gg`,
-  or `G` to scroll; `e` to edit; `r` to reload; `h` for Home; and `b` to browse
-  files. Focus a Markdown link and press `Enter` to activate it; `Shift-H` and
+  or `G` to scroll; `e` to edit; `r` to reload; and `h` or `b` to return Home
+  for browsing. Focus a Markdown link and press `Enter` to activate it; `Shift-H` and
   `Shift-L` move backward and forward through the shared Markdown view's page
   history.
 - **Global** — Use `Tab` and `Shift-Tab` to move between buttons, `Enter` to
   activate the focused button, and `q` to exit.
 
-Opening a document successfully promotes it to the front of a ten-item recent
-list. The list is stored as versioned JSON in the platform-local application
+Selecting a document on Home records it before navigation and promotes it to
+the front of a ten-item recent list. Opening an existing recent entry promotes
+it the same way; direct Viewer routes do not change history. The list is stored
+as versioned JSON in the platform-local application
 data directory for `io.github.joegoggin/leptatui-markdown-editor`. Missing and
-unsupported entries are omitted when Home loads the global history. Storage
-errors remain recoverable and appear as a warning on Home.
+unsupported entries are omitted when Home loads the global history. History
+load errors remain recoverable warnings on Home. A failure to record a selected
+document raises a `ViewError` and prevents navigation.
 
 ## Filesystem and Failure Behavior
 
@@ -84,12 +88,12 @@ on the current filesystem or drive root. Broken or escaping symlinks are
 hidden. Failed directory reads preserve the last valid listing and render a
 recoverable error.
 
-The Viewer loads its initial UTF-8 source through a component-local Leptatui
-filesystem handle, then constructs a path-identified Markdown view so relative
-links, local navigation, and history keep their normal behavior. Missing-file
-and invalid UTF-8 failures remain recoverable diagnostics. Pressing `r`
-dispatches a fresh read and rebuilds the document after the problem is
-corrected, while Home and the standalone file selector remain available.
+The Viewer delegates its document to `<Markdown src=path line_numbers=false />`.
+The component loads its initial UTF-8 source asynchronously through a
+volume-rooted Leptatui filesystem handle, then constructs a path-identified
+Markdown view so relative links, local navigation, and history keep their
+normal behavior. Missing-file and invalid UTF-8 failures raise the standard
+`ViewError` screen. Pressing `r` rebuilds the component and starts a fresh read.
 
 Editor values can contain shell-word quoted arguments, such as
 `VISUAL="nvim -f"`, but they are executed directly without shell expansion,
@@ -120,16 +124,17 @@ spacing is reduced.
 - `pages` organizes each routed feature around a `page` module with co-located
   state, stylesheet, and child components. Components without local style
   rules remain flat files. Leptatui owns selector state; Viewer derives its
-  document from the route and owns its reload revision and editor error. Viewer
-  creates a component-local filesystem handle at the containing volume root,
-  while Home loads and displays recent-file history.
+  document from the route and owns its reload revision and editor error. The
+  Markdown component owns filesystem loading, while Home creates the recent
+  store and owns loading, recording, promotion, and navigation.
 - `main` parses the CLI, converts an optional file path into the initial route,
   constructs `<AppRouter />`, and starts Leptatui.
 
 The normal data flow is optional CLI file path → encoded initial Viewer route →
-operation-loaded Markdown source. The file selector routes selected absolute Markdown
-paths through the same encoder. Successful Viewer reads record directly through
-`RecentFilesStore`; Home loads, validates, and displays that global MRU list.
+asynchronously loaded `<Markdown />`. On Home, the file selector returns an
+absolute Markdown path → `RecentFilesStore` records it → Viewer navigation uses
+the shared route encoder. Home also loads, validates, and displays that global
+MRU list without providing the store through context.
 Editing passes the route-derived path to Leptatui's `use_editor()` hook, which
 temporarily restores the terminal, appends `--` and the path to the resolved
 editor command, and resumes the same Viewer component. The handle's reactive

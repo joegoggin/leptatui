@@ -29,11 +29,15 @@ mod list;
 mod navigation;
 mod table;
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
+use leptos::prelude::{Get, With};
 use pulldown_cmark::{Options, Parser};
 
-use crate::{AnyView, IntoView, div};
+use crate::{
+    AnyView, IntoView, ViewError, div, dynamic, file_system::use_file_system, text,
+    view::error::__view_error,
+};
 
 use self::block::parse_blocks;
 use self::navigation::MarkdownParseContext;
@@ -197,6 +201,77 @@ pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
 /// path-aware fallback page when the file cannot be read as UTF-8.
 pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptions) -> AnyView {
     MarkdownView::new(path.as_ref(), options).into_view()
+}
+
+/// Builds the asynchronously loaded view used by the declarative `Markdown` tag.
+///
+/// This generated-code entry point resolves the source against the process
+/// working directory, scopes filesystem access to its volume, and converts
+/// initialization or read failures into Leptatui's standard view-error screen.
+#[doc(hidden)]
+pub fn __markdown_element(
+    path: impl AsRef<Path>,
+    options: MarkdownOptions,
+    source_file: &'static str,
+    source_line: u32,
+) -> AnyView {
+    let path = match absolute_markdown_path(path.as_ref()) {
+        Ok(path) => path,
+        Err(error) => return __view_error(error.into(), source_file, source_line),
+    };
+    let filesystem = match use_file_system(volume_root(&path)) {
+        Ok(filesystem) => filesystem,
+        Err(error) => return __view_error(error.into(), source_file, source_line),
+    };
+    let operation = filesystem.read_file_as_string(path.clone());
+    let pending = operation.pending();
+    let value = operation.value();
+
+    dynamic(move || {
+        if pending.get() {
+            return text("Loading Markdown file...").into_view();
+        }
+
+        value.with(|result| match result {
+            Some(Ok(source)) => markdown_source_with_options(&path, source, options),
+            Some(Err(error)) => {
+                __view_error(ViewError::msg(error.to_string()), source_file, source_line)
+            }
+            None => text("Loading Markdown file...").into_view(),
+        })
+    })
+    .into_view()
+}
+
+/// Resolves a Markdown source path without requiring the source to exist.
+fn absolute_markdown_path(path: &Path) -> std::io::Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let mut normalized = PathBuf::new();
+
+    for component in absolute.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if normalized.file_name().is_some() {
+                    normalized.pop();
+                }
+            }
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
+        }
+    }
+
+    Ok(normalized)
+}
+
+/// Returns the filesystem or drive root containing a Markdown source path.
+fn volume_root(path: &Path) -> PathBuf {
+    path.ancestors().last().unwrap_or(path).to_path_buf()
 }
 
 /// Creates a navigable Markdown view from already-loaded UTF-8 source.

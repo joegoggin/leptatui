@@ -73,7 +73,7 @@ impl Element {
         )
     }
 
-    /// Expands an infallible path-backed Markdown element.
+    /// Expands an asynchronously loaded path-backed Markdown element.
     ///
     /// # Returns
     ///
@@ -98,7 +98,14 @@ impl Element {
         }
 
         self.expand_attrs(
-            quote! { #leptatui::markdown_file_with_options(#source, #options) },
+            quote! {
+                #leptatui::__private::__markdown_element(
+                    #source,
+                    #options,
+                    ::core::file!(),
+                    ::core::line!(),
+                )
+            },
             &attrs,
         )
     }

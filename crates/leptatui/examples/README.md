@@ -245,9 +245,10 @@ unknown-language code fences:
 cargo run --example markdown_reader -- crates/leptatui/examples/assets/markdown_showcase.md
 ```
 
-The reader constructs its document from `<Markdown src={path} />` before
-terminal startup. Unreadable paths and invalid UTF-8 open the reader with a
-path-aware fallback paragraph. Scroll with the arrow keys or `j`/`k`, Page Up
+The reader constructs its document from `<Markdown src={path} />`, which loads
+asynchronously through a volume-rooted filesystem operation. Unreadable paths
+and invalid UTF-8 open Leptatui's standard `ViewError` screen. Scroll with the
+arrow keys or `j`/`k`, Page Up
 and Page Down or Ctrl+U/Ctrl+D, `gg`, `G`, or the mouse wheel. Use Tab and
 Shift+Tab or pointer movement to focus links, then Enter, Space, or left click
 to open the focused target. Local Markdown files and heading fragments open
@@ -269,7 +270,8 @@ let configured_document = markdown_with_options(
 );
 ```
 
-Use the file functions or `Markdown` tag when the input is a local UTF-8 path:
+Use the synchronous file functions or asynchronous `Markdown` tag when the
+input is a local UTF-8 path:
 
 ```rust
 use leptatui::prelude::*;

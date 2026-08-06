@@ -17,7 +17,6 @@ pub(super) fn use_viewer_document_styles() {
             }
 
             &__error => { fg: Color::LightRed }
-            &__loading => { fg: Color::LightCyan }
             &__empty => { fg: Color::DarkGray }
         }
     };

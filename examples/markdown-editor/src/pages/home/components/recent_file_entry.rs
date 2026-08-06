@@ -1,10 +1,10 @@
 //! Actionable recent-file entry.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, rc::Rc};
 
 use leptatui::prelude::*;
 
-use crate::pages::{shared::relative_path, viewer_location};
+use crate::pages::shared::relative_path;
 
 /// Renders one actionable recent-file row.
 ///
@@ -12,19 +12,22 @@ use crate::pages::{shared::relative_path, viewer_location};
 ///
 /// * `path` — Canonical recent Markdown path.
 /// * `base` — Current directory used to shorten the displayed path.
+/// * `on_open` — Home-owned callback that records and opens the path.
 ///
 /// # Returns
 ///
 /// A button that opens `path` in Viewer.
 #[component]
-pub(in crate::pages::home) fn RecentFileEntry(path: PathBuf, base: PathBuf) -> impl IntoView {
-    let navigate = use_navigate();
+pub(in crate::pages::home) fn RecentFileEntry(
+    path: PathBuf,
+    base: PathBuf,
+    on_open: Rc<dyn Fn(PathBuf)>,
+) -> impl IntoView {
     let label = relative_path(&base, &path);
-    let target = viewer_location(&path);
 
     view! {
         <Button on_press=move || {
-            navigate(&target, NavigateOptions::default());
+            on_open(path.clone());
             AppControl::Continue
         }>{label}</Button>
     }

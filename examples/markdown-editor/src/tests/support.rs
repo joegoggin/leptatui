@@ -15,25 +15,18 @@ use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
 use tokio::{runtime::Runtime, task::LocalSet};
 
-use crate::{
-    app::{AppRouter, AppRouterProps},
-    services::RecentFilesStore,
-};
+use crate::app::{AppRouter, AppRouterProps};
 
 /// Provides deterministic services to the routed application during tests.
 ///
 /// # Arguments
 ///
 /// * `initial_path` — First router location for the test application.
-/// * `recent_files_store` — Isolated recent-file store supplied to routed pages.
-///
 /// # Returns
 ///
-/// A routed application using the supplied service contexts.
+/// A routed application using test-owned process state.
 #[component]
-fn TestAppRouter(initial_path: String, recent_files_store: RecentFilesStore) -> impl IntoView {
-    provide_context(recent_files_store);
-
+fn TestAppRouter(initial_path: String) -> impl IntoView {
     view! { <AppRouter initial_path=initial_path /> }
 }
 
@@ -65,8 +58,6 @@ pub(super) struct TestContexts {
     _test_lease: Rc<TestLease>,
     /// Process directory restored when this fixture is dropped.
     previous_directory: PathBuf,
-    /// Recent-file persistence injected into every constructed application.
-    pub(super) recent_files_store: RecentFilesStore,
 }
 
 impl TestContexts {
@@ -80,20 +71,6 @@ impl TestContexts {
     ///
     /// A [`TestContexts`] retaining the scoped current directory.
     pub(super) fn new(root: &Path) -> Self {
-        Self::with_store(root, RecentFilesStore::memory())
-    }
-
-    /// Initializes an application fixture with an explicit recent-file store.
-    ///
-    /// # Arguments
-    ///
-    /// * `root` — Directory selected as the process current directory.
-    /// * `recent_files_store` — Persistence service provided to the application.
-    ///
-    /// # Returns
-    ///
-    /// A [`TestContexts`] retaining the scoped current directory.
-    pub(super) fn with_store(root: &Path, recent_files_store: RecentFilesStore) -> Self {
         let test_lease = acquire_test_lease();
         enter_test_runtime();
         let previous_directory = env::current_dir().expect("the current directory should resolve");
@@ -102,7 +79,6 @@ impl TestContexts {
         Self {
             _test_lease: test_lease,
             previous_directory,
-            recent_files_store,
         }
     }
 
@@ -128,7 +104,6 @@ impl TestContexts {
         TestAppRouter::with_props(
             TestAppRouterProps::builder()
                 .initial_path(path.into())
-                .recent_files_store(self.recent_files_store.clone())
                 .build(),
         )
         .into_view()
@@ -276,6 +251,7 @@ fn enter_test_runtime() {
         });
         let _ = Box::leak(Box::new(runtime.enter()));
         let _ = Box::leak(Box::new(test_local_set().enter()));
+        let _executor_initializer = Action::new(|_: &()| async {});
     });
 }
 

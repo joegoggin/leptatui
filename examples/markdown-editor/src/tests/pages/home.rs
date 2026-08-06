@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Verifies Viewer reload and Home recent-file behavior remain integrated.
+/// Verifies Viewer reload and direct-route recent-file behavior.
 ///
 /// # Example Under Test
 ///
@@ -14,9 +14,9 @@ use super::*;
 ///
 /// - Viewer opens the requested Markdown file.
 /// - Viewer scrolling and reload retain their existing behavior.
-/// - Returning Home exposes the opened file in recent history.
+/// - Returning Home does not record a direct Viewer route.
 #[test]
-fn routed_pages_open_reload_and_remember_a_markdown_file() -> leptatui::Result<()> {
+fn routed_pages_open_reload_without_recording_direct_routes() -> leptatui::Result<()> {
     let tree = TestTree::new("routed-pages");
     fs::write(tree.root().join("alpha.md"), "# Alpha")
         .expect("the first Markdown file should be created");
@@ -63,25 +63,7 @@ fn routed_pages_open_reload_and_remember_a_markdown_file() -> leptatui::Result<(
     draw_editor(&mut terminal, &view)?;
     let returned_home = rendered_lines(&terminal).join("\n");
     assert!(returned_home.contains("Recent files"));
-    assert!(returned_home.contains("beta.md"));
-
-    for key in [KeyCode::Tab, KeyCode::Tab] {
-        assert_eq!(
-            view.handle_key_event(KeyEvent::new(key, KeyModifiers::NONE))?,
-            KeyControl::Handled
-        );
-        draw_editor(&mut terminal, &view)?;
-    }
-    assert_eq!(
-        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
-        KeyControl::Handled
-    );
-    draw_editor(&mut terminal, &view)?;
-    assert!(
-        rendered_lines(&terminal)
-            .join("\n")
-            .contains("Markdown viewer")
-    );
+    assert!(!returned_home.contains("beta.md"));
 
     Ok(())
 }

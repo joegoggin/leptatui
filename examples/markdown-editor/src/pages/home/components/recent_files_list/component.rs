@@ -1,6 +1,6 @@
 //! Recent-file list, empty state, and persistence warning.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, rc::Rc};
 
 use leptatui::prelude::*;
 
@@ -16,6 +16,7 @@ use super::{
 /// * `entries` — Recent paths in most-recent-first order.
 /// * `error` — Optional recoverable persistence error.
 /// * `base` — Current directory used to shorten displayed paths.
+/// * `on_open` — Home-owned callback that records and opens a path.
 ///
 /// # Returns
 ///
@@ -25,6 +26,7 @@ pub(in crate::pages::home) fn RecentFilesList(
     entries: Vec<PathBuf>,
     error: Option<String>,
     base: PathBuf,
+    on_open: Rc<dyn Fn(PathBuf)>,
 ) -> impl IntoView {
     use_recent_files_list_styles();
 
@@ -46,9 +48,14 @@ pub(in crate::pages::home) fn RecentFilesList(
         rows.extend(entries.iter().map(|path| {
             let entry_path = PathBuf::clone(path);
             let entry_base = base.clone();
+            let entry_on_open = Rc::clone(&on_open);
 
             view! {
-                <RecentFileEntry path=entry_path base=entry_base />
+                <RecentFileEntry
+                    path=entry_path
+                    base=entry_base
+                    on_open=entry_on_open
+                />
             }
             .into_view()
         }));

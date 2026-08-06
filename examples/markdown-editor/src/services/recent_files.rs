@@ -10,6 +10,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(not(test))]
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +46,7 @@ impl RecentFilesStore {
     ///
     /// A [`RecentFilesStore`] using the standard application location, or a
     /// memory-only store when the platform cannot resolve one.
+    #[cfg(not(test))]
     pub(crate) fn standard() -> Self {
         let path = ProjectDirs::from("io.github", "joegoggin", "leptatui-markdown-editor")
             .map(|directories| directories.data_local_dir().join("recent-files.json"));
@@ -53,6 +55,12 @@ impl RecentFilesStore {
             path,
             memory: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Creates the isolated store used by routed component tests.
+    #[cfg(test)]
+    pub(crate) fn standard() -> Self {
+        Self::memory()
     }
 
     /// Creates a store that retains recent files only in application memory.

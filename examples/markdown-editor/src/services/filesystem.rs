@@ -3,23 +3,7 @@
 //! Leptatui owns file selection and path containment. This module retains only
 //! Markdown path validation and volume-boundary discovery used by the viewer.
 
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
-
-/// Returns the filesystem or drive root containing an absolute path.
-///
-/// # Arguments
-///
-/// * `path` — Absolute path whose containment boundary should be discovered.
-///
-/// # Returns
-///
-/// A [`PathBuf`] containing the outermost ancestor of `path`.
-pub(crate) fn volume_root(path: &Path) -> PathBuf {
-    path.ancestors().last().unwrap_or(path).to_path_buf()
-}
+use std::{ffi::OsStr, path::Path};
 
 /// Returns whether a path has a supported Markdown extension.
 ///
