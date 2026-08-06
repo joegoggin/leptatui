@@ -184,33 +184,257 @@ fn compares_dynamic_views_by_identity() {
 /// unrelated redraws.
 #[test]
 fn keyed_views_rebuild_children_only_when_keys_change() -> leptatui::app::Result<()> {
-    let key = Rc::new(Cell::new(0_u8));
-    let builds = Rc::new(Cell::new(0_u8));
-    let key_reader = Rc::clone(&key);
-    let child_key = Rc::clone(&key);
-    let child_builds = Rc::clone(&builds);
-    let view = keyed(
-        move || key_reader.get(),
-        move || {
+    Owner::new().with(|| {
+        let key = RwSignal::new(0_u8);
+        let builds = Rc::new(Cell::new(0_u8));
+        let child_builds = Rc::clone(&builds);
+        let view = keyed(
+            move || key.get(),
+            move || {
+                child_builds.set(child_builds.get().saturating_add(1));
+                text(format!("Key {}", key.get_untracked()))
+            },
+        );
+        let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
+
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 1);
+        assert!(rendered_text(&terminal).contains("Key 0"));
+
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 1);
+
+        key.set(1);
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 2);
+        assert!(rendered_text(&terminal).contains("Key 1"));
+
+        Ok(())
+    })
+}
+
+/// Verifies dynamic views rebuild only after a tracked dependency changes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// dynamic(move || text(format!("Count {}", count.get())))
+/// ```
+///
+/// # Assertions
+///
+/// - The first draw builds the child once.
+/// - An unrelated second draw reuses the retained child.
+/// - Updating the tracked signal rebuilds the child once.
+#[test]
+fn dynamic_views_rebuild_after_tracked_signal_changes() -> leptatui::app::Result<()> {
+    Owner::new().with(|| {
+        let count = RwSignal::new(0_u8);
+        let builds = Rc::new(Cell::new(0_u8));
+        let child_builds = Rc::clone(&builds);
+        let view = dynamic(move || {
             child_builds.set(child_builds.get().saturating_add(1));
-            text(format!("Key {}", child_key.get()))
-        },
-    );
-    let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
+            text(format!("Count {}", count.get()))
+        });
+        let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
 
-    draw_view(&mut terminal, &view)?;
-    assert_eq!(builds.get(), 1);
-    assert!(rendered_text(&terminal).contains("Key 0"));
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 1);
+        assert!(rendered_text(&terminal).contains("Count 0"));
 
-    draw_view(&mut terminal, &view)?;
-    assert_eq!(builds.get(), 1);
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 1);
 
-    key.set(1);
-    draw_view(&mut terminal, &view)?;
-    assert_eq!(builds.get(), 2);
-    assert!(rendered_text(&terminal).contains("Key 1"));
+        count.set(1);
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 2);
+        assert!(rendered_text(&terminal).contains("Count 1"));
 
-    Ok(())
+        Ok(())
+    })
+}
+
+/// Verifies a dynamic view respects memo change detection.
+///
+/// # Example Under Test
+///
+/// ```text
+/// parity = Memo::new(move |_| count.get() % 2)
+/// dynamic(move || text(parity.get().to_string()))
+/// ```
+///
+/// # Assertions
+///
+/// - An upstream change that preserves the memo value does not rebuild.
+/// - An upstream change that alters the memo value rebuilds once.
+#[test]
+fn dynamic_views_rebuild_only_when_memo_values_change() -> leptatui::app::Result<()> {
+    Owner::new().with(|| {
+        let count = RwSignal::new(0_u8);
+        let parity = Memo::new(move |_| count.get() % 2);
+        let builds = Rc::new(Cell::new(0_u8));
+        let child_builds = Rc::clone(&builds);
+        let view = dynamic(move || {
+            child_builds.set(child_builds.get().saturating_add(1));
+            text(parity.get().to_string())
+        });
+        let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
+
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 1);
+
+        count.set(2);
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 1);
+
+        count.set(3);
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 2);
+        assert!(rendered_text(&terminal).contains('1'));
+
+        Ok(())
+    })
+}
+
+/// Verifies untracked reads do not invalidate a dynamic view.
+///
+/// # Example Under Test
+///
+/// ```text
+/// dynamic(move || text(format!("Count {}", count.get_untracked())))
+/// ```
+///
+/// # Assertions
+///
+/// - The first draw builds the child once.
+/// - Updating the untracked signal does not rebuild the child.
+/// - The retained child continues to show its initial value.
+#[test]
+fn dynamic_views_ignore_untracked_signal_changes() -> leptatui::app::Result<()> {
+    Owner::new().with(|| {
+        let count = RwSignal::new(0_u8);
+        let builds = Rc::new(Cell::new(0_u8));
+        let child_builds = Rc::clone(&builds);
+        let view = dynamic(move || {
+            child_builds.set(child_builds.get().saturating_add(1));
+            text(format!("Count {}", count.get_untracked()))
+        });
+        let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
+
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 1);
+        assert!(rendered_text(&terminal).contains("Count 0"));
+
+        count.set(1);
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(builds.get(), 1);
+        assert!(rendered_text(&terminal).contains("Count 0"));
+
+        Ok(())
+    })
+}
+
+/// Verifies `view!` text closures track signal reads and retain attributes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Text style=yellow>{move || label.get()}</Text>
+/// ```
+///
+/// # Assertions
+///
+/// - The initial signal value is rendered.
+/// - Updating the signal changes the rendered text.
+/// - The inline style is applied to the rebuilt text view.
+#[test]
+fn view_macro_text_closures_render_reactively() -> leptatui::app::Result<()> {
+    Owner::new().with(|| {
+        let label = RwSignal::new(String::from("Idle"));
+        let view = view! {
+            <Text style=TuiStyle::new().foreground(Color::Yellow)>
+                {move || label.get()}
+            </Text>
+        };
+        let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
+
+        draw_view(&mut terminal, &view)?;
+        assert!(rendered_text(&terminal).contains("Idle"));
+        let cell = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .find(|cell| cell.symbol() == "I")
+            .expect("rendered I cell");
+        assert_eq!(cell.fg, Color::Yellow);
+
+        label.set(String::from("Saved"));
+        draw_view(&mut terminal, &view)?;
+        assert!(rendered_text(&terminal).contains("Saved"));
+
+        Ok(())
+    })
+}
+
+/// Verifies `view!` treats a direct signal child as a tracked value read.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Text>{label}</Text>
+/// ```
+///
+/// # Assertions
+///
+/// - The initial signal value is rendered without an explicit `.get()` call.
+/// - Updating the signal changes the rendered text.
+#[test]
+fn view_macro_direct_text_signals_render_reactively() -> leptatui::app::Result<()> {
+    Owner::new().with(|| {
+        let label = RwSignal::new(String::from("Idle"));
+        let view = view! { <Text>{label}</Text> };
+        let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
+
+        draw_view(&mut terminal, &view)?;
+        assert!(rendered_text(&terminal).contains("Idle"));
+
+        label.set(String::from("Saved"));
+        draw_view(&mut terminal, &view)?;
+        assert!(rendered_text(&terminal).contains("Saved"));
+
+        Ok(())
+    })
+}
+
+/// Verifies direct signal children work in ordinary container positions.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Div>{label}</Div>
+/// ```
+///
+/// # Assertions
+///
+/// - The initial signal value becomes a text child.
+/// - Updating the signal changes the retained container's rendered content.
+#[test]
+fn view_macro_direct_container_signals_render_reactively() -> leptatui::app::Result<()> {
+    Owner::new().with(|| {
+        let label = RwSignal::new(String::from("Idle"));
+        let view = view! { <Div>{label}</Div> };
+        let mut terminal = Terminal::new(TestBackend::new(24, 5))?;
+
+        draw_view(&mut terminal, &view)?;
+        assert!(rendered_text(&terminal).contains("Idle"));
+
+        label.set(String::from("Saved"));
+        draw_view(&mut terminal, &view)?;
+        assert!(rendered_text(&terminal).contains("Saved"));
+
+        Ok(())
+    })
 }
 
 /// Verifies editable control reconciliation retains shared runtime state.
@@ -349,34 +573,35 @@ fn reconciliation_preserves_div_state_across_layout_styles() {
 /// - Updating the outer dynamic state replaces the previous inner dynamic closure.
 #[test]
 fn dynamic_reconciliation_replaces_new_nested_dynamic_boundaries() -> leptatui::app::Result<()> {
-    let label = Rc::new(Cell::new("Home"));
-    let dynamic_label = Rc::clone(&label);
-    let view = dynamic(move || {
-        let current = dynamic_label.get();
-        dynamic(move || text(current))
-    });
-    let mut terminal = Terminal::new(TestBackend::new(16, 1))?;
+    Owner::new().with(|| {
+        let label = RwSignal::new("Home");
+        let view = dynamic(move || {
+            let current = label.get();
+            dynamic(move || text(current))
+        });
+        let mut terminal = Terminal::new(TestBackend::new(16, 1))?;
 
-    draw_view(&mut terminal, &view)?;
-    let rendered = terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect::<String>();
-    assert!(rendered.contains("Home"), "rendered text: {rendered:?}");
+        draw_view(&mut terminal, &view)?;
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("Home"), "rendered text: {rendered:?}");
 
-    label.set("Counter");
-    draw_view(&mut terminal, &view)?;
-    let rendered = terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect::<String>();
-    assert!(rendered.contains("Counter"), "rendered text: {rendered:?}");
+        label.set("Counter");
+        draw_view(&mut terminal, &view)?;
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("Counter"), "rendered text: {rendered:?}");
 
-    Ok(())
+        Ok(())
+    })
 }

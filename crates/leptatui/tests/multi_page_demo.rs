@@ -188,7 +188,7 @@ fn DemoWorkflowCounter() -> impl IntoView {
     view! {
         <Div class="page">
             <Text class="title">"Counter"</Text>
-            {move || view! { <Text>{format!("Count: {}", counter.get_untracked())}</Text> }}
+            {move || view! { <Text>{format!("Count: {}", counter.get())}</Text> }}
         </Div>
     }
 }
@@ -214,7 +214,7 @@ fn DemoWorkflowSettings() -> impl IntoView {
     view! {
         <Div class="page">
             <Text class="title">"Settings"</Text>
-            {move || view! { <Text>{format!("Theme: {:?}", mode.get_untracked())}</Text> }}
+            {move || view! { <Text>{format!("Theme: {:?}", mode.get())}</Text> }}
         </Div>
     }
 }

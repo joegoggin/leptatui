@@ -108,10 +108,9 @@ spacing is reduced.
 - `cli` contains optional startup-file parsing.
 - `layouts/root` owns the application shell component and its co-located
   `root-layout` stylesheet.
-- `services` contains Markdown path validation, persistent
-  recent-file storage, external editor process boundaries, restored-terminal
-  session coordination. Leptatui owns file selection, volume-root containment,
-  and asynchronous filesystem I/O.
+- `services` contains Markdown path validation and persistent recent-file
+  storage. Leptatui owns external editor sessions, file selection, volume-root
+  containment, and asynchronous filesystem I/O.
 - `contexts` owns shared notification state and user-facing feedback.
 - `app` defines `AppRouter`, provides application services, and declares `/`
   and `/view/*path`. Each routed page and supporting component owns
@@ -131,18 +130,19 @@ The normal data flow is optional CLI file path → encoded initial Viewer route 
 operation-loaded Markdown source. The file selector routes selected absolute Markdown
 paths through the same encoder. Successful Viewer reads record directly through
 `RecentFilesStore`; Home loads, validates, and displays that global MRU list.
-Editing queues the route-derived path through the contextual editor session,
+Editing passes the route-derived path to Leptatui's `use_editor()` hook, which
 temporarily restores the terminal, appends `--` and the path to the resolved
-editor command, and resumes the same Viewer component. Completion updates the
-Viewer-local revision and path-associated failure so the document reloads in
-place. Recoverable failures render inline or through the notification context.
+editor command, and resumes the same Viewer component. The handle's reactive
+status updates the Viewer-local revision and path-associated failure so the
+document reloads in place, then the Viewer clears the consumed status.
+Recoverable failures render inline or through the notification context.
 
 ## Verification
 
 The package's tests use temporary filesystem trees, page-owned signals,
-injectable stores and editor services, and Ratatui's test backend, so
-filesystem, editor, and representative rendering behavior do not require an
-interactive terminal.
+injectable stores, and Ratatui's test backend, so filesystem and representative
+rendering behavior do not require an interactive terminal. Generic editor
+behavior is covered by the Leptatui crate's injected process-boundary tests.
 
 ```sh
 cargo test -p markdown-editor

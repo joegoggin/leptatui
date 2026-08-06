@@ -19,7 +19,7 @@ pub(crate) fn Notifications() -> impl IntoView {
     use_notifications_styles();
 
     dynamic(move || {
-        let rows = notifications.notifications.get_untracked();
+        let rows = notifications.notifications.get();
         div(rows
             .into_iter()
             .map(render_notification)

@@ -40,11 +40,17 @@ impl Element {
             quote! { #name::new() }
         } else {
             let props = format_ident!("{name}Props");
-            let attr_setters = self.attrs.iter().map(|attr| {
-                let name = &attr.name;
+            let attr_bindings = self.attrs.iter().enumerate().map(|(index, attr)| {
+                let binding = format_ident!("__leptatui_prop_{index}");
                 let value = attr.value.to_tokens();
 
-                quote! { .#name(#value) }
+                quote! { let #binding = #value; }
+            });
+            let attr_setters = self.attrs.iter().enumerate().map(|(index, attr)| {
+                let name = &attr.name;
+                let binding = format_ident!("__leptatui_prop_{index}");
+
+                quote! { .#name(#binding) }
             });
             let children = if self.children.is_empty() {
                 TokenStream::new()
@@ -56,14 +62,20 @@ impl Element {
                 }
             };
 
-            quote! {
-                #name::with_props(
-                    #props::builder()
-                        #(#attr_setters)*
-                        #children
-                        .build()
+            return Ok(quote! {{
+                #(#attr_bindings)*
+                #leptatui::__private::__component_factory(
+                    #preserve_on_reconcile,
+                    move || {
+                        #name::with_props(
+                            #props::builder()
+                                #(#attr_setters)*
+                                #children
+                                .build()
+                        )
+                    },
                 )
-            }
+            }});
         };
 
         Ok(quote! {

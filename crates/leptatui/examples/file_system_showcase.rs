@@ -1047,10 +1047,10 @@ fn render_walkthrough(
     state: &ArcRwSignal<WalkthroughState>,
     active: &ArcRwSignal<Option<ActiveTask>>,
 ) -> AnyView {
-    let state = state.get_untracked();
+    let state = state.get();
     let steps = state.tour.steps();
     let pending = active
-        .get_untracked()
+        .get()
         .is_some_and(|task| task.operation().is_pending());
     let mut views = Vec::new();
     views.push(

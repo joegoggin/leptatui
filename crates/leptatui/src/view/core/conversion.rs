@@ -1,5 +1,10 @@
 //! Conversions into concrete and type-erased view trees.
 
+use leptos::{
+    prelude::{ArcMemo, ArcReadSignal, ArcRwSignal, Get, Memo, ReadSignal, RwSignal, Signal},
+    reactive::owner::Storage,
+};
+
 use super::{any_view::AnyView, contract::View};
 
 /// Converts a concrete value into a type-erased terminal view.
@@ -38,6 +43,76 @@ impl IntoView for &str {
         crate::view::content::text::text(self).into_view()
     }
 }
+
+/// Converts one readable reactive value into a tracked dynamic boundary.
+///
+/// # Arguments
+///
+/// * `source` — Reactive value whose tracked reads invalidate the boundary.
+///
+/// # Returns
+///
+/// An [`AnyView`] that rebuilds from the latest source value.
+fn reactive_into_view<S, V>(source: S) -> AnyView
+where
+    S: Get<Value = V> + 'static,
+    V: IntoView + 'static,
+{
+    crate::view::dynamic(move || source.get()).into_view()
+}
+
+macro_rules! impl_arena_signal_into_view {
+    ($signal:ident) => {
+        impl<V, S> IntoView for $signal<V, S>
+        where
+            $signal<V, S>: Get<Value = V> + 'static,
+            V: IntoView + 'static,
+        {
+            fn into_view(self) -> AnyView {
+                reactive_into_view(self)
+            }
+        }
+    };
+}
+
+impl_arena_signal_into_view!(RwSignal);
+impl_arena_signal_into_view!(ReadSignal);
+
+macro_rules! impl_stored_signal_into_view {
+    ($signal:ident) => {
+        impl<V, S> IntoView for $signal<V, S>
+        where
+            S: Storage<V> + 'static,
+            $signal<V, S>: Get<Value = V> + 'static,
+            V: IntoView + 'static,
+        {
+            fn into_view(self) -> AnyView {
+                reactive_into_view(self)
+            }
+        }
+    };
+}
+
+impl_stored_signal_into_view!(Memo);
+impl_stored_signal_into_view!(Signal);
+impl_stored_signal_into_view!(ArcMemo);
+
+macro_rules! impl_arc_signal_into_view {
+    ($signal:ident) => {
+        impl<V> IntoView for $signal<V>
+        where
+            $signal<V>: Get<Value = V> + 'static,
+            V: IntoView + 'static,
+        {
+            fn into_view(self) -> AnyView {
+                reactive_into_view(self)
+            }
+        }
+    };
+}
+
+impl_arc_signal_into_view!(ArcRwSignal);
+impl_arc_signal_into_view!(ArcReadSignal);
 
 /// Converts a homogeneous or tuple-shaped child collection into a view list.
 pub trait IntoViews {

@@ -55,7 +55,7 @@ fn MacroRouteHomePage() -> impl leptatui::IntoView {
 
     view! {
         <Div>
-            {move || text(format!("Home {}", shared.get_untracked()))}
+            {move || text(format!("Home {}", shared.get()))}
         </Div>
     }
 }
@@ -68,7 +68,7 @@ fn MacroRouteCounterPage() -> impl leptatui::IntoView {
 
     view! {
         <Div>
-            {move || text(format!("Counter {}", shared.get_untracked()))}
+            {move || text(format!("Counter {}", shared.get()))}
         </Div>
     }
 }
@@ -81,7 +81,7 @@ fn MacroRouteSettingsPage() -> impl leptatui::IntoView {
 
     view! {
         <Div>
-            {move || text(format!("Settings {}", shared.get_untracked()))}
+            {move || text(format!("Settings {}", shared.get()))}
         </Div>
     }
 }

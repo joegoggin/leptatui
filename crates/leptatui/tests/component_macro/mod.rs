@@ -22,7 +22,7 @@ use leptatui::{
     Modifier, NavigateOptions, RenderCtx, Router, RouterProps, ThemeVariables, TuiStyle, View,
     button, component, div, dynamic, stylesheet, text, theme_color, use_key_event, view,
 };
-use leptos::prelude::{GetUntracked, ReadSignal, Update, signal};
+use leptos::prelude::{Get, ReadSignal, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
 
 use crate::support::{key, render_component, rendered_lines, rendered_text};

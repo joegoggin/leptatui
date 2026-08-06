@@ -6,7 +6,7 @@ use syn::{Error, Expr, Result};
 
 use crate::view::child::Child;
 
-use super::Element;
+use super::{Element, children::ReactiveTextKind};
 
 impl Element {
     /// Expands a nested route outlet.
@@ -56,8 +56,8 @@ impl Element {
             }
         }
         let leptatui = crate::crate_path::leptatui();
-        let view = self.expand_text_like("A", |content| {
-            quote! { #leptatui::route_link(#content, #href, #exact) }
+        let view = self.expand_text_like("A", ReactiveTextKind::RichText, |content| {
+            quote! { #leptatui::route_link(#content, (#href).clone(), (#exact).clone()) }
         })?;
         let mut expanded = view;
         for name in ["class", "id", "style"] {

@@ -15,7 +15,7 @@ fn MacroSignalRoot() -> impl leptatui::IntoView {
     });
 
     div((
-        dynamic(move || text(format!("Count: {}", count.get_untracked()))),
+        dynamic(move || text(format!("Count: {}", count.get()))),
         button("Increment").on_press(move || {
             set_count.update(|count| *count += 1);
             AppControl::Continue

@@ -730,10 +730,10 @@ fn FileSelectorScreen(
     let file_list = keyed(
         move || {
             (
-                list_key_entries.get_untracked(),
-                list_key_selected.get_untracked(),
-                list_key_hidden.get_untracked(),
-                list_key_error.get_untracked(),
+                list_key_entries.get(),
+                list_key_selected.get(),
+                list_key_hidden.get(),
+                list_key_error.get(),
             )
         },
         move || {
@@ -791,15 +791,15 @@ fn FileSelectorScreen(
     view! {
         <Div class="file-selector">
             <Text class="file-selector__header">
-                {move || format!("Select a file — {}", header_directory.get_untracked().display())}
+                {move || format!("Select a file — {}", header_directory.get().display())}
             </Text>
             <Div class="file-selector__panes">
                 <Block class="file-selector__parent">
                     {move || {
-                        if parent_pending.get_untracked() {
+                        if parent_pending.get() {
                             return text("Loading parent…").into_view();
                         }
-                        match parent_value.get_untracked() {
+                        match parent_value.get() {
                             Some(ParentPreviewContent::Entries(entries)) => {
                                 if entries.is_empty() {
                                     text("No parent entries").into_view()
@@ -824,10 +824,10 @@ fn FileSelectorScreen(
                 </Block>
                 <Block class="file-selector__preview">
                     {move || {
-                        if preview_pending.get_untracked() {
+                        if preview_pending.get() {
                             return text("Loading preview…").into_view();
                         }
-                        match preview_value.get_untracked().flatten() {
+                        match preview_value.get().flatten() {
                             Some(PreviewContent::Directory(entries)) => {
                                 if entries.is_empty() {
                                     text("Empty directory").into_view()
@@ -1398,7 +1398,7 @@ mod tests {
         .expect("syntax preview services should initialize");
         let mut terminal =
             Terminal::new(TestBackend::new(width, height)).expect("test terminal should open");
-        for _ in 0..8 {
+        for _ in 0..16 {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
             let screen = screens.active().expect("selector should remain mounted");
             terminal

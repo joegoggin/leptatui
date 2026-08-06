@@ -6,13 +6,13 @@ use crate::{
     contexts::{Notifications, provide_notification_context},
     layouts::{RootLayout, RootLayoutProps},
     pages::{HomePage, NotFoundPage, ViewerPage},
-    services::{EditorProcess, EditorSession, RecentFilesStore},
+    services::RecentFilesStore,
 };
 
 /// Provides application services, routing, notifications, and global controls.
 ///
-/// Existing editor and recent-file contexts are retained. Missing contexts are
-/// initialized with their production implementations.
+/// An existing recent-file context is retained. A missing context is
+/// initialized with its production implementation.
 ///
 /// # Arguments
 ///
@@ -23,12 +23,6 @@ use crate::{
 /// A routed Markdown editor application.
 #[component]
 pub(crate) fn AppRouter(#[prop(into)] initial_path: String) -> impl IntoView {
-    if use_context::<EditorSession>().is_none() {
-        provide_context(EditorSession::managed(
-            use_app_handle(),
-            EditorProcess::new(),
-        ));
-    }
     if use_context::<RecentFilesStore>().is_none() {
         provide_context(RecentFilesStore::standard());
     }

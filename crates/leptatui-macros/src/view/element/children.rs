@@ -8,6 +8,14 @@ use crate::view::{child::Child, text_content::TextContent};
 
 use super::Element;
 
+/// Owned content produced by one reactive text-like element.
+pub(super) enum ReactiveTextKind {
+    /// Content accepted through `Into<String>`.
+    String,
+    /// Content accepted through `Into<leptatui::RichText>`.
+    RichText,
+}
+
 impl Element {
     /// Expands an element that must contain exactly one view child.
     ///
@@ -251,6 +259,7 @@ impl Element {
     pub(super) fn expand_text_like(
         &self,
         element_name: &str,
+        kind: ReactiveTextKind,
         wrap: impl FnOnce(TokenStream) -> TokenStream,
     ) -> Result<TokenStream> {
         if self.children.len() != 1 {
@@ -267,6 +276,31 @@ impl Element {
             ));
         };
 
-        Ok(wrap(content.expand()))
+        let leptatui = crate::crate_path::leptatui();
+        let expanded = match content {
+            TextContent::Literal(value) => return Ok(wrap(quote! { #value })),
+            TextContent::Expr(expr) => match kind {
+                ReactiveTextKind::String => {
+                    let view = wrap(quote! { __leptatui_content });
+                    quote! {
+                        #leptatui::__private::__into_string_view(
+                            #expr,
+                            move |__leptatui_content| #view,
+                        )
+                    }
+                }
+                ReactiveTextKind::RichText => {
+                    let view = wrap(quote! { __leptatui_content });
+                    quote! {
+                        #leptatui::__private::__into_rich_text_view(
+                            #expr,
+                            move |__leptatui_content| #view,
+                        )
+                    }
+                }
+            },
+        };
+
+        Ok(expanded)
     }
 }

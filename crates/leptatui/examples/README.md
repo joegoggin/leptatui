@@ -378,6 +378,26 @@ after successful mutations, and renders pending, success, and error states.
 Use `n` to create, `u` to update the first ticket, `r` to reload, `l` to fail
 the next list request, `e` to fail a mutation, and `q` to quit.
 
+## External Editor
+
+Run the external editor hook example with its in-memory Markdown draft:
+
+```sh
+cargo run --example external_editor
+```
+
+Supply an optional path to enable the file-editing action as well:
+
+```sh
+cargo run --example external_editor -- README.md
+```
+
+Press `t` to round-trip the displayed `RwSignal<String>` through a temporary
+`.md` file, `f` to edit the optional path, `c` to clear the editor status, and
+`q` to quit. The status line reactively shows the shared `EditorStatus` moving
+from pending to success or failure. The editor comes from `VISUAL`, then
+`EDITOR`, and finally the `vi` fallback.
+
 ## File System Showcase
 
 Run the complete root-scoped filesystem operation laboratory:

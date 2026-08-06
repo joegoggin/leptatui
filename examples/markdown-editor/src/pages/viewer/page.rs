@@ -1,16 +1,13 @@
 //! Viewer route-level component, local reload state, and shared file synchronization.
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use leptatui::prelude::*;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 use crate::{
     contexts::use_notifications,
-    services::{EditorSession, RecentFilesStore, is_markdown_path, volume_root},
+    services::{RecentFilesStore, is_markdown_path, volume_root},
 };
 
 use super::{
@@ -42,8 +39,8 @@ const ROUTE_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
 struct EditorFailure {
     /// Markdown path supplied to the editor.
     path: PathBuf,
-    /// Shared editor launch or exit failure.
-    error: Arc<anyhow::Error>,
+    /// Editor launch or exit failure.
+    error: String,
 }
 
 /// Renders the standalone Markdown viewer and document actions.
@@ -57,7 +54,7 @@ struct EditorFailure {
 #[component]
 pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
     let notifications = use_notifications();
-    let editor_session = expect_context::<EditorSession>();
+    let editor = use_editor();
     let recent_files_store = expect_context::<RecentFilesStore>();
     let route_params = use_params_map();
     let initial_path = route_params
@@ -79,6 +76,7 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
         .get("path")
         .map_or_else(|| String::from("none"), str::to_owned);
     let editor_failure = RwSignal::new(None::<EditorFailure>);
+    let editor_request = RwSignal::new(None::<PathBuf>);
     let document_path = RwSignal::new(None::<PathBuf>);
     let load_error = RwSignal::new(None::<String>);
     let load_generation = RwSignal::new(0_u64);
@@ -128,6 +126,43 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
             }
             let _ = document_path.try_set(Some(requested.clone()));
             let _ = read_for_route.try_set(Some(route_filesystem.read_file_as_string(requested)));
+        },
+        true,
+    );
+
+    let completed_editor_status = editor.clone();
+    let completed_editor_clear = editor.clone();
+    Effect::watch_sync(
+        move || completed_editor_status.status(),
+        move |status, _, _| {
+            let Some(status) = status else {
+                return;
+            };
+            if status == &EditorStatus::Pending {
+                return;
+            }
+            let Some(path) = editor_request.get_untracked() else {
+                completed_editor_clear.clear();
+                return;
+            };
+            let failure = match status {
+                EditorStatus::Error(error) => {
+                    notifications.show_error("Editor failed", error.clone());
+                    Some(EditorFailure {
+                        path,
+                        error: error.clone(),
+                    })
+                }
+                EditorStatus::Complete => {
+                    notifications.show_success("Editor closed", "Reloaded the Markdown preview.");
+                    None
+                }
+                EditorStatus::Pending => return,
+            };
+            editor_failure.set(failure);
+            revision.update(|revision| *revision = revision.wrapping_add(1));
+            editor_request.set(None);
+            completed_editor_clear.clear();
         },
         true,
     );
@@ -188,13 +223,13 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
     let document = keyed(
         move || {
             let version = document_key_read
-                .try_get_untracked()
+                .try_get()
                 .flatten()
-                .and_then(|operation| operation.version().try_get_untracked())
+                .and_then(|operation| operation.version().try_get())
                 .unwrap_or_default();
-            let generation = load_generation.try_get_untracked().unwrap_or_default();
-            let path = document_path.try_get_untracked().flatten();
-            let load_error = load_error.try_get_untracked().flatten();
+            let generation = load_generation.try_get().unwrap_or_default();
+            let path = document_path.try_get().flatten();
+            let load_error = load_error.try_get().flatten();
             let editor_error = matching_editor_error(&document_key_editor_failure, path.as_deref());
             (generation, version, load_error, editor_error)
         },
@@ -216,7 +251,7 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
                 .try_get_untracked()
                 .flatten()
                 .map_or(source, |error| Some(Err(error)));
-            let editor_error = matching_editor_error(&editor_failure, path.as_deref());
+            let editor_error = untrack(|| matching_editor_error(&editor_failure, path.as_deref()));
             let loading = operation
                 .as_ref()
                 .and_then(|operation| operation.pending().try_get_untracked())
@@ -243,19 +278,8 @@ pub(crate) fn ViewerPage() -> ViewResult<impl IntoView> {
         match key.code {
             KeyCode::Char('e') => {
                 if let Some(Some(path)) = document_path.try_get_untracked() {
-                    editor_session.edit(path, move |path, result| {
-                        let failure = result.err().map(|error| {
-                            let error = Arc::new(anyhow::Error::new(error));
-                            notifications.show_error("Editor failed", error.to_string());
-                            EditorFailure { path, error }
-                        });
-                        if failure.is_none() {
-                            notifications
-                                .show_success("Editor closed", "Reloaded the Markdown preview.");
-                        }
-                        editor_failure.set(failure);
-                        revision.update(|revision| *revision = revision.wrapping_add(1));
-                    });
+                    editor_request.set(Some(path.clone()));
+                    editor.edit_file(path);
                 } else {
                     editor_failure.set(None);
                 }
@@ -333,10 +357,10 @@ fn matching_editor_error(
     editor_failure: &RwSignal<Option<EditorFailure>>,
     path: Option<&Path>,
 ) -> Option<String> {
-    editor_failure.with_untracked(|failure| {
+    editor_failure.with(|failure| {
         failure
             .as_ref()
             .filter(|failure| Some(failure.path.as_path()) == path)
-            .map(|failure| failure.error.to_string())
+            .map(|failure| failure.error.clone())
     })
 }

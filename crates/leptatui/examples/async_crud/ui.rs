@@ -131,7 +131,7 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
 fn TicketList() -> impl IntoView {
     let context = expect_context::<CrudContext>();
 
-    dynamic(move || match context.tickets.get_untracked() {
+    dynamic(move || match context.tickets.get() {
         None => text("Loading tickets from mock API...")
             .with_classes("pending")
             .into_view(),
@@ -153,9 +153,9 @@ fn MutationStatus() -> impl IntoView {
 
     dynamic(move || {
         render_mutation_status(
-            context.mutation.is_pending_untracked(),
-            context.mutation.input().get_untracked(),
-            context.mutation.value().get_untracked(),
+            context.mutation.is_pending(),
+            context.mutation.input().get(),
+            context.mutation.value().get(),
         )
     })
 }

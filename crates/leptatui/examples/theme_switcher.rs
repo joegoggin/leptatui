@@ -59,7 +59,7 @@ fn ThemeStatus() -> impl IntoView {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
     dynamic(move || {
-        view! { <Text class="theme-status">{format!("Active theme: {:?}", mode.get_untracked())}</Text> }
+        view! { <Text class="theme-status">{format!("Active theme: {:?}", mode.get())}</Text> }
     })
 }
 

@@ -154,7 +154,7 @@ fn StylesheetImportsDemo() -> impl IntoView {
                 {move || {
                     view! {
                         <Text class="body">
-                            {format!("Deploy attempts: {}", launches.get_untracked())}
+                            {format!("Deploy attempts: {}", launches.get())}
                         </Text>
                     }
                 }}

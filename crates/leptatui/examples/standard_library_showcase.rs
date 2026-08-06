@@ -205,19 +205,19 @@ fn StandardLibraryShowcase() -> impl IntoView {
             <Div>
                 <Text class="title">"Standard library showcase"</Text>
                 {move || {
-                    let current_name = name.get_untracked();
-                    let current_notes = notes.get_untracked();
-                    let current_progress = progress.get_untracked();
+                    let current_name = name.get();
+                    let current_notes = notes.get();
+                    let current_progress = progress.get();
                     text(
                             status
-                                .get_untracked()
+                                .get()
                                 .label(&current_name, &current_notes, current_progress),
                         )
                         .with_classes("status")
                 }}
                 {move || {
-                    let name_value = name.get_untracked();
-                    let notes_value = notes.get_untracked();
+                    let name_value = name.get();
+                    let notes_value = notes.get();
 
                     view! {
                         <Form
@@ -297,7 +297,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
                     "Image sizes come from stylesheet classes; supported terminals render graphics and other targets show fallback text."
                 </Text>
                 {move || {
-                    let current_progress = progress.get_untracked();
+                    let current_progress = progress.get();
                     progress_bar(current_progress)
                         .label(format!("{:.0}% complete", current_progress * 100.0))
                         .with_classes("meter")

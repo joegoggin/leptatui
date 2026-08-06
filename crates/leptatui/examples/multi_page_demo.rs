@@ -220,8 +220,8 @@ fn HomePage() -> impl IntoView {
                         <Text class="stat">
                             {format!(
                                 "Count: {} | Theme: {:?}",
-                                counter.get_untracked(),
-                                theme_mode.get_untracked(),
+                                counter.get(),
+                                theme_mode.get(),
                             )}
                         </Text>
                     }
@@ -261,7 +261,7 @@ fn CounterPage() -> impl IntoView {
                 <Text class="page-title">"Counter"</Text>
                 {move || {
                     view! {
-                        <Text class="stat">{format!("Count: {}", counter.get_untracked())}</Text>
+                        <Text class="stat">{format!("Count: {}", counter.get())}</Text>
                     }
                 }}
                 <Div class="actions">
@@ -309,7 +309,7 @@ fn SettingsPage() -> impl IntoView {
                 {move || {
                     view! {
                         <Text class="stat">
-                            {format!("Theme preference: {:?}", mode.get_untracked())}
+                            {format!("Theme preference: {:?}", mode.get())}
                         </Text>
                     }
                 }}

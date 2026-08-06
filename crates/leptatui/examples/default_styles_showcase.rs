@@ -142,8 +142,8 @@ fn DefaultStylesShowcase() -> impl IntoView {
 
                 <H2>"Form controls"</H2>
                 {move || {
-                    let name_value = name.get_untracked();
-                    let notes_value = notes.get_untracked();
+                    let name_value = name.get();
+                    let notes_value = notes.get();
 
                     view! {
                         <Form
@@ -184,11 +184,11 @@ fn DefaultStylesShowcase() -> impl IntoView {
                         </Form>
                     }
                 }}
-                {move || text(form_status.get_untracked())}
+                {move || text(form_status.get())}
 
                 <H2>"Progress"</H2>
                 {move || {
-                    let current = progress.get_untracked();
+                    let current = progress.get();
                     progress_bar(current).label(format!("{:.0}% complete", current * 100.0))
                 }}
                 <Div class="row">

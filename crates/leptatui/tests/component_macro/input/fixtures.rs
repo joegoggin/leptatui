@@ -76,7 +76,7 @@ fn MacroDynamicWrappedButtonRoot() -> impl leptatui::IntoView {
     dynamic(move || {
         view! {
             <MacroWrappedButton
-                label=label.get_untracked()
+                label=label.get()
                 on_press=macro_dynamic_wrapped_button_press
             />
         }

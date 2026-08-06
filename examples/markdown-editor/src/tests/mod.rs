@@ -1,22 +1,18 @@
 //! Behavior tests for the Markdown editor.
 //!
-//! Coverage is grouped by application boundary and includes an end-to-end
-//! workflow that exercises preview, editor, and rendering behavior.
+//! Coverage is grouped by application boundary and exercises routing,
+//! persistence, keyboard handling, and representative rendering behavior.
 //!
 //! # Modules
 //!
 //! - [`app`] — Application routing and responsive rendering.
 //! - [`cli`] — Command-line parsing and startup-path normalization.
-//! - [`editor_process`] — Editor configuration and process construction.
 //! - [`pages`] — Page-specific keyboard handling and rendering.
 //! - [`recent_files`] — Persistent MRU ordering and recoverable storage failures.
 //! - [`support`] — Shared fixtures, mocks, and rendering helpers.
-//! - [`workflow`] — End-to-end non-interactive application coverage.
 
 mod app;
 mod cli;
-mod editor_process;
 mod pages;
 mod recent_files;
 mod support;
-mod workflow;

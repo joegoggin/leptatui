@@ -710,21 +710,21 @@ fn display_none_skips_measurement_paint_and_custom_events() -> leptatui::app::Re
     Ok(())
 }
 
-/// Verifies dynamic content is materialized once for layout and reused by paint.
+/// Verifies dynamic content is retained across unrelated root renders.
 ///
 /// # Example Under Test
 ///
 /// ```text
 /// dynamic(|| text("Dynamic"))
-/// two root renders
+/// two root renders without reactive changes
 /// ```
 ///
 /// # Assertions
 ///
 /// - The dynamic factory runs once during the first render.
-/// - The dynamic factory runs exactly once more during the second render.
+/// - The second render reuses the retained child without rerunning the factory.
 #[test]
-fn dynamic_layout_child_is_refreshed_once_per_render() -> leptatui::app::Result<()> {
+fn dynamic_layout_child_is_retained_across_root_renders() -> leptatui::app::Result<()> {
     let builds = Rc::new(Cell::new(0usize));
     let build_count = Rc::clone(&builds);
     let root = dynamic(move || {
@@ -737,6 +737,6 @@ fn dynamic_layout_child_is_refreshed_once_per_render() -> leptatui::app::Result<
     assert_eq!(builds.get(), 1);
 
     let _second = render_layout_root(&root, 20, 2)?;
-    assert_eq!(builds.get(), 2);
+    assert_eq!(builds.get(), 1);
     Ok(())
 }

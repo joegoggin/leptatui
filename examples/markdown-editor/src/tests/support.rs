@@ -1,13 +1,11 @@
 //! Shared fixtures, mocks, and rendering helpers for editor tests.
 
 use std::{
-    env,
-    ffi::OsString,
-    fs, io,
+    env, fs,
     path::{Path, PathBuf},
-    process::{self, Command},
+    process,
     rc::{Rc, Weak},
-    sync::{Arc, Mutex, MutexGuard, OnceLock},
+    sync::{Mutex, MutexGuard, OnceLock},
     thread,
     time::Duration,
     time::{SystemTime, UNIX_EPOCH},
@@ -19,9 +17,7 @@ use tokio::{runtime::Runtime, task::LocalSet};
 
 use crate::{
     app::{AppRouter, AppRouterProps},
-    services::{
-        EditorProcess, EditorSession, EnvironmentReader, ProcessLauncher, RecentFilesStore,
-    },
+    services::RecentFilesStore,
 };
 
 /// Provides deterministic services to the routed application during tests.
@@ -29,19 +25,13 @@ use crate::{
 /// # Arguments
 ///
 /// * `initial_path` — First router location for the test application.
-/// * `editor_session` — Headless editor session supplied to Viewer.
 /// * `recent_files_store` — Isolated recent-file store supplied to routed pages.
 ///
 /// # Returns
 ///
 /// A routed application using the supplied service contexts.
 #[component]
-fn TestAppRouter(
-    initial_path: String,
-    editor_session: EditorSession,
-    recent_files_store: RecentFilesStore,
-) -> impl IntoView {
-    provide_context(editor_session);
+fn TestAppRouter(initial_path: String, recent_files_store: RecentFilesStore) -> impl IntoView {
     provide_context(recent_files_store);
 
     view! { <AppRouter initial_path=initial_path /> }
@@ -138,32 +128,6 @@ impl TestContexts {
         TestAppRouter::with_props(
             TestAppRouterProps::builder()
                 .initial_path(path.into())
-                .editor_session(EditorSession::deferred(EditorProcess::new()))
-                .recent_files_store(self.recent_files_store.clone())
-                .build(),
-        )
-        .into_view()
-    }
-
-    /// Creates an application view at a route with an immediate editor process.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` — Initial router location.
-    /// * `editor_process` — Process boundary executed without a real terminal.
-    ///
-    /// # Returns
-    ///
-    /// An [`AnyView`] whose Viewer completes editor requests synchronously.
-    pub(super) fn view_at_with_editor(
-        &self,
-        path: impl Into<String>,
-        editor_process: EditorProcess,
-    ) -> AnyView {
-        TestAppRouter::with_props(
-            TestAppRouterProps::builder()
-                .initial_path(path.into())
-                .editor_session(EditorSession::immediate(editor_process))
                 .recent_files_store(self.recent_files_store.clone())
                 .build(),
         )
@@ -196,100 +160,6 @@ fn acquire_test_lease() -> Rc<TestLease> {
         *slot.borrow_mut() = Rc::downgrade(&lease);
         lease
     })
-}
-
-/// Program and argument values captured from one process launch.
-pub(super) type RecordedCommand = (OsString, Vec<OsString>);
-
-/// Result returned by one injected process launch.
-#[derive(Clone, Copy, Debug)]
-pub(super) enum TestLaunchOutcome {
-    /// Reports a successful child exit.
-    Success,
-    /// Reports a non-zero child exit.
-    NonZero,
-    /// Reports a missing executable.
-    NotFound,
-}
-
-/// Injectable launcher that records commands and supplies deterministic exits.
-#[derive(Clone, Debug)]
-pub(super) struct RecordingLauncher {
-    /// Commands received by the launcher in call order.
-    pub(super) commands: Arc<Mutex<Vec<RecordedCommand>>>,
-    /// Outcome returned for each launch.
-    pub(super) outcome: TestLaunchOutcome,
-    /// Optional file replacement performed during a successful edit.
-    pub(super) replacement: Option<(PathBuf, String)>,
-}
-
-/// Injectable environment containing optional editor configuration.
-#[derive(Clone, Debug, Default)]
-pub(super) struct TestEnvironment {
-    /// Value returned for `VISUAL`.
-    pub(super) visual: Option<OsString>,
-    /// Value returned for `EDITOR`.
-    pub(super) editor: Option<OsString>,
-}
-
-impl EnvironmentReader for TestEnvironment {
-    /// Returns a configured test environment value.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` — Environment variable name requested by the editor service.
-    ///
-    /// # Returns
-    ///
-    /// An [`Option`] containing the configured test value.
-    fn var_os(&self, name: &str) -> Option<OsString> {
-        match name {
-            "VISUAL" => self.visual.clone(),
-            "EDITOR" => self.editor.clone(),
-            _ => None,
-        }
-    }
-}
-
-impl ProcessLauncher for RecordingLauncher {
-    /// Records and resolves one prepared command without spawning a process.
-    ///
-    /// # Arguments
-    ///
-    /// * `command` — Prepared editor command whose program and arguments are
-    ///   captured.
-    ///
-    /// # Returns
-    ///
-    /// A boolean matching the configured test outcome.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`io::Error`] for the missing-executable outcome or if a
-    /// configured replacement cannot be written.
-    fn success(&self, command: &mut Command) -> io::Result<bool> {
-        self.commands
-            .lock()
-            .expect("recorded commands should not be poisoned")
-            .push((
-                command.get_program().to_os_string(),
-                command.get_args().map(OsString::from).collect(),
-            ));
-
-        match self.outcome {
-            TestLaunchOutcome::Success => {
-                if let Some((path, source)) = &self.replacement {
-                    fs::write(path, source)?;
-                }
-                Ok(true)
-            }
-            TestLaunchOutcome::NonZero => Ok(false),
-            TestLaunchOutcome::NotFound => Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "injected missing editor executable",
-            )),
-        }
-    }
 }
 
 /// Temporary directory tree removed automatically after an application test.

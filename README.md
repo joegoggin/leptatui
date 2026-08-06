@@ -104,8 +104,9 @@ the normal terminal before forwarding the panic to Rust's existing hook.
 
 Signals created in a component body live for that component instance. Provide
 shared signals or services through typed context when descendants need them.
-Components that must temporarily release the terminal—for example, to launch an
-interactive editor—can call `use_app_handle()` and queue work with
+Components can call `use_editor()` to edit files or reactive strings in the
+user's preferred terminal editor. Lower-level integrations can call
+`use_app_handle()` and queue arbitrary synchronous work with
 `AppHandle::suspend_terminal()`. The runtime restores normal terminal modes,
 runs the work on the app thread, re-enters the TUI, and redraws the same mounted
 component tree.
@@ -139,6 +140,38 @@ view! {
     </Panel>
 }
 ```
+
+## Reactive Rendering
+
+Leptatui follows Leptos's dependency-tracking model for dynamic content. A
+closure passed as a view child or text-like element child runs once, subscribes
+to every signal read with `.get()` or `.with()`, and rebuilds only after one of
+those dependencies changes. Signal invalidation also wakes the app loop, so the
+terminal is not continuously redrawn while the UI is idle.
+
+```rust
+let count = RwSignal::new(0);
+let status = RwSignal::new(String::from("Ready"));
+
+view! {
+    <Div>
+        <Text>{move || format!("Count: {}", count.get())}</Text>
+        <Text>{status}</Text>
+    </Div>
+}
+```
+
+Passing a supported readable signal directly is shorthand for a tracked
+`.get()`. This works for `RwSignal`, `ReadSignal`, `Memo`, `Signal`,
+`ArcRwSignal`, `ArcReadSignal`, and `ArcMemo`, both in text-like elements and in
+ordinary child positions. Use `.get_untracked()` or `.with_untracked()` inside
+a dynamic closure only when the value should not cause that boundary to
+rebuild.
+
+Use `keyed(key, child)` when a subtree should be replaced only after a specific
+tracked key changes. The key closure owns the reactive dependencies; the child
+factory is intentionally untracked, and a changed key mounts a fresh child
+without reconciling its prior local view state.
 
 ## Standard Components
 
@@ -360,8 +393,8 @@ fn StandardControls() -> impl IntoView {
     view! {
         <Div>
             {move || {
-                let name_value = name.get_untracked();
-                let notes_value = notes.get_untracked();
+                let name_value = name.get();
+                let notes_value = notes.get();
 
                 view! {
                     <Form on_submit=|| AppControl::Continue>
@@ -388,7 +421,7 @@ fn StandardControls() -> impl IntoView {
                 src="crates/leptatui/examples/assets/showcase.jpg"
                 alt="Image fallback text"
             />
-            {move || progress_bar(progress.get_untracked()).label("Progress")}
+            {move || progress_bar(progress.get()).label("Progress")}
         </Div>
     }
 }
@@ -989,7 +1022,7 @@ fn ThemeLabel() -> impl IntoView {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
     dynamic(move || {
-        view! { <Text>{format!("Theme: {:?}", mode.get_untracked())}</Text> }
+        view! { <Text>{format!("Theme: {:?}", mode.get())}</Text> }
     })
 }
 
@@ -1070,7 +1103,7 @@ fn HomePage() -> impl IntoView {
             <Text>"Home"</Text>
             {move || {
                 view! {
-                    <Text>{format!("Count: {}", counter.get_untracked())}</Text>
+                    <Text>{format!("Count: {}", counter.get())}</Text>
                 }
             }}
         </Div>
@@ -1216,7 +1249,7 @@ fn TodoApp() -> impl IntoView {
 fn TodoList() -> impl IntoView {
     let todos = expect_context::<Todos>();
 
-    dynamic(move || match todos.items.get_untracked() {
+    dynamic(move || match todos.items.get() {
         Some(Ok(items)) => div(items.into_iter().map(text).collect::<Vec<_>>()),
         Some(Err(error)) => text(format!("Load failed: {error}")),
         None => text("Loading todos..."),
@@ -1251,6 +1284,63 @@ fn TodoActions() -> impl IntoView {
 See `cargo run --example async_redraw` for a small async redraw example and
 `cargo run --example async_crud` for resources, actions, context, stylesheets,
 and app startup working together.
+
+## External Editor
+
+`use_editor()` returns a cloneable handle for opening an existing file or
+round-tripping a reactive string through a temporary Markdown file. Leptatui
+temporarily restores normal terminal modes, waits for the configured editor to
+exit, re-enters the TUI, and redraws the mounted component tree.
+
+The editor command comes from the first non-empty `VISUAL` or `EDITOR` value
+and falls back to `vi`. Values may contain shell-word quoted arguments, but the
+command runs directly without shell expansion. The handle exposes one shared,
+reactive `EditorStatus` that moves from `Pending` to `Complete` or `Error`.
+Call `clear()` after consuming a terminal status to return it to `None`.
+
+```rust,no_run
+use leptatui::prelude::*;
+
+#[component]
+fn EditDraft() -> impl IntoView {
+    let editor = use_editor();
+    let status_editor = editor.clone();
+    let draft = RwSignal::new(String::from("# Draft\n"));
+
+    use_key_event(KeyEventKind::Press, move |key| match key.code {
+        KeyCode::Char('e') => {
+            editor.edit_text(draft);
+            KeyControl::Handled
+        }
+        KeyCode::Char('q') => KeyControl::Exit,
+        _ => KeyControl::Pass,
+    });
+
+    view! {
+        <Div>
+            <Text>{draft}</Text>
+            <Text>{move || match status_editor.status() {
+                None => String::from("Editor idle"),
+                Some(EditorStatus::Pending) => String::from("Editor open"),
+                Some(EditorStatus::Complete) => String::from("Edit complete"),
+                Some(EditorStatus::Error(error)) => format!("Edit failed: {error}"),
+            }}</Text>
+        </Div>
+    }
+}
+```
+
+`edit_file(path)` passes the supplied path to the editor. `edit_text(signal)`
+writes the signal snapshot to a uniquely named `.md` file, applies valid UTF-8
+contents only after a successful editor exit, and removes the temporary file
+before reporting completion. Failures preserve the original signal value. All
+clones of an `Editor` observe the same status, and if multiple edits are queued
+before the terminal is suspended, the last completed edit determines the final
+status.
+
+Run `cargo run --example external_editor` to edit the in-memory draft. Supply
+an optional file with `cargo run --example external_editor -- path/to/file` to
+demonstrate both methods.
 
 ## File Selector
 
@@ -1421,6 +1511,12 @@ Run the standard component showcase:
 
 ```sh
 cargo run --example standard_library_showcase
+```
+
+Run the external editor hook showcase with an optional file:
+
+```sh
+cargo run --example external_editor -- README.md
 ```
 
 Run the semantic document component showcase:

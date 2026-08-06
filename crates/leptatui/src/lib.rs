@@ -9,6 +9,7 @@
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
 //! - [`mod@component`] — Component construction support and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
+//! - [`editor`] — Restored-terminal editing for files and reactive text.
 //! - [`file_system`] — Root-scoped asynchronous filesystem operations.
 //! - [`file_selector`] — Standalone reactive file selection.
 //! - `executor` — Leptos executor integration for async reactive work.
@@ -266,6 +267,7 @@ pub mod action;
 pub mod app;
 pub mod component;
 pub mod context;
+pub mod editor;
 pub mod file_selector;
 pub mod file_system;
 pub mod prelude;
@@ -282,6 +284,7 @@ pub use action::Action;
 pub use anyhow::Error as ViewError;
 pub use app::{App, AppControl, AppHandle, AppRoot, Error, Result, use_app_handle};
 pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, use_key_event};
+pub use editor::{Editor, EditorStatus, use_editor};
 pub use executor::{spawn, spawn_local};
 pub use file_selector::{FileSelector, FileSelectorOptions, use_file_selector};
 pub use leptatui_macros::{component, stylesheet, view};
@@ -362,6 +365,10 @@ macro_rules! view_error {
 /// Hidden implementation details used by generated macro code.
 pub mod __private {
     use crate::{AnyView, IntoView, View};
+    use leptos::{
+        prelude::{ArcMemo, ArcReadSignal, ArcRwSignal, Get, Memo, ReadSignal, RwSignal, Signal},
+        reactive::owner::Storage,
+    };
 
     pub use crate::component::{
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
@@ -373,6 +380,260 @@ pub mod __private {
     pub use crate::route::{__outlet, __route_definition, __routes};
     pub use crate::view::error::__view_error;
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};
+
+    /// Marker for ordinary one-time text content.
+    #[doc(hidden)]
+    pub struct StaticContent;
+
+    /// Marker for readable reactive text content.
+    #[doc(hidden)]
+    pub struct ReactiveContent;
+
+    /// Marker for a reactive content-producing closure.
+    #[doc(hidden)]
+    pub struct ReactiveContentClosure;
+
+    /// Converts static or reactive string-like content into a built view.
+    #[doc(hidden)]
+    pub trait IntoStringView<Marker, Builder, Built> {
+        /// Concrete static or dynamic view produced by the conversion.
+        type Output;
+
+        /// Builds a view from this string-like content.
+        ///
+        /// # Arguments
+        ///
+        /// * `builder` — Callback converting owned content into a concrete view.
+        ///
+        /// # Returns
+        ///
+        /// A static view or tracked [`crate::DynamicView`].
+        fn into_string_view(self, builder: Builder) -> Self::Output;
+    }
+
+    impl<T, Builder, Built> IntoStringView<StaticContent, Builder, Built> for T
+    where
+        T: Into<String>,
+        Builder: Fn(String) -> Built,
+    {
+        type Output = Built;
+
+        fn into_string_view(self, builder: Builder) -> Self::Output {
+            builder(self.into())
+        }
+    }
+
+    impl<F, T, Builder, Built> IntoStringView<ReactiveContentClosure, Builder, Built> for F
+    where
+        F: Fn() -> T + 'static,
+        T: Into<String> + 'static,
+        Builder: Fn(String) -> Built + 'static,
+        Built: IntoView + 'static,
+    {
+        type Output = crate::DynamicView;
+
+        fn into_string_view(self, builder: Builder) -> Self::Output {
+            crate::dynamic(move || builder(self().into()))
+        }
+    }
+
+    /// Converts static or reactive rich-text content into a built view.
+    #[doc(hidden)]
+    pub trait IntoRichTextView<Marker, Builder, Built> {
+        /// Concrete static or dynamic view produced by the conversion.
+        type Output;
+
+        /// Builds a view from this rich-text content.
+        ///
+        /// # Arguments
+        ///
+        /// * `builder` — Callback converting owned content into a concrete view.
+        ///
+        /// # Returns
+        ///
+        /// A static view or tracked [`crate::DynamicView`].
+        fn into_rich_text_view(self, builder: Builder) -> Self::Output;
+    }
+
+    impl<T, Builder, Built> IntoRichTextView<StaticContent, Builder, Built> for T
+    where
+        T: Into<crate::RichText>,
+        Builder: Fn(crate::RichText) -> Built,
+    {
+        type Output = Built;
+
+        fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+            builder(self.into())
+        }
+    }
+
+    impl<F, T, Builder, Built> IntoRichTextView<ReactiveContentClosure, Builder, Built> for F
+    where
+        F: Fn() -> T + 'static,
+        T: Into<crate::RichText> + 'static,
+        Builder: Fn(crate::RichText) -> Built + 'static,
+        Built: IntoView + 'static,
+    {
+        type Output = crate::DynamicView;
+
+        fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+            crate::dynamic(move || builder(self().into()))
+        }
+    }
+
+    macro_rules! impl_arena_content_views {
+        ($signal:ident) => {
+            impl<T, S, Builder, Built> IntoStringView<ReactiveContent, Builder, Built>
+                for $signal<T, S>
+            where
+                $signal<T, S>: Get<Value = T> + 'static,
+                T: Into<String> + 'static,
+                Builder: Fn(String) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_string_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+
+            impl<T, S, Builder, Built> IntoRichTextView<ReactiveContent, Builder, Built>
+                for $signal<T, S>
+            where
+                $signal<T, S>: Get<Value = T> + 'static,
+                T: Into<crate::RichText> + 'static,
+                Builder: Fn(crate::RichText) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+        };
+    }
+
+    impl_arena_content_views!(RwSignal);
+    impl_arena_content_views!(ReadSignal);
+
+    macro_rules! impl_stored_content_views {
+        ($signal:ident) => {
+            impl<T, S, Builder, Built> IntoStringView<ReactiveContent, Builder, Built>
+                for $signal<T, S>
+            where
+                S: Storage<T> + 'static,
+                $signal<T, S>: Get<Value = T> + 'static,
+                T: Into<String> + 'static,
+                Builder: Fn(String) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_string_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+
+            impl<T, S, Builder, Built> IntoRichTextView<ReactiveContent, Builder, Built>
+                for $signal<T, S>
+            where
+                S: Storage<T> + 'static,
+                $signal<T, S>: Get<Value = T> + 'static,
+                T: Into<crate::RichText> + 'static,
+                Builder: Fn(crate::RichText) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+        };
+    }
+
+    impl_stored_content_views!(Memo);
+    impl_stored_content_views!(Signal);
+    impl_stored_content_views!(ArcMemo);
+
+    macro_rules! impl_arc_content_views {
+        ($signal:ident) => {
+            impl<T, Builder, Built> IntoStringView<ReactiveContent, Builder, Built> for $signal<T>
+            where
+                $signal<T>: Get<Value = T> + 'static,
+                T: Into<String> + 'static,
+                Builder: Fn(String) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_string_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+
+            impl<T, Builder, Built> IntoRichTextView<ReactiveContent, Builder, Built> for $signal<T>
+            where
+                $signal<T>: Get<Value = T> + 'static,
+                T: Into<crate::RichText> + 'static,
+                Builder: Fn(crate::RichText) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+        };
+    }
+
+    impl_arc_content_views!(ArcRwSignal);
+    impl_arc_content_views!(ArcReadSignal);
+
+    /// Builds a static or reactive string-content view for generated macro code.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Static, closure, or signal content to convert.
+    /// * `builder` — Callback building the semantic text view.
+    ///
+    /// # Returns
+    ///
+    /// The static or dynamic output selected by [`IntoStringView`].
+    #[doc(hidden)]
+    pub fn __into_string_view<T, Marker, Builder, Built>(
+        value: T,
+        builder: Builder,
+    ) -> <T as IntoStringView<Marker, Builder, Built>>::Output
+    where
+        T: IntoStringView<Marker, Builder, Built>,
+    {
+        value.into_string_view(builder)
+    }
+
+    /// Builds a static or reactive rich-text view for generated macro code.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Static, closure, or signal content to convert.
+    /// * `builder` — Callback building the semantic rich-text view.
+    ///
+    /// # Returns
+    ///
+    /// The static or dynamic output selected by [`IntoRichTextView`].
+    #[doc(hidden)]
+    pub fn __into_rich_text_view<T, Marker, Builder, Built>(
+        value: T,
+        builder: Builder,
+    ) -> <T as IntoRichTextView<Marker, Builder, Built>>::Output
+    where
+        T: IntoRichTextView<Marker, Builder, Built>,
+    {
+        value.into_rich_text_view(builder)
+    }
 
     /// Converts one generated child expression into zero or more retained views.
     #[doc(hidden)]

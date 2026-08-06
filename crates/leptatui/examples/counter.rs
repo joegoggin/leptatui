@@ -65,7 +65,7 @@ fn Counter() -> impl IntoView {
                 {move || {
                     view! {
                         <Text class="counter-value">
-                            {format!("Count: {}", count.get_untracked())}
+                            {format!("Count: {}", count.get())}
                         </Text>
                     }
                 }}

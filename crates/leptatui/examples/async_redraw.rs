@@ -78,7 +78,7 @@ fn AsyncRedraw() -> impl IntoView {
             <Div>
                 <Text class="title">"Async redraw"</Text>
                 {move || {
-                    let (label, class) = match resource.get_untracked() {
+                    let (label, class) = match resource.get() {
                         Some(Ok(value)) => (format!("Resource: {value}"), "ready"),
                         Some(Err(error)) => (format!("Resource: {error}"), "error"),
                         None => (String::from("Resource: pending"), "ready"),
@@ -87,10 +87,10 @@ fn AsyncRedraw() -> impl IntoView {
                     view! { <Text class={class}>{label}</Text> }
                 }}
                 {move || {
-                    let (label, class) = if action.is_pending_untracked() {
+                    let (label, class) = if action.is_pending() {
                         (String::from("Action: pending"), "ready")
                     } else {
-                        match action.value().get_untracked() {
+                        match action.value().get() {
                             Some(Ok(value)) => (format!("Action: {value}"), "ready"),
                             Some(Err(error)) => (format!("Action: {error}"), "error"),
                             None => (String::from("Action: idle"), "ready"),

@@ -26,9 +26,10 @@ use leptatui::{
     VimMode, ZIndex, block, button, code_block, component, div, dynamic, form, h1, h2, h3, h4, h5,
     h6, image, input, keyed, link, list_item, markdown, ordered_list, paragraph, progress_bar,
     stylesheet, table, table_body, table_cell, table_head, table_row, text, text_area,
-    unordered_list,
+    unordered_list, view,
     view::{Line, Span, Text},
 };
+use leptos::prelude::{Get, GetUntracked, Memo, Owner, RwSignal, Set};
 use ratatui::{
     Terminal,
     backend::TestBackend,

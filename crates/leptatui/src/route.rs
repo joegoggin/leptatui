@@ -702,8 +702,8 @@ pub fn __routes(fallback: RouteViewFactory, children: Vec<AnyView>) -> impl Into
     let key_routes = Rc::clone(&routes);
     keyed(
         move || {
-            key_router.revision.get_untracked();
-            let matched = match_routes(&key_routes, &key_router.pathname.get_untracked());
+            key_router.revision.get();
+            let matched = match_routes(&key_routes, &key_router.pathname.get());
             key_router.params.set(
                 matched
                     .as_ref()
@@ -810,8 +810,8 @@ fn build_match(routes: Rc<Vec<RouteDefinition>>, router: RouterContext, depth: u
             let build_router = outlet_router.clone();
             keyed(
                 move || {
-                    key_router.revision.get_untracked();
-                    match_routes(&key_routes, &key_router.pathname.get_untracked())
+                    key_router.revision.get();
+                    match_routes(&key_routes, &key_router.pathname.get())
                         .and_then(|matched| matched.chain.get(depth + 1).copied())
                 },
                 move || build_match(Rc::clone(&build_routes), build_router.clone(), depth + 1),

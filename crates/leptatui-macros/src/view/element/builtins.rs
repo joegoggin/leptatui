@@ -6,6 +6,7 @@ use syn::{Error, Result};
 
 use super::{
     Element,
+    children::ReactiveTextKind,
     validation::{AttrKind, ValidatedAttr},
 };
 
@@ -134,8 +135,8 @@ impl Element {
             }
         };
         let leptatui = crate::crate_path::leptatui();
-        let view = self.expand_text_like("Link", |content| {
-            quote! { #leptatui::link(#content, #href) }
+        let view = self.expand_text_like("Link", ReactiveTextKind::RichText, |content| {
+            quote! { #leptatui::link(#content, (#href).clone()) }
         })?;
         self.expand_attrs(view, &attrs)
     }

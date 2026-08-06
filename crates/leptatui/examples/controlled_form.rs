@@ -139,17 +139,17 @@ fn ControlledForm() -> impl IntoView {
                 {move || {
                     text(
                             status
-                                .get_untracked()
+                                .get()
                                 .label(
-                                    name.get_untracked().as_str(),
-                                    notes.get_untracked().as_str(),
+                                    name.get().as_str(),
+                                    notes.get().as_str(),
                                 ),
                         )
                         .with_classes("status")
                 }}
                 {move || {
-                    let name_value = name.get_untracked();
-                    let notes_value = notes.get_untracked();
+                    let name_value = name.get();
+                    let notes_value = notes.get();
 
                     view! {
                         <Form
