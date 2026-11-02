@@ -7,6 +7,7 @@
 //! - [`form`] — Submit and cancel boundaries for editable controls.
 //! - [`link`] — Focusable URL and filesystem links.
 //! - [`progress_bar`] — Clamped terminal gauge views.
+//! - [`route_link`] — Focusable internal router anchors.
 
 use std::rc::Rc;
 
@@ -15,6 +16,7 @@ pub(crate) mod editable;
 pub(crate) mod form;
 pub(crate) mod link;
 pub(crate) mod progress_bar;
+pub(crate) mod route_link;
 
 /// Returns whether optional callbacks are both absent or share allocation identity.
 pub(crate) fn actions_equal<T: ?Sized>(left: &Option<Rc<T>>, right: &Option<Rc<T>>) -> bool {

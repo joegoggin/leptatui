@@ -6,10 +6,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::app::{AppControl, Error, Result};
+use crate::{
+    app::{AppControl, Error, Result},
+    view::StyleMetadata,
+};
+
+use super::visited::mark_visited;
 
 /// Destination retained by a standalone or embedded link.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum LinkTarget {
     /// Absolute URI passed to the operating system's configured handler.
     Url(String),
@@ -210,10 +215,11 @@ fn has_windows_drive_prefix(value: &str) -> bool {
         && matches!(bytes[2], b'/' | b'\\')
 }
 
-/// Opens one actionable target with the operating system's default handler.
+/// Opens one actionable target and records a successful visit.
 ///
 /// # Arguments
 ///
+/// * `metadata` — Activated link metadata receiving the visited state.
 /// * `target` — URL or filesystem path to open.
 ///
 /// # Returns
@@ -224,8 +230,36 @@ fn has_windows_drive_prefix(value: &str) -> bool {
 ///
 /// Returns [`Error::LinkOpen`] if a local target is missing or the system
 /// handler cannot be started.
-pub(crate) fn open_link_target(target: &LinkTarget) -> Result<AppControl> {
-    open_link_target_with(target, |argument| open::that(argument))
+pub(crate) fn activate_link_target(
+    metadata: &StyleMetadata,
+    target: &LinkTarget,
+) -> Result<AppControl> {
+    activate_link_target_with(metadata, target, |argument| open::that(argument))
+}
+
+/// Opens one link through a supplied launcher and records successful visits.
+///
+/// # Arguments
+///
+/// * `metadata` — Activated link metadata receiving the visited state.
+/// * `target` — URL or filesystem path to validate and open.
+/// * `opener` — Launcher receiving the target as an operating-system string.
+///
+/// # Returns
+///
+/// An [`AppControl::Continue`] value after the launcher succeeds.
+///
+/// # Errors
+///
+/// Returns [`Error::LinkOpen`] if target validation or launching fails.
+fn activate_link_target_with(
+    metadata: &StyleMetadata,
+    target: &LinkTarget,
+    opener: impl FnOnce(&OsStr) -> io::Result<()>,
+) -> Result<AppControl> {
+    let control = open_link_target_with(target, opener)?;
+    mark_visited(metadata, target);
+    Ok(control)
 }
 
 /// Opens one link through an injected launcher.
@@ -271,7 +305,9 @@ fn open_link_target_with(
 mod tests {
     use std::{cell::Cell, io, path::PathBuf};
 
-    use super::{LinkTarget, open_link_target_with};
+    use crate::view::{StyleMetadata, ViewType};
+
+    use super::{LinkTarget, activate_link_target_with, open_link_target_with};
 
     /// Verifies string targets distinguish fragments, paths, and absolute URIs.
     ///
@@ -345,5 +381,34 @@ mod tests {
         let error = open_link_target_with(&target, |_| Err(io::Error::other("launcher failed")))
             .unwrap_err();
         assert!(error.to_string().contains("https://example.com"));
+    }
+
+    /// Verifies only successful activations mark link metadata as visited.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// activate https://example.com with successful and failing launchers
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Successful activation returns continue and marks metadata visited.
+    /// - Failed activation returns a link-open error and leaves metadata unvisited.
+    #[test]
+    fn link_activation_marks_only_successful_visits() {
+        let target = LinkTarget::from("https://example.com");
+        let successful = StyleMetadata::new(ViewType::Link);
+        let result = activate_link_target_with(&successful, &target, |_| Ok(()));
+        assert_eq!(result.unwrap(), crate::AppControl::Continue);
+        assert!(successful.is_visited());
+
+        let failed = StyleMetadata::new(ViewType::Link);
+        let error = activate_link_target_with(&failed, &target, |_| {
+            Err(io::Error::other("launcher failed"))
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("https://example.com"));
+        assert!(!failed.is_visited());
     }
 }

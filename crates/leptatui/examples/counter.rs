@@ -31,25 +31,32 @@ fn Counter() -> impl IntoView {
         .counter-panel => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
         .counter-value => { fg: Color::LightCyan, modifier: Modifier::BOLD }
         .counter-help => { fg: Color::Gray }
-        .counter-controls => { display: Display::Flex }
+        .counter-controls => {
+            display: Display::Flex
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
+        }
         Button => {
             fg: Color::White,
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
         }
-        .danger => { fg: Color::LightRed }
-
-        @media (max-width: 60) {
-            .counter-panel => { padding: TuiSpacing::ZERO }
-            .counter-controls => { flex_direction: FlexDirection::Column }
-            .counter-button => {
+        .counter-button => {
+            @media (max-width: 60) {
                 padding: TuiSpacing::ZERO
             }
         }
+        .danger => { fg: Color::LightRed }
     }
 
     view! {
@@ -58,7 +65,7 @@ fn Counter() -> impl IntoView {
                 {move || {
                     view! {
                         <Text class="counter-value">
-                            {format!("Count: {}", count.get_untracked())}
+                            {format!("Count: {}", count.get())}
                         </Text>
                     }
                 }}
@@ -76,6 +83,7 @@ fn Counter() -> impl IntoView {
 
 /// Runs the counter example application.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(Counter::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <Counter /> };
+    App::new(view).run().await
 }

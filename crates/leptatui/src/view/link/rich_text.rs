@@ -15,7 +15,8 @@ use crate::{
 
 use super::{
     geometry::{RichTextWrapMode, aligned_line_offset, linked_visual_segments},
-    target::{LinkTarget, open_link_target},
+    target::{LinkTarget, activate_link_target},
+    visited::sync_visited,
 };
 use crate::view::{
     CellAlignment,
@@ -136,7 +137,8 @@ impl RichText {
     pub(crate) fn activate_focused_link(&self) -> Result<Option<AppControl>> {
         for link in &self.links {
             if link.metadata.is_focused() && link.target.is_actionable() {
-                return open_link_target(&link.target).map(Some);
+                let control = activate_link_target(&link.metadata, &link.target)?;
+                return Ok(Some(control));
             }
         }
         Ok(None)
@@ -574,6 +576,7 @@ pub(crate) fn resolved_rich_text(
         metadata.clone(),
         |ctx| {
             for link in &content.links {
+                sync_visited(&link.metadata, &link.target);
                 let link_style = resolve_style(&link.metadata, ctx).to_ratatui_style();
                 for position in &link.spans {
                     if let Some(span) = text

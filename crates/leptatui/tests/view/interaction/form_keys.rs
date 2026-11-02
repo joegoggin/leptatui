@@ -16,7 +16,7 @@
 /// - Enter is handled for a focused text area.
 /// - The text-area callback emits the value with a trailing newline.
 #[test]
-fn insert_mode_keeps_input_single_line_and_text_area_multiline() -> Result<()> {
+fn insert_mode_keeps_input_single_line_and_text_area_multiline() -> leptatui::app::Result<()> {
     let input_emitted = Rc::new(RefCell::new(Vec::new()));
     let mut input_view = emitting_input("Ada", &input_emitted);
     assert_eq!(
@@ -55,7 +55,7 @@ fn insert_mode_keeps_input_single_line_and_text_area_multiline() -> Result<()> {
 /// - Normal-mode Enter is handled.
 /// - Normal-mode Enter invokes the submit callback once.
 #[test]
-fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> Result<()> {
+fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> leptatui::app::Result<()> {
     let insert_submits = Rc::new(Cell::new(0));
     let insert_submits_for_form = Rc::clone(&insert_submits);
     let mut insert_input = input("Ada").with_focus(true);
@@ -106,7 +106,7 @@ fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> Result<()>
 /// - Ctrl+Enter is handled by the form.
 /// - Ctrl+Enter submits the form without emitting another input value.
 #[test]
-fn form_text_area_uses_plain_enter_for_newlines_and_ctrl_enter_for_submit() -> Result<()> {
+fn form_text_area_uses_plain_enter_for_newlines_and_ctrl_enter_for_submit() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let submits = Rc::new(Cell::new(0));
     let submits_for_form = Rc::clone(&submits);
@@ -148,7 +148,7 @@ fn form_text_area_uses_plain_enter_for_newlines_and_ctrl_enter_for_submit() -> R
 /// - The second Esc is handled by the form.
 /// - The second Esc invokes the cancel callback once.
 #[test]
-fn form_esc_leaves_insert_mode_before_canceling() -> Result<()> {
+fn form_esc_leaves_insert_mode_before_canceling() -> leptatui::app::Result<()> {
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
     let mut input_view = input("Ada").with_focus(true);
@@ -187,7 +187,7 @@ fn form_esc_leaves_insert_mode_before_canceling() -> Result<()> {
 /// - The `jk` sequence does not invoke the cancel callback.
 /// - A later Esc is handled by the form.
 #[test]
-fn form_jk_leaves_insert_mode_without_canceling() -> Result<()> {
+fn form_jk_leaves_insert_mode_without_canceling() -> leptatui::app::Result<()> {
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
     let mut input_view = input("Ada").with_focus(true);
@@ -235,7 +235,7 @@ fn form_jk_leaves_insert_mode_without_canceling() -> Result<()> {
 /// - The first Esc does not invoke the cancel callback.
 /// - The second Esc is handled by the form and invokes cancel.
 #[test]
-fn form_esc_leaves_visual_modes_before_canceling() -> Result<()> {
+fn form_esc_leaves_visual_modes_before_canceling() -> leptatui::app::Result<()> {
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
     let mut input_view = input("Ada").with_focus(true);
@@ -308,7 +308,7 @@ fn form_esc_leaves_visual_modes_before_canceling() -> Result<()> {
 /// - Enter is handled through the component boundary.
 /// - The nested form submit callback runs once.
 #[test]
-fn form_inside_component_boundary_handles_submit_key() -> Result<()> {
+fn form_inside_component_boundary_handles_submit_key() -> leptatui::app::Result<()> {
     let submits = Rc::new(Cell::new(0));
     let submits_for_form = Rc::clone(&submits);
     let view = form([input("Ada").with_focus(true)]).on_submit(move || {

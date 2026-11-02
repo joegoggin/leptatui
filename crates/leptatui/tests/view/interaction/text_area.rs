@@ -13,7 +13,7 @@
 /// - The enter key is handled.
 /// - The callbacks receive the full proposed multiline values.
 #[test]
-fn focused_text_area_emits_inserted_text_through_on_input() -> Result<()> {
+fn focused_text_area_emits_inserted_text_through_on_input() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_char = Rc::clone(&emitted);
     let mut char_view = text_area("Ada\nLovelace")
@@ -64,7 +64,7 @@ fn focused_text_area_emits_inserted_text_through_on_input() -> Result<()> {
 /// - No input value is emitted.
 /// - The text area switches to normal mode with Esc-style cursor placement.
 #[test]
-fn focused_text_area_jk_returns_to_normal_mode_without_emitting_text() -> Result<()> {
+fn focused_text_area_jk_returns_to_normal_mode_without_emitting_text() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_text_area("Ada\nLovelace", &emitted);
 
@@ -101,7 +101,7 @@ fn focused_text_area_jk_returns_to_normal_mode_without_emitting_text() -> Result
 /// - The later `k` emits literal `jk`.
 /// - The text area remains in insert mode.
 #[test]
-fn focused_text_area_slow_jk_inserts_literal_text() -> Result<()> {
+fn focused_text_area_slow_jk_inserts_literal_text() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_text_area("Ada\nLovelace", &emitted);
 
@@ -142,7 +142,7 @@ fn focused_text_area_slow_jk_inserts_literal_text() -> Result<()> {
 /// - Delete at the end of the first line is handled.
 /// - Both callbacks receive the joined multiline value.
 #[test]
-fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> Result<()> {
+fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_backspace = Rc::clone(&emitted);
     let mut backspace_view = text_area("Ada\nLovelace")
@@ -197,7 +197,7 @@ fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> Result<
 /// - Home and End move within the current logical line.
 /// - No input callback values are emitted.
 #[test]
-fn focused_text_area_cursor_keys_move_without_emitting_text() -> Result<()> {
+fn focused_text_area_cursor_keys_move_without_emitting_text() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_text_area = Rc::clone(&emitted);
     let mut view = text_area("abc\nde\nfghi")

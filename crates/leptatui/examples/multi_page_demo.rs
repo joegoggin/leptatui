@@ -6,14 +6,6 @@
 
 use leptatui::prelude::*;
 
-/// Pages available in the demo router.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum DemoPage {
-    Home,
-    Counter,
-    Settings,
-}
-
 /// Theme preference shared by the demo pages.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ThemeMode {
@@ -53,21 +45,12 @@ impl ThemeMode {
     }
 }
 
-/// Navigates to a page and keeps the app running.
-fn navigate_to(navigate: WriteSignal<DemoPage>, page: DemoPage) -> AppControl {
-    navigate.update(|route| *route = page);
-    AppControl::Continue
-}
-
 /// Root component for the multi-page demo.
 #[component]
 fn MultiPageDemo() -> impl IntoView {
     let counter = RwSignal::new(0);
     let theme_mode = RwSignal::new(ThemeMode::Light);
     let theme = RwSignal::new(ThemeMode::Light.variables());
-    let route_state = provide_route(DemoPage::Home);
-    let route = route_state.route();
-
     provide_context(counter);
     provide_context(theme_mode);
     provide_context(theme);
@@ -95,15 +78,37 @@ fn MultiPageDemo() -> impl IntoView {
             bg: $surface,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .app-title => { fg: $accent, modifier: Modifier::BOLD }
         .nav => {
             display: Display::Flex,
             flex_direction: FlexDirection::Row
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
-        .actions => { display: Display::Flex }
-        .page => { fg: $text, bg: $panel, padding: TuiSpacing::uniform(1) }
+        .actions => {
+            display: Display::Flex
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
+        }
+        .page => {
+            fg: $text,
+            bg: $panel,
+            padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+        }
         .page-title => { fg: $accent, modifier: Modifier::BOLD }
         .body => { fg: $text }
         .muted => { fg: $muted }
@@ -117,6 +122,10 @@ fn MultiPageDemo() -> impl IntoView {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1),
 
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+
             &:focus => {
                 fg: $focus_text,
                 bg: $focus_surface,
@@ -124,65 +133,72 @@ fn MultiPageDemo() -> impl IntoView {
                 border_type: BorderType::Thick
             }
         }
-
-        @media (max-width: 60) {
-            .app-shell => { padding: TuiSpacing::ZERO }
-            .nav => { flex_direction: FlexDirection::Column }
-            .actions => { flex_direction: FlexDirection::Column }
-            .page => { padding: TuiSpacing::ZERO }
-            Button => { padding: TuiSpacing::ZERO }
-        }
     }
 
     view! {
-        <Block class="app-shell">
-            <Div>
-                <Text class="app-title">"Leptatui multi-page demo"</Text>
-                <Nav />
-                {move || match route.get_untracked() {
-                    DemoPage::Home => view! { <HomePage /> },
-                    DemoPage::Counter => view! { <CounterPage /> },
-                    DemoPage::Settings => view! { <SettingsPage /> },
-                }}
-                <Text class="muted">
-                    "h Home | c Counter | s Settings | +/- count | t theme | q quit"
-                </Text>
-            </Div>
-        </Block>
+        <Router initial_path="/">
+            <Block class="app-shell">
+                <Div>
+                    <Text class="app-title">"Leptatui multi-page demo"</Text>
+                    <Nav />
+                    <Routes fallback=NotFoundPage>
+                        <Route path="/" view=HomePage />
+                        <Route path="/counter" view=CounterPage />
+                        <Route path="/settings" view=SettingsPage />
+                    </Routes>
+                    <Text class="muted">
+                        "h Home | c Counter | s Settings | +/- count | t theme | q quit"
+                    </Text>
+                </Div>
+            </Block>
+        </Router>
     }
 }
 
 /// Top navigation shared across pages.
 #[component]
 fn Nav() -> impl IntoView {
-    let navigate = use_navigate::<DemoPage>();
+    let shortcut_navigate = use_navigate();
 
     use_key_event(KeyEventKind::Press, move |key| match key.code {
         KeyCode::Char('h') => {
-            navigate.update(|route| *route = DemoPage::Home);
+            shortcut_navigate("/", NavigateOptions::default());
             KeyControl::Handled
         }
         KeyCode::Char('c') => {
-            navigate.update(|route| *route = DemoPage::Counter);
+            shortcut_navigate("/counter", NavigateOptions::default());
             KeyControl::Handled
         }
         KeyCode::Char('s') => {
-            navigate.update(|route| *route = DemoPage::Settings);
+            shortcut_navigate("/settings", NavigateOptions::default());
             KeyControl::Handled
         }
         _ => KeyControl::Pass,
     });
 
-    let home = use_navigate::<DemoPage>();
-    let counter = use_navigate::<DemoPage>();
-    let settings = use_navigate::<DemoPage>();
-
     view! {
         <Div class="nav">
-            <Button on_press=move || navigate_to(home, DemoPage::Home)>"Home"</Button>
-            <Button on_press=move || navigate_to(counter, DemoPage::Counter)>"Counter"</Button>
-            <Button on_press=move || navigate_to(settings, DemoPage::Settings)>"Settings"</Button>
+            <A href="/" exact=true>"Home"</A>
+            <A href="/counter">"Counter"</A>
+            <A href="/settings">"Settings"</A>
         </Div>
+    }
+}
+
+/// Renders an unmatched-location fallback.
+///
+/// # Returns
+///
+/// A not-found page component.
+#[component]
+fn NotFoundPage() -> impl IntoView {
+    let location = use_location();
+    view! {
+        <Block class="page">
+            <Text class="danger">
+                {move || format!("No route matches {}", location.pathname().get())}
+            </Text>
+        </Block>
     }
 }
 
@@ -204,8 +220,8 @@ fn HomePage() -> impl IntoView {
                         <Text class="stat">
                             {format!(
                                 "Count: {} | Theme: {:?}",
-                                counter.get_untracked(),
-                                theme_mode.get_untracked(),
+                                counter.get(),
+                                theme_mode.get(),
                             )}
                         </Text>
                     }
@@ -245,7 +261,7 @@ fn CounterPage() -> impl IntoView {
                 <Text class="page-title">"Counter"</Text>
                 {move || {
                     view! {
-                        <Text class="stat">{format!("Count: {}", counter.get_untracked())}</Text>
+                        <Text class="stat">{format!("Count: {}", counter.get())}</Text>
                     }
                 }}
                 <Div class="actions">
@@ -293,7 +309,7 @@ fn SettingsPage() -> impl IntoView {
                 {move || {
                     view! {
                         <Text class="stat">
-                            {format!("Theme preference: {:?}", mode.get_untracked())}
+                            {format!("Theme preference: {:?}", mode.get())}
                         </Text>
                     }
                 }}
@@ -320,6 +336,7 @@ fn SettingsPage() -> impl IntoView {
 
 /// Runs the multi-page demo application.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(MultiPageDemo::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <MultiPageDemo /> };
+    App::new(view).run().await
 }

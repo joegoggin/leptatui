@@ -20,7 +20,7 @@
 /// - `I` and `A` move to the line start and line end for inputs and text
 ///   areas.
 #[test]
-fn focused_editable_controls_support_vim_mode_transitions() -> Result<()> {
+fn focused_editable_controls_support_vim_mode_transitions() -> leptatui::app::Result<()> {
     let mut input_view = input("Ada").with_focus(true);
     assert_eq!(editable_state(&input_view).mode(), VimMode::Normal);
 
@@ -93,7 +93,7 @@ fn focused_editable_controls_support_vim_mode_transitions() -> Result<()> {
 /// - Opening above the first line prepends a blank line.
 /// - Empty text areas enter insert mode without emitting a changed value.
 #[test]
-fn focused_text_area_supports_vim_open_line_commands() -> Result<()> {
+fn focused_text_area_supports_vim_open_line_commands() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut below_middle = emitting_text_area("one\ntwo", &emitted);
     editable_state_mut(&mut below_middle).set_mode(VimMode::Normal);
@@ -200,7 +200,7 @@ fn focused_text_area_supports_vim_open_line_commands() -> Result<()> {
 /// - Inputs do not emit values or leave normal mode for multiline-only
 ///   open-line commands.
 #[test]
-fn focused_input_handles_vim_open_line_commands_without_mutation() -> Result<()> {
+fn focused_input_handles_vim_open_line_commands_without_mutation() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_input("Ada", &emitted);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
@@ -240,7 +240,7 @@ fn focused_input_handles_vim_open_line_commands_without_mutation() -> Result<()>
 /// - Line and value boundary motions move to the first or last character.
 /// - `gg` moves the cursor back to the first character.
 #[test]
-fn focused_input_supports_vim_normal_mode_movement() -> Result<()> {
+fn focused_input_supports_vim_normal_mode_movement() -> leptatui::app::Result<()> {
     let mut view = input("one two three").with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(0);
@@ -298,7 +298,7 @@ fn focused_input_supports_vim_normal_mode_movement() -> Result<()> {
 /// - `$` and `0` move to the current line end and start.
 /// - `G` and `gg` move to the last and first characters in the text area.
 #[test]
-fn focused_text_area_supports_vim_normal_mode_movement() -> Result<()> {
+fn focused_text_area_supports_vim_normal_mode_movement() -> leptatui::app::Result<()> {
     let mut view = text_area("one\ntwo\nthree").with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(4);
@@ -351,7 +351,7 @@ fn focused_text_area_supports_vim_normal_mode_movement() -> Result<()> {
 /// - `k` moves to the previous logical line.
 /// - `j` returns to the trailing blank line.
 #[test]
-fn focused_text_area_supports_trailing_blank_line_normal_mode_movement() -> Result<()> {
+fn focused_text_area_supports_trailing_blank_line_normal_mode_movement() -> leptatui::app::Result<()> {
     let value = "one\ntwo\n";
     let trailing_blank_cursor = value.len();
     let mut view = text_area(value).with_focus(true);

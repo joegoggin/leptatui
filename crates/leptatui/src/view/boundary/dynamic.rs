@@ -1,17 +1,32 @@
-//! Dynamic child storage for render-tree views.
+//! Reactive dynamic child storage for render-tree views.
 
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{
+    cell::RefCell,
+    fmt,
+    rc::Rc,
+    sync::{Arc, RwLock, Weak},
+};
 
 use crossterm::event::{Event, KeyEvent};
+use leptos::prelude::untrack;
+use leptos::reactive::graph::{
+    AnySource, AnySubscriber, ReactiveNode, ReactiveNodeState, Source, Subscriber, ToAnySubscriber,
+    WithObserver,
+};
 
 use crate::{
     LayoutSize,
-    app::{AppControl, Result},
+    app::{AppControl, Result, request_redraw},
     component::{FocusedControl, KeyControl, LayoutPhase, RenderCtx},
     view::core::measurement::AvailableSpace,
 };
 
 use crate::view::{AnyView, IntoView, View};
+
+/// Mutation applied to each child produced by a dynamic text-like element.
+type DynamicConfigurator = Box<dyn Fn(&mut AnyView)>;
+/// Key callback applied after the current dynamic child passes an event.
+type DynamicKeyHandler = Box<dyn FnMut(KeyEvent) -> KeyControl>;
 
 /// Shared dynamic child that preserves compatible child state between refreshes.
 #[derive(Clone)]
@@ -22,7 +37,165 @@ pub struct DynamicView {
 /// Deferred dynamic view state shared by cloned dynamic boundaries.
 struct DynamicViewInner {
     child: Box<dyn Fn() -> AnyView>,
+    invalidation: DynamicInvalidation,
+    reconcile_on_refresh: bool,
     current: RefCell<Option<AnyView>>,
+    subscriber: DynamicSubscriber,
+    configurators: RefCell<Vec<DynamicConfigurator>>,
+    key_handler: RefCell<Option<DynamicKeyHandler>>,
+}
+
+/// Dependency policy used by one dynamic boundary.
+enum DynamicInvalidation {
+    /// Rebuilds when any signal read by the child factory changes.
+    Child,
+    /// Rebuilds without reconciliation when a tracked key changes value.
+    Key(Box<dyn Fn() -> bool>),
+}
+
+/// Thread-safe reactive subscriber that wakes the terminal app when invalidated.
+#[derive(Clone)]
+struct DynamicSubscriber {
+    inner: Arc<DynamicSubscriberInner>,
+}
+
+/// Mutable dependency state behind a dynamic subscriber.
+struct DynamicSubscriberInner {
+    state: RwLock<DynamicSubscriberState>,
+}
+
+/// Latest invalidation state and the reactive sources observed by a boundary.
+struct DynamicSubscriberState {
+    node: ReactiveNodeState,
+    sources: Vec<AnySource>,
+}
+
+impl DynamicSubscriber {
+    /// Creates a clean subscriber for a boundary with no retained child.
+    ///
+    /// # Returns
+    ///
+    /// A [`DynamicSubscriber`] ready to collect dependencies during the
+    /// boundary's initial child construction.
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(DynamicSubscriberInner {
+                state: RwLock::new(DynamicSubscriberState {
+                    node: ReactiveNodeState::Clean,
+                    sources: Vec::new(),
+                }),
+            }),
+        }
+    }
+
+    /// Returns whether this boundary needs to reevaluate its observed closure.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether a tracked dependency changed.
+    fn update_if_necessary(&self) -> bool {
+        self.to_any_subscriber()
+            .with_observer(|| self.inner.update_if_necessary())
+    }
+
+    /// Replaces prior dependencies with those read by `evaluate`.
+    ///
+    /// # Arguments
+    ///
+    /// * `evaluate` — Closure whose reactive reads should be observed.
+    ///
+    /// # Returns
+    ///
+    /// A `T` value returned by `evaluate`.
+    fn track<T>(&self, evaluate: impl FnOnce() -> T) -> T {
+        let subscriber = self.to_any_subscriber();
+        self.inner.clear_sources(&subscriber);
+        subscriber.with_observer(evaluate)
+    }
+
+    /// Removes this subscriber from every source it currently observes.
+    fn dispose(&self) {
+        let subscriber = self.to_any_subscriber();
+        self.inner.clear_sources(&subscriber);
+    }
+}
+
+impl ToAnySubscriber for DynamicSubscriber {
+    fn to_any_subscriber(&self) -> AnySubscriber {
+        let inner: Arc<dyn Subscriber + Send + Sync> = self.inner.clone();
+        AnySubscriber(
+            Arc::as_ptr(&self.inner) as usize,
+            Arc::downgrade(&inner) as Weak<dyn Subscriber + Send + Sync>,
+        )
+    }
+}
+
+impl ReactiveNode for DynamicSubscriberInner {
+    fn mark_dirty(&self) {
+        self.state
+            .write()
+            .expect("dynamic subscriber poisoned")
+            .node = ReactiveNodeState::Dirty;
+        request_redraw();
+    }
+
+    fn mark_check(&self) {
+        let mut state = self.state.write().expect("dynamic subscriber poisoned");
+        if state.node == ReactiveNodeState::Clean {
+            state.node = ReactiveNodeState::Check;
+        }
+        drop(state);
+        request_redraw();
+    }
+
+    fn mark_subscribers_check(&self) {}
+
+    fn update_if_necessary(&self) -> bool {
+        let mut state = self.state.write().expect("dynamic subscriber poisoned");
+        match state.node {
+            ReactiveNodeState::Clean => false,
+            ReactiveNodeState::Dirty => {
+                state.node = ReactiveNodeState::Clean;
+                true
+            }
+            ReactiveNodeState::Check => {
+                state.node = ReactiveNodeState::Clean;
+                let sources = state.sources.clone();
+                drop(state);
+                sources
+                    .into_iter()
+                    .any(|source| source.update_if_necessary())
+            }
+        }
+    }
+}
+
+impl Subscriber for DynamicSubscriberInner {
+    fn add_source(&self, source: AnySource) {
+        let mut state = self.state.write().expect("dynamic subscriber poisoned");
+        if !state.sources.contains(&source) {
+            state.sources.push(source);
+        }
+    }
+
+    fn clear_sources(&self, subscriber: &AnySubscriber) {
+        let sources = std::mem::take(
+            &mut self
+                .state
+                .write()
+                .expect("dynamic subscriber poisoned")
+                .sources,
+        );
+        for source in sources {
+            source.remove_subscriber(subscriber);
+        }
+    }
+}
+
+impl Drop for DynamicViewInner {
+    fn drop(&mut self) {
+        self.subscriber.dispose();
+    }
 }
 
 impl DynamicView {
@@ -31,9 +204,218 @@ impl DynamicView {
         Self {
             inner: Rc::new(DynamicViewInner {
                 child: Box::new(child),
+                invalidation: DynamicInvalidation::Child,
+                reconcile_on_refresh: true,
                 current: RefCell::new(None),
+                subscriber: DynamicSubscriber::new(),
+                configurators: RefCell::new(Vec::new()),
+                key_handler: RefCell::new(None),
             }),
         }
+    }
+
+    /// Creates a dynamic boundary with explicit invalidation behavior.
+    ///
+    /// # Arguments
+    ///
+    /// * `child` — Callback building a replacement child.
+    /// * `key_changed` — Tracked callback deciding whether to replace an existing child.
+    /// * `reconcile_on_refresh` — Whether replacement children retain compatible state.
+    ///
+    /// # Returns
+    ///
+    /// A [`DynamicView`] governed by the supplied invalidation callbacks.
+    fn new_with_invalidation(
+        child: impl Fn() -> AnyView + 'static,
+        key_changed: impl Fn() -> bool + 'static,
+        reconcile_on_refresh: bool,
+    ) -> Self {
+        Self {
+            inner: Rc::new(DynamicViewInner {
+                child: Box::new(child),
+                invalidation: DynamicInvalidation::Key(Box::new(key_changed)),
+                reconcile_on_refresh,
+                current: RefCell::new(None),
+                subscriber: DynamicSubscriber::new(),
+                configurators: RefCell::new(Vec::new()),
+                key_handler: RefCell::new(None),
+            }),
+        }
+    }
+
+    /// Installs a key handler after the current child receives each key.
+    ///
+    /// # Arguments
+    ///
+    /// * `handler` — Callback invoked when the materialized child passes a key.
+    ///
+    /// # Returns
+    ///
+    /// A [`DynamicView`] containing the requested key handler.
+    pub(crate) fn on_key_event(
+        self,
+        handler: impl FnMut(KeyEvent) -> KeyControl + 'static,
+    ) -> Self {
+        *self.inner.key_handler.borrow_mut() = Some(Box::new(handler));
+        self
+    }
+
+    /// Applies an id to every child produced by this dynamic boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` — Id selector assigned to each produced child.
+    ///
+    /// # Returns
+    ///
+    /// This [`DynamicView`] with the child configurator installed.
+    #[doc(hidden)]
+    pub fn with_id(self, id: impl Into<String>) -> Self {
+        let id = id.into();
+        self.inner
+            .configurators
+            .borrow_mut()
+            .push(Box::new(move |child| {
+                if let Some(metadata) = child.style_metadata_mut() {
+                    metadata.set_id(id.clone());
+                }
+            }));
+        self
+    }
+
+    /// Applies classes to every child produced by this dynamic boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `classes` — Whitespace-separated classes assigned to each child.
+    ///
+    /// # Returns
+    ///
+    /// This [`DynamicView`] with the child configurator installed.
+    #[doc(hidden)]
+    pub fn with_classes(self, classes: impl Into<String>) -> Self {
+        let classes = classes.into();
+        self.inner
+            .configurators
+            .borrow_mut()
+            .push(Box::new(move |child| {
+                if let Some(metadata) = child.style_metadata_mut() {
+                    metadata.set_classes(classes.clone());
+                }
+            }));
+        self
+    }
+
+    /// Applies an inline style to every child produced by this dynamic boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `style` — Inline style assigned to each produced child.
+    ///
+    /// # Returns
+    ///
+    /// This [`DynamicView`] with the child configurator installed.
+    #[doc(hidden)]
+    pub fn with_inline_style(self, style: crate::TuiStyle) -> Self {
+        self.inner
+            .configurators
+            .borrow_mut()
+            .push(Box::new(move |child| {
+                if let Some(metadata) = child.style_metadata_mut() {
+                    metadata.set_inline_style(style.clone());
+                }
+            }));
+        self
+    }
+
+    /// Applies table-cell alignment to every child produced by this boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `alignment` — Alignment assigned when the child is a table cell.
+    ///
+    /// # Returns
+    ///
+    /// This [`DynamicView`] with the child configurator installed.
+    #[doc(hidden)]
+    pub fn alignment(self, alignment: crate::CellAlignment) -> Self {
+        self.inner
+            .configurators
+            .borrow_mut()
+            .push(Box::new(move |child| {
+                if let Some(cell) = child.downcast_mut::<crate::TableCellView>() {
+                    cell.alignment = alignment;
+                }
+            }));
+        self
+    }
+
+    /// Applies a code-block language to every child produced by this boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `language` — Syntax language assigned when the child is a code block.
+    ///
+    /// # Returns
+    ///
+    /// This [`DynamicView`] with the child configurator installed.
+    #[doc(hidden)]
+    pub fn language(self, language: impl Into<String>) -> Self {
+        let language = language.into();
+        self.inner
+            .configurators
+            .borrow_mut()
+            .push(Box::new(move |child| {
+                if let Some(code) = child.downcast_mut::<crate::CodeBlockView>() {
+                    *code = code.clone().language(language.clone());
+                }
+            }));
+        self
+    }
+
+    /// Applies line-number visibility to every child produced by this boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `line_numbers` — Whether produced code blocks show line numbers.
+    ///
+    /// # Returns
+    ///
+    /// This [`DynamicView`] with the child configurator installed.
+    #[doc(hidden)]
+    pub fn line_numbers(self, line_numbers: bool) -> Self {
+        self.inner
+            .configurators
+            .borrow_mut()
+            .push(Box::new(move |child| {
+                if let Some(code) = child.downcast_mut::<crate::CodeBlockView>() {
+                    *code = code.clone().line_numbers(line_numbers);
+                }
+            }));
+        self
+    }
+
+    /// Applies a button action to every child produced by this boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `action` — Callback assigned when the child is a button.
+    ///
+    /// # Returns
+    ///
+    /// This [`DynamicView`] with the child configurator installed.
+    #[doc(hidden)]
+    pub fn on_press(self, action: impl Fn() -> AppControl + 'static) -> Self {
+        let action: crate::ButtonAction = Rc::new(action);
+        self.inner
+            .configurators
+            .borrow_mut()
+            .push(Box::new(move |child| {
+                if let Some(button) = child.downcast_mut::<crate::ButtonView>() {
+                    button.on_press = Some(Rc::clone(&action));
+                }
+            }));
+        self
     }
 
     /// Refreshes the current child and reads it for the duration of `read`.
@@ -86,12 +468,30 @@ impl DynamicView {
         )
     }
 
-    /// Rebuilds the child view and reconciles compatible state from the previous child.
+    /// Rebuilds an invalidated child and optionally reconciles compatible state.
     fn refresh(&self) {
-        let mut next = (self.inner.child)();
+        if self.inner.current.borrow().is_some() && !self.inner.subscriber.update_if_necessary() {
+            return;
+        }
+
+        let mut next = match &self.inner.invalidation {
+            DynamicInvalidation::Child => self.inner.subscriber.track(|| (self.inner.child)()),
+            DynamicInvalidation::Key(key_changed) => {
+                let should_refresh = self.inner.subscriber.track(key_changed);
+                if self.inner.current.borrow().is_some() && !should_refresh {
+                    return;
+                }
+                untrack(|| (self.inner.child)())
+            }
+        };
+        for configure in self.inner.configurators.borrow().iter() {
+            configure(&mut next);
+        }
         let mut current = self.inner.current.borrow_mut();
 
-        if let Some(previous) = current.as_ref() {
+        if self.inner.reconcile_on_refresh
+            && let Some(previous) = current.as_ref()
+        {
             next.reconcile_from(previous);
         }
 
@@ -100,6 +500,8 @@ impl DynamicView {
 }
 
 impl View for DynamicView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         if ctx.layout_phase() == LayoutPhase::Paint {
             self.with_current_view(|child| child.render(ctx))
@@ -162,7 +564,17 @@ impl View for DynamicView {
     }
 
     fn __dispatch_key_event(&mut self, key: KeyEvent) -> Result<KeyControl> {
-        self.with_current_view_mut(|child| child.__dispatch_key_event(key))
+        let control = self.with_current_view_mut(|child| child.__dispatch_key_event(key))?;
+        if control != KeyControl::Pass {
+            return Ok(control);
+        }
+
+        Ok(self
+            .inner
+            .key_handler
+            .borrow_mut()
+            .as_mut()
+            .map_or(KeyControl::Pass, |handler| handler(key)))
     }
 
     fn __flush_pending_input(&mut self) -> Option<AppControl> {
@@ -295,18 +707,103 @@ impl fmt::Debug for DynamicView {
     }
 }
 
-/// Creates a dynamic child boundary.
+/// Creates a reactive dynamic child boundary.
 ///
 /// # Arguments
 ///
-/// * `child` — Closure that rebuilds the current child during traversal.
+/// * `child` — Closure that rebuilds after one of its tracked dependencies changes.
 ///
 /// # Returns
 ///
-/// A [`DynamicView`] retaining compatible child state between refreshes.
+/// A [`DynamicView`] retaining compatible child state between reactive refreshes.
 pub fn dynamic<V>(child: impl Fn() -> V + 'static) -> DynamicView
 where
     V: IntoView,
 {
     DynamicView::new(move || child().into_view())
+}
+
+/// Creates a reactive child that rebuilds only when its key changes.
+///
+/// The current child remains mounted while consecutive keys compare equal.
+/// A different key replaces the retained child and resets its local view state.
+///
+/// # Arguments
+///
+/// * `key` — Callback returning the current invalidation key.
+/// * `child` — Callback building the child for a new key.
+///
+/// # Returns
+///
+/// A [`DynamicView`] that retains its child across equal keys.
+pub fn keyed<K, V>(key: impl Fn() -> K + 'static, child: impl Fn() -> V + 'static) -> DynamicView
+where
+    K: PartialEq + 'static,
+    V: IntoView,
+{
+    let current_key = RefCell::new(None::<K>);
+    DynamicView::new_with_invalidation(
+        move || child().into_view(),
+        move || {
+            let next_key = key();
+            let mut current_key = current_key.borrow_mut();
+            if current_key.as_ref() == Some(&next_key) {
+                false
+            } else {
+                *current_key = Some(next_key);
+                true
+            }
+        },
+        false,
+    )
+}
+
+#[cfg(test)]
+/// Tests for reactive redraw wakeups from dynamic boundaries.
+mod tests {
+    use std::time::Duration;
+
+    use leptos::prelude::{Get, Owner, RwSignal, Set};
+    use tokio::time::timeout;
+
+    use crate::{
+        app::{redraw_test_lock, subscribe_redraws},
+        text,
+    };
+
+    use super::dynamic;
+
+    /// Verifies changing a tracked signal wakes the terminal app loop.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// dynamic(move || text(label.get()))
+    /// label.set("Saved")
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - The initial child evaluation subscribes to the signal.
+    /// - Updating the signal delivers a redraw request before timeout.
+    #[tokio::test(flavor = "current_thread")]
+    async fn tracked_signal_change_requests_redraw() {
+        let _redraw_guard = redraw_test_lock().await;
+        let owner = Owner::new();
+        let (label, view) = owner.with(|| {
+            let label = RwSignal::new(String::from("Idle"));
+            let view = dynamic(move || text(label.get()));
+            view.with_view(|_| ());
+            (label, view)
+        });
+        let mut redraws = subscribe_redraws();
+
+        label.set(String::from("Saved"));
+
+        timeout(Duration::from_secs(1), redraws.changed())
+            .await
+            .expect("signal invalidation should request a redraw")
+            .expect("redraw sender should stay available");
+        drop(view);
+    }
 }

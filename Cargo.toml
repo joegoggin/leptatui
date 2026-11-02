@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/leptatui", "crates/leptatui-macros"]
+members = [
+    "crates/leptatui",
+    "crates/leptatui-macros",
+    "examples/markdown-editor",
+]
 default-members = ["crates/leptatui"]
 resolver = "3"
 

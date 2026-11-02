@@ -44,7 +44,7 @@ fn markdown_fixture_dir(name: &str) -> PathBuf {
     ))
 }
 
-/// Returns code-block options from a single-block Markdown document.
+/// Returns line-number visibility from a single-block Markdown document.
 ///
 /// # Arguments
 ///
@@ -52,8 +52,8 @@ fn markdown_fixture_dir(name: &str) -> PathBuf {
 ///
 /// # Returns
 ///
-/// A tuple containing line-number visibility and the syntax theme.
-fn parsed_code_block_options(view: &AnyView) -> (bool, SyntaxTheme) {
+/// A boolean indicating whether line numbers are enabled.
+fn parsed_code_block_line_numbers(view: &AnyView) -> bool {
     let document = view
         .downcast_ref::<DivView>()
         .expect("Markdown document should have a Div root");
@@ -64,7 +64,7 @@ fn parsed_code_block_options(view: &AnyView) -> (bool, SyntaxTheme) {
         .downcast_ref::<CodeBlockView>()
         .expect("Markdown child should be a code block");
 
-    (code.has_line_numbers(), code.selected_syntax_theme())
+    code.has_line_numbers()
 }
 
 /// Returns scroll offset and maximum offset from a Markdown document.

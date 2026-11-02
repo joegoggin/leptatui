@@ -93,6 +93,10 @@ fn StylesheetImportsDemo() -> impl IntoView {
             border_type: palette.$border_type,
             padding: palette.$panel_padding,
 
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+
             .title => {
                 fg: palette.$primary_bg,
                 modifier: palette.$strong
@@ -103,11 +107,19 @@ fn StylesheetImportsDemo() -> impl IntoView {
             .primary-action => {
                 @include buttons.primary
 
+                @media (max-width: 60) {
+                    padding: TuiSpacing::ZERO
+                }
+
                 &:focus => { @include buttons.focused }
             }
 
             .secondary-action => {
                 @include buttons.secondary
+
+                @media (max-width: 60) {
+                    padding: TuiSpacing::ZERO
+                }
 
                 &:focus => { @include buttons.focused }
             }
@@ -115,28 +127,19 @@ fn StylesheetImportsDemo() -> impl IntoView {
             .danger-action => {
                 @include buttons.danger
 
+                @media (max-width: 60) {
+                    padding: TuiSpacing::ZERO
+                }
+
                 &:focus => { @include buttons.focused }
             }
         }
 
-        .actions => { display: Display::Flex }
+        .actions => {
+            display: Display::Flex
 
-        @media (max-width: 60) {
-            .screen => { padding: TuiSpacing::ZERO }
-            .actions => { flex_direction: FlexDirection::Column }
-
-            .screen => {
-                .primary-action => {
-                    padding: TuiSpacing::ZERO
-                }
-
-                .secondary-action => {
-                    padding: TuiSpacing::ZERO
-                }
-
-                .danger-action => {
-                    padding: TuiSpacing::ZERO
-                }
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
             }
         }
     }
@@ -151,7 +154,7 @@ fn StylesheetImportsDemo() -> impl IntoView {
                 {move || {
                     view! {
                         <Text class="body">
-                            {format!("Deploy attempts: {}", launches.get_untracked())}
+                            {format!("Deploy attempts: {}", launches.get())}
                         </Text>
                     }
                 }}
@@ -189,6 +192,7 @@ fn StylesheetImportsDemo() -> impl IntoView {
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(StylesheetImportsDemo::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <StylesheetImportsDemo /> };
+    App::new(view).run().await
 }

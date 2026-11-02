@@ -19,10 +19,8 @@ fn Root() -> impl IntoView {
         .hello-panel => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
-        }
 
-        @media (max-width: 60) {
-            .hello-panel => {
+            @media (max-width: 60) {
                 border_type: BorderType::Plain,
                 padding: TuiSpacing::ZERO
             }
@@ -50,6 +48,7 @@ fn Root() -> impl IntoView {
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(Root::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <Root /> };
+    App::new(view).run().await
 }

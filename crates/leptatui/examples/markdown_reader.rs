@@ -30,6 +30,11 @@ fn MarkdownReader(document: AnyView) -> impl IntoView {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                border_type: BorderType::Plain,
+                padding: TuiSpacing::ZERO
+            }
         }
 
         H1 => { fg: Color::LightCyan }
@@ -46,12 +51,6 @@ fn MarkdownReader(document: AnyView) -> impl IntoView {
         CodeBlock => { fg: Color::LightBlue }
         Link:focus => { fg: Color::Black, bg: Color::LightCyan }
 
-        @media (max-width: 60) {
-            .reader-shell => {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
-            }
-        }
     }
 
     view! { <Block class="reader-shell">{document}</Block> }
@@ -103,10 +102,9 @@ fn markdown_path(args: impl IntoIterator<Item = OsString>) -> io::Result<PathBuf
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn Error>> {
     let path = markdown_path(env::args_os())?;
-    let document = view! { <Markdown src=path syntax_theme=SyntaxTheme::Dark line_numbers=true /> };
-    let reader =
-        MarkdownReader::with_props(MarkdownReaderProps::builder().document(document).build());
+    let document = view! { <Markdown src=path line_numbers=true /> };
+    let view = view! { <MarkdownReader document=document /> };
 
-    App::new(reader).run().await?;
+    App::new(view).run().await?;
     Ok(())
 }

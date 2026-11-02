@@ -15,6 +15,7 @@ mod attributes;
 mod builtins;
 mod children;
 mod custom_component;
+mod router;
 mod validation;
 
 use proc_macro2::TokenStream;
@@ -28,6 +29,7 @@ use crate::view::syntax::{next_is_closing_tag, next_is_self_closing_tag_end};
 
 use self::validation::{is_builtin_element, is_component_name};
 
+use self::children::ReactiveTextKind;
 use super::{attr::Attr, child::Child};
 
 /// Parsed terminal element with attributes and children.
@@ -168,6 +170,22 @@ impl Element {
             return self.expand_link();
         }
 
+        if self.name == "A" {
+            return self.expand_route_link();
+        }
+
+        if self.name == "Routes" {
+            return self.expand_routes();
+        }
+
+        if self.name == "Outlet" {
+            return self.expand_outlet();
+        }
+
+        if matches!(self.name.to_string().as_str(), "Route" | "ParentRoute") {
+            return self.expand_route_definition();
+        }
+
         match self.name.to_string().as_str() {
             "Block" => self.expand_single_child("Block", |child| {
                 let leptatui = crate::crate_path::leptatui();
@@ -175,45 +193,45 @@ impl Element {
             }),
             "Div" => self.expand_child_list("Div", |children| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::div(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
+                quote! { #leptatui::div(#children) }
             }),
             "Form" => self.expand_child_list("Form", |children| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::form(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
+                quote! { #leptatui::form(#children) }
             }),
-            "Text" => self.expand_text_like("Text", |content| {
+            "Text" => self.expand_text_like("Text", ReactiveTextKind::String, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::text(#content) }
             }),
-            "H1" => self.expand_text_like("H1", |content| {
+            "H1" => self.expand_text_like("H1", ReactiveTextKind::RichText, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::h1(#content) }
             }),
-            "H2" => self.expand_text_like("H2", |content| {
+            "H2" => self.expand_text_like("H2", ReactiveTextKind::RichText, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::h2(#content) }
             }),
-            "H3" => self.expand_text_like("H3", |content| {
+            "H3" => self.expand_text_like("H3", ReactiveTextKind::RichText, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::h3(#content) }
             }),
-            "H4" => self.expand_text_like("H4", |content| {
+            "H4" => self.expand_text_like("H4", ReactiveTextKind::RichText, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::h4(#content) }
             }),
-            "H5" => self.expand_text_like("H5", |content| {
+            "H5" => self.expand_text_like("H5", ReactiveTextKind::RichText, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::h5(#content) }
             }),
-            "H6" => self.expand_text_like("H6", |content| {
+            "H6" => self.expand_text_like("H6", ReactiveTextKind::RichText, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::h6(#content) }
             }),
-            "Paragraph" => self.expand_text_like("Paragraph", |content| {
+            "Paragraph" => self.expand_text_like("Paragraph", ReactiveTextKind::RichText, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::paragraph(#content) }
             }),
-            "CodeBlock" => self.expand_text_like("CodeBlock", |content| {
+            "CodeBlock" => self.expand_text_like("CodeBlock", ReactiveTextKind::String, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::code_block(#content) }
             }),
@@ -235,7 +253,7 @@ impl Element {
             ),
             "ListItem" => self.expand_child_list("ListItem", |children| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::list_item(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
+                quote! { #leptatui::list_item(#children) }
             }),
             "Table" => self.expand_element_child_list(
                 "Table",
@@ -269,11 +287,11 @@ impl Element {
                     quote! { #leptatui::table_row(::std::vec![#(#leptatui::IntoView::into_view(#children)),*]) }
                 },
             ),
-            "TableCell" => self.expand_text_like("TableCell", |content| {
+            "TableCell" => self.expand_text_like("TableCell", ReactiveTextKind::RichText, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::table_cell(#content) }
             }),
-            "Button" => self.expand_text_like("Button", |content| {
+            "Button" => self.expand_text_like("Button", ReactiveTextKind::String, |content| {
                 let leptatui = crate::crate_path::leptatui();
                 quote! { #leptatui::button(#content) }
             }),

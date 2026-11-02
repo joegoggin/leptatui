@@ -1,0 +1,5 @@
+error: unexpected end of input, stylesheet! nested @media block requires at least one declaration, mixin include, or nested rule
+ --> tests/fixtures/stylesheet_macro/fail/empty_nested_media.rs:9:37
+  |
+9 |             @media (max-width: 80) {}
+  |                                     ^

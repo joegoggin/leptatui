@@ -77,6 +77,8 @@ impl ProgressBarView {
 }
 
 impl View for ProgressBarView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
         let ratatui_style = style.to_ratatui_style();

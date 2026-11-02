@@ -13,7 +13,7 @@
 /// - Normal movement keys move the cursor while preserving the anchor.
 /// - Esc returns to normal mode and clears the selection anchor.
 #[test]
-fn focused_input_supports_vim_visual_mode_transitions() -> Result<()> {
+fn focused_input_supports_vim_visual_mode_transitions() -> leptatui::app::Result<()> {
     let mut view = input("abcd").with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(1);
@@ -55,7 +55,7 @@ fn focused_input_supports_vim_visual_mode_transitions() -> Result<()> {
 /// - `d` deletes the selected characters, emits the controlled value, and
 ///   records undo history.
 #[test]
-fn focused_input_supports_visual_yank_and_delete() -> Result<()> {
+fn focused_input_supports_visual_yank_and_delete() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_input("abcd", &emitted);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
@@ -111,7 +111,7 @@ fn focused_input_supports_visual_yank_and_delete() -> Result<()> {
 /// - Visual-line `d` removes all selected logical lines and records undo
 ///   history.
 #[test]
-fn focused_text_area_supports_visual_line_yank_paste_and_delete() -> Result<()> {
+fn focused_text_area_supports_visual_line_yank_paste_and_delete() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_text_area("one\ntwo\nthree", &emitted);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
@@ -178,7 +178,7 @@ fn focused_text_area_supports_visual_line_yank_paste_and_delete() -> Result<()> 
 /// Undo and redo history must survive controlled-value reconciliation between
 /// emitted input values.
 #[test]
-fn focused_input_supports_vim_delete_yank_paste_undo_and_redo() -> Result<()> {
+fn focused_input_supports_vim_delete_yank_paste_undo_and_redo() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_input("abc", &emitted);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
@@ -250,7 +250,7 @@ fn focused_input_supports_vim_delete_yank_paste_undo_and_redo() -> Result<()> {
 /// Linewise operations need different paste ranges than character-wise input
 /// operations.
 #[test]
-fn focused_text_area_supports_linewise_yank_delete_paste_undo_and_redo() -> Result<()> {
+fn focused_text_area_supports_linewise_yank_delete_paste_undo_and_redo() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let mut view = emitting_text_area("one\ntwo\nthree", &emitted);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);

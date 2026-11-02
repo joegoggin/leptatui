@@ -6,6 +6,7 @@ use syn::{Error, Result};
 
 use super::{
     Element,
+    children::ReactiveTextKind,
     validation::{AttrKind, ValidatedAttr},
 };
 
@@ -72,7 +73,7 @@ impl Element {
         )
     }
 
-    /// Expands an infallible path-backed Markdown element.
+    /// Expands an asynchronously loaded path-backed Markdown element.
     ///
     /// # Returns
     ///
@@ -87,14 +88,13 @@ impl Element {
             self.validate_required_attr_element("Markdown", AttrKind::MarkdownSrc, "src")?;
         let leptatui = crate::crate_path::leptatui();
         let mut options = quote! { #leptatui::MarkdownOptions::default() };
-
-        if let Some(theme) = attrs
+        let editable = attrs
             .iter()
-            .find(|validated| validated.kind == AttrKind::SyntaxTheme)
-        {
-            let value = theme.attr.value.to_tokens();
-            options = quote! { (#options).syntax_theme(#value) };
-        }
+            .find(|validated| validated.kind == AttrKind::Editable)
+            .map_or_else(
+                || quote! { false },
+                |validated| validated.attr.value.to_tokens(),
+            );
 
         if let Some(line_numbers) = attrs
             .iter()
@@ -105,7 +105,15 @@ impl Element {
         }
 
         self.expand_attrs(
-            quote! { #leptatui::markdown_file_with_options(#source, #options) },
+            quote! {
+                #leptatui::__private::__markdown_element(
+                    #source,
+                    #options,
+                    #editable,
+                    ::core::file!(),
+                    ::core::line!(),
+                )
+            },
             &attrs,
         )
     }
@@ -142,8 +150,8 @@ impl Element {
             }
         };
         let leptatui = crate::crate_path::leptatui();
-        let view = self.expand_text_like("Link", |content| {
-            quote! { #leptatui::link(#content, #href) }
+        let view = self.expand_text_like("Link", ReactiveTextKind::RichText, |content| {
+            quote! { #leptatui::link(#content, (#href).clone()) }
         })?;
         self.expand_attrs(view, &attrs)
     }

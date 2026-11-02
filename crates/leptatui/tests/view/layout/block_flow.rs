@@ -15,7 +15,7 @@
 /// - Each child receives an automatic eight-cell width.
 /// - The children occupy consecutive rows in source order.
 #[test]
-fn block_children_stack_in_source_order_at_automatic_width() -> Result<()> {
+fn block_children_stack_in_source_order_at_automatic_width() -> leptatui::app::Result<()> {
     let root = div((text("A"), text("B"), text("C"))).into_view();
 
     let terminal = render_layout_root(&root, 8, 4)?;
@@ -65,7 +65,7 @@ fn block_children_stack_in_source_order_at_automatic_width() -> Result<()> {
 /// - The root block resolves to the four-row sum of its descendants.
 /// - The nested children and following sibling render on consecutive rows.
 #[test]
-fn nested_blocks_compose_intrinsic_block_sizes() -> Result<()> {
+fn nested_blocks_compose_intrinsic_block_sizes() -> leptatui::app::Result<()> {
     let root = div((text("A"), div((text("B"), text("C"))), text("D"))).into_view();
 
     let terminal = render_layout_root(&root, 10, 6)?;
@@ -119,7 +119,7 @@ fn nested_blocks_compose_intrinsic_block_sizes() -> Result<()> {
 /// - The hidden child retains no geometry or rendered text.
 /// - The final visible child follows immediately after the structural children.
 #[test]
-fn structural_boundaries_and_hidden_nodes_add_no_block_box() -> Result<()> {
+fn structural_boundaries_and_hidden_nodes_add_no_block_box() -> leptatui::app::Result<()> {
     let hidden = text("Hidden").with_inline_style(TuiStyle::new().display(Display::None));
     let root = div((
         text("A"),

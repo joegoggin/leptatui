@@ -29,6 +29,11 @@ fn DocumentShowcase() -> impl IntoView {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                border_type: BorderType::Plain,
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .help => { fg: Color::DarkGray }
@@ -46,12 +51,6 @@ fn DocumentShowcase() -> impl IntoView {
         TableHead => { fg: Color::LightCyan }
         CodeBlock => { fg: Color::LightBlue }
 
-        @media (max-width: 60) {
-            .document-shell => {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
-            }
-        }
     }
 
     view! {
@@ -116,7 +115,6 @@ fn DocumentShowcase() -> impl IntoView {
                 <CodeBlock
                     language="rust"
                     line_numbers=true
-                    syntax_theme={SyntaxTheme::Dark}
                 >{source}</CodeBlock>
 
                 <Paragraph class="help">
@@ -138,6 +136,7 @@ fn DocumentShowcase() -> impl IntoView {
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(DocumentShowcase::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <DocumentShowcase /> };
+    App::new(view).run().await
 }

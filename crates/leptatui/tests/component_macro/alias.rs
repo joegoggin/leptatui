@@ -7,12 +7,15 @@
 /// use ui::prelude::*;
 /// #[component]
 /// fn Greeting() -> impl IntoView { view! { <Text>"hi"</Text> } }
+/// #[derive(RouteParams)]
+/// struct GreetingParams { name: String }
 /// ```
 ///
 /// # Assertions
 ///
 /// - `cargo check` succeeds in a temporary downstream crate.
 /// - The downstream crate imports only the renamed `ui` dependency.
+/// - Component, view, and typed-parameter macros resolve the renamed runtime.
 ///
 /// # Why
 ///
@@ -78,8 +81,22 @@ fn Greeting() -> impl IntoView {
     view! { <Text>"hi"</Text> }
 }
 
+#[derive(RouteParams)]
+struct GreetingParams {
+    name: String,
+}
+
+#[derive(QueryParams)]
+struct GreetingQuery {
+    page: Option<usize>,
+}
+
 fn main() {
     let _view: AnyView = Greeting::new().into_view();
+    fn route_model<T: ui::RouteParams>() {}
+    fn query_model<T: ui::QueryParams>() {}
+    route_model::<GreetingParams>();
+    query_model::<GreetingQuery>();
 }
 "#,
     )

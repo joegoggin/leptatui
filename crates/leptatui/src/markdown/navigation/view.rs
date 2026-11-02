@@ -12,6 +12,7 @@ use crate::{
     app::{AppControl, Result},
     component::{KeyControl, RenderCtx},
     paragraph,
+    view::mark_target_visited,
 };
 
 use super::{
@@ -70,6 +71,44 @@ impl MarkdownView {
     pub(in crate::markdown) fn new(path: &Path, options: MarkdownOptions) -> Self {
         let root_path = absolute_path(path);
         let current = load_markdown_page(root_path.clone(), options, None);
+        Self {
+            state: Rc::new(RefCell::new(MarkdownState {
+                root_path,
+                options,
+                current,
+                back: Vec::new(),
+                forward: Vec::new(),
+            })),
+        }
+    }
+
+    /// Creates a file-identified Markdown boundary from preloaded source.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Markdown path used for identity and relative links.
+    /// * `source` — Preloaded UTF-8 CommonMark source.
+    /// * `options` — Rendering options applied to every page.
+    ///
+    /// # Returns
+    ///
+    /// A [`MarkdownView`] displaying the supplied source without initial I/O.
+    pub(in crate::markdown) fn from_source(
+        path: &Path,
+        source: &str,
+        options: MarkdownOptions,
+    ) -> Self {
+        let root_path = absolute_path(path);
+        let link_base = root_path.parent().unwrap_or_else(|| Path::new("."));
+        let current = MarkdownPage {
+            path: root_path.clone(),
+            document: markdown_with_options_and_source(
+                source,
+                options,
+                link_base,
+                Some(&root_path),
+            ),
+        };
         Self {
             state: Rc::new(RefCell::new(MarkdownState {
                 root_path,
@@ -140,6 +179,10 @@ impl MarkdownState {
             return false;
         };
 
+        mark_target_visited(&LinkTarget::Markdown {
+            path: path.clone(),
+            fragment: fragment.clone(),
+        });
         let next = load_markdown_page(path, self.options, fragment.as_deref());
         let previous = std::mem::replace(&mut self.current, next);
         self.back.push(previous);
@@ -192,6 +235,8 @@ impl PartialEq for MarkdownView {
 }
 
 impl View for MarkdownView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         self.state.borrow().current.document.render(ctx)
     }

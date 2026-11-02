@@ -8,6 +8,8 @@ static MACRO_SECOND_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
 static MACRO_MIXED_BUILTIN_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
 /// Wrapped button activation count for mixed child key dispatch tests.
 static MACRO_MIXED_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
+/// Dynamic wrapped button activation count for redraw reconciliation tests.
+static MACRO_DYNAMIC_WRAPPED_BUTTON_PRESSES: AtomicUsize = AtomicUsize::new(0);
 /// Repeated-key handler count for key-kind filtering tests.
 static MACRO_REPEAT_KEY_PRESSES: AtomicUsize = AtomicUsize::new(0);
 /// Release-key handler count for key-kind filtering tests.

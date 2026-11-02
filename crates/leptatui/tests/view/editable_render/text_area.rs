@@ -10,11 +10,12 @@
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The text area renders a default border.
+/// - The text area renders a rounded default border.
+/// - One cell of horizontal padding separates each line from the border.
 /// - The first line starts on the first inner row.
 /// - The second line starts on the second inner row.
 #[test]
-fn renders_text_area_multiline_value() -> Result<()> {
+fn renders_text_area_multiline_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("One\nTwo");
@@ -23,10 +24,10 @@ fn renders_text_area_multiline_value() -> Result<()> {
 
     assert_eq!(
         cell_symbol(&terminal, 0, 0, 8),
-        symbol_border::PLAIN.top_left
+        symbol_border::ROUNDED.top_left
     );
-    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "O");
-    assert_eq!(cell_symbol(&terminal, 1, 2, 8), "T");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "O");
+    assert_eq!(cell_symbol(&terminal, 2, 2, 8), "T");
 
     Ok(())
 }
@@ -43,17 +44,17 @@ fn renders_text_area_multiline_value() -> Result<()> {
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - Lines start in the first column when borders are disabled.
+/// - Lines retain one cell of padding when borders are disabled.
 #[test]
-fn text_area_borders_none_disables_default_border() -> Result<()> {
+fn text_area_borders_none_disables_default_border() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("One\nTwo").with_inline_style(TuiStyle::new().borders(Borders::NONE));
 
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 0, 0, 8), "O");
-    assert_eq!(cell_symbol(&terminal, 0, 1, 8), "T");
+    assert_eq!(cell_symbol(&terminal, 1, 0, 8), "O");
+    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "T");
 
     Ok(())
 }
@@ -70,17 +71,17 @@ fn text_area_borders_none_disables_default_border() -> Result<()> {
 /// # Assertions
 ///
 /// - The terminal draw call succeeds.
-/// - The inner cells contain the first and last placeholder characters.
+/// - The inner cells contain the first and last visible placeholder characters.
 #[test]
-fn renders_text_area_placeholder_when_value_is_empty() -> Result<()> {
+fn renders_text_area_placeholder_when_value_is_empty() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("").placeholder("Notes");
 
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "N");
-    assert_eq!(cell_symbol(&terminal, 5, 1, 8), "s");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "N");
+    assert_eq!(cell_symbol(&terminal, 5, 1, 8), "e");
 
     Ok(())
 }
@@ -101,7 +102,7 @@ fn renders_text_area_placeholder_when_value_is_empty() -> Result<()> {
 /// - The focused text-area cell uses the stylesheet foreground color.
 /// - The focused text-area cell uses the stylesheet background color.
 #[test]
-fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
+fn renders_focused_text_area_with_focus_stylesheet_rule() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("Ada").with_focus(true);
@@ -119,10 +120,45 @@ fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
     })?;
     render_result?;
 
-    let (fg, bg) = cell_colors(&terminal, 1, 1, 8);
+    let (fg, bg) = cell_colors(&terminal, 2, 1, 8);
     assert_eq!(fg, Color::Black);
     assert_eq!(bg, Color::Yellow);
 
+    Ok(())
+}
+
+/// Verifies insert-mode text areas render their built-in yellow palette.
+///
+/// # Example Under Test
+///
+/// ```text
+/// text_area("Ada").with_focus(true)
+/// mode = Insert
+/// ```
+///
+/// # Assertions
+///
+/// - Text-area content and borders render yellow on dark gray.
+/// - The focused border uses thick glyphs.
+/// - The resolved content remains bold.
+#[test]
+fn insert_mode_text_area_renders_default_palette() -> leptatui::app::Result<()> {
+    let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
+    let mut view = text_area("Ada").with_focus(true);
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
+
+    draw_view(&mut terminal, &view)?;
+
+    assert_eq!(
+        cell_colors(&terminal, 2, 1, 8),
+        (Color::Yellow, Color::DarkGray)
+    );
+    assert_eq!(
+        cell_colors(&terminal, 0, 0, 8),
+        (Color::Yellow, Color::DarkGray)
+    );
+    assert_eq!(cell_symbol(&terminal, 0, 0, 8), symbol_border::THICK.top_left);
+    assert!(cell_modifiers(&terminal, 2, 1, 8).contains(Modifier::BOLD));
     Ok(())
 }
 
@@ -140,14 +176,14 @@ fn renders_focused_text_area_with_focus_stylesheet_rule() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The focused text area sets the terminal cursor on the final row.
 #[test]
-fn focused_text_area_sets_terminal_cursor_position() -> Result<()> {
+fn focused_text_area_sets_terminal_cursor_position() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = text_area("one\ntwo").with_focus(true);
 
     draw_view(&mut terminal, &view)?;
 
-    terminal.backend_mut().assert_cursor_position((4, 2));
+    terminal.backend_mut().assert_cursor_position((5, 2));
 
     Ok(())
 }
@@ -168,19 +204,19 @@ fn focused_text_area_sets_terminal_cursor_position() -> Result<()> {
 /// - Moving the cursor to the start succeeds.
 /// - The second render succeeds and shows the head of the multiline value.
 #[test]
-fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
+fn text_area_rendering_scrolls_vertically_around_cursor() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("aaa\nbbb\nccc").with_focus(true);
 
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "b");
-    assert_eq!(cell_symbol(&terminal, 1, 2, 8), "c");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "b");
+    assert_eq!(cell_symbol(&terminal, 2, 2, 8), "c");
 
     editable_state_mut(&mut view).set_cursor(0);
     draw_view(&mut terminal, &view)?;
-    assert_eq!(cell_symbol(&terminal, 1, 1, 8), "a");
-    assert_eq!(cell_symbol(&terminal, 1, 2, 8), "b");
+    assert_eq!(cell_symbol(&terminal, 2, 1, 8), "a");
+    assert_eq!(cell_symbol(&terminal, 2, 2, 8), "b");
 
     Ok(())
 }
@@ -198,8 +234,9 @@ fn text_area_rendering_scrolls_vertically_around_cursor() -> Result<()> {
 ///
 /// - The first logical line remains unselected.
 /// - The second and third logical lines render in reverse video.
+/// - Content and borders use the visual-mode magenta palette.
 #[test]
-fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
+fn text_area_visual_line_selection_renders_reversed_cells() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(10, 5);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("one\ntwo\nthree").with_focus(true);
@@ -209,9 +246,17 @@ fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
 
     draw_view(&mut terminal, &view)?;
 
-    assert!(!cell_modifiers(&terminal, 1, 1, 10).contains(Modifier::REVERSED));
-    assert!(cell_modifiers(&terminal, 1, 2, 10).contains(Modifier::REVERSED));
-    assert!(cell_modifiers(&terminal, 1, 3, 10).contains(Modifier::REVERSED));
+    assert!(!cell_modifiers(&terminal, 2, 1, 10).contains(Modifier::REVERSED));
+    assert!(cell_modifiers(&terminal, 2, 2, 10).contains(Modifier::REVERSED));
+    assert!(cell_modifiers(&terminal, 2, 3, 10).contains(Modifier::REVERSED));
+    assert_eq!(
+        cell_colors(&terminal, 2, 2, 10),
+        (Color::Magenta, Color::DarkGray)
+    );
+    assert_eq!(
+        cell_colors(&terminal, 0, 0, 10),
+        (Color::Magenta, Color::DarkGray)
+    );
 
     Ok(())
 }
@@ -222,7 +267,7 @@ fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
 ///
 /// ```text
 /// text_area("Ada").with_focus(true)
-/// width = 5, mode = Insert, key = j
+/// width = 7, mode = Insert, key = j
 /// ```
 ///
 /// # Assertions
@@ -231,8 +276,8 @@ fn text_area_visual_line_selection_renders_reversed_cells() -> Result<()> {
 /// - The preview character wraps to the next row in reverse video.
 /// - The terminal cursor is placed on the wrapped preview character.
 #[test]
-fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
-    let backend = TestBackend::new(5, 4);
+fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> leptatui::app::Result<()> {
+    let backend = TestBackend::new(7, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut view = text_area("Ada").with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
@@ -243,9 +288,9 @@ fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
     );
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(cell_symbol(&terminal, 1, 2, 5), "j");
-    assert!(cell_modifiers(&terminal, 1, 2, 5).contains(Modifier::REVERSED));
-    terminal.backend_mut().assert_cursor_position((1, 2));
+    assert_eq!(cell_symbol(&terminal, 2, 2, 7), "j");
+    assert!(cell_modifiers(&terminal, 2, 2, 7).contains(Modifier::REVERSED));
+    terminal.backend_mut().assert_cursor_position((2, 2));
 
     Ok(())
 }
@@ -264,14 +309,14 @@ fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The following text view renders after the wrapped text-area rows.
 #[test]
-fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
-    let backend = TestBackend::new(6, 7);
+fn column_reserves_height_for_wrapped_text_area() -> leptatui::app::Result<()> {
+    let backend = TestBackend::new(6, 9);
     let mut terminal = Terminal::new(backend)?;
     let view = div((text_area("Hello World"), text("End")));
 
     draw_view(&mut terminal, &view)?;
 
-    assert_eq!(symbol_position(&terminal, "E", 6), (0, 6));
+    assert_eq!(symbol_position(&terminal, "E", 6), (0, 8));
 
     Ok(())
 }
@@ -292,7 +337,7 @@ fn column_reserves_height_for_wrapped_text_area() -> Result<()> {
 /// - Wrapped text occupies the first two rows.
 /// - The following text view renders on the third row.
 #[test]
-fn column_reserves_height_for_wrapped_text() -> Result<()> {
+fn column_reserves_height_for_wrapped_text() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(6, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = div(vec![text("Hello World"), text("End")]);

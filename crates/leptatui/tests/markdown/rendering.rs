@@ -10,12 +10,13 @@
 /// # Assertions
 ///
 /// - Markdown H1 through H6 use the same repeated `#` heading hierarchy.
+/// - Markdown headings use the semantic cyan-to-gray color palette.
 /// - Long Unicode prose wraps across multiple terminal rows.
 /// - Ordered and unordered list markers remain visible.
 /// - Link labels remain visible without appended destinations.
 /// - Quote prefixes, rules, image fallbacks, literal HTML, and tables render visibly.
 #[test]
-fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
+fn markdown_fixtures_render_targeted_terminal_fragments() -> leptatui::app::Result<()> {
     let core_document = markdown(CORE_FIXTURE);
     let core = render_view(core_document.as_view(), 40, 80)?;
     let core_lines = rendered_lines(&core);
@@ -32,6 +33,17 @@ fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
                 .iter()
                 .any(|line| line.starts_with(expected_heading))
         );
+    }
+    let core_cells = core.backend().buffer().content();
+    for (row, expected_color) in [
+        (0, Color::LightCyan),
+        (2, Color::LightBlue),
+        (4, Color::LightGreen),
+        (6, Color::LightYellow),
+        (8, Color::LightMagenta),
+        (10, Color::Gray),
+    ] {
+        assert_eq!(core_cells[row * 40].fg, expected_color);
     }
     assert!(core_lines.iter().any(|line| line.contains("Unicode 界")));
     assert!(core_lines.iter().any(|line| line.contains("the guide")));
@@ -82,25 +94,60 @@ fn markdown_fixtures_render_targeted_terminal_fragments() -> Result<()> {
     Ok(())
 }
 
-/// Verifies Markdown syntax options affect semantic and rendered code output.
+/// Verifies Markdown links use their semantic default and focus palettes.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// code.md with the light syntax theme and line numbers enabled
+/// [Guide](https://example.com)
+/// Tab, render
 /// ```
 ///
 /// # Assertions
 ///
-/// - Every code block records the requested syntax theme and line-number behavior.
+/// - An unvisited Markdown link renders blue and underlined.
+/// - Focus traversal handles the Markdown link.
+/// - Every focused link-label cell remains blue on dark gray.
+#[test]
+fn focused_markdown_link_uses_default_palette() -> leptatui::app::Result<()> {
+    let mut document = markdown("[Guide](https://example.com)");
+    let unvisited = render_view(document.as_view(), 8, 1)?;
+    for cell in &unvisited.backend().buffer().content()[..5] {
+        assert_eq!(cell.fg, Color::Blue);
+        assert!(cell.modifier.contains(Modifier::UNDERLINED));
+    }
+
+    assert_eq!(
+        document.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))?,
+        leptatui::KeyControl::Handled
+    );
+
+    let rendered = render_view(document.as_view(), 8, 1)?;
+    for cell in &rendered.backend().buffer().content()[..5] {
+        assert_eq!(cell.fg, Color::Blue);
+        assert_eq!(cell.bg, Color::DarkGray);
+    }
+
+    Ok(())
+}
+
+/// Verifies Markdown code options affect semantic and rendered output.
+///
+/// # Example Under Test
+///
+/// ```text
+/// code.md with line numbers enabled
+/// ```
+///
+/// # Assertions
+///
+/// - Every code block records the requested line-number behavior.
 /// - Known `rust` and `rs` selectors contain highlighted spans.
 /// - The unknown selector retains plain unstyled source.
 /// - Rendered code shows language titles, line-number gutters, and wrapped Unicode source.
 #[test]
-fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()> {
-    let options = MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Light)
-        .line_numbers(true);
+fn markdown_code_fixture_applies_options_and_renders_highlighting() -> leptatui::app::Result<()> {
+    let options = MarkdownOptions::default().line_numbers(true);
     let view = markdown_with_options(CODE_FIXTURE, options);
     let document = view
         .downcast_ref::<DivView>()
@@ -114,7 +161,6 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
 
     for child in &code_blocks {
         assert!(child.has_line_numbers());
-        assert_eq!(child.selected_syntax_theme(), SyntaxTheme::Light);
     }
 
     for index in [0, 1] {
@@ -162,7 +208,7 @@ fn markdown_code_fixture_applies_options_and_renders_highlighting() -> Result<()
 /// - The trailing logical blank line retains the same syntax background.
 /// - The surrounding border does not receive the syntax background.
 #[test]
-fn markdown_code_background_fills_the_block_interior() -> Result<()> {
+fn markdown_code_background_fills_the_block_interior() -> leptatui::app::Result<()> {
     let source = "```rust\nlet value = true;\n```\n";
     let document = markdown(source);
     let terminal = render_view(document.as_view(), 24, 4)?;
@@ -192,7 +238,7 @@ fn markdown_code_background_fills_the_block_interior() -> Result<()> {
 /// - Empty input renders successfully in a zero-sized terminal.
 /// - Code-heavy Markdown measures and renders without panicking at widths zero through two.
 #[test]
-fn markdown_fixtures_handle_empty_and_zero_sized_viewports() -> Result<()> {
+fn markdown_fixtures_handle_empty_and_zero_sized_viewports() -> leptatui::app::Result<()> {
     let empty = markdown(EMPTY_FIXTURE);
     assert!(
         empty

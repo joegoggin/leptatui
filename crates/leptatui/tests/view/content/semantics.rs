@@ -13,7 +13,7 @@
 /// - The second span wraps to the second row.
 /// - The second span does not inherit the first span's reversed modifier.
 #[test]
-fn semantic_rendering_preserves_rich_text_span_styles() -> Result<()> {
+fn semantic_rendering_preserves_rich_text_span_styles() -> leptatui::app::Result<()> {
     let content = Text::from(Line::from(vec![
         Span::styled(
             "Rich ",
@@ -52,7 +52,7 @@ fn semantic_rendering_preserves_rich_text_span_styles() -> Result<()> {
 /// - The first span retains its yellow foreground and reversed modifier.
 /// - The second span wraps without inheriting the first span's reversed modifier.
 #[test]
-fn heading_rendering_preserves_rich_text_styles_and_hanging_indent() -> Result<()> {
+fn heading_rendering_preserves_rich_text_styles_and_hanging_indent() -> leptatui::app::Result<()> {
     let content = Text::from(Line::from(vec![
         Span::styled(
             "Rich ",
@@ -93,7 +93,7 @@ fn heading_rendering_preserves_rich_text_styles_and_hanging_indent() -> Result<(
 /// - Each marker contains one `#` per heading level with no leading indentation.
 /// - Both heading rows begin after the complete marker gutter.
 #[test]
-fn semantic_text_variants_wrap_and_report_intrinsic_size() -> Result<()> {
+fn semantic_text_variants_wrap_and_report_intrinsic_size() -> leptatui::app::Result<()> {
     let headings = [
         (h1("One Two"), 1),
         (h2("One Two"), 2),
@@ -141,7 +141,7 @@ fn semantic_text_variants_wrap_and_report_intrinsic_size() -> Result<()> {
 /// - H6 renders all six hash cells when the viewport permits them.
 /// - Heading content begins at cell seven when the viewport permits it.
 #[test]
-fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
+fn semantic_headings_handle_zero_and_narrow_widths() -> leptatui::app::Result<()> {
     for width in 0..=8 {
         let view = h6("Heading");
         let mut terminal = Terminal::new(TestBackend::new(width, 2))?;
@@ -190,7 +190,7 @@ fn semantic_headings_handle_zero_and_narrow_widths() -> Result<()> {
 /// - The third character wraps to the second row.
 /// - The following text view renders after both paragraph rows.
 #[test]
-fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()> {
+fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> leptatui::app::Result<()> {
     let view = div((paragraph("界界界"), text("End")));
     let mut terminal = Terminal::new(TestBackend::new(4, 3))?;
 
@@ -219,7 +219,7 @@ fn semantic_text_wraps_unicode_and_reserves_parent_layout_height() -> Result<()>
 /// - Rendering a flex row that assigns zero width to one child succeeds.
 /// - The narrow row reports a one-row intrinsic size.
 #[test]
-fn semantic_text_clips_overflow_and_handles_zero_width_flex_items() -> Result<()> {
+fn semantic_text_clips_overflow_and_handles_zero_width_flex_items() -> leptatui::app::Result<()> {
     let mut clipped = Terminal::new(TestBackend::new(4, 1))?;
     draw_view(&mut clipped, &paragraph("One Two"))?;
     assert_eq!(symbol_position(&clipped, "O", 4), (0, 0));

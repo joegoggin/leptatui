@@ -13,6 +13,7 @@ use syn::{
 
 use crate::stylesheet::{
     import::StylesheetImports,
+    media::starts_media,
     selector::Selector,
     value::{StyleValue, StyleValueKind},
     variable::StylesheetVariables,
@@ -66,7 +67,7 @@ impl Parse for Declaration {
     }
 }
 
-/// Parses declaration value tokens up to a style-item boundary.
+/// Parses declaration value tokens up to a declaration, rule, or media boundary.
 ///
 /// # Arguments
 ///
@@ -86,6 +87,7 @@ fn parse_value(input: ParseStream<'_>) -> Result<StyleValue> {
     while !input.is_empty()
         && !input.peek(Token![,])
         && !starts_important(input)
+        && !starts_media(input)
         && !starts_nested_rule(input)
     {
         tokens.extend(::std::iter::once(input.parse::<TokenTree>()?));

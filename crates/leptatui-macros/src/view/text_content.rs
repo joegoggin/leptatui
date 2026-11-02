@@ -3,8 +3,6 @@
 //! This module parses literal and braced-expression content accepted by text
 //! and button elements.
 
-use proc_macro2::TokenStream;
-use quote::quote;
 use syn::{
     Expr, LitStr, Result,
     parse::{Parse, ParseStream},
@@ -44,20 +42,5 @@ impl Parse for TextContent {
         }
 
         Err(input.error("expected string literal or braced expression"))
-    }
-}
-
-impl TextContent {
-    /// Expands text content into an expression suitable for text builders.
-    ///
-    /// # Returns
-    ///
-    /// A [`TokenStream`] containing a literal, expression, or invoked closure.
-    pub(super) fn expand(&self) -> TokenStream {
-        match self {
-            Self::Literal(value) => quote! { #value },
-            Self::Expr(expr) if matches!(expr.as_ref(), Expr::Closure(_)) => quote! { (#expr)() },
-            Self::Expr(expr) => quote! { #expr },
-        }
     }
 }

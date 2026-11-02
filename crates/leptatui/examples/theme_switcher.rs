@@ -59,7 +59,7 @@ fn ThemeStatus() -> impl IntoView {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
     dynamic(move || {
-        view! { <Text class="theme-status">{format!("Active theme: {:?}", mode.get_untracked())}</Text> }
+        view! { <Text class="theme-status">{format!("Active theme: {:?}", mode.get())}</Text> }
     })
 }
 
@@ -90,10 +90,21 @@ fn ThemeDemo() -> impl IntoView {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1),
 
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
+
             .title => { fg: $accent, modifier: Modifier::BOLD }
             .theme-status => { fg: $text }
             .body => { fg: $muted }
-            .theme-button => { fg: $text, bg: $surface }
+            .theme-button => {
+                fg: $text,
+                bg: $surface
+
+                @media (max-width: 60) {
+                    padding: TuiSpacing::ZERO
+                }
+            }
             .danger => { fg: Color::LightRed }
 
             Button => {
@@ -106,13 +117,11 @@ fn ThemeDemo() -> impl IntoView {
             }
         }
 
-        .controls => { display: Display::Flex }
+        .controls => {
+            display: Display::Flex
 
-        @media (max-width: 60) {
-            .app-panel => { padding: TuiSpacing::ZERO }
-            .controls => { flex_direction: FlexDirection::Column }
-            .theme-button => {
-                padding: TuiSpacing::ZERO
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
             }
         }
     }
@@ -158,6 +167,7 @@ fn ThemeDemo() -> impl IntoView {
 /// Returns [`Error`] if the terminal app fails to initialize, render, or
 /// process events.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(ThemeDemo::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <ThemeDemo /> };
+    App::new(view).run().await
 }

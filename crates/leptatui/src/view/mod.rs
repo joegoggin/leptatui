@@ -10,6 +10,7 @@
 //! - `content` — Text, paragraph, heading, and code views.
 //! - `controls` — Interactive form and input views.
 //! - `core` — Shared view contracts, conversion, metadata, and rendering.
+//! - `error` — Default interactive screen for fallible component errors.
 //! - `media` — Terminal image views.
 //! - `reconciliation` — Retained view-tree state reconciliation.
 
@@ -18,14 +19,15 @@ pub(crate) mod containers;
 pub(crate) mod content;
 pub(crate) mod controls;
 pub(crate) mod core;
+pub(crate) mod error;
 mod link;
 pub(crate) mod media;
 mod reconciliation;
 
-pub(crate) use boundary::component::{ComponentView, component_factory};
+pub(crate) use boundary::component::{ComponentView, WeakComponentView, component_factory};
 pub use boundary::{
     component::component,
-    dynamic::{DynamicView, dynamic},
+    dynamic::{DynamicView, dynamic, keyed},
 };
 pub use containers::{
     block::{BlockView, block},
@@ -42,7 +44,7 @@ pub use containers::{
     },
 };
 pub use content::{
-    code_block::{CodeBlockView, SyntaxTheme, code_block},
+    code_block::{CodeBlockView, code_block},
     heading::{HeadingLevel, HeadingView, h1, h2, h3, h4, h5, h6},
     paragraph::{ParagraphView, paragraph},
     text::{TextView, text},
@@ -58,6 +60,7 @@ pub use controls::{
     form::{FormAction, FormView, form},
     link::{LinkView, link},
     progress_bar::{ProgressBarView, progress_bar},
+    route_link::{RouteLinkView, route_link},
 };
 pub use core::{
     any_view::AnyView,
@@ -69,6 +72,7 @@ pub use core::{
 };
 pub(crate) use link::{InlineLink, LinkedSpan};
 pub use link::{LinkTarget, RichText};
+pub(crate) use link::{VisitedLinkRegistry, mark_target_visited};
 pub use media::image::{ImageSource, ImageView, image};
 pub use ratatui::text::{Line, Span, Text};
 pub(crate) use reconciliation::reconcile_views;

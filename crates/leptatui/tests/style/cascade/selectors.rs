@@ -108,6 +108,186 @@ fn selector_css_specificity_sums_compound_and_descendant_parts() {
     assert_eq!(selector.css_specificity(), (0, 2, 1));
 }
 
+/// Verifies active selectors match active metadata with pseudo-class specificity.
+///
+/// # Example Under Test
+///
+/// ```text
+/// A:active
+/// ```
+///
+/// # Assertions
+///
+/// - An active anchor matches the compound selector.
+/// - An inactive anchor does not match the compound selector.
+/// - The selector contributes one pseudo-class and one type specificity unit.
+#[test]
+fn active_selector_matches_metadata_and_counts_as_pseudo_specificity() {
+    let selector = StyleSelector::compound(vec![
+        StyleSelector::view_type(ViewType::A),
+        StyleSelector::active(),
+    ]);
+    let mut active = StyleMetadata::new(ViewType::A);
+    active.set_active(true);
+    let inactive = StyleMetadata::new(ViewType::A);
+
+    let stylesheet = Stylesheet::new().rule(
+        selector.clone(),
+        TuiStyle::new().foreground(Color::LightCyan),
+    );
+    let active_style = stylesheet.resolve(
+        &active,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let inactive_style = stylesheet.resolve(
+        &inactive,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(active_style.foreground, Some(Color::LightCyan));
+    assert_eq!(inactive_style.foreground, Some(Color::Blue));
+    assert_eq!(selector.css_specificity(), (0, 1, 1));
+}
+
+/// Verifies insert selectors match insert metadata with pseudo-class specificity.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Input:insert
+/// ```
+///
+/// # Assertions
+///
+/// - Insert-mode input metadata matches the compound selector.
+/// - Normal-mode input metadata does not match the compound selector.
+/// - The selector contributes one pseudo-class and one type specificity unit.
+#[test]
+fn insert_selector_matches_metadata_and_counts_as_pseudo_specificity() {
+    let selector = StyleSelector::compound(vec![
+        StyleSelector::view_type(ViewType::Input),
+        StyleSelector::insert(),
+    ]);
+    let mut insert = StyleMetadata::new(ViewType::Input);
+    insert.set_insert(true);
+    let normal = StyleMetadata::new(ViewType::Input);
+    let stylesheet = Stylesheet::new().rule(
+        selector.clone(),
+        TuiStyle::new().foreground(Color::Magenta),
+    );
+
+    let insert_style = stylesheet.resolve(
+        &insert,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let normal_style = stylesheet.resolve(
+        &normal,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(insert_style.foreground, Some(Color::Magenta));
+    assert_eq!(normal_style.foreground, Some(Color::White));
+    assert_eq!(selector.css_specificity(), (0, 1, 1));
+}
+
+/// Verifies visual selectors match visual metadata with pseudo-class specificity.
+///
+/// # Example Under Test
+///
+/// ```text
+/// TextArea:visual
+/// ```
+///
+/// # Assertions
+///
+/// - Visual-mode text-area metadata matches the compound selector.
+/// - Normal-mode text-area metadata does not match the compound selector.
+/// - The selector contributes one pseudo-class and one type specificity unit.
+#[test]
+fn visual_selector_matches_metadata_and_counts_as_pseudo_specificity() {
+    let selector = StyleSelector::compound(vec![
+        StyleSelector::view_type(ViewType::TextArea),
+        StyleSelector::visual(),
+    ]);
+    let mut visual = StyleMetadata::new(ViewType::TextArea);
+    visual.set_visual(true);
+    let normal = StyleMetadata::new(ViewType::TextArea);
+    let stylesheet = Stylesheet::new().rule(
+        selector.clone(),
+        TuiStyle::new().foreground(Color::LightMagenta),
+    );
+
+    let visual_style = stylesheet.resolve(
+        &visual,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let normal_style = stylesheet.resolve(
+        &normal,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(visual_style.foreground, Some(Color::LightMagenta));
+    assert_eq!(normal_style.foreground, Some(Color::White));
+    assert_eq!(selector.css_specificity(), (0, 1, 1));
+}
+
+/// Verifies visited selectors match visited metadata with pseudo-class specificity.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Link:visited
+/// ```
+///
+/// # Assertions
+///
+/// - Visited link metadata matches the compound selector.
+/// - Unvisited link metadata does not match the compound selector.
+/// - The selector contributes one pseudo-class and one type specificity unit.
+#[test]
+fn visited_selector_matches_metadata_and_counts_as_pseudo_specificity() {
+    let selector = StyleSelector::compound(vec![
+        StyleSelector::view_type(ViewType::Link),
+        StyleSelector::visited(),
+    ]);
+    let mut visited = StyleMetadata::new(ViewType::Link);
+    visited.set_visited(true);
+    let unvisited = StyleMetadata::new(ViewType::Link);
+    let stylesheet = Stylesheet::new().rule(
+        selector.clone(),
+        TuiStyle::new().foreground(Color::LightMagenta),
+    );
+
+    let visited_style = stylesheet.resolve(
+        &visited,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+    let unvisited_style = stylesheet.resolve(
+        &unvisited,
+        &[],
+        TuiStyle::new(),
+        &ThemeVariables::new(),
+    );
+
+    assert_eq!(visited_style.foreground, Some(Color::LightMagenta));
+    assert_eq!(unvisited_style.foreground, Some(Color::Blue));
+    assert_eq!(selector.css_specificity(), (0, 1, 1));
+}
+
 /// Verifies descendant selector specificity overrides later class rules.
 ///
 /// # Example Under Test

@@ -59,7 +59,7 @@ fn PreludeComponent() -> impl IntoView {
 /// The prelude should expose enough macro, view, component, and context APIs for
 /// a small component to render without extra imports.
 #[test]
-fn prelude_exposes_macros_and_required_context() -> Result<()> {
+fn prelude_exposes_macros_and_required_context() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(32, 3);
     let mut terminal = Terminal::new(backend)?;
     let component = PreludeComponent::new();
@@ -112,12 +112,12 @@ fn prelude_exposes_macros_and_required_context() -> Result<()> {
 /// - A memo can derive from a prelude signal.
 /// - Context values can be provided and read from the prelude.
 /// - Standard-library builders, callback aliases, source types, Markdown
-///   options, and infallible file readers type-check from the prelude.
-/// - The Markdown view tag loads a path into the same document as its reader.
+///   options, and synchronous file readers type-check from the prelude.
+/// - The Markdown view tag creates a reactive asynchronous boundary.
 /// - The view and stylesheet macros support standard-library component names
 ///   from prelude imports.
-#[test]
-fn prelude_exposes_reactivity_and_context() {
+#[tokio::test(flavor = "current_thread")]
+async fn prelude_exposes_reactivity_and_context() {
     Owner::new().with(|| {
         let (count, set_count) = signal(0);
 
@@ -165,9 +165,7 @@ fn prelude_exposes_reactivity_and_context() {
             markdown("# Markdown"),
             markdown_with_options(
                 "```rust\nfn main() {}\n```",
-                MarkdownOptions::default()
-                    .syntax_theme(SyntaxTheme::Light)
-                    .line_numbers(true),
+                MarkdownOptions::default().line_numbers(true),
             ),
             ordered_list([
                 list_item([paragraph("First")]),
@@ -184,8 +182,7 @@ fn prelude_exposes_reactivity_and_context() {
             ]),
             code_block("fn main() {}")
                 .language("rust")
-                .line_numbers(true)
-                .syntax_theme(SyntaxTheme::Light),
+                .line_numbers(true),
             form_view,
             image(image_source).alt("Project logo"),
             progress_bar(0.5).label("Half"),
@@ -214,7 +211,7 @@ fn prelude_exposes_reactivity_and_context() {
                         </TableRow>
                     </TableBody>
                 </Table>
-                <CodeBlock language="rust" line_numbers=true syntax_theme=SyntaxTheme::Light>
+                <CodeBlock language="rust" line_numbers=true>
                     "fn main() {}"
                 </CodeBlock>
                 <Form>
@@ -229,17 +226,10 @@ fn prelude_exposes_reactivity_and_context() {
         let macro_markdown = view! {
             <Markdown
                 src={markdown_path}
-                syntax_theme=SyntaxTheme::Light
                 line_numbers=true
             />
         };
-        let markdown_options = MarkdownOptions::default()
-            .syntax_theme(SyntaxTheme::Light)
-            .line_numbers(true);
-        assert_eq!(
-            macro_markdown,
-            markdown_file_with_options(markdown_path, markdown_options)
-        );
+        assert!(macro_markdown.downcast_ref::<DynamicView>().is_some());
         let _default_file_reader = |path: &str| markdown_file(path);
         let _configured_file_reader =
             |path: &str, options: MarkdownOptions| markdown_file_with_options(path, options);
@@ -338,19 +328,39 @@ fn prelude_exposes_reactivity_and_context() {
 ///
 /// ```text
 /// use leptatui::prelude::*;
-/// create_resource(|| (), |_| async { Ok(42) })
+/// Resource::new(|| (), |_| async { Ok(42) })
 /// ```
 ///
 /// # Assertions
 ///
 /// - A resource can be created through prelude exports.
-/// - The resource eventually resolves to `ResourceState::Ready(42)`.
+/// - The resource eventually resolves to `Some(Ok(42))`.
 #[tokio::test(flavor = "current_thread")]
 async fn prelude_exposes_resource_helpers() {
     let owner = Owner::new();
 
-    let resource: Resource<i32, &'static str> =
-        owner.with(|| create_resource(|| (), |_| async { Ok(42) }));
+    let resource: Resource<std::result::Result<i32, &'static str>> =
+        owner.with(|| Resource::new(|| (), |_| async { Ok(42) }));
 
-    wait_until(|| matches!(resource.get_untracked(), ResourceState::Ready(42))).await;
+    wait_until(|| resource.get_untracked() == Some(Ok(42))).await;
+}
+
+/// Verifies the prelude leaves the standard two-parameter result unshadowed.
+///
+/// # Example Under Test
+///
+/// ```text
+/// use leptatui::prelude::*;
+/// let value: Result<i32, &str> = Ok(42);
+/// ```
+///
+/// # Assertions
+///
+/// - A standard [`Result`] with distinct success and error types compiles.
+/// - The result contains `42`.
+#[test]
+fn prelude_does_not_shadow_standard_result() {
+    let value: Result<i32, &str> = Ok(42);
+
+    assert_eq!(value, Ok(42));
 }

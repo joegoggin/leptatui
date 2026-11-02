@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::{app::AppControl, view::StyleMetadata};
 
-use super::state::EditableState;
+use super::state::{EditableState, VimMode};
 
 /// Shared callback invoked when an editable control proposes a new value.
 pub type EditableAction = Rc<dyn Fn(String) -> AppControl>;
@@ -34,6 +34,16 @@ pub(crate) struct EditableModel {
     pub(crate) editable_state: EditableState,
 }
 
+impl EditableModel {
+    /// Synchronizes retained editing mode into stylesheet metadata.
+    pub(crate) fn sync_style_state(&self) {
+        let mode = self.editable_state.mode();
+        self.metadata.sync_insert(mode == VimMode::Insert);
+        self.metadata
+            .sync_visual(matches!(mode, VimMode::Visual | VimMode::VisualLine));
+    }
+}
+
 impl PartialEq for EditableModel {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
@@ -50,6 +60,7 @@ macro_rules! impl_editable_view_api {
     ($type:ty) => {
         impl $crate::view::StyledView for $type {
             fn metadata(&self) -> &$crate::view::StyleMetadata {
+                self.model.sync_style_state();
                 &self.model.metadata
             }
 
@@ -107,6 +118,37 @@ macro_rules! impl_editable_view_api {
             /// Sets the current focus pseudo-class state.
             pub fn with_focus(self, focused: bool) -> Self {
                 $crate::view::StyledView::with_focus(self, focused)
+            }
+
+            /// Sets the current insert pseudo-class state.
+            pub fn with_insert(self, insert: bool) -> Self {
+                $crate::view::StyledView::with_insert(self, insert)
+            }
+
+            /// Sets the current visual pseudo-class state.
+            ///
+            /// # Arguments
+            ///
+            /// * `visual` — Whether this view should match the visual selector.
+            ///
+            /// # Returns
+            ///
+            /// This view with the updated visual state.
+            pub fn with_visual(self, visual: bool) -> Self {
+                $crate::view::StyledView::with_visual(self, visual)
+            }
+
+            /// Sets the current visited pseudo-class state.
+            ///
+            /// # Arguments
+            ///
+            /// * `visited` — Whether this view should match the visited selector.
+            ///
+            /// # Returns
+            ///
+            /// This view with the updated visited state.
+            pub fn with_visited(self, visited: bool) -> Self {
+                $crate::view::StyledView::with_visited(self, visited)
             }
 
             /// Stores placeholder text.

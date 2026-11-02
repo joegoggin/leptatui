@@ -86,6 +86,10 @@ fn StandardLibraryShowcase() -> impl IntoView {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .title => {
@@ -98,32 +102,66 @@ fn StandardLibraryShowcase() -> impl IntoView {
         .caption => { fg: Color::DarkGray }
         .help => { fg: Color::DarkGray }
         .meter => { fg: Color::LightGreen, bg: Color::DarkGray }
-        .image-small => { image_size: TuiSize::new(24, 8) }
-        .image-medium => { image_size: TuiSize::new(36, 12) }
-        .image-large => { image_size: TuiSize::new(48, 16) }
+        .image-small => {
+            image_size: TuiSize::new(24, 8)
+
+            @media (max-width: 60) {
+                image_size: TuiSize::new(20, 6)
+            }
+        }
+        .image-medium => {
+            image_size: TuiSize::new(36, 12)
+
+            @media (max-width: 60) {
+                image_size: TuiSize::new(28, 8)
+            }
+        }
+        .image-large => {
+            image_size: TuiSize::new(48, 16)
+
+            @media (max-width: 60) {
+                image_size: TuiSize::new(36, 10)
+            }
+        }
 
         Input => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         TextArea => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Image => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Button => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Input:focus => {
@@ -153,19 +191,12 @@ fn StandardLibraryShowcase() -> impl IntoView {
             modifier: Modifier::BOLD | Modifier::UNDERLINED
         }
 
-        .actions => { display: Display::Flex }
+        .actions => {
+            display: Display::Flex
 
-        @media (max-width: 60) {
-            .showcase-shell => { padding: TuiSpacing::ZERO }
-            .actions => { flex_direction: FlexDirection::Column }
-
-            Input => { padding: TuiSpacing::ZERO }
-            TextArea => { padding: TuiSpacing::ZERO }
-            Image => { padding: TuiSpacing::ZERO }
-            .image-small => { image_size: TuiSize::new(20, 6) }
-            .image-medium => { image_size: TuiSize::new(28, 8) }
-            .image-large => { image_size: TuiSize::new(36, 10) }
-            Button => { padding: TuiSpacing::ZERO }
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
     }
 
@@ -174,19 +205,19 @@ fn StandardLibraryShowcase() -> impl IntoView {
             <Div>
                 <Text class="title">"Standard library showcase"</Text>
                 {move || {
-                    let current_name = name.get_untracked();
-                    let current_notes = notes.get_untracked();
-                    let current_progress = progress.get_untracked();
+                    let current_name = name.get();
+                    let current_notes = notes.get();
+                    let current_progress = progress.get();
                     text(
                             status
-                                .get_untracked()
+                                .get()
                                 .label(&current_name, &current_notes, current_progress),
                         )
                         .with_classes("status")
                 }}
                 {move || {
-                    let name_value = name.get_untracked();
-                    let notes_value = notes.get_untracked();
+                    let name_value = name.get();
+                    let notes_value = notes.get();
 
                     view! {
                         <Form
@@ -266,7 +297,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
                     "Image sizes come from stylesheet classes; supported terminals render graphics and other targets show fallback text."
                 </Text>
                 {move || {
-                    let current_progress = progress.get_untracked();
+                    let current_progress = progress.get();
                     progress_bar(current_progress)
                         .label(format!("{:.0}% complete", current_progress * 100.0))
                         .with_classes("meter")
@@ -290,6 +321,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(StandardLibraryShowcase::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <StandardLibraryShowcase /> };
+    App::new(view).run().await
 }

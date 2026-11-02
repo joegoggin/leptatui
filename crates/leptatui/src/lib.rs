@@ -9,6 +9,9 @@
 //! - [`app`] — Terminal setup, event polling, and app-loop runtime APIs.
 //! - [`mod@component`] — Component construction support and frame contexts.
 //! - [`context`] — Typed render-scope context APIs with Leptos owner fallback.
+//! - [`editor`] — Restored-terminal editing for files and reactive text.
+//! - [`file_system`] — Root-scoped asynchronous filesystem operations.
+//! - [`file_selector`] — Standalone reactive file selection.
 //! - `executor` — Leptos executor integration for async reactive work.
 //! - `markdown` — CommonMark parsing and semantic view conversion.
 //! - [`route`] — Signal-backed route state helpers for page switches.
@@ -21,7 +24,7 @@
 //! # Public API Shape
 //!
 //! Application code should normally import [`prelude`] and run a root component
-//! with `App::new(root).run().await`. Explicit module or top-level imports remain
+//! with `App::new(view).run().await`. Explicit module or top-level imports remain
 //! available for lower-level manual rendering and style inspection.
 //!
 //! ```no_run
@@ -33,10 +36,35 @@
 //! }
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<()> {
-//!     App::new(Root::new()).run().await
+//! async fn main() -> leptatui::app::Result<()> {
+//!     let view = view! { <Root /> };
+//!     App::new(view).run().await
 //! }
 //! ```
+//!
+//! Component setup that can fail returns [`ViewResult<impl IntoView>`]. The
+//! [`macro@component`] supports `?` and automatically wraps the final bare
+//! view expression. [`view_error!`] returns an intentional custom error, with
+//! an optional source-preserving form:
+//!
+//! ```
+//! use leptatui::prelude::*;
+//!
+//! #[component]
+//! fn Fallible() -> ViewResult<impl IntoView> {
+//!     let result: std::io::Result<()> = Ok(());
+//!     if let Err(error) = result {
+//!         view_error!(error => "failed to prepare the view");
+//!     }
+//!     view! { <Text>"Ready"</Text> }
+//! }
+//! # let _ = Fallible::new();
+//! ```
+//!
+//! Component bodies own their local signals and can provide shared signals or
+//! services through typed context. [`use_app_handle`] returns the scoped
+//! [`AppHandle`] when a component needs to queue synchronous work that must run
+//! while the managed terminal is temporarily restored.
 //!
 //! The [`macro@view`] and [`macro@component`] macros are Leptatui terminal UI
 //! macros. They use Leptos-style syntax and Leptos reactive primitives, but
@@ -98,8 +126,8 @@
 //!
 //! Semantic headings are available through [`h1`] through [`h6`], and
 //! [`paragraph`] creates unmodified body text. [`code_block`] creates a
-//! bordered, width-aware source view with optional bundled syntax highlighting
-//! and line numbers. [`ordered_list`] and
+//! bordered, width-aware source view with optional syntax highlighting through
+//! the terminal's ANSI palette and optional line numbers. [`ordered_list`] and
 //! [`unordered_list`] group block-oriented [`list_item`] values with terminal
 //! markers. [`table`] groups semantic table sections, rows, and aligned cells
 //! into a bordered responsive grid. These semantic views accept
@@ -133,7 +161,6 @@
 //!     ]),
 //!     code_block("fn main() {}")
 //!         .language("rust")
-//!         .syntax_theme(SyntaxTheme::Dark)
 //!         .line_numbers(true),
 //! ));
 //! # let _ = document;
@@ -176,11 +203,9 @@
 //!                 </TableRow>
 //!             </TableBody>
 //!         </Table>
-//!         <CodeBlock
-//!             language="rust"
-//!             syntax_theme={SyntaxTheme::Dark}
-//!             line_numbers=true
-//!         >"fn main() {}"</CodeBlock>
+//!         <CodeBlock language="rust" line_numbers=true>
+//!             "fn main() {}"
+//!         </CodeBlock>
 //!     </Div>
 //! };
 //! # let _ = document;
@@ -188,26 +213,29 @@
 //!
 //! [`markdown()`] and [`markdown_with_options`] convert in-memory CommonMark.
 //! [`markdown_file`] and [`markdown_file_with_options`] synchronously load
-//! UTF-8 paths before returning a view, and `view!` provides the equivalent
-//! path-backed `Markdown` tag:
+//! UTF-8 paths before returning a view. The path-backed `Markdown` tag loads
+//! asynchronously through a volume-rooted [`file_system::FileSystem`]:
 //!
-//! ```
+//! ```no_run
 //! use leptatui::prelude::*;
 //!
 //! let source = "# Guide\n\n```rust\nfn main() {}\n```";
 //! let default_document = markdown(source);
 //! let configured_document = markdown_with_options(
 //!     source,
-//!     MarkdownOptions::default()
-//!         .syntax_theme(SyntaxTheme::Light)
-//!         .line_numbers(true),
+//!     MarkdownOptions::default().line_numbers(true),
 //! );
 //! let file_document = markdown_file("README.md");
 //! let tagged_document = view! {
-//!     <Markdown src="README.md" syntax_theme={SyntaxTheme::Dark} line_numbers=true />
+//!     <Markdown src="README.md" editable=true line_numbers=true />
 //! };
 //! # let _ = (default_document, configured_document, file_document, tagged_document);
 //! ```
+//!
+//! The `editable` attribute defaults to `false`. When enabled, the Markdown
+//! element handles unmodified `e` by editing its original `src` and unmodified
+//! `r` by refetching it. A successful editor session also triggers a refetch;
+//! editor and reload failures use the standard [`ViewError`] screen.
 //!
 //! Markdown compatibility covers CommonMark plus tables. Optional GFM
 //! extensions are deferred. Links retain their inline labels and participate
@@ -218,23 +246,28 @@
 //! handler; in-memory Markdown and standalone [`LinkView`] values keep that
 //! external behavior. Images become descriptive text without fetching local
 //! or remote targets, and raw HTML or unsupported blocks retain readable
-//! fallbacks. File readers are infallible and render a path-aware page for
-//! unreadable or non-UTF-8 input.
+//! fallbacks. Synchronous file readers render a path-aware fallback for
+//! unreadable or non-UTF-8 input; the `Markdown` tag surfaces those failures
+//! through the standard [`ViewError`] screen.
 //!
 //! Shared app state is usually stored with typed context via
 //! [`context::provide_context`], [`context::use_context`], and
-//! [`context::expect_context`]. Multi-page apps can store the active page with
-//! [`provide_route`], read it with [`use_route`], and navigate with
-//! [`use_navigate`]. Asynchronous reads and mutations use [`create_resource`]
-//! and [`create_action`] to expose pending, ready, and error state to
-//! components.
+//! [`context::expect_context`]. Multi-page apps declare URL-like paths with
+//! [`Router`], `Routes`, and `Route` tags, read reactive location state with
+//! [`use_location`], convert matched values through [`RouteParams`] and
+//! [`QueryParams`] models, and navigate with [`use_navigate`]. Matched route
+//! components call [`use_params`] and [`use_query`], propagating conversion
+//! failures with `?`. Derived query models serialize into locations through
+//! [`with_query`]. Asynchronous reads and mutations use [`Resource::new`] and
+//! [`Action::new`] to expose loading, pending, and output state.
+//! Application errors remain ordinary typed [`std::result::Result`] values
+//! returned by resource fetchers or action handlers.
 //!
 //! # Deferred Scope
 //!
-//! The first baseline intentionally does not expose a Leptos DOM renderer, a
-//! generalized router, or raw terminal session customization APIs. Generated-code
-//! and runtime wiring hooks live under `__private` and are not supported as user
-//! APIs.
+//! The first baseline intentionally does not expose a Leptos DOM renderer or
+//! raw terminal session customization APIs. Generated-code and runtime wiring
+//! hooks live under `__private` and are not supported as user APIs.
 
 mod executor;
 mod markdown;
@@ -243,6 +276,9 @@ pub mod action;
 pub mod app;
 pub mod component;
 pub mod context;
+pub mod editor;
+pub mod file_selector;
+pub mod file_system;
 pub mod prelude;
 pub mod resource;
 pub mod route;
@@ -253,16 +289,24 @@ mod terminal_image;
 
 extern crate self as leptatui;
 
-pub use action::{Action, ActionState, create_action};
-pub use app::{App, AppControl, AppRoot, Error, Result};
+pub use action::Action;
+pub use anyhow::Error as ViewError;
+pub use app::{App, AppControl, AppHandle, AppRoot, Error, Result, use_app_handle};
 pub use component::{Children, ChildrenFn, ChildrenMut, KeyControl, RenderCtx, use_key_event};
-pub use leptatui_macros::{component, stylesheet, view};
+pub use editor::{Editor, EditorStatus, use_editor};
+pub use executor::{spawn, spawn_local};
+pub use file_selector::{FileSelector, FileSelectorOptions, use_file_selector};
+pub use leptatui_macros::{QueryParams, RouteParams, component, stylesheet, view};
 pub use markdown::{
     MarkdownOptions, MarkdownView, markdown, markdown_file, markdown_file_with_options,
-    markdown_with_options,
+    markdown_source_with_options, markdown_with_options,
 };
-pub use resource::{Resource, ResourceState, create_resource};
-pub use route::{RouteState, provide_route, use_navigate, use_route};
+pub use resource::Resource;
+pub use route::{
+    History, Location, Navigate, NavigateOptions, Outlet, ParamsError, ParamsMap, QueryParams,
+    RouteParams, RouteViewFactory, Router, RouterProps, use_history, use_location, use_navigate,
+    use_params, use_query, with_query,
+};
 pub use style::{
     AlignContent, AlignItems, AlignSelf, Axes, BorderType, Borders, BoxSizing, Color, Dimension,
     Display, Edges, FlexDirection, FlexWrap, Fraction, GridAutoFlow, GridLine, GridMaxTrackSize,
@@ -276,24 +320,369 @@ pub use view::{
     ContainerView, DivView, DynamicView, EditableAction, EditableState, EditableView, FormAction,
     FormView, HeadingLevel, HeadingView, ImageSource, ImageView, InputView, IntoView, IntoViews,
     LayoutGeometry, LinkTarget, LinkView, ListItemView, ListKind, ListView, ParagraphView,
-    ProgressBarView, RichText, StyleMetadata, StyledView, SyntaxTheme, TableCellView, TableRowView,
-    TableSectionKind, TableSectionView, TableView, TextAreaView, TextView, TextualView, View,
-    ViewType, VimMode, block, button, code_block, component, div, dynamic, form, h1, h2, h3, h4,
-    h5, h6, image, input, link, list_item, ordered_list, paragraph, progress_bar, table,
-    table_body, table_cell, table_head, table_row, text, text_area, unordered_list,
+    ProgressBarView, RichText, RouteLinkView, StyleMetadata, StyledView, TableCellView,
+    TableRowView, TableSectionKind, TableSectionView, TableView, TextAreaView, TextView,
+    TextualView, View, ViewType, VimMode, block, button, code_block, component, div, dynamic, form,
+    h1, h2, h3, h4, h5, h6, image, input, keyed, link, list_item, ordered_list, paragraph,
+    progress_bar, route_link, table, table_body, table_cell, table_head, table_row, text,
+    text_area, unordered_list,
 };
+
+/// Result type returned by fallible component setup functions.
+///
+/// [`ViewResult`] uses [`ViewError`] so component bodies can propagate any
+/// thread-safe standard error with the `?` operator. The [`macro@component`]
+/// converts an error into Leptatui's default interactive error screen.
+pub type ViewResult<T> = std::result::Result<T, ViewError>;
+
+/// Returns a custom error from a fallible component.
+///
+/// The one-part form creates a new [`ViewError`] from a formatted message. The
+/// source-preserving form converts its first expression into a [`ViewError`]
+/// and attaches the formatted message as context.
+///
+/// ```
+/// use leptatui::prelude::*;
+///
+/// # fn load() -> std::io::Result<()> { Ok(()) }
+/// #[component]
+/// fn Example() -> ViewResult<impl IntoView> {
+///     if let Err(error) = load() {
+///         view_error!(error => "failed to load the example");
+///     }
+///
+///     view! { <Text>"Loaded"</Text> }
+/// }
+/// # let _ = Example::new();
+/// ```
+#[macro_export]
+macro_rules! view_error {
+    ($source:expr => $($message:tt)+) => {{
+        let __leptatui_error: $crate::ViewError =
+            ::core::convert::Into::into($source);
+        return ::core::result::Result::Err(
+            __leptatui_error.context(::std::format!($($message)+)),
+        );
+    }};
+    ($($message:tt)+) => {{
+        return ::core::result::Result::Err(
+            $crate::ViewError::msg(::std::format!($($message)+)),
+        );
+    }};
+}
 
 #[doc(hidden)]
 /// Hidden implementation details used by generated macro code.
 pub mod __private {
-    use crate::{AnyView, View};
+    use crate::{AnyView, IntoView, View};
+    use leptos::{
+        prelude::{ArcMemo, ArcReadSignal, ArcRwSignal, Get, Memo, ReadSignal, RwSignal, Signal},
+        reactive::owner::Storage,
+    };
 
     pub use crate::component::{
         __register_stylesheet, __with_key_handler_registry, __with_stylesheet_registry,
         FocusedControl, KeyHandlerRegistry, StylesheetRegistry,
     };
-    pub use crate::context::hooks::{__with_context_scope, __with_context_scope_if_missing};
+    pub use crate::context::hooks::{
+        __with_component_setup_context, __with_context_scope, __with_context_scope_if_missing,
+    };
+    pub use crate::markdown::__markdown_element;
+    pub use crate::route::{
+        __optional_param, __outlet, __push_query_param, __required_param, __route_definition,
+        __routes,
+    };
+    pub use crate::view::core::events::__handle_builtin_event_with_layout;
+    pub use crate::view::error::__view_error;
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};
+
+    /// Marker for ordinary one-time text content.
+    #[doc(hidden)]
+    pub struct StaticContent;
+
+    /// Marker for readable reactive text content.
+    #[doc(hidden)]
+    pub struct ReactiveContent;
+
+    /// Marker for a reactive content-producing closure.
+    #[doc(hidden)]
+    pub struct ReactiveContentClosure;
+
+    /// Converts static or reactive string-like content into a built view.
+    #[doc(hidden)]
+    pub trait IntoStringView<Marker, Builder, Built> {
+        /// Concrete static or dynamic view produced by the conversion.
+        type Output;
+
+        /// Builds a view from this string-like content.
+        ///
+        /// # Arguments
+        ///
+        /// * `builder` — Callback converting owned content into a concrete view.
+        ///
+        /// # Returns
+        ///
+        /// A static view or tracked [`crate::DynamicView`].
+        fn into_string_view(self, builder: Builder) -> Self::Output;
+    }
+
+    impl<T, Builder, Built> IntoStringView<StaticContent, Builder, Built> for T
+    where
+        T: Into<String>,
+        Builder: Fn(String) -> Built,
+    {
+        type Output = Built;
+
+        fn into_string_view(self, builder: Builder) -> Self::Output {
+            builder(self.into())
+        }
+    }
+
+    impl<F, T, Builder, Built> IntoStringView<ReactiveContentClosure, Builder, Built> for F
+    where
+        F: Fn() -> T + 'static,
+        T: Into<String> + 'static,
+        Builder: Fn(String) -> Built + 'static,
+        Built: IntoView + 'static,
+    {
+        type Output = crate::DynamicView;
+
+        fn into_string_view(self, builder: Builder) -> Self::Output {
+            crate::dynamic(move || builder(self().into()))
+        }
+    }
+
+    /// Converts static or reactive rich-text content into a built view.
+    #[doc(hidden)]
+    pub trait IntoRichTextView<Marker, Builder, Built> {
+        /// Concrete static or dynamic view produced by the conversion.
+        type Output;
+
+        /// Builds a view from this rich-text content.
+        ///
+        /// # Arguments
+        ///
+        /// * `builder` — Callback converting owned content into a concrete view.
+        ///
+        /// # Returns
+        ///
+        /// A static view or tracked [`crate::DynamicView`].
+        fn into_rich_text_view(self, builder: Builder) -> Self::Output;
+    }
+
+    impl<T, Builder, Built> IntoRichTextView<StaticContent, Builder, Built> for T
+    where
+        T: Into<crate::RichText>,
+        Builder: Fn(crate::RichText) -> Built,
+    {
+        type Output = Built;
+
+        fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+            builder(self.into())
+        }
+    }
+
+    impl<F, T, Builder, Built> IntoRichTextView<ReactiveContentClosure, Builder, Built> for F
+    where
+        F: Fn() -> T + 'static,
+        T: Into<crate::RichText> + 'static,
+        Builder: Fn(crate::RichText) -> Built + 'static,
+        Built: IntoView + 'static,
+    {
+        type Output = crate::DynamicView;
+
+        fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+            crate::dynamic(move || builder(self().into()))
+        }
+    }
+
+    macro_rules! impl_arena_content_views {
+        ($signal:ident) => {
+            impl<T, S, Builder, Built> IntoStringView<ReactiveContent, Builder, Built>
+                for $signal<T, S>
+            where
+                $signal<T, S>: Get<Value = T> + 'static,
+                T: Into<String> + 'static,
+                Builder: Fn(String) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_string_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+
+            impl<T, S, Builder, Built> IntoRichTextView<ReactiveContent, Builder, Built>
+                for $signal<T, S>
+            where
+                $signal<T, S>: Get<Value = T> + 'static,
+                T: Into<crate::RichText> + 'static,
+                Builder: Fn(crate::RichText) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+        };
+    }
+
+    impl_arena_content_views!(RwSignal);
+    impl_arena_content_views!(ReadSignal);
+
+    macro_rules! impl_stored_content_views {
+        ($signal:ident) => {
+            impl<T, S, Builder, Built> IntoStringView<ReactiveContent, Builder, Built>
+                for $signal<T, S>
+            where
+                S: Storage<T> + 'static,
+                $signal<T, S>: Get<Value = T> + 'static,
+                T: Into<String> + 'static,
+                Builder: Fn(String) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_string_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+
+            impl<T, S, Builder, Built> IntoRichTextView<ReactiveContent, Builder, Built>
+                for $signal<T, S>
+            where
+                S: Storage<T> + 'static,
+                $signal<T, S>: Get<Value = T> + 'static,
+                T: Into<crate::RichText> + 'static,
+                Builder: Fn(crate::RichText) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+        };
+    }
+
+    impl_stored_content_views!(Memo);
+    impl_stored_content_views!(Signal);
+    impl_stored_content_views!(ArcMemo);
+
+    macro_rules! impl_arc_content_views {
+        ($signal:ident) => {
+            impl<T, Builder, Built> IntoStringView<ReactiveContent, Builder, Built> for $signal<T>
+            where
+                $signal<T>: Get<Value = T> + 'static,
+                T: Into<String> + 'static,
+                Builder: Fn(String) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_string_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+
+            impl<T, Builder, Built> IntoRichTextView<ReactiveContent, Builder, Built> for $signal<T>
+            where
+                $signal<T>: Get<Value = T> + 'static,
+                T: Into<crate::RichText> + 'static,
+                Builder: Fn(crate::RichText) -> Built + 'static,
+                Built: IntoView + 'static,
+            {
+                type Output = crate::DynamicView;
+
+                fn into_rich_text_view(self, builder: Builder) -> Self::Output {
+                    crate::dynamic(move || builder(self.get().into()))
+                }
+            }
+        };
+    }
+
+    impl_arc_content_views!(ArcRwSignal);
+    impl_arc_content_views!(ArcReadSignal);
+
+    /// Builds a static or reactive string-content view for generated macro code.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Static, closure, or signal content to convert.
+    /// * `builder` — Callback building the semantic text view.
+    ///
+    /// # Returns
+    ///
+    /// The static or dynamic output selected by [`IntoStringView`].
+    #[doc(hidden)]
+    pub fn __into_string_view<T, Marker, Builder, Built>(
+        value: T,
+        builder: Builder,
+    ) -> <T as IntoStringView<Marker, Builder, Built>>::Output
+    where
+        T: IntoStringView<Marker, Builder, Built>,
+    {
+        value.into_string_view(builder)
+    }
+
+    /// Builds a static or reactive rich-text view for generated macro code.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Static, closure, or signal content to convert.
+    /// * `builder` — Callback building the semantic rich-text view.
+    ///
+    /// # Returns
+    ///
+    /// The static or dynamic output selected by [`IntoRichTextView`].
+    #[doc(hidden)]
+    pub fn __into_rich_text_view<T, Marker, Builder, Built>(
+        value: T,
+        builder: Builder,
+    ) -> <T as IntoRichTextView<Marker, Builder, Built>>::Output
+    where
+        T: IntoRichTextView<Marker, Builder, Built>,
+    {
+        value.into_rich_text_view(builder)
+    }
+
+    /// Converts one generated child expression into zero or more retained views.
+    #[doc(hidden)]
+    pub trait IntoViewChildren {
+        /// Converts this value into the views contributed at one child position.
+        fn into_view_children(self) -> Vec<AnyView>;
+    }
+
+    impl<V> IntoViewChildren for V
+    where
+        V: IntoView,
+    {
+        fn into_view_children(self) -> Vec<AnyView> {
+            vec![self.into_view()]
+        }
+    }
+
+    impl<V> IntoViewChildren for Vec<V>
+    where
+        V: IntoView,
+    {
+        fn into_view_children(self) -> Vec<AnyView> {
+            self.into_iter().map(IntoView::into_view).collect()
+        }
+    }
+
+    /// Converts a generated scalar or vector child expression into retained views.
+    #[doc(hidden)]
+    pub fn __into_view_children<C>(children: C) -> Vec<AnyView>
+    where
+        C: IntoViewChildren,
+    {
+        children.into_view_children()
+    }
 
     /// Creates a component view from a generated component factory.
     ///

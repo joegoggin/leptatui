@@ -19,7 +19,7 @@ use super::*;
 /// - Its retained normal-flow row and the scrollable content extent do not
 ///   change.
 #[test]
-fn top_sticky_follows_flow_then_pins_without_changing_extents() -> Result<()> {
+fn top_sticky_follows_flow_then_pins_without_changing_extents() -> leptatui::app::Result<()> {
     let sticky = div((text("S"),)).with_inline_style(
         fixture_size(8.0, 1.0)
             .position(Position::Sticky)
@@ -82,7 +82,7 @@ fn top_sticky_follows_flow_then_pins_without_changing_extents() -> Result<()> {
 ///   that row upward.
 /// - The retained normal-flow row remains unchanged.
 #[test]
-fn bottom_sticky_clamps_at_the_scrollport_end_threshold() -> Result<()> {
+fn bottom_sticky_clamps_at_the_scrollport_end_threshold() -> leptatui::app::Result<()> {
     let sticky = div((text("S"),)).with_inline_style(
         fixture_size(8.0, 1.0)
             .position(Position::Sticky)
@@ -134,7 +134,7 @@ fn bottom_sticky_clamps_at_the_scrollport_end_threshold() -> Result<()> {
 /// - The nested container consumes a later scroll at its visible position.
 /// - The marker remains constrained after nested scrolling.
 #[test]
-fn sticky_uses_the_nearest_nested_scrollport() -> Result<()> {
+fn sticky_uses_the_nearest_nested_scrollport() -> leptatui::app::Result<()> {
     let sticky = div((text("S"),)).with_inline_style(
         fixture_size(8.0, 1.0)
             .position(Position::Sticky)
@@ -186,7 +186,8 @@ fn sticky_uses_the_nearest_nested_scrollport() -> Result<()> {
 /// - Normal-flow content height and maximum scroll offset include the original
 ///   sticky dimensions.
 #[test]
-fn oversized_sticky_prefers_the_start_edge_without_corrupting_extents() -> Result<()> {
+fn oversized_sticky_prefers_the_start_edge_without_corrupting_extents() -> leptatui::app::Result<()>
+{
     let sticky = div((text("S"),)).with_inline_style(
         fixture_size(8.0, 4.0)
             .position(Position::Sticky)
@@ -228,7 +229,7 @@ fn oversized_sticky_prefers_the_start_edge_without_corrupting_extents() -> Resul
 /// - The resized scrollport clamps the same marker at row four.
 /// - The existing scroll offset survives the resize.
 #[test]
-fn percentage_sticky_inset_recomputes_after_terminal_resize() -> Result<()> {
+fn percentage_sticky_inset_recomputes_after_terminal_resize() -> leptatui::app::Result<()> {
     let sticky = div((text("S"),)).with_inline_style(
         fixture_size(10.0, 1.0)
             .position(Position::Sticky)
@@ -300,7 +301,7 @@ fn percentage_sticky_inset_recomputes_after_terminal_resize() -> Result<()> {
 /// - The sticky marker remains painted on the scrollport's top row.
 /// - The focused button label remains visible below the sticky marker.
 #[test]
-fn focus_scrolling_keeps_the_sticky_header_constrained() -> Result<()> {
+fn focus_scrolling_keeps_the_sticky_header_constrained() -> leptatui::app::Result<()> {
     let sticky = div((text("S"),)).with_inline_style(
         fixture_size(12.0, 1.0)
             .position(Position::Sticky)

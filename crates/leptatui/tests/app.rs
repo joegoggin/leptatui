@@ -6,7 +6,7 @@
 use std::{cell::Cell, time::Duration};
 
 use crossterm::event::Event;
-use leptatui::{App, AppControl, IntoView, RenderCtx, Result, View, button};
+use leptatui::{App, AppControl, IntoView, RenderCtx, View, button};
 
 /// Test view used to prove view-to-root adaptation.
 struct TestRoot {
@@ -24,7 +24,7 @@ impl View for TestRoot {
     /// # Returns
     ///
     /// An empty [`Result`] on success.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         Ok(())
     }
 
@@ -37,7 +37,7 @@ impl View for TestRoot {
     /// # Returns
     ///
     /// An [`AppControl`] value requesting exit.
-    fn handle_event(&mut self, _event: Event) -> Result<AppControl> {
+    fn handle_event(&mut self, _event: Event) -> leptatui::app::Result<AppControl> {
         self.events.set(self.events.get().saturating_add(1));
         Ok(AppControl::Exit)
     }

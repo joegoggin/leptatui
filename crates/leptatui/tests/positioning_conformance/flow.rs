@@ -23,7 +23,7 @@ use super::*;
 /// Separating absolute nodes from flow nodes must not move all automatic-inset
 /// boxes after later siblings before layout computes their static positions.
 #[test]
-fn absolute_auto_insets_preserve_static_source_position() -> Result<()> {
+fn absolute_auto_insets_preserve_static_source_position() -> leptatui::app::Result<()> {
     let absolute =
         div((text("X"),)).with_inline_style(fixture_size(1.0, 1.0).position(Position::Absolute));
     let root = div((text("A"), absolute, text("B")))
@@ -60,7 +60,7 @@ fn absolute_auto_insets_preserve_static_source_position() -> Result<()> {
 /// - The following normal-flow text starts where the relative box originally
 ///   reserved space.
 #[test]
-fn static_ignores_insets_and_relative_offsets_preserve_flow_space() -> Result<()> {
+fn static_ignores_insets_and_relative_offsets_preserve_flow_space() -> leptatui::app::Result<()> {
     let static_box = div((text("S"),)).with_inline_style(
         fixture_size(2.0, 1.0)
             .position(Position::Static)
@@ -112,7 +112,7 @@ fn static_ignores_insets_and_relative_offsets_preserve_flow_space() -> Result<()
 /// - The following normal-flow box starts immediately after the first box.
 /// - The absolute box overlaps the flow row instead of reserving its own row.
 #[test]
-fn absolute_boxes_leave_normal_flow() -> Result<()> {
+fn absolute_boxes_leave_normal_flow() -> leptatui::app::Result<()> {
     let absolute = div((text("B"),)).with_inline_style(
         fixture_size(2.0, 1.0)
             .position(Position::Absolute)
@@ -153,7 +153,7 @@ fn absolute_boxes_leave_normal_flow() -> Result<()> {
 /// - The absolute box spans the remaining width and height between opposing
 ///   insets.
 #[test]
-fn opposing_insets_follow_positioning_rules() -> Result<()> {
+fn opposing_insets_follow_positioning_rules() -> leptatui::app::Result<()> {
     let relative = div((text("R"),)).with_inline_style(
         fixture_size(2.0, 1.0)
             .position(Position::Relative)
@@ -200,7 +200,7 @@ fn opposing_insets_follow_positioning_rules() -> Result<()> {
 /// - The nested absolute descendant uses the relative inner box.
 /// - The static root acts as the terminal containing-block fallback.
 #[test]
-fn absolute_descendants_use_the_nearest_non_static_ancestor_or_root() -> Result<()> {
+fn absolute_descendants_use_the_nearest_non_static_ancestor_or_root() -> leptatui::app::Result<()> {
     let direct_absolute = div((text("A"),)).with_inline_style(
         fixture_size(1.0, 1.0)
             .position(Position::Absolute)
@@ -269,7 +269,7 @@ fn absolute_descendants_use_the_nearest_non_static_ancestor_or_root() -> Result<
 /// - The large viewport places the child at column ten and row ten.
 /// - The child's explicit size remains stable across both renders.
 #[test]
-fn percentage_insets_recompute_after_terminal_resize() -> Result<()> {
+fn percentage_insets_recompute_after_terminal_resize() -> leptatui::app::Result<()> {
     let absolute = div((text("P"),)).with_inline_style(
         fixture_size(2.0, 1.0)
             .position(Position::Absolute)

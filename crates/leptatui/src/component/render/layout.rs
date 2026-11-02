@@ -27,6 +27,8 @@ pub(super) struct LayoutState {
     phase: LayoutPhase,
     /// Whether an erased view should adopt its retained absolute geometry.
     honors_geometry: bool,
+    /// Whether the root may paint from its retained layout snapshot.
+    reuse_requested: bool,
     /// Retained geometry for views that do not expose selector metadata.
     unstyled_geometry: Rc<RefCell<HashMap<usize, LayoutGeometry>>>,
 }
@@ -41,6 +43,7 @@ impl Default for LayoutState {
         Self {
             phase: LayoutPhase::Inactive,
             honors_geometry: true,
+            reuse_requested: false,
             unstyled_geometry: Rc::new(RefCell::new(HashMap::new())),
         }
     }
@@ -82,6 +85,24 @@ impl RenderCtx<'_, '_> {
     /// `true` when retained layout geometry should replace the assigned area.
     pub(crate) const fn honors_layout_geometry(&self) -> bool {
         self.layout_state.honors_geometry
+    }
+
+    /// Returns whether the root may reuse its retained layout snapshot.
+    ///
+    /// # Returns
+    ///
+    /// A [`bool`] indicating whether retained-layout reuse was requested.
+    pub(crate) const fn layout_reuse_requested(&self) -> bool {
+        self.layout_state.reuse_requested
+    }
+
+    /// Selects whether the root may reuse retained geometry for this frame.
+    ///
+    /// # Arguments
+    ///
+    /// * `requested` — Whether root snapshot validation should attempt reuse.
+    pub(crate) fn set_layout_reuse_requested(&mut self, requested: bool) {
+        self.layout_state.reuse_requested = requested;
     }
 
     /// Returns retained geometry for a view without selector metadata.

@@ -13,6 +13,22 @@ fn main() {
             Button => {
                 &:focus => { background: Color::Yellow }
             }
+
+            A => {
+                &:active => { foreground: Color::LightCyan }
+            }
+
+            Input => {
+                &:insert => { foreground: Color::Yellow }
+            }
+
+            TextArea => {
+                &:visual => { foreground: Color::Magenta }
+            }
+
+            Link => {
+                &:visited => { foreground: Color::LightMagenta }
+            }
         }
     };
 
@@ -37,6 +53,46 @@ fn main() {
                 ]),
             ),
             TuiStyle::new().background(Color::Yellow),
+        )
+        .rule(
+            StyleSelector::descendant(
+                vec![StyleSelector::class("panel")],
+                StyleSelector::compound(vec![
+                    StyleSelector::view_type(ViewType::A),
+                    StyleSelector::active(),
+                ]),
+            ),
+            TuiStyle::new().foreground(Color::LightCyan),
+        )
+        .rule(
+            StyleSelector::descendant(
+                vec![StyleSelector::class("panel")],
+                StyleSelector::compound(vec![
+                    StyleSelector::view_type(ViewType::Input),
+                    StyleSelector::insert(),
+                ]),
+            ),
+            TuiStyle::new().foreground(Color::Yellow),
+        )
+        .rule(
+            StyleSelector::descendant(
+                vec![StyleSelector::class("panel")],
+                StyleSelector::compound(vec![
+                    StyleSelector::view_type(ViewType::TextArea),
+                    StyleSelector::visual(),
+                ]),
+            ),
+            TuiStyle::new().foreground(Color::Magenta),
+        )
+        .rule(
+            StyleSelector::descendant(
+                vec![StyleSelector::class("panel")],
+                StyleSelector::compound(vec![
+                    StyleSelector::view_type(ViewType::Link),
+                    StyleSelector::visited(),
+                ]),
+            ),
+            TuiStyle::new().foreground(Color::LightMagenta),
         );
 
     assert_eq!(styles, expected);

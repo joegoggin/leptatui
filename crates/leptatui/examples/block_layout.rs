@@ -21,6 +21,11 @@ fn BlockLayout() -> impl IntoView {
         .app-shell => {
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                border_type: BorderType::Plain,
+                padding: TuiSpacing::ZERO
+            }
         }
         .title => {
             fg: Color::LightCyan,
@@ -35,6 +40,10 @@ fn BlockLayout() -> impl IntoView {
         .comparison => {
             display: Display::Flex,
             gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column
+            }
         }
         .panel => {
             borders: Borders::ALL,
@@ -43,6 +52,13 @@ fn BlockLayout() -> impl IntoView {
                 Dimension::from(Length::cells(6.0))
             ),
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                size: LayoutSize::new(
+                    Dimension::from(Length::percent(100.0)),
+                    Dimension::from(Length::cells(5.0))
+                )
+            }
         }
         .content-sized => { box_sizing: BoxSizing::ContentBox }
         .border-sized => { box_sizing: BoxSizing::BorderBox }
@@ -63,19 +79,6 @@ fn BlockLayout() -> impl IntoView {
         .third-panel => { bg: Color::DarkGray }
         .hint => { fg: Color::DarkGray }
 
-        @media (max-width: 60) {
-            .app-shell => {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
-            }
-            .comparison => { flex_direction: FlexDirection::Column }
-            .panel => {
-                size: LayoutSize::new(
-                    Dimension::from(Length::percent(100.0)),
-                    Dimension::from(Length::cells(5.0))
-                )
-            }
-        }
     }
 
     view! {
@@ -119,6 +122,7 @@ fn BlockLayout() -> impl IntoView {
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(BlockLayout::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <BlockLayout /> };
+    App::new(view).run().await
 }

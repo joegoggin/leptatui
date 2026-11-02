@@ -13,7 +13,7 @@
 /// - The view render call succeeds.
 /// - The rendered text resolves the media-rule foreground color.
 #[test]
-fn render_context_applies_media_rules_from_root_viewport() -> Result<()> {
+fn render_context_applies_media_rules_from_root_viewport() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 3);
     let mut terminal = Terminal::new(backend)?;
     let view = text("Hi").with_classes("accent");
@@ -58,7 +58,7 @@ fn render_context_applies_media_rules_from_root_viewport() -> Result<()> {
 /// - The first bordered button renders near the top.
 /// - The second bordered button renders lower after column stacking.
 #[test]
-fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()> {
+fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 6);
     let mut terminal = Terminal::new(backend)?;
     let view = div(vec![button("A"), button("B")]).with_classes("stack");
@@ -100,7 +100,7 @@ fn media_direction_gives_stacked_bordered_buttons_minimum_height() -> Result<()>
 /// - The styled render succeeds.
 /// - The fourth nested button renders on the expected lower row.
 #[test]
-fn column_reserves_height_for_nested_stacked_bordered_buttons() -> Result<()> {
+fn column_reserves_height_for_nested_stacked_bordered_buttons() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 14);
     let mut terminal = Terminal::new(backend)?;
     let view = div((

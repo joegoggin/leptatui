@@ -23,7 +23,7 @@ fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
         <Div>
             <Text>{title}</Text>
-            {div(children())}
+            {children()}
         </Div>
     }
 }
@@ -42,4 +42,8 @@ fn main() {
     };
 
     assert!(view.style_metadata().is_none());
+
+    let values = vec![text("First"), text("Second")];
+    let vector_view = view! { <Div>{values}</Div> };
+    assert_eq!(vector_view.children().len(), 2);
 }

@@ -14,7 +14,7 @@
 /// - The second styled render succeeds.
 /// - Empty and occupied cells on the bottom row keep the parent background.
 #[test]
-fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down() -> Result<()> {
+fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 2);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div((text("Top"), button("Launch"), text("Tail"))).with_classes("surface");
@@ -64,7 +64,7 @@ fn overflowing_column_keeps_parent_background_on_bottom_row_after_scrolling_down
 /// - The second styled render succeeds.
 /// - Empty and occupied cells on the top row keep the parent background.
 #[test]
-fn overflowing_column_keeps_parent_background_on_top_row_after_scrolling_up() -> Result<()> {
+fn overflowing_column_keeps_parent_background_on_top_row_after_scrolling_up() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 2);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div((text("Top"), button("Launch"), text("Tail"))).with_classes("surface");

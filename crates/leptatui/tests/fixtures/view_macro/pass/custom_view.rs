@@ -9,7 +9,7 @@ struct Badge;
 
 impl View for Badge {
     /// Renders nothing in this compile-only fixture.
-    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> leptatui::app::Result<()> {
         Ok(())
     }
 

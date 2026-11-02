@@ -40,9 +40,7 @@ pub(super) fn parse_code_block<'a>(
         CodeBlockKind::Indented => None,
         CodeBlockKind::Fenced(info) => info.split_whitespace().next().map(str::to_owned),
     };
-    let view = code_block(source)
-        .line_numbers(options.line_numbers)
-        .syntax_theme(options.syntax_theme);
+    let view = code_block(source).line_numbers(options.line_numbers);
     match language {
         Some(language) => view.language(language),
         None => view,

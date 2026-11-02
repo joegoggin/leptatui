@@ -10,10 +10,11 @@
 /// # Assertions
 ///
 /// - Markers render as `9.` and `10.` beginning at the requested value.
+/// - Ordered markers use the light-cyan semantic default.
 /// - The shorter marker is right-aligned to the longer marker.
 /// - Both item contents begin in the same terminal column.
 #[test]
-fn ordered_list_starts_and_aligns_multi_digit_markers() -> Result<()> {
+fn ordered_list_starts_and_aligns_multi_digit_markers() -> leptatui::app::Result<()> {
     let view = ordered_list([
         list_item([paragraph("Nine")]),
         list_item([paragraph("Ten")]),
@@ -26,6 +27,7 @@ fn ordered_list_starts_and_aligns_multi_digit_markers() -> Result<()> {
     assert_eq!(cell_symbol(&terminal, 0, 0, 12), " ");
     assert_eq!(cell_symbol(&terminal, 1, 0, 12), "9");
     assert_eq!(cell_symbol(&terminal, 2, 0, 12), ".");
+    assert_eq!(cell_colors(&terminal, 1, 0, 12).0, Color::LightCyan);
     assert_eq!(cell_symbol(&terminal, 0, 1, 12), "1");
     assert_eq!(cell_symbol(&terminal, 1, 1, 12), "0");
     assert_eq!(cell_symbol(&terminal, 2, 1, 12), ".");
@@ -50,10 +52,11 @@ fn ordered_list_starts_and_aligns_multi_digit_markers() -> Result<()> {
 /// # Assertions
 ///
 /// - Unordered items render `-` markers.
+/// - Unordered markers use the light-green semantic default.
 /// - Wrapped continuation text and later blocks align with item content.
 /// - An empty item still consumes one marker row.
 #[test]
-fn unordered_list_wraps_mixed_blocks_and_renders_empty_items() -> Result<()> {
+fn unordered_list_wraps_mixed_blocks_and_renders_empty_items() -> leptatui::app::Result<()> {
     let view = unordered_list([
         list_item([paragraph("Alpha Beta"), paragraph("Tail")]),
         list_item(()),
@@ -63,6 +66,7 @@ fn unordered_list_wraps_mixed_blocks_and_renders_empty_items() -> Result<()> {
     draw_view(&mut terminal, &view)?;
 
     assert_eq!(cell_symbol(&terminal, 0, 0, 8), "-");
+    assert_eq!(cell_colors(&terminal, 0, 0, 8).0, Color::LightGreen);
     assert_eq!(symbol_position(&terminal, "A", 8), (2, 0));
     assert_eq!(symbol_position(&terminal, "B", 8), (2, 1));
     assert_eq!(symbol_position(&terminal, "T", 8), (2, 2));
@@ -92,7 +96,7 @@ fn unordered_list_wraps_mixed_blocks_and_renders_empty_items() -> Result<()> {
 /// - The recursively nested ordered marker starts at column four.
 /// - Nested content renders after each local marker gutter.
 #[test]
-fn nested_lists_indent_two_cells_per_level() -> Result<()> {
+fn nested_lists_indent_two_cells_per_level() -> leptatui::app::Result<()> {
     let view = ordered_list([list_item((
         paragraph("Parent"),
         unordered_list([list_item((
@@ -130,7 +134,7 @@ fn nested_lists_indent_two_cells_per_level() -> Result<()> {
 /// - A row assigning zero width to one list renders without panicking.
 /// - The narrow row reports a positive intrinsic height.
 #[test]
-fn semantic_lists_handle_narrow_and_zero_width_content() -> Result<()> {
+fn semantic_lists_handle_narrow_and_zero_width_content() -> leptatui::app::Result<()> {
     let mut narrow = Terminal::new(TestBackend::new(1, 1))?;
     draw_view(
         &mut narrow,
@@ -171,7 +175,7 @@ fn semantic_lists_handle_narrow_and_zero_width_content() -> Result<()> {
 /// - PageDown is handled by the parent column.
 /// - The scrolled viewport reveals the third list item.
 #[test]
-fn semantic_list_height_scrolls_inside_parent_column() -> Result<()> {
+fn semantic_list_height_scrolls_inside_parent_column() -> leptatui::app::Result<()> {
     let mut view = div([ordered_list([
         list_item([paragraph("First")]),
         list_item([paragraph("Second")]),

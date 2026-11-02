@@ -1,0 +1,5 @@
+error: stylesheet! parent class suffix requires a parent selector
+ --> tests/fixtures/stylesheet_macro/fail/bem_parent_suffix_top_level.rs:8:10
+  |
+8 |         &__button => { fg: Color::White }
+  |          ^^^^^^^^

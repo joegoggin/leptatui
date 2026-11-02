@@ -7,6 +7,8 @@
 //! In-memory and explicit file readers are infallible; file failures become
 //! path-aware semantic fallback content. File-backed views navigate local
 //! Markdown targets and heading fragments in-app with cached page history.
+//! Declarative `Markdown` tags may opt into external editing and source reload
+//! shortcuts with `editable=true`.
 //! The compatibility promise is core CommonMark plus tables. Optional GFM
 //! extensions are deferred. Links retain focusable target metadata, while
 //! images become descriptive text without fetching local or remote targets.
@@ -29,11 +31,16 @@ mod list;
 mod navigation;
 mod table;
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
+use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+use leptos::prelude::{Effect, Get, GetUntracked, RwSignal, Set, WithUntracked};
 use pulldown_cmark::{Options, Parser};
 
-use crate::{AnyView, IntoView, SyntaxTheme, div};
+use crate::{
+    AnyView, EditorStatus, IntoView, KeyControl, ViewError, div, dynamic,
+    file_system::use_file_system, keyed, text, use_editor, view::error::__view_error,
+};
 
 use self::block::parse_blocks;
 use self::navigation::MarkdownParseContext;
@@ -42,27 +49,11 @@ pub use self::navigation::MarkdownView;
 /// Default presentation options applied while converting Markdown documents.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MarkdownOptions {
-    /// Bundled syntax theme applied to fenced and indented code blocks.
-    pub(super) syntax_theme: SyntaxTheme,
     /// Whether parsed code blocks display one-based line numbers.
     pub(super) line_numbers: bool,
 }
 
 impl MarkdownOptions {
-    /// Sets the bundled syntax theme for parsed code blocks.
-    ///
-    /// # Arguments
-    ///
-    /// * `syntax_theme` — Dark or light bundled theme selection.
-    ///
-    /// # Returns
-    ///
-    /// A [`MarkdownOptions`] value with the requested syntax theme.
-    pub fn syntax_theme(mut self, syntax_theme: SyntaxTheme) -> Self {
-        self.syntax_theme = syntax_theme;
-        self
-    }
-
     /// Sets default line-number visibility for parsed code blocks.
     ///
     /// # Arguments
@@ -110,14 +101,12 @@ pub fn markdown(source: impl AsRef<str>) -> AnyView {
 /// # Examples
 ///
 /// ```
-/// use leptatui::{MarkdownOptions, SyntaxTheme, markdown_with_options};
+/// use leptatui::{MarkdownOptions, markdown_with_options};
 ///
 /// let source = "```rust\nfn main() {}\n```";
 /// let document = markdown_with_options(
 ///     source,
-///     MarkdownOptions::default()
-///         .syntax_theme(SyntaxTheme::Dark)
-///         .line_numbers(true),
+///     MarkdownOptions::default().line_numbers(true),
 /// );
 /// # let _ = document;
 /// ```
@@ -195,13 +184,11 @@ pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
 /// # Examples
 ///
 /// ```no_run
-/// use leptatui::{MarkdownOptions, SyntaxTheme, markdown_file_with_options};
+/// use leptatui::{MarkdownOptions, markdown_file_with_options};
 ///
 /// let view = markdown_file_with_options(
 ///     "README.md",
-///     MarkdownOptions::default()
-///         .syntax_theme(SyntaxTheme::Light)
-///         .line_numbers(true),
+///     MarkdownOptions::default().line_numbers(true),
 /// );
 /// # let _ = view;
 /// ```
@@ -217,6 +204,200 @@ pub fn markdown_file(path: impl AsRef<Path>) -> AnyView {
 /// path-aware fallback page when the file cannot be read as UTF-8.
 pub fn markdown_file_with_options(path: impl AsRef<Path>, options: MarkdownOptions) -> AnyView {
     MarkdownView::new(path.as_ref(), options).into_view()
+}
+
+/// Builds the asynchronously loaded view used by the declarative `Markdown` tag.
+///
+/// This generated-code entry point resolves the source against the process
+/// working directory, scopes filesystem access to its volume, and converts
+/// initialization, read, or editor failures into Leptatui's standard
+/// view-error screen. Editable elements open their original source with `e`
+/// and refetch it with `r` or after a successful editor session.
+///
+/// # Arguments
+///
+/// * `path` — Markdown file path supplied through `src`.
+/// * `options` — Presentation options applied to each loaded document.
+/// * `editable` — Whether unmodified `e` and `r` edit and reload `path`.
+/// * `source_file` — Rust source file containing the declarative element.
+/// * `source_line` — Rust source line containing the declarative element.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing the loaded Markdown document or standard error
+/// screen.
+#[doc(hidden)]
+pub fn __markdown_element(
+    path: impl AsRef<Path>,
+    options: MarkdownOptions,
+    editable: bool,
+    source_file: &'static str,
+    source_line: u32,
+) -> AnyView {
+    let path = match absolute_markdown_path(path.as_ref()) {
+        Ok(path) => path,
+        Err(error) => {
+            return markdown_element_error(error.to_string(), source_file, source_line);
+        }
+    };
+    let filesystem = match use_file_system(volume_root(&path)) {
+        Ok(filesystem) => filesystem,
+        Err(error) => {
+            return markdown_element_error(error.to_string(), source_file, source_line);
+        }
+    };
+    let operation = filesystem.read_file_as_string(path.clone());
+    let pending = operation.pending();
+    let value = operation.value();
+    let version = operation.version();
+    let editor_error = RwSignal::new(None::<String>);
+    let keyed_pending = pending.clone();
+    let keyed_error = editor_error;
+    let child_pending = pending;
+    let child_error = editor_error;
+    let child_path = path.clone();
+
+    let view = keyed(
+        move || (version.get(), keyed_pending.get(), keyed_error.get()),
+        move || {
+            if let Some(error) = child_error.get_untracked() {
+                return __view_error(ViewError::msg(error), source_file, source_line);
+            }
+            if child_pending.get_untracked() {
+                return text("Loading Markdown file...").into_view();
+            }
+
+            value.with_untracked(|result| match result {
+                Some(Ok(source)) => markdown_source_with_options(&child_path, source, options),
+                Some(Err(error)) => {
+                    __view_error(ViewError::msg(error.to_string()), source_file, source_line)
+                }
+                None => text("Loading Markdown file...").into_view(),
+            })
+        },
+    );
+
+    if !editable {
+        return view.into_view();
+    }
+
+    let editor = use_editor();
+    let status_editor = editor.clone();
+    let clear_editor = editor.clone();
+    let completed_operation = operation.clone();
+    let completed_error = editor_error;
+    Effect::watch_sync(
+        move || status_editor.status(),
+        move |status, _, _| match status {
+            Some(EditorStatus::Complete) => {
+                completed_error.set(None);
+                completed_operation.dispatch(());
+                clear_editor.clear();
+            }
+            Some(EditorStatus::Error(error)) => {
+                completed_error.set(Some(error.clone()));
+                clear_editor.clear();
+            }
+            Some(EditorStatus::Pending) | None => {}
+        },
+        true,
+    );
+
+    let edit_editor = editor;
+    let edit_path = path.clone();
+    let edit_error = editor_error;
+    let reload_operation = operation;
+    view.on_key_event(move |key| {
+        if key.kind != KeyEventKind::Press || key.modifiers != KeyModifiers::NONE {
+            return KeyControl::Pass;
+        }
+
+        match key.code {
+            KeyCode::Char('e') => {
+                edit_error.set(None);
+                edit_editor.edit_file(edit_path.clone());
+                KeyControl::Handled
+            }
+            KeyCode::Char('r') => {
+                edit_error.set(None);
+                reload_operation.dispatch(());
+                KeyControl::Handled
+            }
+            _ => KeyControl::Pass,
+        }
+    })
+    .into_view()
+}
+
+/// Creates a reactive standard error screen for Markdown setup failures.
+///
+/// # Arguments
+///
+/// * `message` — Diagnostic displayed by the standard error screen.
+/// * `source_file` — Rust source file containing the declarative element.
+/// * `source_line` — Rust source line containing the declarative element.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing the standard error screen.
+fn markdown_element_error(message: String, source_file: &'static str, source_line: u32) -> AnyView {
+    dynamic(move || __view_error(ViewError::msg(message.clone()), source_file, source_line))
+        .into_view()
+}
+
+/// Resolves a Markdown source path without requiring the source to exist.
+fn absolute_markdown_path(path: &Path) -> std::io::Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let mut normalized = PathBuf::new();
+
+    for component in absolute.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if normalized.file_name().is_some() {
+                    normalized.pop();
+                }
+            }
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
+        }
+    }
+
+    Ok(normalized)
+}
+
+/// Returns the filesystem or drive root containing a Markdown source path.
+fn volume_root(path: &Path) -> PathBuf {
+    path.ancestors().last().unwrap_or(path).to_path_buf()
+}
+
+/// Creates a navigable Markdown view from already-loaded UTF-8 source.
+///
+/// The supplied path establishes relative-link resolution and navigation
+/// identity without reading the initial page from the filesystem. Activating a
+/// later local Markdown link continues to use the file-backed navigation
+/// behavior of [`MarkdownView`].
+///
+/// # Arguments
+///
+/// * `path` — Path represented by the loaded source.
+/// * `source` — UTF-8 CommonMark source that has already been read.
+/// * `options` — Code-block presentation defaults for the document.
+///
+/// # Returns
+///
+/// An [`AnyView`] containing a navigable [`MarkdownView`].
+pub fn markdown_source_with_options(
+    path: impl AsRef<Path>,
+    source: impl AsRef<str>,
+    options: MarkdownOptions,
+) -> AnyView {
+    MarkdownView::from_source(path.as_ref(), source.as_ref(), options).into_view()
 }
 
 #[cfg(test)]

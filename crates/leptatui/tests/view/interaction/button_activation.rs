@@ -19,7 +19,7 @@
 /// Both common activation keys should trigger only the currently focused
 /// button.
 #[test]
-fn enter_and_space_activate_focused_button() -> Result<()> {
+fn enter_and_space_activate_focused_button() -> leptatui::app::Result<()> {
     let count = Rc::new(Cell::new(0));
     let enter_count = Rc::clone(&count);
     let space_count = Rc::clone(&count);

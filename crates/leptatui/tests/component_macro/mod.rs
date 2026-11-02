@@ -18,16 +18,18 @@ use crossterm::event::{
 };
 use leptatui::context::provide_context;
 use leptatui::{
-    AnyView, AppControl, Children, Color, Display, FlexDirection, IntoView, KeyControl, RenderCtx,
-    Result, ThemeVariables, TuiStyle, View, button, component, div, dynamic, stylesheet, text,
-    theme_color, use_key_event, view,
+    AnyView, AppControl, Borders, Children, Color, Display, FlexDirection, IntoView, KeyControl,
+    Modifier, NavigateOptions, QueryParams, RenderCtx, RouteParams, Router, RouterProps,
+    ThemeVariables, TuiStyle, View, button, component, div, dynamic, stylesheet, text, theme_color,
+    use_key_event, view,
 };
-use leptos::prelude::{GetUntracked, ReadSignal, Update, signal};
+use leptos::prelude::{Get, ReadSignal, Update, signal};
 use ratatui::{Terminal, backend::TestBackend};
 
-use crate::support::{key, render_component, rendered_text};
+use crate::support::{key, render_component, rendered_lines, rendered_text};
 
 include!("context/mod.rs");
+include!("error_handling/mod.rs");
 include!("input/mod.rs");
 include!("key_events/mod.rs");
 include!("lifecycle/mod.rs");

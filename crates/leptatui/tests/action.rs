@@ -30,7 +30,10 @@ type PendingActions = Arc<Mutex<HashMap<i32, oneshot::Sender<TestActionResult>>>
 /// # Example Under Test
 ///
 /// ```text
-/// let action = create_action(|input| async move { Ok(format!("{input}:saved")) });
+/// let action = Action::new(|input| {
+///     let input = *input;
+///     async move { Ok(format!("{input}:saved")) }
+/// });
 /// action.dispatch(7);
 /// ```
 ///
@@ -51,8 +54,8 @@ async fn dispatch_sets_pending_state_and_captures_input() {
 
     wait_until(|| has_pending_action(&pending)).await;
     assert!(action.is_pending());
-    assert_eq!(action.input_untracked(), Some(7));
-    assert_eq!(action.result_untracked(), None);
+    assert_eq!(action.input().get_untracked(), Some(7));
+    assert_eq!(action.value().get_untracked(), None);
 }
 
 /// Verifies successful completion stores the output and clears pending state.
@@ -66,11 +69,9 @@ async fn dispatch_sets_pending_state_and_captures_input() {
 ///
 /// # Assertions
 ///
-/// - The action eventually exposes `3:saved` as its successful value.
+/// - The action eventually exposes `Ok("3:saved")` as its output.
 /// - The action is no longer pending after completion.
-/// - The action keeps `3` as the latest input.
-/// - The action stores `Ok("3:saved")` as its full result.
-/// - The action exposes no error.
+/// - The action clears its in-flight input.
 #[tokio::test(flavor = "current_thread")]
 async fn successful_completion_stores_output() {
     let owner = Owner::new();
@@ -83,11 +84,9 @@ async fn successful_completion_stores_output() {
     wait_until(|| has_pending_action(&pending)).await;
     send_action_response(&pending, Ok(String::from("saved")));
 
-    wait_until(|| action.value().as_deref() == Some("3:saved")).await;
+    wait_until(|| action.value().get_untracked() == Some(Ok(String::from("3:saved")))).await;
     assert!(!action.is_pending());
-    assert_eq!(action.input_untracked(), Some(3));
-    assert_eq!(action.result_untracked(), Some(Ok(String::from("3:saved"))));
-    assert_eq!(action.error(), None);
+    assert_eq!(action.input().get_untracked(), None);
 }
 
 /// Verifies failed completion stores the error and clears pending state.
@@ -101,11 +100,9 @@ async fn successful_completion_stores_output() {
 ///
 /// # Assertions
 ///
-/// - The action eventually exposes `offline` as its error.
+/// - The action eventually exposes `Err("offline")` as its output.
 /// - The action is no longer pending after completion.
-/// - The action keeps `4` as the latest input.
-/// - The action stores `Err("offline")` as its full result.
-/// - The action exposes no successful value.
+/// - The action clears its in-flight input.
 #[tokio::test(flavor = "current_thread")]
 async fn failed_completion_stores_error() {
     let owner = Owner::new();
@@ -118,11 +115,9 @@ async fn failed_completion_stores_error() {
     wait_until(|| has_pending_action(&pending)).await;
     send_action_response(&pending, Err("offline"));
 
-    wait_until(|| action.error() == Some("offline")).await;
+    wait_until(|| action.value().get_untracked() == Some(Err("offline"))).await;
     assert!(!action.is_pending());
-    assert_eq!(action.input_untracked(), Some(4));
-    assert_eq!(action.result_untracked(), Some(Err("offline")));
-    assert_eq!(action.value(), None);
+    assert_eq!(action.input().get_untracked(), None);
 }
 
 /// Verifies a slower stale dispatch cannot overwrite a newer action result.
@@ -139,9 +134,9 @@ async fn failed_completion_stores_error() {
 /// # Assertions
 ///
 /// - Dispatches are registered for inputs `1` and `2`.
-/// - Completing input `2` first stores `2:second` as the action value.
+/// - Completing input `2` first stores `Ok("2:second")` as the action output.
 /// - Completing stale input `1` afterward does not replace the newer value.
-/// - The action keeps `2` as the latest input and full result.
+/// - The action keeps the latest output after the stale completion.
 ///
 /// # Why
 ///
@@ -160,17 +155,16 @@ async fn stale_dispatch_completion_does_not_overwrite_newer_result() {
     wait_until(|| has_pending_dispatch(&pending, 2)).await;
 
     send_dispatch_response(&pending, 2, Ok(String::from("second")));
-    wait_until(|| action.value().as_deref() == Some("2:second")).await;
+    wait_until(|| action.value().get_untracked() == Some(Ok(String::from("2:second")))).await;
 
     send_dispatch_response(&pending, 1, Ok(String::from("first")));
     settle_tasks().await;
 
-    assert_eq!(action.value().as_deref(), Some("2:second"));
-    assert_eq!(action.input_untracked(), Some(2));
     assert_eq!(
-        action.result_untracked(),
+        action.value().get_untracked(),
         Some(Ok(String::from("2:second")))
     );
+    assert_eq!(action.input().get_untracked(), None);
 }
 
 /// Creates the controlled action used by action state tests.
@@ -183,11 +177,12 @@ async fn stale_dispatch_completion_does_not_overwrite_newer_result() {
 /// # Returns
 ///
 /// An [`Action`] that formats successful responses as `{input}:{value}`.
-fn create_test_action(owner: &Owner, pending: &PendingAction) -> Action<i32, String, &'static str> {
+fn create_test_action(owner: &Owner, pending: &PendingAction) -> Action<i32, TestActionResult> {
     let pending_for_action = Arc::clone(pending);
 
     owner.with(|| {
-        create_action(move |input| {
+        Action::new(move |input| {
+            let input = *input;
             let pending = Arc::clone(&pending_for_action);
 
             async move {
@@ -212,11 +207,12 @@ fn create_test_action(owner: &Owner, pending: &PendingAction) -> Action<i32, Str
 fn create_keyed_test_action(
     owner: &Owner,
     pending: &PendingActions,
-) -> Action<i32, String, &'static str> {
+) -> Action<i32, TestActionResult> {
     let pending_for_action = Arc::clone(pending);
 
     owner.with(|| {
-        create_action(move |input| {
+        Action::new(move |input| {
+            let input = *input;
             let pending = Arc::clone(&pending_for_action);
 
             async move {

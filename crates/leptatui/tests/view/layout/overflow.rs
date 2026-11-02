@@ -13,7 +13,7 @@
 /// - The view render call succeeds.
 /// - The rightmost cell remains the final text character.
 #[test]
-fn fitting_column_does_not_render_scrollbar() -> Result<()> {
+fn fitting_column_does_not_render_scrollbar() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
     let view = div([text("12345678")]);
@@ -46,7 +46,7 @@ fn fitting_column_does_not_render_scrollbar() -> Result<()> {
 /// - The first row retains all eight text columns without reserving a scrollbar.
 /// - PageDown passes because clipped overflow is not scrollable.
 #[test]
-fn clipped_overflow_does_not_scroll_or_reserve_a_scrollbar() -> Result<()> {
+fn clipped_overflow_does_not_scroll_or_reserve_a_scrollbar() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div(vec![text("12345678"), text("Two"), text("Three")])
@@ -85,7 +85,7 @@ fn clipped_overflow_does_not_scroll_or_reserve_a_scrollbar() -> Result<()> {
 /// - The overflow does not render a scrollbar.
 /// - PageDown passes because visible overflow is not scrollable.
 #[test]
-fn visible_overflow_paints_outside_its_box_without_scrolling() -> Result<()> {
+fn visible_overflow_paints_outside_its_box_without_scrolling() -> leptatui::app::Result<()> {
     let inner = div(vec![text("One"), text("Two")]).with_inline_style(
         TuiStyle::new()
             .size(LayoutSize::new(
@@ -125,7 +125,7 @@ fn visible_overflow_paints_outside_its_box_without_scrolling() -> Result<()> {
 /// - PageDown is handled by the hidden scroll container.
 /// - The second row of content moves to the top after scrolling.
 #[test]
-fn hidden_overflow_scrolls_without_rendering_a_scrollbar() -> Result<()> {
+fn hidden_overflow_scrolls_without_rendering_a_scrollbar() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div(vec![text("12345678"), text("Two"), text("Three")])
@@ -160,7 +160,7 @@ fn hidden_overflow_scrolls_without_rendering_a_scrollbar() -> Result<()> {
 /// - Overflowing auto content wraps before the reserved scrollbar column.
 /// - The overflowing container renders its scrollbar in the eighth column.
 #[test]
-fn nested_auto_overflow_conditionally_reserves_a_scrollbar() -> Result<()> {
+fn nested_auto_overflow_conditionally_reserves_a_scrollbar() -> leptatui::app::Result<()> {
     let fixed_size = LayoutSize::new(
         Dimension::from(Length::cells(8.0)),
         Dimension::from(Length::cells(1.0)),
@@ -203,7 +203,7 @@ fn nested_auto_overflow_conditionally_reserves_a_scrollbar() -> Result<()> {
 /// - The scrollbar occupies the eighth column.
 /// - PageDown passes because no scroll offset is available.
 #[test]
-fn scroll_overflow_always_reserves_and_renders_scrollbar() -> Result<()> {
+fn scroll_overflow_always_reserves_and_renders_scrollbar() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div([text("1234567")])
@@ -243,7 +243,7 @@ fn scroll_overflow_always_reserves_and_renders_scrollbar() -> Result<()> {
 /// - The first scrollbar cell renders as the scroll thumb.
 /// - The second scrollbar cell renders as the scrollbar track.
 #[test]
-fn overflowing_column_renders_right_scrollbar() -> Result<()> {
+fn overflowing_column_renders_right_scrollbar() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
     let view = div(vec![text("One"), text("Two"), text("Three")]);
@@ -279,7 +279,7 @@ fn overflowing_column_renders_right_scrollbar() -> Result<()> {
 /// - The Down key is handled by the refreshed dynamic child.
 /// - Rendering after the key shows the scrolled second row.
 #[test]
-fn dynamic_overflowing_column_scrolls_after_render() -> Result<()> {
+fn dynamic_overflowing_column_scrolls_after_render() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
     let mut view = dynamic(|| div(vec![text("One"), text("Two"), text("Three")]));
@@ -315,7 +315,7 @@ fn dynamic_overflowing_column_scrolls_after_render() -> Result<()> {
 /// - Text wraps before the scrollbar column.
 /// - The scrollbar thumb occupies the rightmost column.
 #[test]
-fn overflowing_column_reserves_width_for_scrollbar() -> Result<()> {
+fn overflowing_column_reserves_width_for_scrollbar() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(6, 2);
     let mut terminal = Terminal::new(backend)?;
     let view = div(vec![text("123456"), text("more"), text("tail")]);
@@ -350,7 +350,7 @@ fn overflowing_column_reserves_width_for_scrollbar() -> Result<()> {
 /// - The second terminal draw succeeds.
 /// - The scrollbar thumb moves from the top cell to the bottom cell.
 #[test]
-fn overflowing_column_updates_scrollbar_position() -> Result<()> {
+fn overflowing_column_updates_scrollbar_position() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
     let mut view = div(vec![text("One"), text("Two"), text("Three")]);
@@ -399,7 +399,7 @@ fn overflowing_column_updates_scrollbar_position() -> Result<()> {
 /// - The second terminal draw succeeds.
 /// - The scrollbar thumb reaches the bottom row.
 #[test]
-fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> Result<()> {
+fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
     let children = (0..10).map(|index| text(format!("Line {index}")));
@@ -446,7 +446,7 @@ fn overflowing_column_scrollbar_reaches_bottom_at_max_scroll() -> Result<()> {
 /// - Redrawing reveals the next source column.
 /// - The bottom row contains the horizontal scrollbar.
 #[test]
-fn horizontal_overflow_scrolls_with_horizontal_wheel_events() -> Result<()> {
+fn horizontal_overflow_scrolls_with_horizontal_wheel_events() -> leptatui::app::Result<()> {
     let child = text("ABCDEFGH").with_inline_style(TuiStyle::new().size(LayoutSize::new(
         Dimension::from(Length::cells(8.0)),
         Dimension::from(Length::cells(1.0)),
@@ -498,7 +498,7 @@ fn horizontal_overflow_scrolls_with_horizontal_wheel_events() -> Result<()> {
 /// - Two scroll gutters reduce the viewport to `4x2`.
 /// - The bottom-right gutter corner remains unpainted by either scrollbar.
 #[test]
-fn overflow_modes_resolve_independently_on_both_axes() -> Result<()> {
+fn overflow_modes_resolve_independently_on_both_axes() -> leptatui::app::Result<()> {
     let fixed_child = || {
         text("content").with_inline_style(TuiStyle::new().size(LayoutSize::new(
             Dimension::from(Length::cells(8.0)),
@@ -568,7 +568,7 @@ fn overflow_modes_resolve_independently_on_both_axes() -> Result<()> {
 /// - The child inherits that viewport as its effective clip.
 /// - Maximum scroll offsets use the same rounded viewport.
 #[test]
-fn retained_viewport_and_clip_define_two_axis_scrolling() -> Result<()> {
+fn retained_viewport_and_clip_define_two_axis_scrolling() -> leptatui::app::Result<()> {
     let child = text("content").with_inline_style(TuiStyle::new().size(LayoutSize::new(
         Dimension::from(Length::cells(8.0)),
         Dimension::from(Length::cells(4.0)),
@@ -633,7 +633,7 @@ fn retained_viewport_and_clip_define_two_axis_scrolling() -> Result<()> {
 /// - The measured content width and height survive reconciliation.
 /// - A later smaller content extent clamps both retained offsets.
 #[test]
-fn reconciliation_retains_two_axis_overflow_metadata() -> Result<()> {
+fn reconciliation_retains_two_axis_overflow_metadata() -> leptatui::app::Result<()> {
     let create_view = || {
         div([text("content").with_inline_style(TuiStyle::new().size(LayoutSize::new(
             Dimension::from(Length::cells(8.0)),
@@ -710,7 +710,7 @@ fn reconciliation_retains_two_axis_overflow_metadata() -> Result<()> {
 /// - Rendering advances the horizontal scroll offset.
 /// - The focused button label is visible.
 #[test]
-fn focus_visibility_scrolls_horizontally() -> Result<()> {
+fn focus_visibility_scrolls_horizontally() -> leptatui::app::Result<()> {
     let button_style = TuiStyle::new()
         .size(LayoutSize::new(
             Dimension::from(Length::cells(6.0)),
@@ -769,7 +769,7 @@ fn focus_visibility_scrolls_horizontally() -> Result<()> {
 /// Block children must use the computed container path so clipping, scroll
 /// offsets, and default borders agree with retained geometry.
 #[test]
-fn block_scrolls_child_through_computed_overflow_geometry() -> Result<()> {
+fn block_scrolls_child_through_computed_overflow_geometry() -> leptatui::app::Result<()> {
     let mut view = block(div((text("One"), text("Two"), text("Three")))).with_inline_style(
         TuiStyle::new()
             .box_sizing(BoxSizing::BorderBox)

@@ -1,7 +1,8 @@
 //! Runtime error and result types.
 //!
-//! This module centralizes Leptatui app-loop errors from terminal I/O and
-//! asynchronous event polling tasks.
+//! This module centralizes Leptatui app-loop errors from terminal I/O,
+//! asynchronous event polling tasks, and link activation. Application-owned
+//! failures remain ordinary typed results handled by application code.
 
 /// Result type returned by Leptatui runtime APIs.
 pub type Result<T> = std::result::Result<T, Error>;

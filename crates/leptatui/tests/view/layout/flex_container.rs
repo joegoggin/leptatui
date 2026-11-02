@@ -68,7 +68,7 @@ fn retained_flex_children(root: &AnyView) -> Vec<ratatui::layout::Rect> {
 /// - Column directions place children vertically from the selected edge.
 /// - Reverse directions preserve source order while reversing placement.
 #[test]
-fn flex_directions_place_children_on_the_selected_main_axis() -> Result<()> {
+fn flex_directions_place_children_on_the_selected_main_axis() -> leptatui::app::Result<()> {
     let cases = [
         (
             FlexDirection::Row,
@@ -140,7 +140,7 @@ fn flex_directions_place_children_on_the_selected_main_axis() -> Result<()> {
 /// - Wrap moves the third child to the next cross-axis line.
 /// - Wrap-reverse reverses the two flex-line positions.
 #[test]
-fn flex_wrap_modes_control_line_creation_and_cross_axis_order() -> Result<()> {
+fn flex_wrap_modes_control_line_creation_and_cross_axis_order() -> leptatui::app::Result<()> {
     let cases = [
         (
             FlexWrap::NoWrap,
@@ -209,7 +209,7 @@ fn flex_wrap_modes_control_line_creation_and_cross_axis_order() -> Result<()> {
 /// - A vertical gap separates column children by two cells.
 /// - Wrapped rows apply the horizontal item gap and vertical line gap.
 #[test]
-fn flex_gaps_apply_to_items_and_wrapped_lines() -> Result<()> {
+fn flex_gaps_apply_to_items_and_wrapped_lines() -> leptatui::app::Result<()> {
     let row = div((
         fixed_flex_child("A", 2.0, 1.0),
         fixed_flex_child("B", 2.0, 1.0),
@@ -292,7 +292,7 @@ fn flex_gaps_apply_to_items_and_wrapped_lines() -> Result<()> {
 /// - Start, end, center, flex-relative, and stretch values pack as specified.
 /// - Space-between, space-around, and space-evenly distribute six free cells.
 #[test]
-fn justify_content_variants_distribute_main_axis_space() -> Result<()> {
+fn justify_content_variants_distribute_main_axis_space() -> leptatui::app::Result<()> {
     let cases = [
         (JustifyContent::Start, [0, 2]),
         (JustifyContent::End, [6, 8]),
@@ -345,7 +345,7 @@ fn justify_content_variants_distribute_main_axis_space() -> Result<()> {
 /// - Start, end, flex-relative, center, and baseline values position both children.
 /// - Stretch expands an auto-height child to the six-cell cross size.
 #[test]
-fn align_items_variants_position_children_on_the_cross_axis() -> Result<()> {
+fn align_items_variants_position_children_on_the_cross_axis() -> leptatui::app::Result<()> {
     let cases = [
         (AlignItems::Start, [0, 0]),
         (AlignItems::End, [5, 4]),
@@ -416,7 +416,7 @@ fn align_items_variants_position_children_on_the_cross_axis() -> Result<()> {
 /// - Stretch expands each line's cross size without changing fixed child height.
 /// - Space distribution values place both lines across six free cells.
 #[test]
-fn align_content_variants_distribute_wrapped_lines() -> Result<()> {
+fn align_content_variants_distribute_wrapped_lines() -> leptatui::app::Result<()> {
     let cases = [
         (AlignContent::Start, [0, 1]),
         (AlignContent::End, [6, 7]),
@@ -470,7 +470,7 @@ fn align_content_variants_distribute_wrapped_lines() -> Result<()> {
 /// - The narrow viewport moves the third child onto a second line.
 /// - Returning to the wide viewport replaces the retained wrapped geometry.
 #[test]
-fn flex_container_rebuilds_wrapped_geometry_after_terminal_resize() -> Result<()> {
+fn flex_container_rebuilds_wrapped_geometry_after_terminal_resize() -> leptatui::app::Result<()> {
     let root = div((
         fixed_flex_child("A", 3.0, 1.0),
         fixed_flex_child("B", 3.0, 1.0),

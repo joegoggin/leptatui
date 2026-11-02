@@ -4,33 +4,25 @@
 ///
 /// ```text
 /// markdown("```rust\nfn main() {}\n```")
-/// markdown_with_options(source, light theme + line numbers)
+/// markdown_with_options(source, line numbers enabled)
 /// ```
 ///
 /// # Assertions
 ///
 /// - Both in-memory readers return document views without failure.
-/// - Default code blocks use the dark theme without line numbers.
-/// - Custom options apply the light theme and enable line numbers.
+/// - Default code blocks omit line numbers.
+/// - Custom options enable line numbers.
 /// - An owned source string is accepted by the option-bearing reader.
 #[test]
 fn markdown_reader_apis_apply_default_and_custom_options() {
     let source = "```rust\nfn main() {}\n```\n";
     let default = markdown(source);
-    assert_eq!(
-        parsed_code_block_options(&default),
-        (false, SyntaxTheme::Dark)
-    );
+    assert!(!parsed_code_block_line_numbers(&default));
 
-    let options = MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Light)
-        .line_numbers(true);
+    let options = MarkdownOptions::default().line_numbers(true);
     let owned_source = source.to_owned();
     let configured = markdown_with_options(owned_source, options);
-    assert_eq!(
-        parsed_code_block_options(&configured),
-        (true, SyntaxTheme::Light)
-    );
+    assert!(parsed_code_block_line_numbers(&configured));
 }
 
 /// Verifies Markdown file readers synchronously load UTF-8 source.
@@ -39,7 +31,7 @@ fn markdown_reader_apis_apply_default_and_custom_options() {
 ///
 /// ```text
 /// markdown_file("guide.md")
-/// markdown_file_with_options("guide.md", light theme + line numbers)
+/// markdown_file_with_options("guide.md", line numbers enabled)
 /// ```
 ///
 /// # Assertions
@@ -71,9 +63,7 @@ fn markdown_file_reader_apis_load_utf8_source() {
         fixture_path
     );
 
-    let options = MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Light)
-        .line_numbers(true);
+    let options = MarkdownOptions::default().line_numbers(true);
     let configured = markdown_file_with_options(&fixture_path, options);
     let expected_configured = markdown_with_options(source, options);
     assert_eq!(
@@ -81,6 +71,306 @@ fn markdown_file_reader_apis_load_utf8_source() {
         rendered_view_lines(&expected_configured, 80, 20)
             .expect("configured in-memory document should render")
     );
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+}
+
+/// Verifies the declarative Markdown element loads through reactive filesystem state.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Markdown src="guide.md" line_numbers=false />
+/// ```
+///
+/// # Assertions
+///
+/// - The selected UTF-8 file renders after its asynchronous operation completes.
+/// - Explicitly disabled line numbers omit the code-block gutter.
+#[tokio::test(flavor = "current_thread")]
+async fn markdown_element_loads_asynchronously_without_line_numbers() {
+    let fixture_dir = markdown_fixture_dir("element-reader");
+    let fixture_path = fixture_dir.join("guide.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    fs::write(&fixture_path, "```text\nalpha\nbeta\n```\n")
+        .expect("Markdown fixture should be written");
+    let owner = leptos::prelude::Owner::new();
+    let view = owner.with(|| {
+        __markdown_element(
+            &fixture_path,
+            MarkdownOptions::default().line_numbers(false),
+            false,
+            file!(),
+            line!(),
+        )
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let rendered = rendered_view_lines(&view, 40, 8)
+        .expect("asynchronously loaded Markdown should render")
+        .join("\n");
+    assert!(rendered.contains("alpha"));
+    assert!(!rendered.contains("1 │"));
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+}
+
+/// Verifies declarative Markdown read failures become standard view errors.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Markdown src="missing.md" />
+/// ```
+///
+/// # Assertions
+///
+/// - The fixture directory and source file are created successfully.
+/// - The standard error screen is rendered after the asynchronous read fails.
+/// - The diagnostic identifies the missing Markdown source path.
+/// - The fixture directory is removed after verification.
+#[tokio::test(flavor = "current_thread")]
+async fn markdown_element_read_failure_renders_view_error() {
+    let fixture_dir = markdown_fixture_dir("element-error");
+    let missing_path = fixture_dir.join("missing.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    let owner = leptos::prelude::Owner::new();
+    let view = owner.with(|| {
+        __markdown_element(
+            &missing_path,
+            MarkdownOptions::default(),
+            false,
+            file!(),
+            line!(),
+        )
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let rendered = rendered_view_lines(&view, 120, 20)
+        .expect("Markdown error screen should render")
+        .join("\n");
+    assert!(rendered.contains("Error"));
+    assert!(rendered.contains("missing.md"));
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+}
+
+/// Verifies non-editable Markdown elements leave editor shortcuts unhandled.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Markdown src="guide.md" />
+/// ```
+///
+/// # Assertions
+///
+/// - The fixture directory and source file are created successfully.
+/// - The default element passes an unmodified `e` key event.
+/// - The default element passes an unmodified `r` key event.
+/// - The fixture directory is removed after verification.
+#[tokio::test(flavor = "current_thread")]
+async fn markdown_element_is_not_editable_by_default() {
+    let fixture_dir = markdown_fixture_dir("element-not-editable");
+    let fixture_path = fixture_dir.join("guide.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    fs::write(&fixture_path, "# Guide\n").expect("Markdown fixture should be written");
+    let owner = leptos::prelude::Owner::new();
+    let mut view = owner.with(|| {
+        __markdown_element(
+            &fixture_path,
+            MarkdownOptions::default(),
+            false,
+            file!(),
+            line!(),
+        )
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert_eq!(
+        view.__dispatch_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))
+            .expect("edit key handling should succeed"),
+        KeyControl::Pass
+    );
+    assert_eq!(
+        view.__dispatch_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+            .expect("reload key handling should succeed"),
+        KeyControl::Pass
+    );
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+}
+
+/// Verifies editable Markdown elements refetch their original source on reload.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Markdown src="guide.md" editable=true />
+/// ```
+///
+/// # Assertions
+///
+/// - The fixture directory and initial source are created successfully.
+/// - The initial source is rendered after the first asynchronous read.
+/// - The source file is updated successfully.
+/// - An unmodified `r` key event is consumed by the element.
+/// - The reloaded document contains the changed file contents.
+/// - The fixture directory is removed after verification.
+#[tokio::test(flavor = "current_thread")]
+async fn editable_markdown_element_reloads_its_source() {
+    let fixture_dir = markdown_fixture_dir("element-reload");
+    let fixture_path = fixture_dir.join("guide.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    fs::write(&fixture_path, "Original contents\n")
+        .expect("initial Markdown fixture should be written");
+    let owner = leptos::prelude::Owner::new();
+    let mut view = owner.with(|| {
+        __markdown_element(
+            &fixture_path,
+            MarkdownOptions::default(),
+            true,
+            file!(),
+            line!(),
+        )
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let initial = rendered_view_lines(&view, 80, 8)
+        .expect("initial Markdown should render")
+        .join("\n");
+    assert!(initial.contains("Original contents"));
+
+    fs::write(&fixture_path, "Reloaded contents\n")
+        .expect("updated Markdown fixture should be written");
+    assert_eq!(
+        view.__dispatch_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+            .expect("reload key handling should succeed"),
+        KeyControl::Handled
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let reloaded = rendered_view_lines(&view, 80, 8)
+        .expect("reloaded Markdown should render")
+        .join("\n");
+    assert!(reloaded.contains("Reloaded contents"));
+    assert!(!reloaded.contains("Original contents"));
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+}
+
+/// Verifies editable Markdown propagates external-editor setup failures.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Markdown src="guide.md" editable=true />
+/// ```
+///
+/// # Assertions
+///
+/// - The fixture directory and source file are created successfully.
+/// - An unmodified `e` key event is consumed by the element.
+/// - Editing outside a managed app renders the standard error screen.
+/// - The error explains that external editing requires a managed app.
+/// - The fixture directory is removed after verification.
+#[tokio::test(flavor = "current_thread")]
+async fn editable_markdown_element_renders_editor_failures() {
+    let fixture_dir = markdown_fixture_dir("element-editor-error");
+    let fixture_path = fixture_dir.join("guide.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    fs::write(&fixture_path, "# Guide\n").expect("Markdown fixture should be written");
+    let owner = leptos::prelude::Owner::new();
+    let mut view = owner.with(|| {
+        __markdown_element(
+            &fixture_path,
+            MarkdownOptions::default(),
+            true,
+            file!(),
+            line!(),
+        )
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert_eq!(
+        view.__dispatch_key_event(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE))
+            .expect("edit key handling should succeed"),
+        KeyControl::Handled
+    );
+    tokio::task::yield_now().await;
+
+    let rendered = rendered_view_lines(&view, 120, 20)
+        .expect("editor error screen should render")
+        .join("\n");
+    assert!(rendered.contains("Error"));
+    assert!(rendered.contains("external editing requires a managed Leptatui application"));
+
+    fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
+}
+
+/// Verifies view-tree order selects among multiple editable Markdown elements.
+///
+/// # Example Under Test
+///
+/// ```text
+/// <Div>
+///   <Markdown src="first.md" editable=true />
+///   <Markdown src="second.md" editable=true />
+/// </Div>
+/// ```
+///
+/// # Assertions
+///
+/// - Both source fixtures are created and updated successfully.
+/// - The first editable element consumes an unmodified `r` key event.
+/// - The first source is refetched.
+/// - The second source remains unchanged until it receives its own reload.
+/// - The fixture directory is removed after verification.
+#[tokio::test(flavor = "current_thread")]
+async fn first_editable_markdown_element_consumes_the_shortcut() {
+    let fixture_dir = markdown_fixture_dir("element-order");
+    let first_path = fixture_dir.join("first.md");
+    let second_path = fixture_dir.join("second.md");
+    fs::create_dir_all(&fixture_dir).expect("fixture directory should be created");
+    fs::write(&first_path, "First original\n").expect("first fixture should be written");
+    fs::write(&second_path, "Second original\n").expect("second fixture should be written");
+    let owner = leptos::prelude::Owner::new();
+    let mut view = owner.with(|| {
+        div((
+            __markdown_element(
+                &first_path,
+                MarkdownOptions::default(),
+                true,
+                file!(),
+                line!(),
+            ),
+            __markdown_element(
+                &second_path,
+                MarkdownOptions::default(),
+                true,
+                file!(),
+                line!(),
+            ),
+        ))
+        .into_view()
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    fs::write(&first_path, "First reloaded\n").expect("first fixture should be updated");
+    fs::write(&second_path, "Second reloaded\n").expect("second fixture should be updated");
+    assert_eq!(
+        view.__dispatch_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+            .expect("reload key handling should succeed"),
+        KeyControl::Handled
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let rendered = rendered_view_lines(&view, 80, 12)
+        .expect("ordered Markdown elements should render")
+        .join("\n");
+    assert!(rendered.contains("First reloaded"));
+    assert!(rendered.contains("Second original"));
+    assert!(!rendered.contains("Second reloaded"));
 
     fs::remove_dir_all(&fixture_dir).expect("fixture directory should be removed");
 }

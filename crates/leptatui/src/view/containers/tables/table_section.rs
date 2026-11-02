@@ -67,6 +67,8 @@ impl TableSectionView {
 }
 
 impl View for TableSectionView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         Ok(())
     }

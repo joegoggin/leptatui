@@ -17,7 +17,7 @@
 /// - A key event updates the signal.
 /// - A redraw shows the updated signal without rerunning setup.
 #[test]
-fn generated_component_setup_runs_once_and_signals_persist() -> Result<()> {
+fn generated_component_setup_runs_once_and_signals_persist() -> leptatui::app::Result<()> {
     MACRO_SIGNAL_SETUP_RUNS.store(0, Ordering::SeqCst);
 
     let backend = TestBackend::new(24, 4);

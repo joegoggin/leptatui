@@ -136,13 +136,11 @@ impl Element {
                         "view! line_numbers attribute is only supported on CodeBlock or Markdown",
                     ));
                 }
-                "syntax_theme" if matches!(element_name.as_str(), "CodeBlock" | "Markdown") => {
-                    AttrKind::SyntaxTheme
-                }
-                "syntax_theme" => {
+                "editable" if element_name == "Markdown" => AttrKind::Editable,
+                "editable" => {
                     return Err(Error::new_spanned(
                         &attr.name,
-                        "view! syntax_theme attribute is only supported on CodeBlock or Markdown",
+                        "view! editable attribute is only supported on Markdown",
                     ));
                 }
                 _ => {
@@ -164,7 +162,7 @@ impl Element {
                             "unsupported view! attribute; expected class, id, style, value, or label"
                         }
                         "Markdown" => {
-                            "unsupported view! attribute; expected class, id, style, src, line_numbers, or syntax_theme"
+                            "unsupported view! attribute; expected class, id, style, src, line_numbers, or editable"
                         }
                         "OrderedList" => {
                             "unsupported view! attribute; expected class, id, style, or start"
@@ -173,7 +171,7 @@ impl Element {
                             "unsupported view! attribute; expected class, id, style, or alignment"
                         }
                         "CodeBlock" => {
-                            "unsupported view! attribute; expected class, id, style, language, line_numbers, or syntax_theme"
+                            "unsupported view! attribute; expected class, id, style, language, or line_numbers"
                         }
                         _ => "unsupported view! attribute; expected class, id, or style",
                     };
@@ -277,13 +275,9 @@ impl Element {
                     reject_literal_typed_attr(attr, "line_numbers", "bool")?;
                     quote! { (#expanded).line_numbers(#value) }
                 }
-                AttrKind::SyntaxTheme if self.name == "Markdown" => {
-                    reject_literal_typed_attr(attr, "syntax_theme", "SyntaxTheme")?;
+                AttrKind::Editable => {
+                    reject_literal_typed_attr(attr, "editable", "bool")?;
                     expanded
-                }
-                AttrKind::SyntaxTheme => {
-                    reject_literal_typed_attr(attr, "syntax_theme", "SyntaxTheme")?;
-                    quote! { (#expanded).syntax_theme(#value) }
                 }
                 AttrKind::OnInput => {
                     reject_literal_callback(attr, "on_input")?;
@@ -307,7 +301,7 @@ impl Element {
                     | AttrKind::Alignment
                     | AttrKind::Language
                     | AttrKind::LineNumbers
-                    | AttrKind::SyntaxTheme
+                    | AttrKind::Editable
             ) && attr.value.is_unbraced_expr()
             {
                 return Err(Error::new_spanned(

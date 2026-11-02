@@ -67,6 +67,8 @@ impl fmt::Debug for TextAreaView {
 }
 
 impl View for TextAreaView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_editable_text_view(&self.model, ctx)
     }
@@ -81,6 +83,7 @@ impl View for TextAreaView {
     }
 
     fn style_metadata(&self) -> Option<&StyleMetadata> {
+        self.model.sync_style_state();
         Some(&self.model.metadata)
     }
 

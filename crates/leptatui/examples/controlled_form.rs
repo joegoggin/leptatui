@@ -65,6 +65,10 @@ fn ControlledForm() -> impl IntoView {
             fg: Color::White,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::uniform(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         .title => {
@@ -80,18 +84,30 @@ fn ControlledForm() -> impl IntoView {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         TextArea => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Button => {
             borders: Borders::ALL,
             border_type: BorderType::Rounded,
             padding: TuiSpacing::horizontal(1)
+
+            @media (max-width: 60) {
+                padding: TuiSpacing::ZERO
+            }
         }
 
         Input:focus => {
@@ -114,24 +130,6 @@ fn ControlledForm() -> impl IntoView {
             modifier: Modifier::BOLD,
             border_type: BorderType::Thick
         }
-
-        @media (max-width: 60) {
-            .form-shell => {
-                padding: TuiSpacing::ZERO
-            }
-
-            Input => {
-                padding: TuiSpacing::ZERO
-            }
-
-            TextArea => {
-                padding: TuiSpacing::ZERO
-            }
-
-            Button => {
-                padding: TuiSpacing::ZERO
-            }
-        }
     }
 
     view! {
@@ -141,17 +139,17 @@ fn ControlledForm() -> impl IntoView {
                 {move || {
                     text(
                             status
-                                .get_untracked()
+                                .get()
                                 .label(
-                                    name.get_untracked().as_str(),
-                                    notes.get_untracked().as_str(),
+                                    name.get().as_str(),
+                                    notes.get().as_str(),
                                 ),
                         )
                         .with_classes("status")
                 }}
                 {move || {
-                    let name_value = name.get_untracked();
-                    let notes_value = notes.get_untracked();
+                    let name_value = name.get();
+                    let notes_value = notes.get();
 
                     view! {
                         <Form
@@ -210,6 +208,7 @@ fn ControlledForm() -> impl IntoView {
 /// Returns [`Error::Io`] if terminal setup, rendering, input, or cleanup fails.
 /// Returns [`Error::EventTask`] if the blocking event task fails.
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(ControlledForm::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <ControlledForm /> };
+    App::new(view).run().await
 }

@@ -39,6 +39,8 @@ pub fn block(child: impl IntoView) -> BlockView {
 }
 
 impl View for BlockView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_with_layout(self, ctx, |ctx| {
             render_container_with_default_borders(&self.children, &self.metadata, Borders::ALL, ctx)

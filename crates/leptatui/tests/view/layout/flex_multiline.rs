@@ -14,7 +14,7 @@
 /// - The narrow column retains two children in its first column and one in its second.
 /// - Item gaps separate siblings while cross-line distribution reaches both container edges.
 #[test]
-fn narrow_flex_axes_wrap_with_item_and_line_gaps() -> Result<()> {
+fn narrow_flex_axes_wrap_with_item_and_line_gaps() -> leptatui::app::Result<()> {
     let row = div((
         fixed_flex_child("A", 2.0, 1.0),
         fixed_flex_child("B", 2.0, 1.0),
@@ -84,7 +84,7 @@ fn narrow_flex_axes_wrap_with_item_and_line_gaps() -> Result<()> {
 /// - A and B occupy the cross-end line in reversed main-axis order.
 /// - C occupies the preceding reverse-wrapped line without exceeding the content box.
 #[test]
-fn reverse_direction_and_wrap_reverse_keep_stable_source_rectangles() -> Result<()> {
+fn reverse_direction_and_wrap_reverse_keep_stable_source_rectangles() -> leptatui::app::Result<()> {
     let root = div((
         fixed_flex_child("A", 2.0, 1.0),
         fixed_flex_child("B", 2.0, 1.0),
@@ -140,7 +140,7 @@ fn reverse_direction_and_wrap_reverse_keep_stable_source_rectangles() -> Result<
 /// Independently rounding three equal fractional widths can exceed or underfill
 /// the ten-cell parent, so terminal geometry must retain cumulative rounding.
 #[test]
-fn odd_flex_remainders_round_cumulatively_without_overflow() -> Result<()> {
+fn odd_flex_remainders_round_cumulatively_without_overflow() -> leptatui::app::Result<()> {
     let child_style = TuiStyle::new()
         .flex_basis(Dimension::from(Length::cells(0.0)))
         .flex_grow(1.0)
@@ -200,7 +200,7 @@ fn odd_flex_remainders_round_cumulatively_without_overflow() -> Result<()> {
 /// - The reverse-wrapped line gap places the first zero-area child one row later.
 /// - Both child rectangles remain saturated within the one-cell render viewport.
 #[test]
-fn zero_sized_reverse_wrapping_saturates_terminal_geometry() -> Result<()> {
+fn zero_sized_reverse_wrapping_saturates_terminal_geometry() -> leptatui::app::Result<()> {
     let root = div((
         fixed_flex_child("A", 0.0, 0.0),
         fixed_flex_child("B", 0.0, 0.0),
@@ -255,7 +255,7 @@ fn zero_sized_reverse_wrapping_saturates_terminal_geometry() -> Result<()> {
 /// - The line gap leaves the middle terminal row blank.
 /// - The wrapped `CC` label paints at the start of the final row.
 #[test]
-fn wrapped_flex_lines_paint_a_stable_terminal_snapshot() -> Result<()> {
+fn wrapped_flex_lines_paint_a_stable_terminal_snapshot() -> leptatui::app::Result<()> {
     let root = div((
         fixed_flex_child("AA", 2.0, 1.0),
         fixed_flex_child("BB", 2.0, 1.0),

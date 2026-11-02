@@ -15,7 +15,7 @@
 /// - The button receives focus after another tab event.
 /// - Enter returns [`AppControl::Continue`] and runs the focused button callback.
 #[test]
-fn enter_and_space_do_not_activate_focused_editable_controls() -> Result<()> {
+fn enter_and_space_do_not_activate_focused_editable_controls() -> leptatui::app::Result<()> {
     let count = Rc::new(Cell::new(0));
     let submit_count = Rc::clone(&count);
     let mut view = div((
@@ -64,12 +64,60 @@ fn enter_and_space_do_not_activate_focused_editable_controls() -> Result<()> {
 /// - The tab event succeeds and focuses the button.
 /// - The enter event returns [`AppControl::Exit`].
 #[test]
-fn focused_button_action_can_exit_app_loop() -> Result<()> {
+fn focused_button_action_can_exit_app_loop() -> leptatui::app::Result<()> {
     let mut view = button("Quit").on_press(|| AppControl::Exit);
 
     view.handle_event(key(KeyCode::Tab))?;
 
     assert_eq!(view.handle_event(key(KeyCode::Enter))?, AppControl::Exit);
+
+    Ok(())
+}
+
+/// Verifies buttons render their built-in blurred and focused colors.
+///
+/// # Example Under Test
+///
+/// ```text
+/// div([button("U"), button("F").with_focus(true)])
+/// ```
+///
+/// # Assertions
+///
+/// - The unfocused button renders white with the terminal background.
+/// - The focused button renders white on dark gray.
+/// - Button borders use the same colors as their labels.
+#[test]
+fn renders_buttons_with_default_focus_colors() -> leptatui::app::Result<()> {
+    let backend = TestBackend::new(12, 3);
+    let mut terminal = Terminal::new(backend)?;
+    let view = div([button("U"), button("F").with_focus(true)])
+        .with_inline_style(TuiStyle::new().display(Display::Flex));
+
+    draw_view(&mut terminal, &view)?;
+
+    let buffer = terminal.backend().buffer();
+    let unfocused_label = buffer
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "U")
+        .expect("rendered unfocused button label");
+    let focused_label = buffer
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "F")
+        .expect("rendered focused button label");
+    let unfocused_border = &buffer[(0, 0)];
+    let focused_border = &buffer[(5, 0)];
+
+    assert_eq!(unfocused_label.fg, Color::White);
+    assert_eq!(unfocused_label.bg, Color::Reset);
+    assert_eq!(unfocused_border.fg, Color::White);
+    assert_eq!(unfocused_border.bg, Color::Reset);
+    assert_eq!(focused_label.fg, Color::White);
+    assert_eq!(focused_label.bg, Color::DarkGray);
+    assert_eq!(focused_border.fg, Color::White);
+    assert_eq!(focused_border.bg, Color::DarkGray);
 
     Ok(())
 }
@@ -96,7 +144,7 @@ fn focused_button_action_can_exit_app_loop() -> Result<()> {
 ///
 /// Focus selector state should affect rendered button styling.
 #[test]
-fn renders_focused_button_with_focus_stylesheet_rule() -> Result<()> {
+fn renders_focused_button_with_focus_stylesheet_rule() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(24, 5);
     let mut terminal = Terminal::new(backend)?;
     let view = div([button("One").with_focus(true), button("Two")])

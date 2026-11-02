@@ -17,7 +17,7 @@
 /// - The three-cell bottom margin and two-cell following top margin collapse to three cells.
 /// - The following sibling retains its independent left margin.
 #[test]
-fn asymmetric_margins_position_and_separate_block_siblings() -> Result<()> {
+fn asymmetric_margins_position_and_separate_block_siblings() -> leptatui::app::Result<()> {
     let first = text("A").with_inline_style(
         TuiStyle::new()
             .box_sizing(BoxSizing::BorderBox)
@@ -92,7 +92,7 @@ fn asymmetric_margins_position_and_separate_block_siblings() -> Result<()> {
 /// - Each authored padding edge independently insets the content box.
 /// - The content renders at the retained content-box origin.
 #[test]
-fn asymmetric_padding_and_border_sides_define_retained_boxes() -> Result<()> {
+fn asymmetric_padding_and_border_sides_define_retained_boxes() -> leptatui::app::Result<()> {
     let root = block(text("X"))
         .with_inline_style(
             TuiStyle::new()
@@ -147,7 +147,7 @@ fn asymmetric_padding_and_border_sides_define_retained_boxes() -> Result<()> {
 /// - Border, padding, content, and trailing cells receive the authored background.
 /// - Cells in the surrounding margin retain the terminal's default background.
 #[test]
-fn background_and_rounded_borders_paint_only_the_border_box() -> Result<()> {
+fn background_and_rounded_borders_paint_only_the_border_box() -> leptatui::app::Result<()> {
     let child = block(text("X")).with_inline_style(
         TuiStyle::new()
             .background(Color::Blue)
@@ -215,7 +215,7 @@ fn background_and_rounded_borders_paint_only_the_border_box() -> Result<()> {
 /// - The text begins at the retained content-box origin.
 /// - Border, padding, and content cells share the authored background.
 #[test]
-fn styled_leaf_paints_from_retained_box_geometry() -> Result<()> {
+fn styled_leaf_paints_from_retained_box_geometry() -> leptatui::app::Result<()> {
     let root = div((text("X").with_inline_style(
         TuiStyle::new()
             .background(Color::Blue)
@@ -260,7 +260,7 @@ fn styled_leaf_paints_from_retained_box_geometry() -> Result<()> {
 /// - The second content box saturates to zero width and height without underflow.
 /// - The following sibling renders immediately after the chrome-constrained box.
 #[test]
-fn zero_sized_boxes_saturate_inner_geometry_without_affecting_following_paint() -> Result<()> {
+fn zero_sized_boxes_saturate_inner_geometry_without_affecting_following_paint() -> leptatui::app::Result<()> {
     let zero = text("").with_inline_style(
         TuiStyle::new()
             .box_sizing(BoxSizing::BorderBox)
@@ -331,7 +331,7 @@ fn zero_sized_boxes_saturate_inner_geometry_without_affecting_following_paint() 
 /// A block's single child participates in the same computed layout snapshot as
 /// children of other layout containers.
 #[test]
-fn block_child_paint_and_hit_area_follow_retained_geometry() -> Result<()> {
+fn block_child_paint_and_hit_area_follow_retained_geometry() -> leptatui::app::Result<()> {
     let child_style = TuiStyle::new()
         .background(Color::Red)
         .box_sizing(BoxSizing::BorderBox)

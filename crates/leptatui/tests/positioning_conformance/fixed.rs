@@ -20,7 +20,8 @@ use super::*;
 /// - The second flow row remains at row one because neither fixed box reserves
 ///   flow space.
 #[test]
-fn fixed_header_and_footer_use_viewport_edges_without_reserving_flow() -> Result<()> {
+fn fixed_header_and_footer_use_viewport_edges_without_reserving_flow() -> leptatui::app::Result<()>
+{
     let header = div((text("HEADER"),)).with_inline_style(
         fixture_size(12.0, 1.0)
             .position(Position::Fixed)
@@ -63,7 +64,8 @@ fn fixed_header_and_footer_use_viewport_edges_without_reserving_flow() -> Result
 /// - The relative ancestor's origin and dimensions do not affect the overlay.
 /// - The overlay paints at its retained viewport-relative coordinates.
 #[test]
-fn fixed_overlay_uses_terminal_viewport_instead_of_positioned_ancestor() -> Result<()> {
+fn fixed_overlay_uses_terminal_viewport_instead_of_positioned_ancestor() -> leptatui::app::Result<()>
+{
     let overlay = div((text("XYZ"),)).with_inline_style(
         fixture_size(3.0, 2.0)
             .position(Position::Fixed)
@@ -109,7 +111,7 @@ fn fixed_overlay_uses_terminal_viewport_instead_of_positioned_ancestor() -> Resu
 /// - The large viewport places the fixed child at column ten and row ten.
 /// - The fixed child's explicit size remains stable across both renders.
 #[test]
-fn fixed_percentage_insets_recompute_after_terminal_resize() -> Result<()> {
+fn fixed_percentage_insets_recompute_after_terminal_resize() -> leptatui::app::Result<()> {
     let fixed = div((text("F"),)).with_inline_style(
         fixture_size(2.0, 1.0)
             .position(Position::Fixed)
@@ -149,7 +151,7 @@ fn fixed_percentage_insets_recompute_after_terminal_resize() -> Result<()> {
 /// - The fixed descendant retains the same viewport-relative rectangle.
 /// - The fixed marker remains painted in the terminal's top-right cell.
 #[test]
-fn fixed_descendant_ignores_nested_ancestor_scrolling() -> Result<()> {
+fn fixed_descendant_ignores_nested_ancestor_scrolling() -> leptatui::app::Result<()> {
     let fixed = div((text("F"),)).with_inline_style(
         fixture_size(1.0, 1.0)
             .position(Position::Fixed)
@@ -201,7 +203,7 @@ fn fixed_descendant_ignores_nested_ancestor_scrolling() -> Result<()> {
 /// - The terminal displays only the four columns that fit in its viewport.
 /// - Retained clipping uses the terminal viewport instead of the ancestor.
 #[test]
-fn fixed_box_escapes_ancestor_clip_and_clips_to_terminal_viewport() -> Result<()> {
+fn fixed_box_escapes_ancestor_clip_and_clips_to_terminal_viewport() -> leptatui::app::Result<()> {
     let fixed = div((text("FIXED"),)).with_inline_style(
         fixture_size(5.0, 1.0)
             .position(Position::Fixed)

@@ -53,6 +53,7 @@ mod style_module;
 pub use cascade::{
     MediaQuery, StyleDeclarations, StyleRule, StyleSelector, Stylesheet, ViewportSize,
 };
+pub(crate) use foundation::TERMINAL_SURFACE_BACKGROUND;
 pub use foundation::{ThemeValue, ThemeVariables, TuiSize, TuiSpacing, TuiStyle, theme_color};
 pub use layout::{
     AlignContent, AlignItems, AlignSelf, Axes, BoxSizing, Dimension, Display, Edges, FlexDirection,

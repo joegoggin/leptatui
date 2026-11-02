@@ -10,7 +10,7 @@ macros for building interactive terminal applications.
 - `crates/leptatui`: Public runtime crate with app, component, view, context,
   style, and prelude APIs.
 - `crates/leptatui-macros`: Internal proc-macro crate that implements
-  `#[component]`, `view!`, and `stylesheet!`.
+  `#[component]`, `view!`, `view_error!`, and `stylesheet!`.
 - `crates/leptatui/examples`: Runnable examples for the public crate.
 
 Within each crate, domain facades keep public imports stable while substantive
@@ -35,7 +35,7 @@ cargo check --workspace --examples
 
 Application code normally imports `leptatui::prelude::*`, defines a root
 component, builds a view tree with either builders or `view!`, and runs it with
-`App::new(root).run().await`.
+`App::new(view).run().await`.
 
 `view!` and `#[component]` are Leptatui-owned macros for terminal UIs. They use
 familiar Leptos-style component syntax, but they create values implementing
@@ -66,10 +66,50 @@ fn Greeting() -> impl IntoView {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    App::new(Greeting::new()).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <Greeting /> };
+    App::new(view).run().await
 }
 ```
+
+Components that perform fallible setup can return
+`ViewResult<impl IntoView>`. The component macro permits `?` and automatically
+wraps the final bare view expression in `Ok`. An error replaces the active
+application UI with a standalone full-screen diagnostic and router-aware Back
+and Quit controls:
+
+```rust
+use leptatui::prelude::*;
+
+#[component]
+fn Document() -> ViewResult<impl IntoView> {
+    let source = std::fs::read_to_string("guide.md")?;
+    view! { <Text>{source}</Text> }
+}
+```
+
+Use `view_error!` for an intentional custom diagnostic. Passing only a message
+replaces the underlying failure; the `error => message` form preserves the
+source beneath anyhow context:
+
+```rust
+if let Err(error) = std::fs::read_to_string("settings.toml") {
+    view_error!(error => "Could not load application settings");
+}
+```
+
+The error screen supports Tab/Shift+Tab and Enter/Space, `Esc` or `b` to go
+back, and `q` to quit. While the managed app is active, panic handling restores
+the normal terminal before forwarding the panic to Rust's existing hook.
+
+Signals created in a component body live for that component instance. Provide
+shared signals or services through typed context when descendants need them.
+Components can call `use_editor()` to edit files or reactive strings in the
+user's preferred terminal editor. Lower-level integrations can call
+`use_app_handle()` and queue arbitrary synchronous work with
+`AppHandle::suspend_terminal()`. The runtime restores normal terminal modes,
+runs the work on the app thread, re-enters the TUI, and redraws the same mounted
+component tree.
 
 Component function parameters are props. Use PascalCase component tags in
 `view!`, pass props as attributes, and use nested content with a `children:
@@ -88,7 +128,7 @@ fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
         <Block>
             <Div>
                 <Text>{title}</Text>
-                {div(children())}
+                {children()}
             </Div>
         </Block>
     }
@@ -100,6 +140,38 @@ view! {
     </Panel>
 }
 ```
+
+## Reactive Rendering
+
+Leptatui follows Leptos's dependency-tracking model for dynamic content. A
+closure passed as a view child or text-like element child runs once, subscribes
+to every signal read with `.get()` or `.with()`, and rebuilds only after one of
+those dependencies changes. Signal invalidation also wakes the app loop, so the
+terminal is not continuously redrawn while the UI is idle.
+
+```rust
+let count = RwSignal::new(0);
+let status = RwSignal::new(String::from("Ready"));
+
+view! {
+    <Div>
+        <Text>{move || format!("Count: {}", count.get())}</Text>
+        <Text>{status}</Text>
+    </Div>
+}
+```
+
+Passing a supported readable signal directly is shorthand for a tracked
+`.get()`. This works for `RwSignal`, `ReadSignal`, `Memo`, `Signal`,
+`ArcRwSignal`, `ArcReadSignal`, and `ArcMemo`, both in text-like elements and in
+ordinary child positions. Use `.get_untracked()` or `.with_untracked()` inside
+a dynamic closure only when the value should not cause that boundary to
+rebuild.
+
+Use `keyed(key, child)` when a subtree should be replaced only after a specific
+tracked key changes. The key closure owns the reactive dependencies; the child
+factory is intentionally untracked, and a changed key mounts a fresh child
+without reconciling its prior local view state.
 
 ## Standard Components
 
@@ -114,8 +186,10 @@ PascalCase `view!` tags.
 types such as `TextView`, `DivView`, `InputView`, and `TextAreaView`, so their
 type-specific configuration remains available without pattern matching.
 Containers accept homogeneous collections or heterogeneous tuples through
-`IntoViews`; type erasure occurs only when children enter the tree as
-`AnyView` values. Application-defined views can implement `View` directly,
+`IntoViews`. Braced `Vec<V>` expressions inside `Div`, `Form`, `ListItem`, or
+component children splice their views directly into the surrounding child list.
+Type erasure occurs only when children enter the tree as `AnyView` values.
+Application-defined views can implement `View` directly,
 optionally implement `StyledView` or `ContainerView`, and use
 `RenderCtx::resolve_style` to participate in the normal stylesheet cascade.
 Custom selector names are created with `ViewType::new("Name")`, and the same
@@ -124,10 +198,11 @@ name can be used as a `stylesheet!` type selector.
 `Link` opens URLs and local paths with the operating system's configured
 handler. Use `link("Project site", "https://example.com")` or
 `<Link href="https://example.com">"Project site"</Link>` anywhere in a view.
-Links are underlined by default; use Tab and Shift+Tab to move focus and Enter
-or Space to activate the focused link. Moving the pointer over a link focuses
-it, and left-clicking activates it. Empty and `#fragment` targets remain visible
-but are intentionally not focusable.
+Links are blue and underlined by default, then magenta and underlined after a
+successful visit during the current app session. Use Tab and Shift+Tab to move
+focus and Enter or Space to activate the focused link. Moving the pointer over
+a link focuses it, and left-clicking activates it. Empty and `#fragment` targets
+remain visible but are intentionally not focusable.
 
 `Input` and `TextArea` are controlled components: pass the displayed `value`
 from caller-owned state and update that state from `on_input` when editing
@@ -183,7 +258,6 @@ let document = div((
     ]),
     code_block("fn main() { println!(\"hello\"); }")
         .language("rust")
-        .syntax_theme(SyntaxTheme::Dark)
         .line_numbers(true),
 ));
 ```
@@ -230,7 +304,6 @@ fn Guide() -> impl IntoView {
             </Table>
             <CodeBlock
                 language="rust"
-                syntax_theme={SyntaxTheme::Dark}
                 line_numbers=true
             >"fn main() {}"</CodeBlock>
         </Div>
@@ -242,9 +315,10 @@ Headings, paragraphs, list items, table cells, and code lines wrap to the
 available width and contribute their wrapped height to parent layouts. Code
 blocks do not scroll horizontally. A recognized `language` selects a bundled
 syntax grammar; an unknown language keeps the source readable as plain text.
-`SyntaxTheme::Dark` is the default, and line numbers are disabled unless
-requested. Table cells accept inline Ratatui text rather than nested block
-views in the v1 API.
+Syntax colors use the terminal's ANSI palette, code-block backgrounds use the
+terminal's `DarkGray` palette entry, and line numbers are disabled unless
+requested. Table cells accept inline Ratatui text rather than nested block views
+in the v1 API.
 
 ### Markdown Readers
 
@@ -258,15 +332,13 @@ let source = "# Guide\n\n```rust\nfn main() {}\n```";
 let default_document = markdown(source);
 let highlighted_document = markdown_with_options(
     source,
-    MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Light)
-        .line_numbers(true),
+    MarkdownOptions::default().line_numbers(true),
 );
 ```
 
-For explicit UTF-8 path loading, use `markdown_file`,
-`markdown_file_with_options`, or the path-backed `Markdown` tag. Loading
-finishes before the view is returned:
+For synchronous UTF-8 path loading, use `markdown_file` or
+`markdown_file_with_options`. The path-backed `Markdown` tag instead loads
+asynchronously through `use_file_system()` at the containing volume root:
 
 ```rust
 use leptatui::prelude::*;
@@ -274,18 +346,31 @@ use leptatui::prelude::*;
 let default_file = markdown_file("README.md");
 let configured_file = markdown_file_with_options(
     "README.md",
-    MarkdownOptions::default()
-        .syntax_theme(SyntaxTheme::Dark)
-        .line_numbers(true),
+    MarkdownOptions::default().line_numbers(true),
 );
 let tagged_file = view! {
-    <Markdown
-        src="README.md"
-        syntax_theme={SyntaxTheme::Dark}
-        line_numbers=true
-    />
+    <Markdown src="README.md" editable=true line_numbers=true />
 };
 ```
+
+`editable` defaults to `false`. When enabled, the element consumes an
+unmodified `e` to open its original `src` through `use_editor()` and an
+unmodified `r` to refetch that source. A successful editor session also
+refetches the source. Each refetch replaces the Markdown view, resetting its
+local navigation history, focus, and scroll state. Editor and reload failures
+use the same standard error screen as the initial asynchronous read. If a view
+contains multiple editable Markdown elements, normal view-tree traversal gives
+the first eligible element the shortcut.
+
+Markdown readers use the same semantic defaults as their underlying elements:
+cyan-to-gray heading levels, white paragraphs, cyan ordered lists and table
+headers, green unordered lists, terminal-native syntax on dark-gray code blocks,
+blue Markdown links, and white-on-dark-gray focused links and anchors. Visited
+Markdown links are magenta and underlined; active route anchors are light cyan
+and bold. The same palette applies to
+standalone tags such as `<H1>`,
+`<Paragraph>`, `<CodeBlock>`, and `<A>`. Authored stylesheet rules and inline
+styles override these defaults through the normal cascade.
 
 The compatibility promise is CommonMark plus tables. Optional GFM task lists,
 strikethrough, footnotes, and other extensions are deferred. Markdown links
@@ -302,8 +387,9 @@ in-memory Markdown keep that external behavior. Empty destinations and a bare
 `#` remain inactive.
 Images become deterministic descriptive text; local and remote image targets
 are never fetched. Raw HTML and unsupported blocks remain readable fallbacks.
-Unreadable paths and invalid UTF-8 also render a path-aware in-app page instead
-of returning an error, so back navigation remains available.
+Synchronous file readers render unreadable paths and invalid UTF-8 as a
+path-aware in-app page. The asynchronous `Markdown` tag shows its loading state
+and then raises a `ViewError`, producing the standard interactive error screen.
 
 ```rust
 use leptatui::prelude::*;
@@ -317,8 +403,8 @@ fn StandardControls() -> impl IntoView {
     view! {
         <Div>
             {move || {
-                let name_value = name.get_untracked();
-                let notes_value = notes.get_untracked();
+                let name_value = name.get();
+                let notes_value = notes.get();
 
                 view! {
                     <Form on_submit=|| AppControl::Continue>
@@ -345,21 +431,88 @@ fn StandardControls() -> impl IntoView {
                 src="crates/leptatui/examples/assets/showcase.jpg"
                 alt="Image fallback text"
             />
-            {move || progress_bar(progress.get_untracked()).label("Progress")}
+            {move || progress_bar(progress.get()).label("Progress")}
         </Div>
     }
 }
 ```
 
-Styles live with components. Put `stylesheet!` inside a `#[component]` body to
-register those rules for that component subtree, including descendant
-components. The same macro still returns a `Stylesheet` value for direct
-construction and tests. It supports flat terminal selectors and nested rules
-that lower into explicit descendant selectors. Use `&:focus` inside a nested
-rule to combine focus with the current terminal selector. Matching rules use
+Buttons, inputs, and text areas default to white text with rounded borders and
+one cell of horizontal padding. Focused controls use bold white text on the
+terminal surface background with thick borders; insert-mode inputs and text
+areas use yellow foregrounds, while both visual modes use magenta foregrounds.
+Tables default to white and progress bars to light green on dark gray. Links are
+blue and underlined until visited, then magenta and underlined. These remain
+low-precedence defaults.
+
+Styles live with components. Invoke `stylesheet!` directly inside a
+`#[component]` body, or call a synchronous helper that invokes it, to register
+those rules for that component subtree, including descendant components. The
+helper must run during component setup, before the component returns its view.
+The same macro still returns a `Stylesheet` value for direct construction and
+tests. It supports flat terminal selectors and nested rules that lower into
+explicit descendant selectors. Use `&:focus`, `&:active`,
+`&:insert`, `&:visual`, or `&:visited` inside a nested rule to combine a
+pseudo-class with the current terminal selector. `:insert` matches `Input` and
+`TextArea` views whose retained Vim mode is `Insert`; `:visual` matches either
+character-wise Visual or Visual Line mode; `:visited` matches links whose
+destination was opened during the current app session. Matching rules use
 CSS-style specificity and source order; inline styles override normal
 stylesheet declarations, and stylesheet declarations marked `!important`
 override normal inline styles.
+
+Larger components can keep their Rust stylesheet in a sibling `style.rs`.
+Styled child components use a directory containing `component.rs`, `style.rs`,
+and `mod.rs`; routed pages use the equivalent `page.rs`, `style.rs`, and
+`mod.rs`. Components without local rules can omit `style.rs` and remain in a
+flat module.
+
+```text
+example_card/
+├── component.rs
+├── mod.rs
+└── style.rs
+```
+
+```rust
+// example_card/mod.rs
+mod component;
+mod style;
+
+pub use component::ExampleCard;
+
+// example_card/component.rs
+use leptatui::prelude::*;
+
+use super::style::use_example_card_styles;
+
+/// Renders an example card with co-located styles.
+#[component]
+pub fn ExampleCard() -> impl IntoView {
+    use_example_card_styles();
+
+    view! {
+        <Div class="example-card">
+            <Text class="example-card__content">"Example card"</Text>
+        </Div>
+    }
+}
+
+// example_card/style.rs
+use leptatui::prelude::*;
+
+/// Registers the example card stylesheet with the active component.
+pub(super) fn use_example_card_styles() {
+    stylesheet! {
+        .example-card => {
+            &__content => { fg: Color::LightCyan }
+        }
+    };
+}
+```
+
+The trailing semicolon in the helper keeps its return type as `()`;
+`stylesheet!` remains value-producing for direct stylesheet construction.
 
 ```rust
 #[component]
@@ -380,25 +533,67 @@ fn Panel() -> impl IntoView {
 }
 ```
 
-Stylesheets also support top-level media query blocks for responsive terminal
-UIs. Width and height values are terminal-cell counts from the root viewport,
-and `flex_direction` can switch a flex container's axis at a breakpoint.
+Nested class rules also support BEM-style `&__element` and `&--modifier`
+suffixes. These concatenate with the nearest parent class rather than creating
+a descendant selector, and may be chained or combined with the supported
+pseudo-classes. Parent suffixes require a class selector; they cannot be used at
+the top level or beneath a type or id selector.
+
+```rust
+#[component]
+fn ExamplePage() -> impl IntoView {
+    stylesheet! {
+        .example-page => {
+            &__button => {
+                &:focus => { bg: Color::Black }
+                &--submit => { fg: Color::Green }
+                &--cancel => { fg: Color::Red }
+            }
+        }
+    }
+
+    view! {
+        <Div class="example-page">
+            <Button class="example-page__button example-page__button--submit">
+                "Submit"
+            </Button>
+            <Button class="example-page__button example-page__button--cancel">
+                "Cancel"
+            </Button>
+        </Div>
+    }
+}
+```
+
+Stylesheets support media queries nested within selector blocks for responsive
+terminal UIs. Direct declarations apply to the containing selector, while
+nested rules retain its selector path. Width and height values are terminal-cell
+counts from the root viewport. Top-level media blocks remain supported for
+backward compatibility.
 
 ```rust
 #[component]
 fn ResponsivePanel() -> impl IntoView {
     stylesheet! {
-        .panel => { padding: TuiSpacing::uniform(1) }
-        .actions => { display: Display::Flex }
+        .panel => {
+            padding: TuiSpacing::uniform(1)
 
-        @media (max-width: 80) {
-            .panel => { padding: TuiSpacing::ZERO }
-            .actions => { flex_direction: FlexDirection::Column }
-            Text => { fg: Color::Yellow }
+            @media (max-width: 80) {
+                padding: TuiSpacing::ZERO
+                Text => { fg: Color::Yellow }
+            }
         }
+        .actions => {
+            display: Display::Flex
 
-        @media (min-width: 81) and (min-height: 24) {
-            Button:focus => { bg: Color::Yellow }
+            @media (max-width: 80) {
+                flex_direction: FlexDirection::Column
+            }
+        }
+        Button:focus => {
+            @media (min-width: 81) and (min-height: 24) {
+                bg: Color::Yellow
+            }
         }
     }
 
@@ -837,7 +1032,7 @@ fn ThemeLabel() -> impl IntoView {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
     dynamic(move || {
-        view! { <Text>{format!("Theme: {:?}", mode.get_untracked())}</Text> }
+        view! { <Text>{format!("Theme: {:?}", mode.get())}</Text> }
     })
 }
 
@@ -878,18 +1073,19 @@ fn ThemeRoot() -> impl IntoView {
 See `cargo run --example theme_switcher` for the complete light/dark theme
 switcher.
 
-Multi-page apps use ordinary Leptatui components with route state stored in
-typed context. Keep `main` focused on startup, build shared state in the root
-component, provide route and app-wide context there, and let page components
-consume the values they need. The active page is usually a small enum, updated
-through the route write signal returned by `provide_route()` or by
-`use_navigate()` in descendants. The root then switches pages from a dynamic
-`view!` child.
+Multi-page apps use URL-like locations and declarative route components. Wrap
+the application shell in `Router`, place route declarations inside `Routes`,
+and navigate with internal `A` anchors or `use_navigate()`. Content outside
+`Routes` remains mounted, and `ParentRoute` plus `Outlet` provides retained
+nested layouts. An `A` whose destination matches the current route matches the
+`:active` stylesheet pseudo-class. Route matching no longer injects an
+`active` class, so authored route-state rules should use `A:active` or nested
+`&:active` selectors.
 
 Use props for required parent-to-child inputs and local component
 configuration. Use context for app-wide state that many routes or deeply nested
-descendants need to read or update, such as the active route, theme variables,
-or persisted settings. Keep shared state owned by the root when navigation
+descendants need to read or update, such as theme variables or persisted
+settings. Keep shared state owned by the root when navigation
 should not reset it; add explicit reset behavior when a route change should
 clear shared state. Descendant pages can read required context with
 `expect_context()` or optional context with `use_context()`.
@@ -897,31 +1093,13 @@ clear shared state. Descendant pages can read required context with
 ```rust
 use leptatui::prelude::*;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Page {
-    Home,
-    Counter,
-    Settings,
-}
-
 #[component]
 fn Nav() -> impl IntoView {
-    let navigate = use_navigate::<Page>();
-
     view! {
         <Div style={TuiStyle::new().display(Display::Flex)}>
-            <Button on_press=move || {
-                navigate.update(|route| *route = Page::Home);
-                AppControl::Continue
-            }>"Home"</Button>
-            <Button on_press=move || {
-                navigate.update(|route| *route = Page::Counter);
-                AppControl::Continue
-            }>"Counter"</Button>
-            <Button on_press=move || {
-                navigate.update(|route| *route = Page::Settings);
-                AppControl::Continue
-            }>"Settings"</Button>
+            <A href="/" exact=true>"Home"</A>
+            <A href="/counter">"Counter"</A>
+            <A href="/settings">"Settings"</A>
         </Div>
     }
 }
@@ -935,7 +1113,7 @@ fn HomePage() -> impl IntoView {
             <Text>"Home"</Text>
             {move || {
                 view! {
-                    <Text>{format!("Count: {}", counter.get_untracked())}</Text>
+                    <Text>{format!("Count: {}", counter.get())}</Text>
                 }
             }}
         </Div>
@@ -961,43 +1139,83 @@ fn CounterPage() -> impl IntoView {
 
 #[component]
 fn SettingsPage() -> impl IntoView {
-    let route = use_route::<Page>();
+    let location = use_location();
 
     view! {
-        {move || {
-            view! {
-                <Text>{format!("Current page: {:?}", route.get_untracked())}</Text>
-            }
-        }}
+        <Text>{move || format!("Current path: {}", location.pathname().get())}</Text>
     }
+}
+
+#[component]
+fn NotFoundPage() -> impl IntoView {
+    view! { <Text>"Page not found"</Text> }
 }
 
 #[component]
 fn Root() -> impl IntoView {
     let counter = RwSignal::new(0);
-    let route_state = provide_route(Page::Home);
-    let route = route_state.route();
 
     provide_context(counter);
 
     view! {
-        <Div>
-            <Nav />
-            {move || match route.get_untracked() {
-                Page::Home => view! { <HomePage /> },
-                Page::Counter => view! { <CounterPage /> },
-                Page::Settings => view! { <SettingsPage /> },
-            }}
-        </Div>
+        <Router initial_path="/">
+            <Div>
+                <Nav />
+                <Routes fallback=NotFoundPage>
+                    <Route path="/" view=HomePage />
+                    <Route path="/counter" view=CounterPage />
+                    <Route path="/settings" view=SettingsPage />
+                </Routes>
+            </Div>
+        </Router>
     }
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let root = Root::new();
-    App::new(root).run().await
+async fn main() -> leptatui::app::Result<()> {
+    let view = view! { <Root /> };
+    App::new(view).run().await
 }
 ```
+
+Route patterns accept static segments, `:parameter` segments, and a terminal
+`*wildcard`. Matched pages read decoded path and query values through derived
+models:
+
+```rust
+use leptatui::prelude::*;
+
+#[derive(RouteParams)]
+struct ViewerParams {
+    path: String,
+}
+
+#[derive(QueryParams)]
+struct ViewerQuery {
+    line: Option<usize>,
+}
+
+#[component]
+fn ViewerPage() -> ViewResult<impl IntoView> {
+    let params = use_params::<ViewerParams>()?;
+    let query = use_query::<ViewerQuery>()?;
+
+    view! {
+        <Text>{format!("{} at {:?}", params.path, query.line)}</Text>
+    }
+}
+```
+
+Required fields implement `FromStr`; missing or malformed values propagate
+through `?` to the standard error screen. Optional fields use `Option<T>`, and
+`#[param(name = "page-number")]` maps a Rust field to a different parameter
+name. Derived query models also serialize their `Display` values with
+`to_query_string()`. Use `with_query("/view", &query)` to construct a location
+with percent-encoded keys and values; absent optional fields are omitted.
+Parameter or query changes remount matched route content while shared UI outside
+`<Routes>` remains mounted. Read the current raw location with `use_location()`.
+Programmatic navigation uses `use_navigate()`, while `use_history()` exposes
+process-local back and forward controls.
 
 See `crates/leptatui/examples/multi_page_demo.rs` or run
 `cargo run --example multi_page_demo` for a complete routing and context
@@ -1005,14 +1223,16 @@ example with shared counter and theme state.
 
 ## Resources And Actions
 
-Use `create_resource` for asynchronous reads keyed by reactive source state and
-`create_action` for POST-like mutations triggered by buttons or key handlers.
-Both helpers publish signal-backed state and request redraws when pending or
-completed work changes, so components can render loading, success, and error
-states from ordinary dynamic views.
+Use `Resource::new` for asynchronous reads keyed by reactive source state and
+`Action::new` for POST-like mutations triggered by buttons or key handlers.
+Both types publish signal-backed loading, input, and value state and request
+redraws when work changes. Fetchers and handlers can return any output type;
+application failures remain ordinary `Result<T, E>` values handled by
+components or contexts.
 
-Resources ignore stale completions from older source keys. Actions keep the
-latest dispatched input and ignore stale completions from older dispatches. A
+Resources retain their previous value while reloading and ignore stale
+completions from older source keys. Actions retain their previous output,
+expose the current input only while pending, and ignore stale completions. A
 common pattern is to keep a refresh signal in root context, key the resource
 from that signal, and increment it after a successful action.
 
@@ -1021,8 +1241,8 @@ use leptatui::prelude::*;
 
 #[derive(Clone)]
 struct Todos {
-    items: Resource<Vec<String>, String>,
-    create: Action<String, String, String>,
+    items: Resource<Result<Vec<String>, String>>,
+    create: Action<String, Result<String, String>>,
     refresh: WriteSignal<u64>,
 }
 
@@ -1038,12 +1258,13 @@ async fn create_todo(title: String) -> std::result::Result<String, String> {
 fn TodoApp() -> impl IntoView {
     let (refresh, set_refresh) = signal(0_u64);
 
-    let items = create_resource(
+    let items = Resource::new(
         move || refresh.get(),
         |_| async move { load_todos().await },
     );
 
-    let create = create_action(move |title: String| {
+    let create = Action::new(move |title: &String| {
+        let title = title.clone();
         let set_refresh = set_refresh;
 
         async move {
@@ -1071,10 +1292,10 @@ fn TodoApp() -> impl IntoView {
 fn TodoList() -> impl IntoView {
     let todos = expect_context::<Todos>();
 
-    dynamic(move || match todos.items.get_untracked() {
-        ResourceState::Pending => text("Loading todos..."),
-        ResourceState::Ready(items) => div(items.into_iter().map(text).collect::<Vec<_>>()),
-        ResourceState::Error(error) => text(format!("Load failed: {error}")),
+    dynamic(move || match todos.items.get() {
+        Some(Ok(items)) => div(items.into_iter().map(text).collect::<Vec<_>>()),
+        Some(Err(error)) => text(format!("Load failed: {error}")),
+        None => text("Loading todos..."),
     })
 }
 
@@ -1106,6 +1327,182 @@ fn TodoActions() -> impl IntoView {
 See `cargo run --example async_redraw` for a small async redraw example and
 `cargo run --example async_crud` for resources, actions, context, stylesheets,
 and app startup working together.
+
+## External Editor
+
+`use_editor()` returns a cloneable handle for opening an existing file or
+round-tripping a reactive string through a temporary Markdown file. Leptatui
+temporarily restores normal terminal modes, waits for the configured editor to
+exit, re-enters the TUI, and redraws the mounted component tree.
+
+The editor command comes from the first non-empty `VISUAL` or `EDITOR` value
+and falls back to `vi`. Values may contain shell-word quoted arguments, but the
+command runs directly without shell expansion. The handle exposes one shared,
+reactive `EditorStatus` that moves from `Pending` to `Complete` or `Error`.
+Call `clear()` after consuming a terminal status to return it to `None`.
+
+```rust,no_run
+use leptatui::prelude::*;
+
+#[component]
+fn EditDraft() -> impl IntoView {
+    let editor = use_editor();
+    let status_editor = editor.clone();
+    let draft = RwSignal::new(String::from("# Draft\n"));
+
+    use_key_event(KeyEventKind::Press, move |key| match key.code {
+        KeyCode::Char('e') => {
+            editor.edit_text(draft);
+            KeyControl::Handled
+        }
+        KeyCode::Char('q') => KeyControl::Exit,
+        _ => KeyControl::Pass,
+    });
+
+    view! {
+        <Div>
+            <Text>{draft}</Text>
+            <Text>{move || match status_editor.status() {
+                None => String::from("Editor idle"),
+                Some(EditorStatus::Pending) => String::from("Editor open"),
+                Some(EditorStatus::Complete) => String::from("Edit complete"),
+                Some(EditorStatus::Error(error)) => format!("Edit failed: {error}"),
+            }}</Text>
+        </Div>
+    }
+}
+```
+
+`edit_file(path)` passes the supplied path to the editor. `edit_text(signal)`
+writes the signal snapshot to a uniquely named `.md` file, applies valid UTF-8
+contents only after a successful editor exit, and removes the temporary file
+before reporting completion. Failures preserve the original signal value. All
+clones of an `Editor` observe the same status, and if multiple edits are queued
+before the terminal is suspended, the last completed edit determines the final
+status.
+
+Run `cargo run --example external_editor` to edit the in-memory draft. Supply
+an optional file with `cargo run --example external_editor -- path/to/file` to
+demonstrate both methods.
+
+## File Selector
+
+`use_file_selector()` returns a cloneable handle for Leptatui's
+standalone file picker. The picker temporarily owns the complete terminal and
+event stream, so application styles and layouts cannot affect it. `Enter`
+selects the highlighted file, `Esc` or `Ctrl-C` cancels without changing the
+previously stored path, and `q` exits the application.
+
+```rust,no_run
+use leptatui::prelude::*;
+
+#[component]
+fn OpenDocument() -> impl IntoView {
+    let selector = use_file_selector();
+    let button_selector = selector.clone();
+    let navigate = use_navigate();
+
+    Effect::new(move || {
+        if let Some(path) = selector.get_file() {
+            navigate(
+                &format!("/documents/{}", path.display()),
+                NavigateOptions::default(),
+            );
+        }
+    });
+
+    view! {
+        <Div>
+            <Button on_press=move || {
+                button_selector.select_with_options(
+                    FileSelectorOptions::new()
+                        .starting_directory("docs")
+                        .extensions(["md", "markdown"]),
+                );
+                AppControl::Continue
+            }>
+                "Select a file"
+            </Button>
+        </Div>
+    }
+}
+```
+
+`select()` starts in the process current directory and accepts any regular
+file. `select_with_options()` can choose the initial directory, extension
+allowlist, and initial hidden-file visibility. A successful selection replaces
+the stored canonical `PathBuf`; `get_file()` reactively reads it and `clear()`
+removes it explicitly. Reading it inside an `Effect` reruns that effect after a
+selection or clear. Opening or cancelling never clears an existing value.
+
+## Root-Scoped File System
+
+`use_file_system()` canonicalizes a directory boundary and returns a cloneable
+handle whose methods start blocking I/O outside the terminal event thread.
+Call it directly inside any component that needs filesystem access rather than
+passing a handle through the component tree. Relative paths resolve below that
+root. Absolute paths and symlink
+targets are accepted only when their canonical targets remain contained.
+An exact leading `~` or `~/` expands to the current user's home directory for
+both root initialization and every action path; named-user forms such as
+`~alice` remain literal. Expanded paths still must remain within the configured
+root.
+
+```rust,no_run
+use leptatui::prelude::*;
+
+#[component]
+fn ConfigDirButton() -> ViewResult<impl IntoView> {
+    let files = use_file_system("~/.config")?;
+
+    view! {
+        <Button on_press=move || {
+            // Ignoring the handle is valid for fire-and-forget work.
+            files.create_dir("my-app/cache");
+            AppControl::Continue
+        }>
+            "Create config directory"
+        </Button>
+    }
+}
+
+#[component]
+fn ProjectsDirButton() -> ViewResult<impl IntoView> {
+    let files = use_file_system("~/Projects")?;
+    let latest_read = RwSignal::new(None::<FileOperation<String>>);
+
+    view! {
+        <Button on_press=move || {
+            // Retain the already-started operation to render pending/value/version.
+            latest_read.set(Some(files.read_file_as_string("README.md")));
+            AppControl::Continue
+        }>
+            "Read project guide"
+        </Button>
+    }
+}
+```
+
+Every operation method returns an already-dispatched `FileOperation<T>`, an
+alias for `Action<(), std::io::Result<T>>`. Keep it to observe reactive state,
+call `dispatch(())` to retry the same captured arguments, or ignore it when no
+result is needed.
+
+The API includes path resolution, metadata, deterministic directory listings,
+binary and UTF-8 reads, recursive directory creation, truncating, appending,
+and atomic writes, non-overwriting copy and rename, and file or recursive
+directory deletion. `rename()` supports files, directories, and symbolic links.
+Missing roots remain an error unless `FileSystemOptions::create_root(true)` is
+selected, and recursive deletion can never target the scoped root itself.
+
+Run `cargo run --example file_system_showcase` for a guided demonstration that
+executes every operation in dependency order, retains reactive results, and
+offers a separate expected-failure tour.
+
+Useful follow-up capabilities include filesystem watching for automatic UI
+reloads, recursive walking and glob matching, streaming and configurable open
+options for large files, permission and symlink management, and platform
+config/cache/data-directory discovery.
 
 ## Examples
 
@@ -1147,10 +1544,22 @@ Run the multi-page routing demo:
 cargo run --example multi_page_demo
 ```
 
+Run the fallible-view and panic-cleanup showcase:
+
+```sh
+cargo run --example error_handling
+```
+
 Run the standard component showcase:
 
 ```sh
 cargo run --example standard_library_showcase
+```
+
+Run the external editor hook showcase with an optional file:
+
+```sh
+cargo run --example external_editor -- README.md
 ```
 
 Run the semantic document component showcase:

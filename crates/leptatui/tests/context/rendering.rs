@@ -19,7 +19,7 @@
 ///
 /// Component rendering bridges Leptatui render scopes and Leptos owner scopes.
 #[test]
-fn component_render_scope_can_provide_and_read_context() -> Result<()> {
+fn component_render_scope_can_provide_and_read_context() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(16, 4);
     let mut terminal = Terminal::new(backend)?;
     let mut root = ContextRoot {
@@ -55,7 +55,7 @@ fn component_render_scope_can_provide_and_read_context() -> Result<()> {
 /// - Updating the signal to dark mode succeeds.
 /// - The second render succeeds and paints the themed text white on black.
 #[test]
-fn context_theme_variables_update_rendered_styles() -> Result<()> {
+fn context_theme_variables_update_rendered_styles() -> leptatui::app::Result<()> {
     let owner = Owner::new();
     let (dark, set_dark) = owner.with(|| signal(false));
     let stylesheet = Stylesheet::new().rule(
@@ -120,7 +120,7 @@ fn context_theme_variables_update_rendered_styles() -> Result<()> {
 /// - Updating the theme signal succeeds.
 /// - The second render succeeds and resolves dark theme colors.
 #[test]
-fn context_theme_signal_updates_rendered_styles() -> Result<()> {
+fn context_theme_signal_updates_rendered_styles() -> leptatui::app::Result<()> {
     let owner = Owner::new();
     let light = ThemeVariables::new()
         .color("text", Color::Black)

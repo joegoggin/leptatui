@@ -431,7 +431,7 @@ fn fixture_view(fixture: &GridFixture) -> AnyView {
 /// - Every child retains its expected source-ordered terminal rectangle.
 /// - Painted rows reflect spanning, implicit sizing, source-order overlap, and automatic fallback.
 #[test]
-fn explicit_grid_placement_records_geometry_and_painted_output() -> Result<()> {
+fn explicit_grid_placement_records_geometry_and_painted_output() -> leptatui::app::Result<()> {
     assert_fixtures(explicit_fixtures())
 }
 
@@ -452,7 +452,7 @@ fn explicit_grid_placement_records_geometry_and_painted_output() -> Result<()> {
 /// - Sparse row flow leaves the first-row hole and places the final item after the cursor.
 /// - Dense row flow backfills the first-row hole with the final item.
 #[test]
-fn row_auto_flow_preserves_sparse_cursor_and_dense_backfill() -> Result<()> {
+fn row_auto_flow_preserves_sparse_cursor_and_dense_backfill() -> leptatui::app::Result<()> {
     assert_fixtures(row_flow_fixtures())
 }
 
@@ -473,7 +473,7 @@ fn row_auto_flow_preserves_sparse_cursor_and_dense_backfill() -> Result<()> {
 /// - Sparse column flow leaves the first-column hole and places the final item after the cursor.
 /// - Dense column flow backfills the first-column hole with the final item.
 #[test]
-fn column_auto_flow_preserves_sparse_cursor_and_dense_backfill() -> Result<()> {
+fn column_auto_flow_preserves_sparse_cursor_and_dense_backfill() -> leptatui::app::Result<()> {
     assert_fixtures(column_flow_fixtures())
 }
 
@@ -490,7 +490,7 @@ fn column_auto_flow_preserves_sparse_cursor_and_dense_backfill() -> Result<()> {
 /// # Errors
 ///
 /// Returns [`leptatui::Error::Io`] if terminal drawing or view rendering fails.
-fn assert_fixtures(fixtures: Vec<GridFixture>) -> Result<()> {
+fn assert_fixtures(fixtures: Vec<GridFixture>) -> leptatui::app::Result<()> {
     for fixture in fixtures {
         let root = fixture_view(&fixture);
         let terminal = render_view(root.as_view(), fixture.width, fixture.height)?;

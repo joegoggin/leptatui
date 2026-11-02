@@ -55,7 +55,7 @@ fn image_builder_stores_source_alt_and_selector_metadata() {
 /// Test backends must remain deterministic even when terminal image protocols
 /// are unavailable.
 #[test]
-fn image_fallback_renders_alt_text_on_test_backend() -> Result<()> {
+fn image_fallback_renders_alt_text_on_test_backend() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(24, 2);
     let mut terminal = Terminal::new(backend)?;
     let view = image("missing.png").alt("Project logo");
@@ -84,7 +84,7 @@ fn image_fallback_renders_alt_text_on_test_backend() -> Result<()> {
 /// - The rendered fallback text matches the runtime deterministic support
 ///   message.
 #[test]
-fn image_fallback_without_alt_uses_support_message() -> Result<()> {
+fn image_fallback_without_alt_uses_support_message() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(40, 2);
     let mut terminal = Terminal::new(backend)?;
     let view = image("missing.png");
@@ -111,7 +111,7 @@ fn image_fallback_without_alt_uses_support_message() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The fallback text resolves styles through `ViewType::Image`.
 #[test]
-fn image_type_styles_apply_to_fallback_text() -> Result<()> {
+fn image_type_styles_apply_to_fallback_text() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
     let view = image("missing.png").alt("Logo");
@@ -147,7 +147,7 @@ fn image_type_styles_apply_to_fallback_text() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The image fallback cell inherits foreground color from the form.
 #[test]
-fn image_fallback_text_inherits_parent_text_style() -> Result<()> {
+fn image_fallback_text_inherits_parent_text_style() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
     let view = form([image("missing.png").alt("Logo")]);
@@ -183,7 +183,7 @@ fn image_fallback_text_inherits_parent_text_style() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - The image height is the stylesheet-declared intrinsic height.
 #[test]
-fn image_stylesheet_size_controls_intrinsic_size() -> Result<()> {
+fn image_stylesheet_size_controls_intrinsic_size() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
     let view = image("missing.png").with_classes("thumbnail");
@@ -218,7 +218,7 @@ fn image_stylesheet_size_controls_intrinsic_size() -> Result<()> {
 /// - The terminal draw call succeeds.
 /// - Fallback text renders only inside the styled image area.
 #[test]
-fn image_stylesheet_size_constrains_fallback_area() -> Result<()> {
+fn image_stylesheet_size_constrains_fallback_area() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
     let view = image("missing.png").alt("ABCDE").with_classes("thumbnail");
@@ -259,7 +259,7 @@ fn image_stylesheet_size_constrains_fallback_area() -> Result<()> {
 /// - Horizontal scrolling advances the image source by one cell.
 /// - The image remains clipped to the four-cell viewport.
 #[test]
-fn image_fallback_clipping_uses_retained_viewport_geometry() -> Result<()> {
+fn image_fallback_clipping_uses_retained_viewport_geometry() -> leptatui::app::Result<()> {
     let child = image("missing.png")
         .alt("ABCDEF")
         .with_inline_style(

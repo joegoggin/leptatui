@@ -1,4 +1,4 @@
-error: unsupported stylesheet pseudo-selector; expected :focus
+error: unsupported stylesheet pseudo-selector; expected :focus, :active, :insert, :visual, or :visited
  --> tests/fixtures/stylesheet_macro/fail/unsupported_pseudo.rs:8:16
   |
 8 |         Button:hover => { bg: Color::Blue }

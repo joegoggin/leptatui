@@ -154,7 +154,11 @@ fn expand_prop_setter(
     let fields = props.iter().enumerate().map(|(field_index, field)| {
         let field_ident = &field.ident;
         if field_index == index {
-            quote! { #field_ident: #setter_value }
+            if prop.into {
+                quote! { #field_ident: #setter_value }
+            } else {
+                quote! { #field_ident }
+            }
         } else {
             quote! { #field_ident: self.#field_ident }
         }

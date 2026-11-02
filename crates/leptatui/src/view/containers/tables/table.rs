@@ -43,6 +43,8 @@ pub fn table(sections: impl IntoViews) -> TableView {
 }
 
 impl View for TableView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_table_view(&self.children, &self.metadata, ctx)
     }

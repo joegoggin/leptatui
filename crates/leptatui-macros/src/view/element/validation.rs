@@ -75,6 +75,10 @@ pub(super) fn is_builtin_element(name: &Ident) -> bool {
             | "H6"
             | "Paragraph"
             | "Link"
+            | "A"
+            | "Routes"
+            | "Route"
+            | "ParentRoute"
             | "Markdown"
             | "CodeBlock"
             | "OrderedList"
@@ -138,8 +142,8 @@ mod attr_validation {
         Language,
         /// Code-block line-number visibility.
         LineNumbers,
-        /// Code-block highlighting theme.
-        SyntaxTheme,
+        /// Declarative Markdown external-editor behavior.
+        Editable,
         /// Button activation callback.
         OnPress,
         /// Form submit callback.

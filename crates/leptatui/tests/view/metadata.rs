@@ -40,6 +40,10 @@ fn editable_builders_return_distinct_concrete_types() {
 /// - The metadata has no classes.
 /// - The metadata has no inline style.
 /// - The metadata is not focused.
+/// - The metadata is not active.
+/// - The metadata is not in insert mode.
+/// - The metadata is not in visual mode.
+/// - The metadata has not been visited.
 #[test]
 fn view_builders_store_default_selector_metadata() {
     let block_view = block(text("child"));
@@ -50,6 +54,10 @@ fn view_builders_store_default_selector_metadata() {
     assert!(metadata.classes().is_empty());
     assert_eq!(metadata.inline_style(), None);
     assert!(!metadata.is_focused());
+    assert!(!metadata.is_active());
+    assert!(!metadata.is_insert());
+    assert!(!metadata.is_visual());
+    assert!(!metadata.is_visited());
 }
 
 /// Verifies view metadata setters store selector fields.
@@ -62,6 +70,10 @@ fn view_builders_store_default_selector_metadata() {
 ///     .with_classes("primary toolbar")
 ///     .with_inline_style(yellow)
 ///     .with_focus(true)
+///     .with_active(true)
+///     .with_insert(true)
+///     .with_visual(true)
+///     .with_visited(true)
 /// ```
 ///
 /// # Assertions
@@ -72,6 +84,10 @@ fn view_builders_store_default_selector_metadata() {
 /// - The metadata classes are `primary` and `toolbar`.
 /// - The metadata inline style is yellow.
 /// - The metadata is focused.
+/// - The metadata is active.
+/// - The metadata is in insert mode.
+/// - The metadata is in visual mode.
+/// - The metadata is visited.
 #[test]
 fn view_metadata_setters_store_selector_fields() {
     let style = TuiStyle::new().foreground(Color::Yellow);
@@ -79,7 +95,11 @@ fn view_metadata_setters_store_selector_fields() {
         .with_id("save")
         .with_classes("primary toolbar")
         .with_inline_style(style.clone())
-        .with_focus(true);
+        .with_focus(true)
+        .with_active(true)
+        .with_insert(true)
+        .with_visual(true)
+        .with_visited(true);
     let metadata = view.style_metadata().expect("button metadata");
 
     assert_eq!(metadata.view_type(), ViewType::Button);
@@ -90,4 +110,62 @@ fn view_metadata_setters_store_selector_fields() {
     );
     assert_eq!(metadata.inline_style(), Some(style));
     assert!(metadata.is_focused());
+    assert!(metadata.is_active());
+    assert!(metadata.is_insert());
+    assert!(metadata.is_visual());
+    assert!(metadata.is_visited());
+}
+
+/// Verifies editable metadata follows retained Vim insert mode.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada"): Normal -> Insert -> Normal
+/// ```
+///
+/// # Assertions
+///
+/// - A new input does not match `:insert`.
+/// - Entering insert mode makes its metadata match `:insert`.
+/// - Returning to normal mode clears the insert state.
+#[test]
+fn editable_metadata_tracks_retained_insert_mode() {
+    let mut view = input("Ada");
+    assert!(!view.metadata().is_insert());
+
+    view.editable_state_mut().set_mode(VimMode::Insert);
+    assert!(view.metadata().is_insert());
+
+    view.editable_state_mut().set_mode(VimMode::Normal);
+    assert!(!view.metadata().is_insert());
+}
+
+/// Verifies editable metadata follows both retained Vim visual modes.
+///
+/// # Example Under Test
+///
+/// ```text
+/// input("Ada"): Normal -> Visual -> VisualLine -> Normal
+/// ```
+///
+/// # Assertions
+///
+/// - A new input does not match `:visual`.
+/// - Character-wise visual mode makes its metadata match `:visual`.
+/// - Visual-line mode continues to match `:visual`.
+/// - Returning to normal mode clears the visual state.
+#[test]
+fn editable_metadata_tracks_retained_visual_modes() {
+    let mut view = input("Ada");
+    assert!(!view.metadata().is_visual());
+
+    view.editable_state_mut().set_mode(VimMode::Visual);
+    assert!(view.metadata().is_visual());
+
+    view.editable_state_mut().set_mode(VimMode::VisualLine);
+    assert!(view.metadata().is_visual());
+
+    view.editable_state_mut().set_mode(VimMode::Normal);
+    assert!(!view.metadata().is_visual());
 }

@@ -14,7 +14,7 @@ mod props;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{ItemFn, Stmt};
+use syn::{Error, ItemFn, Stmt};
 
 use super::signature;
 
@@ -38,6 +38,7 @@ use self::{
 /// Returns [`syn::Error`] if the function signature is unsupported.
 pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
     let props = signature::analyze(&input_fn.sig)?;
+    let fallible_error = signature::fallible_error(&input_fn.sig);
 
     let attrs = input_fn.attrs;
     let vis = input_fn.vis;
@@ -61,7 +62,18 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
     let props_api = expand_props_api(&vis, &ident, &props);
     let constructors = expand_constructors(&vis, &ident, &props);
-    let setup_fn = expand_setup_fn(&ident, &props, quote! { #body }, &leptatui);
+    let setup_body = if fallible_error.is_some() {
+        expand_fallible_body(&mut body.stmts, &leptatui)?
+    } else {
+        quote! { #body }
+    };
+    let setup_fn = expand_setup_fn(
+        &ident,
+        &props,
+        setup_body,
+        fallible_error.as_ref(),
+        &leptatui,
+    );
     let default_impl = expand_default_impl(&ident, &props);
 
     Ok(quote! {
@@ -87,15 +99,17 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 let __leptatui_stylesheets =
                     #leptatui::__private::StylesheetRegistry::new();
                 let __leptatui_view = __leptatui_owner.with(|| {
-                    #leptatui::__private::__with_key_handler_registry(
-                        &__leptatui_key_handlers,
-                        || {
-                            #leptatui::__private::__with_stylesheet_registry(
-                                &__leptatui_stylesheets,
-                                __leptatui_setup,
-                            )
-                        },
-                    )
+                    #leptatui::__private::__with_component_setup_context(|| {
+                        #leptatui::__private::__with_key_handler_registry(
+                            &__leptatui_key_handlers,
+                            || {
+                                #leptatui::__private::__with_stylesheet_registry(
+                                    &__leptatui_stylesheets,
+                                    __leptatui_setup,
+                                )
+                            },
+                        )
+                    })
                 });
                 let __leptatui_stylesheet = __leptatui_stylesheets.stylesheet();
 
@@ -118,6 +132,15 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         #default_impl
 
         impl #leptatui::View for #ident {
+            #[doc = "Handles a component app event with retained-layout reporting."]
+            #[doc(hidden)]
+            fn __handle_event_with_layout(
+                &mut self,
+                event: #leptatui::__private::Event,
+            ) -> #leptatui::Result<(#leptatui::AppControl, bool)> {
+                #leptatui::__private::__handle_builtin_event_with_layout(self, event)
+            }
+
             #[doc = "Renders the component into the provided Leptatui context."]
             fn render(
                 &self,
@@ -130,7 +153,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
                 ctx.__with_stylesheet(__leptatui_stylesheet, |ctx| {
                     __leptatui_owner.with(|| {
                         #leptatui::__private::__with_context_scope_if_missing(|| {
-                            ctx.render_view(__leptatui_view)
+                            __leptatui_view.render(ctx)
                         })
                     })
                 })
@@ -243,6 +266,22 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             #[doc(hidden)]
             fn __is_layout_transparent(&self) -> bool {
                 true
+            }
+
+            #[doc(hidden)]
+            fn reconcile(&mut self, previous: &dyn #leptatui::View) {
+                let ::core::option::Option::Some(previous) =
+                    previous.as_any().downcast_ref::<Self>()
+                else {
+                    return;
+                };
+                let __leptatui_owner = &self.__leptatui_owner;
+                let __leptatui_view = &mut self.__leptatui_view;
+                let __leptatui_previous_view = &previous.__leptatui_view;
+
+                __leptatui_owner.with(|| {
+                    __leptatui_view.reconcile_from(__leptatui_previous_view);
+                });
             }
 
             #[doc(hidden)]
@@ -503,4 +542,49 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
             }
         }
     })
+}
+
+/// Wraps a fallible component's final view expression in `Result::Ok`.
+///
+/// # Arguments
+///
+/// * `statements` — Parsed statements from the original component body.
+/// * `leptatui` — Resolved path to the public runtime crate.
+///
+/// # Returns
+///
+/// A [`TokenStream`] containing the transformed fallible setup body.
+///
+/// # Errors
+///
+/// Returns [`syn::Error`] if the component has no final bare expression.
+fn expand_fallible_body(
+    statements: &mut Vec<Stmt>,
+    leptatui: &TokenStream,
+) -> syn::Result<TokenStream> {
+    let Some(tail) = statements.pop() else {
+        return Err(Error::new(
+            proc_macro2::Span::call_site(),
+            "fallible #[component] functions must end with a view expression",
+        ));
+    };
+
+    let view = match tail {
+        Stmt::Expr(expression, None) => quote! { #expression },
+        Stmt::Macro(statement) if statement.semi_token.is_none() => {
+            let invocation = statement.mac;
+            quote! { #invocation }
+        }
+        statement => {
+            return Err(Error::new_spanned(
+                statement,
+                "fallible #[component] functions must end with a bare view expression",
+            ));
+        }
+    };
+
+    Ok(quote! {{
+        #(#statements)*
+        ::core::result::Result::Ok(#leptatui::IntoView::into_view(#view))
+    }})
 }
