@@ -6,6 +6,7 @@
 //! # Modules
 //!
 //! - [`attr`] — Element attribute parsing and value classification.
+//! - [`captures`] — Owned captures for generated tracking closures.
 //! - [`child`] — Nested element and text-like child parsing.
 //! - [`element`] — Built-in and component element validation and expansion.
 //! - [`root`] — Single-root view invocation parsing and expansion.
@@ -13,6 +14,7 @@
 //! - [`text_content`] — Literal and expression text-content parsing.
 
 mod attr;
+mod captures;
 mod child;
 mod element;
 mod root;

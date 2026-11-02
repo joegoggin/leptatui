@@ -16,7 +16,7 @@ use leptatui::prelude::*;
 ///
 /// * `document` — Semantic Markdown view loaded before terminal startup.
 #[component]
-fn MarkdownReader(document: AnyView) -> impl IntoView {
+fn MarkdownReader(#[prop(static)] document: AnyView) -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') {
             return KeyControl::Exit;
@@ -103,7 +103,7 @@ fn markdown_path(args: impl IntoIterator<Item = OsString>) -> io::Result<PathBuf
 async fn main() -> std::result::Result<(), Box<dyn Error>> {
     let path = markdown_path(env::args_os())?;
     let document = view! { <Markdown src=path line_numbers=true /> };
-    let view = view! { <MarkdownReader document=document /> };
+    let view = view! { <MarkdownReader document={document.into_view()} /> };
 
     App::new(view).run().await?;
     Ok(())

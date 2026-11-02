@@ -19,14 +19,21 @@ mod view;
 
 use proc_macro::TokenStream;
 
-/// Converts a zero-argument function returning a view-compatible value into a
-/// Leptatui component type.
+/// Converts a view-producing function into a retained Leptatui component type.
+///
+/// Data parameters use `Prop<T>` so view expressions track changing inputs
+/// without rerunning component setup. `#[prop(callback)]` retains event handlers;
+/// `#[prop(static)]` retains intentional setup-only inputs. Structural children
+/// are retained lazily in their consuming context.
 #[proc_macro_attribute]
 pub fn component(args: TokenStream, input: TokenStream) -> TokenStream {
     component::expand(args, input)
 }
 
-/// Converts declarative terminal element syntax into Leptatui view builders.
+/// Converts declarative terminal syntax into automatically tracked view bindings.
+///
+/// Data expressions track the signals they read; event callbacks are retained
+/// and execute only for events. Updates preserve compatible control state.
 #[proc_macro]
 pub fn view(input: TokenStream) -> TokenStream {
     view::expand(input)

@@ -1,0 +1,5 @@
+error: component data props must use Prop<T>; use #[prop(callback)] for event callbacks or #[prop(static)] for setup-only inputs
+ --> tests/fixtures/component_macro/fail/plain_data_prop.rs:7:20
+  |
+7 | fn Snapshot(label: String) -> impl IntoView {
+  |                    ^^^^^^

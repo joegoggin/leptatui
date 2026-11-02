@@ -82,6 +82,10 @@ fn focused_control_span_for_list_item(
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Option<VerticalSpan> {
+    if let Some(boundary) = item.downcast_ref::<crate::DynamicView>() {
+        return boundary
+            .with_view(|item| focused_control_span_for_list_item(item, marker_width, ctx));
+    }
     if let Some(item) = item.downcast_ref::<ListItemView>() {
         let style = resolve_style(&item.metadata, ctx);
         let area = ctx.area();

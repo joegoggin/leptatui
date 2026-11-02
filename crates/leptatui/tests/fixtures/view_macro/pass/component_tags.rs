@@ -7,19 +7,19 @@ use leptatui::prelude::*;
 
 /// Builds a text view from a prop.
 #[component]
-fn Label(#[prop(into)] text: String) -> impl IntoView {
+fn Label(#[prop(into)] text: leptatui::Prop<String>) -> impl IntoView {
     view! { <Text>{text}</Text> }
 }
 
 /// Builds a button from an unbraced callback prop.
 #[component]
-fn ActionLabel(on_press: fn() -> AppControl) -> impl IntoView {
+fn ActionLabel(#[prop(callback)] on_press: fn() -> AppControl) -> impl IntoView {
     view! { <Button on_press={on_press}>"Run"</Button> }
 }
 
 /// Builds a panel around nested children.
 #[component]
-fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
+fn Panel(#[prop(into)] title: leptatui::Prop<String>, children: Children) -> impl IntoView {
     view! {
         <Div>
             <Text>{title}</Text>

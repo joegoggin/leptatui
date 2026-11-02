@@ -8,7 +8,7 @@ use leptatui::prelude::*;
 
 /// Repeated labeled row for one cascade case.
 #[component]
-fn CaseRow(#[prop(into)] title: String, children: Children) -> impl IntoView {
+fn CaseRow(#[prop(into)] title: leptatui::Prop<String>, children: Children) -> impl IntoView {
     view! {
         <Div class="case-row">
             <Text class="case-label">{title}</Text>
@@ -37,7 +37,10 @@ fn ChildLowerSpecificity() -> impl IntoView {
 
 /// Button component used to show focus selectors across component boundaries.
 #[component]
-fn ActionButton(#[prop(into)] label: String, on_press: fn() -> AppControl) -> impl IntoView {
+fn ActionButton(
+    #[prop(into)] label: leptatui::Prop<String>,
+    #[prop(callback)] on_press: fn() -> AppControl,
+) -> impl IntoView {
     view! {
         <Button class="focus-button" on_press=on_press>
             {label}

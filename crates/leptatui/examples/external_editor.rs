@@ -88,17 +88,17 @@ fn ExternalEditor() -> impl IntoView {
                 <Text class="editor-title">"External editor hook"</Text>
                 <Text>{target}</Text>
                 {move || match status_editor.status() {
-                    None => view! { <Text class="editor-status">"Operation: idle"</Text> },
+                    None => view! { <Text class="editor-status">"Operation: idle"</Text> }.into_view(),
                     Some(EditorStatus::Pending) => {
-                        view! { <Text class="editor-status">"Operation: editor open"</Text> }
+                        view! { <Text class="editor-status">"Operation: editor open"</Text> }.into_view()
                     }
                     Some(EditorStatus::Complete) => {
-                        view! { <Text class="editor-status">"Operation: completed"</Text> }
+                        view! { <Text class="editor-status">"Operation: completed"</Text> }.into_view()
                     }
                     Some(EditorStatus::Error(error)) => {
                         view! {
                             <Text class="editor-error">{format!("Operation failed: {error}")}</Text>
-                        }
+                        }.into_view()
                     }
                 }}
                 <Text class="editor-help">

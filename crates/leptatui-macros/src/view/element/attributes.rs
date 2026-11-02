@@ -206,6 +206,52 @@ impl Element {
         view: TokenStream,
         attrs: &[ValidatedAttr<'_>],
     ) -> Result<TokenStream> {
+        self.expand_attrs_with_tracking(view, attrs, true)
+    }
+
+    /// Expands concrete semantic attributes inside an already tracked parent.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` — Concrete semantic node.
+    /// * `attrs` — Validated attributes applied directly to that node.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] of fluent setters without nested binding boundaries.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] for invalid or duplicate attributes.
+    pub(super) fn expand_static_attrs(
+        &self,
+        view: TokenStream,
+        attrs: &[ValidatedAttr<'_>],
+    ) -> Result<TokenStream> {
+        self.expand_attrs_with_tracking(view, attrs, false)
+    }
+
+    /// Applies fluent setters using either local bindings or parent tracking.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` — Expanded node constructor.
+    /// * `attrs` — Validated attributes.
+    /// * `track` — Whether expressions need their own binding boundary.
+    ///
+    /// # Returns
+    ///
+    /// A [`TokenStream`] containing the configured node.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`syn::Error`] for malformed attributes.
+    fn expand_attrs_with_tracking(
+        &self,
+        view: TokenStream,
+        attrs: &[ValidatedAttr<'_>],
+        track: bool,
+    ) -> Result<TokenStream> {
         for (index, current) in attrs.iter().enumerate() {
             if let Some(duplicate) = attrs[index + 1..]
                 .iter()
@@ -222,12 +268,40 @@ impl Element {
         }
 
         let mut expanded = view;
+        let mut binding = quote! { __leptatui_view };
+        let mut has_binding = false;
+        let mut captured_expressions = Vec::new();
 
         for ValidatedAttr { attr, kind } in attrs {
-            let value = attr.value.to_tokens();
-            expanded = match kind {
-                AttrKind::Class => quote! { (#expanded).with_classes(#value) },
-                AttrKind::Id => quote! { (#expanded).with_id(#value) },
+            let reactive = track
+                && !attr.value.is_literal()
+                && !matches!(
+                    kind,
+                    AttrKind::OnPress
+                        | AttrKind::OnSubmit
+                        | AttrKind::OnCancel
+                        | AttrKind::OnInput
+                        | AttrKind::Href
+                        | AttrKind::MarkdownSrc
+                        | AttrKind::Editable
+                )
+                && !(self.name == "Markdown" && *kind == AttrKind::LineNumbers);
+            if reactive {
+                captured_expressions.push(syn::parse2::<syn::Expr>(attr.value.to_tokens())?);
+            }
+            let value = if reactive || !track {
+                attr.value.repeat_tokens()
+            } else {
+                attr.value.to_tokens()
+            };
+            let target = if reactive {
+                binding.clone()
+            } else {
+                expanded.clone()
+            };
+            let next = match kind {
+                AttrKind::Class => quote! { (#target).with_classes(#value) },
+                AttrKind::Id => quote! { (#target).with_id(#value) },
                 AttrKind::Style => {
                     if attr.value.is_literal() {
                         return Err(Error::new_spanned(
@@ -236,54 +310,69 @@ impl Element {
                         ));
                     }
 
-                    quote! { (#expanded).with_inline_style(#value) }
+                    quote! { (#target).with_inline_style(#value) }
                 }
                 AttrKind::OnPress => {
                     reject_literal_callback(attr, "on_press")?;
-                    quote! { (#expanded).on_press(#value) }
+                    quote! { (#target).on_press(#value) }
                 }
                 AttrKind::OnSubmit => {
                     reject_literal_callback(attr, "on_submit")?;
-                    quote! { (#expanded).on_submit(#value) }
+                    quote! { (#target).on_submit(#value) }
                 }
                 AttrKind::OnCancel => {
                     reject_literal_callback(attr, "on_cancel")?;
-                    quote! { (#expanded).on_cancel(#value) }
+                    quote! { (#target).on_cancel(#value) }
                 }
-                AttrKind::InputValue => expanded,
-                AttrKind::ImageSource => expanded,
-                AttrKind::ProgressValue => expanded,
-                AttrKind::MarkdownSrc => expanded,
-                AttrKind::Href => expanded,
-                AttrKind::Placeholder => quote! { (#expanded).placeholder(#value) },
-                AttrKind::Alt => quote! { (#expanded).alt(#value) },
-                AttrKind::Label => quote! { (#expanded).label(#value) },
+                AttrKind::InputValue if reactive => {
+                    quote! { (#target).__value(#value, __leptatui_initial) }
+                }
+                AttrKind::InputValue => target,
+                AttrKind::ImageSource if reactive => {
+                    quote! { (#target).__value(#value, __leptatui_initial) }
+                }
+                AttrKind::ImageSource => target,
+                AttrKind::ProgressValue if reactive => {
+                    quote! { (#target).__value(#value, __leptatui_initial) }
+                }
+                AttrKind::ProgressValue => target,
+                AttrKind::MarkdownSrc => target,
+                AttrKind::Href => target,
+                AttrKind::Placeholder => quote! { (#target).placeholder(#value) },
+                AttrKind::Alt => quote! { (#target).alt(#value) },
+                AttrKind::Label => quote! { (#target).label(#value) },
                 AttrKind::Start => {
                     reject_literal_typed_attr(attr, "start", "usize")?;
-                    quote! { (#expanded).start(#value) }
+                    quote! { (#target).start(#value) }
                 }
                 AttrKind::Alignment => {
                     reject_literal_typed_attr(attr, "alignment", "CellAlignment")?;
-                    quote! { (#expanded).alignment(#value) }
+                    quote! { (#target).alignment(#value) }
                 }
-                AttrKind::Language => quote! { (#expanded).language(#value) },
+                AttrKind::Language => quote! { (#target).language(#value) },
                 AttrKind::LineNumbers if self.name == "Markdown" => {
                     reject_literal_typed_attr(attr, "line_numbers", "bool")?;
-                    expanded
+                    target
                 }
                 AttrKind::LineNumbers => {
                     reject_literal_typed_attr(attr, "line_numbers", "bool")?;
-                    quote! { (#expanded).line_numbers(#value) }
+                    quote! { (#target).line_numbers(#value) }
                 }
                 AttrKind::Editable => {
                     reject_literal_typed_attr(attr, "editable", "bool")?;
-                    expanded
+                    target
                 }
                 AttrKind::OnInput => {
                     reject_literal_callback(attr, "on_input")?;
-                    quote! { (#expanded).on_input(#value) }
+                    quote! { (#target).on_input(#value) }
                 }
             };
+            if reactive {
+                binding = next;
+                has_binding = true;
+            } else {
+                expanded = next;
+            }
 
             if !matches!(
                 *kind,
@@ -311,6 +400,16 @@ impl Element {
             }
         }
 
-        Ok(expanded)
+        if has_binding {
+            let leptatui = crate::crate_path::leptatui();
+            let captures = crate::view::captures::capture_values(&captured_expressions);
+            Ok(quote! {{
+                let __leptatui_node = #expanded;
+                #captures
+                #leptatui::__private::__bind(__leptatui_node, move |__leptatui_view, __leptatui_initial| #binding)
+            }})
+        } else {
+            Ok(expanded)
+        }
     }
 }

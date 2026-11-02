@@ -735,7 +735,7 @@ impl ActiveTask {
 /// A Leptatui view containing the guided operation list, or an initialization
 /// error.
 #[component]
-fn FileSystemShowcase(root: PathBuf) -> ViewResult<impl IntoView> {
+fn FileSystemShowcase(#[prop(static)] root: PathBuf) -> ViewResult<impl IntoView> {
     let filesystem =
         use_file_system_with_options(root, FileSystemOptions::new().create_root(true))?;
     let state = ArcRwSignal::new(WalkthroughState::new(TourKind::Success));

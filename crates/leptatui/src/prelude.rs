@@ -29,6 +29,7 @@
 //! infallible in-memory or explicit path-based Markdown readers. Low-level
 //! render metadata and generated-code hooks stay outside the default import.
 
+pub use crate::Prop;
 pub use crate::{
     Action, AlignContent, AlignItems, AlignSelf, AnyView, App, AppControl, AppHandle, AppRoot,
     AvailableSpace, Axes, BlockView, BorderType, Borders, BoxSizing, ButtonView, CellAlignment,

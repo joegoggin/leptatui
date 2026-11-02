@@ -182,3 +182,21 @@ impl View for ImageView {
 }
 
 impl_styled_view!(ImageView);
+
+impl ImageView {
+    /// Updates the caller-owned property without replacing retained view state.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Latest property value.
+    /// * `_initial` — Whether this is the first supplied property value.
+    ///
+    /// # Returns
+    ///
+    /// This view with the updated property.
+    #[doc(hidden)]
+    pub fn __value(mut self, value: impl Into<ImageSource>, _initial: bool) -> Self {
+        self.source = value.into();
+        self
+    }
+}

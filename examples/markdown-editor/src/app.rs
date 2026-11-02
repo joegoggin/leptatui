@@ -17,7 +17,7 @@ use crate::{
 ///
 /// A routed Markdown editor application.
 #[component]
-pub(crate) fn AppRouter(#[prop(into)] initial_path: String) -> impl IntoView {
+pub(crate) fn AppRouter(#[prop(into)] initial_path: leptatui::Prop<String>) -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') && key.modifiers == KeyModifiers::NONE {
             return KeyControl::Exit;
@@ -27,7 +27,7 @@ pub(crate) fn AppRouter(#[prop(into)] initial_path: String) -> impl IntoView {
     });
 
     view! {
-        <Router initial_path=initial_path>
+        <Router initial_path={initial_path.get()}>
             <RootLayout>
                 <Routes fallback=NotFoundPage>
                     <Route path="/" view=HomePage />

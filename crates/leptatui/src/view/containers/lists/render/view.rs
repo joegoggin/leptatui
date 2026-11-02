@@ -108,6 +108,9 @@ fn render_marked_list_item(
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
+    if let Some(boundary) = item.downcast_ref::<crate::DynamicView>() {
+        return boundary.with_view(|item| render_marked_list_item(item, marker, marker_width, ctx));
+    }
     if let Some(item) = item.downcast_ref::<ListItemView>() {
         let style = resolve_style(&item.metadata, ctx);
         ctx.render_widget(Block::new().style(style.to_ratatui_style()));

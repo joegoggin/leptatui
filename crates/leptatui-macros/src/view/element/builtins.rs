@@ -104,18 +104,16 @@ impl Element {
             options = quote! { (#options).line_numbers(#value) };
         }
 
-        self.expand_attrs(
-            quote! {
-                #leptatui::__private::__markdown_element(
+        let loader = quote! {
+            #leptatui::dynamic(move || #leptatui::__private::__markdown_element(
                     #source,
                     #options,
                     #editable,
                     ::core::file!(),
                     ::core::line!(),
-                )
-            },
-            &attrs,
-        )
+                ))
+        };
+        self.expand_attrs(loader, &attrs)
     }
 
     /// Expands a rich-text link with one required `href` attribute.
@@ -236,7 +234,15 @@ impl Element {
             }
         };
 
-        let value = required_attr.attr.value.to_tokens();
+        let value = if !required_attr.attr.value.is_literal() {
+            match required_kind {
+                AttrKind::InputValue | AttrKind::ImageSource => quote! { "" },
+                AttrKind::ProgressValue => quote! { 0.0 },
+                _ => required_attr.attr.value.repeat_tokens(),
+            }
+        } else {
+            required_attr.attr.value.to_tokens()
+        };
         Ok((attrs, value))
     }
 }

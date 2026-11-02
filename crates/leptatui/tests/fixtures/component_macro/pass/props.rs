@@ -7,23 +7,23 @@ use leptatui::prelude::*;
 
 /// Builds a text view from a required prop.
 #[component]
-fn RequiredLabel(#[prop(into)] label: String) -> impl IntoView {
-    text(label)
+fn RequiredLabel(#[prop(into)] label: leptatui::Prop<String>) -> impl IntoView {
+    view! { <Text>{label.get()}</Text> }
 }
 
 /// Builds a text view from optional and defaulted props.
 #[component]
 fn DefaultedLabel(
-    #[prop(optional, into)] prefix: String,
-    #[prop(default = "fallback".to_string(), into)] label: String,
+    #[prop(optional, into)] prefix: leptatui::Prop<String>,
+    #[prop(default = "fallback".to_string(), into)] label: leptatui::Prop<String>,
 ) -> impl IntoView {
-    text(format!("{prefix}{label}"))
+    view! { <Text>{format!("{}{}", prefix.get(), label.get())}</Text> }
 }
 
 /// Builds a column from nested children.
 #[component]
-fn ChildPanel(#[prop(into)] title: String, children: Children) -> impl IntoView {
-    div((text(title), div(children())))
+fn ChildPanel(#[prop(into)] title: leptatui::Prop<String>, children: Children) -> impl IntoView {
+    view! { <Div><Text>{title.get()}</Text>{children()}</Div> }
 }
 
 /// Exercises generated prop builders and constructors.

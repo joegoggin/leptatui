@@ -234,7 +234,38 @@ pub fn __markdown_element(
     source_file: &'static str,
     source_line: u32,
 ) -> AnyView {
-    let path = match absolute_markdown_path(path.as_ref()) {
+    crate::component(MarkdownElement::with_props(MarkdownElementProps {
+        path: path.as_ref().to_path_buf(),
+        options,
+        editable,
+        source_file,
+        source_line,
+    }))
+}
+
+/// Owns resources and editor subscriptions for one declarative Markdown source.
+///
+/// # Arguments
+///
+/// * `path` — Source file for this mounted instance.
+/// * `options` — Rendering options for this instance.
+/// * `editable` — Whether external editing shortcuts are enabled.
+/// * `source_file` — Calling Rust source file for errors.
+/// * `source_line` — Calling Rust source line for errors.
+///
+/// # Returns
+///
+/// An owned asynchronous Markdown view.
+#[crate::component]
+#[allow(non_snake_case)]
+fn MarkdownElement(
+    #[prop(static)] path: PathBuf,
+    #[prop(static)] options: MarkdownOptions,
+    #[prop(static)] editable: bool,
+    #[prop(static)] source_file: &'static str,
+    #[prop(static)] source_line: u32,
+) -> impl IntoView {
+    let path = match absolute_markdown_path(&path) {
         Ok(path) => path,
         Err(error) => {
             return markdown_element_error(error.to_string(), source_file, source_line);

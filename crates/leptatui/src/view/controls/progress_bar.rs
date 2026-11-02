@@ -131,3 +131,21 @@ impl View for ProgressBarView {
 }
 
 impl_styled_view!(ProgressBarView);
+
+impl ProgressBarView {
+    /// Updates the caller-owned property without replacing retained view state.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Latest property value.
+    /// * `_initial` — Whether this is the first supplied property value.
+    ///
+    /// # Returns
+    ///
+    /// This view with the updated property.
+    #[doc(hidden)]
+    pub fn __value(mut self, value: f64, _initial: bool) -> Self {
+        self.value = clamped_progress_value(value);
+        self
+    }
+}

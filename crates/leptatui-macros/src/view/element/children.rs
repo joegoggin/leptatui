@@ -235,7 +235,20 @@ impl Element {
             {
                 Ok(Some(quote! { #leptatui::dynamic(#expr) }))
             }
-            Child::Text(TextContent::Expr(expr)) => Ok(Some(quote! { #expr })),
+            Child::Text(TextContent::Expr(expr)) if matches!(expr.as_ref(), syn::Expr::Path(_)) => {
+                Ok(Some(quote! { #expr }))
+            }
+            Child::Text(TextContent::Expr(expr)) => {
+                let value = if matches!(expr.as_ref(), syn::Expr::Path(_)) {
+                    quote! { (#expr).clone() }
+                } else {
+                    quote! { #expr }
+                };
+                let captures = crate::view::captures::capture_values([expr.as_ref()]);
+                Ok(Some(
+                    quote! {{ #captures #leptatui::dynamic(move || #leptatui::__private::__fragment(#value)) }},
+                ))
+            }
             Child::Text(TextContent::Literal(_)) => Ok(None),
         }
     }
@@ -277,30 +290,46 @@ impl Element {
         };
 
         let leptatui = crate::crate_path::leptatui();
-        let expanded = match content {
-            TextContent::Literal(value) => return Ok(wrap(quote! { #value })),
-            TextContent::Expr(expr) => match kind {
-                ReactiveTextKind::String => {
-                    let view = wrap(quote! { __leptatui_content });
-                    quote! {
-                        #leptatui::__private::__into_string_view(
-                            #expr,
-                            move |__leptatui_content| #view,
-                        )
+        let mut expressions = self
+            .attrs
+            .iter()
+            .filter(|attr| matches!(attr.name.to_string().as_str(), "href" | "exact"))
+            .map(|attr| syn::parse2::<syn::Expr>(attr.value.to_tokens()))
+            .collect::<Result<Vec<_>>>()?;
+        let mut setup = TokenStream::new();
+        let (content, tracked) = match content {
+            TextContent::Literal(value) => {
+                (quote! { #value }, matches!(element_name, "Link" | "A"))
+            }
+            TextContent::Expr(expr) => {
+                let input = if matches!(expr.as_ref(), syn::Expr::Closure(_)) {
+                    setup = quote! { let __leptatui_source = #expr; };
+                    quote! { &__leptatui_source }
+                } else {
+                    expressions.push(*expr.clone());
+                    if matches!(expr.as_ref(), syn::Expr::Path(_)) {
+                        quote! { (#expr).clone() }
+                    } else {
+                        quote! { #expr }
                     }
-                }
-                ReactiveTextKind::RichText => {
-                    let view = wrap(quote! { __leptatui_content });
-                    quote! {
-                        #leptatui::__private::__into_rich_text_view(
-                            #expr,
-                            move |__leptatui_content| #view,
-                        )
+                };
+                let content = match kind {
+                    ReactiveTextKind::String => {
+                        quote! { #leptatui::__private::__read_string(#input) }
                     }
-                }
-            },
+                    ReactiveTextKind::RichText => {
+                        quote! { #leptatui::__private::__read_rich_text(#input) }
+                    }
+                };
+                (content, true)
+            }
         };
-
-        Ok(expanded)
+        let view = wrap(content);
+        if tracked {
+            let captures = crate::view::captures::capture_values(&expressions);
+            Ok(quote! {{ #captures #setup #leptatui::dynamic(move || #view) }})
+        } else {
+            Ok(view)
+        }
     }
 }

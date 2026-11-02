@@ -40,7 +40,15 @@ pub(super) fn expand_props_api(vis: &Visibility, component: &Ident, props: &[Pro
     let initial_values = props.iter().map(|prop| {
         let ident = &prop.ident;
         let value = match &prop.default {
-            Some(default) => default.initial_value(prop.ty.as_ref()),
+            Some(default) => {
+                if let Some(ty) = &prop.reactive_ty {
+                    let value = default.initial_value(ty);
+                    let leptatui = crate::crate_path::leptatui();
+                    quote! { #leptatui::Prop::new(#value) }
+                } else {
+                    default.initial_value(prop.ty.as_ref())
+                }
+            }
             None => quote! { #missing_ident },
         };
 
@@ -115,15 +123,51 @@ fn expand_prop_setter(
         .collect::<Vec<_>>();
     let ident = &prop.ident;
     let ty = &prop.ty;
+    let leptatui = crate::crate_path::leptatui();
+    let value_ty = prop.reactive_ty.as_ref().unwrap_or(ty);
     let setter_ty = if prop.into {
-        quote! { impl ::core::convert::Into<#ty> }
+        quote! { impl ::core::convert::Into<#value_ty> }
     } else {
-        quote! { #ty }
+        quote! { #value_ty }
     };
     let setter_value = if prop.into {
         quote! { ::core::convert::Into::into(#ident) }
     } else {
         quote! { #ident }
+    };
+    let setter_value = if prop.reactive_ty.is_some() {
+        quote! { #leptatui::Prop::new(#setter_value) }
+    } else {
+        setter_value
+    };
+    let deferred_ident = format_ident!("__view_{}", ident);
+    // `impl Trait` cannot occur in the output of a nested Fn bound. Into setters
+    // use a named source-output type in the generated deferred method instead.
+    let deferred_generics = if prop.into {
+        quote! { <__LeptatuiValue: Into<#value_ty> + 'static> }
+    } else {
+        TokenStream::new()
+    };
+    let output_ty = if prop.into {
+        quote! { __LeptatuiValue }
+    } else {
+        quote! { #value_ty }
+    };
+    let deferred_ty = if prop.reactive_ty.is_some() {
+        quote! { impl FnOnce(&mut dyn FnMut(#output_ty)) + Clone + 'static }
+    } else {
+        quote! { impl FnOnce(&mut dyn FnMut(#output_ty)) }
+    };
+    let deferred_value = if prop.reactive_ty.is_some() {
+        if prop.into {
+            quote! { #leptatui::Prop::__derived(move || #leptatui::__private::__read_expression(source.clone()).into()) }
+        } else {
+            quote! { #leptatui::Prop::__derived(move || #leptatui::__private::__read_expression(source.clone())) }
+        }
+    } else if prop.into {
+        quote! { #leptatui::__private::__read_expression(source).into() }
+    } else {
+        quote! { #leptatui::__private::__read_expression(source) }
     };
     let impl_generics = state_idents
         .iter()
@@ -144,6 +188,7 @@ fn expand_prop_setter(
             quote! { #state }
         }
     });
+    let impl_args = impl_args.collect::<Vec<_>>();
     let return_args = state_idents.iter().enumerate().map(|(arg_index, state)| {
         if arg_index == index {
             quote! { #ty }
@@ -151,19 +196,25 @@ fn expand_prop_setter(
             quote! { #state }
         }
     });
+    let return_args = return_args.collect::<Vec<_>>();
     let fields = props.iter().enumerate().map(|(field_index, field)| {
         let field_ident = &field.ident;
         if field_index == index {
-            if prop.into {
-                quote! { #field_ident: #setter_value }
-            } else {
-                quote! { #field_ident }
-            }
+            quote! { #field_ident: #setter_value }
         } else {
             quote! { #field_ident: self.#field_ident }
         }
     });
 
+    let fields = fields.collect::<Vec<_>>();
+    let deferred_fields = props.iter().enumerate().map(|(field_index, field)| {
+        let field_ident = &field.ident;
+        if field_index == index {
+            quote! { #field_ident: #deferred_value }
+        } else {
+            quote! { #field_ident: self.#field_ident }
+        }
+    });
     quote! {
         impl #impl_generics #builder_ident<#(#impl_args),*> {
             #[doc = "Sets a component prop value."]
@@ -171,6 +222,10 @@ fn expand_prop_setter(
                 #builder_ident {
                     #(#fields,)*
                 }
+            }
+            #[doc(hidden)]
+            #vis fn #deferred_ident #deferred_generics(self, source: #deferred_ty) -> #builder_ident<#(#return_args),*> {
+                #builder_ident { #(#deferred_fields,)* }
             }
         }
     }

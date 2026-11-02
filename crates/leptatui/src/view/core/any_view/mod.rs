@@ -33,6 +33,35 @@ pub struct AnyView {
 }
 
 impl AnyView {
+    /// Reads through structural dynamic boundaries for semantic inspection.
+    ///
+    /// # Arguments
+    ///
+    /// * `read` — Callback inspecting the materialized node.
+    ///
+    /// # Returns
+    ///
+    /// An `R` returned without borrowing across a boundary.
+    pub(crate) fn with_resolved<R>(&self, read: impl FnOnce(&AnyView) -> R) -> R {
+        if let Some(boundary) = self.downcast_ref::<DynamicView>() {
+            boundary.with_view(|child| child.with_resolved(read))
+        } else {
+            read(self)
+        }
+    }
+
+    /// Returns the concrete node owned by an internal typed binding.
+    ///
+    /// # Returns
+    ///
+    /// A `V` previously erased by this boundary.
+    pub(crate) fn into_typed<V: View>(self) -> V {
+        let value: Box<dyn std::any::Any> = self.inner;
+        *value
+            .downcast::<V>()
+            .unwrap_or_else(|_| panic!("binding node type changed"))
+    }
+
     /// Returns whether the latest layout pass excluded this subtree.
     ///
     /// # Returns

@@ -102,6 +102,21 @@ pub(super) fn expand_setup_fn(
 
     let props_ident = props_ident(component);
     let field_names = props.iter().map(|prop| &prop.ident);
+    let retained_children = props.iter().filter_map(|prop| {
+        let syn::Type::Path(path) = prop.ty.as_ref() else {
+            return None;
+        };
+        if !path
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| segment.ident == "Children")
+        {
+            return None;
+        }
+        let ident = &prop.ident;
+        Some(quote! { let #ident = #leptatui::__private::__retain_children(#ident); })
+    });
 
     quote! {
         #[doc(hidden)]
@@ -109,7 +124,7 @@ pub(super) fn expand_setup_fn(
             let #props_ident {
                 #(#field_names,)*
             } = __leptatui_props;
-
+            #(#retained_children)*
             #setup_body
         }
     }

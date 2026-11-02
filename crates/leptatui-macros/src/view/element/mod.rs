@@ -9,6 +9,7 @@
 //! - [`builtins`] — Built-in terminal element expansion.
 //! - [`children`] — Element and component child expansion.
 //! - [`custom_component`] — Application component tag expansion.
+//! - [`table`] — Parent tracking for concrete semantic table trees.
 //! - [`validation`] — Built-in element and component-name validation.
 
 mod attributes;
@@ -16,6 +17,7 @@ mod builtins;
 mod children;
 mod custom_component;
 mod router;
+mod table;
 mod validation;
 
 use proc_macro2::TokenStream;
@@ -139,6 +141,10 @@ impl Element {
     /// name are unsupported.
     fn expand_with_parent(&self, parent: Option<&str>) -> Result<TokenStream> {
         self.validate_ancestry(parent)?;
+
+        if self.name == "Table" {
+            return self.expand_reactive_table();
+        }
 
         if self.name == "Input" {
             return self.expand_editable_text_control("Input", |value| {

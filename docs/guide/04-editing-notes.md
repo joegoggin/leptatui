@@ -19,35 +19,33 @@ Replace the view expression with:
 view! {
     <Div>
         <Text>"My notes"</Text>
-        {move || view! {
-            <Form
-                on_submit=move || {
-                    status.set(String::from("Submitted in memory"));
+        <Form
+            on_submit=move || {
+                status.set(String::from("Submitted in memory"));
+                AppControl::Continue
+            }
+            on_cancel=move || {
+                status.set(String::from("Canceled; draft kept"));
+                AppControl::Continue
+            }
+        >
+            <Text>"Title"</Text>
+            <Input value={title.get()} placeholder="Title"
+                on_input=move |next| {
+                    title.set(next);
+                    status.set(String::from("Editing"));
                     AppControl::Continue
                 }
-                on_cancel=move || {
-                    status.set(String::from("Canceled; draft kept"));
+            />
+            <Text>"Body"</Text>
+            <TextArea value={body.get()} placeholder="Write a note"
+                on_input=move |next| {
+                    body.set(next);
+                    status.set(String::from("Editing"));
                     AppControl::Continue
                 }
-            >
-                <Text>"Title"</Text>
-                <Input value={title.get()} placeholder="Title"
-                    on_input=move |next| {
-                        title.set(next);
-                        status.set(String::from("Editing"));
-                        AppControl::Continue
-                    }
-                />
-                <Text>"Body"</Text>
-                <TextArea value={body.get()} placeholder="Write a note"
-                    on_input=move |next| {
-                        body.set(next);
-                        status.set(String::from("Editing"));
-                        AppControl::Continue
-                    }
-                />
-            </Form>
-        }}
+            />
+        </Form>
         <Text>{status}</Text>
         <Text>"Tab focuses. i edits. Esc returns to normal mode. Ctrl+Q quits."</Text>
     </Div>
@@ -56,9 +54,11 @@ view! {
 
 The controls are **controlled**: `value` comes from your state, and `on_input`
 proposes a new string. Accept the change by storing it in the signal. Without
-that update, the displayed value does not change. The tracked closure reads
-the current values and rebuilds the form when they change. Reconciliation
-preserves the controls' focus, cursor, and editing state across these rebuilds.
+that update, the displayed value does not change.
+
+`view!` automatically tracks signal reads in attribute expressions such as
+`value={title.get()}`. When the signal changes, the binding updates the existing
+control, preserving its focus, cursor, selection, undo history, and editing mode.
 
 ## Try editing
 

@@ -129,7 +129,7 @@ fn MacroRoutePropNav() -> impl leptatui::IntoView {
 
 /// Route page whose prop must update when branches share this component type.
 #[component]
-fn MacroRouteNamedPage(#[prop(into)] label: String) -> impl leptatui::IntoView {
+fn MacroRouteNamedPage(#[prop(into)] label: leptatui::Prop<String>) -> impl leptatui::IntoView {
     view! { <Text>{label}</Text> }
 }
 
@@ -225,9 +225,9 @@ fn MacroTypedParamsPage() -> leptatui::ViewResult<impl leptatui::IntoView> {
 ///
 /// A routed fixture whose matched page propagates parameter errors.
 #[component]
-fn MacroTypedParamsErrorRoot(#[prop(into)] initial_path: String) -> impl leptatui::IntoView {
+fn MacroTypedParamsErrorRoot(#[prop(into)] initial_path: leptatui::Prop<String>) -> impl leptatui::IntoView {
     view! {
-        <Router initial_path=initial_path>
+        <Router initial_path={initial_path.get()}>
             <Routes fallback=MacroRouteHomePage>
                 <Route path="/items/:item-id" view=MacroTypedParamsErrorPage />
             </Routes>

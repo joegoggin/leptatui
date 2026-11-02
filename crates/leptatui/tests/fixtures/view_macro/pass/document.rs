@@ -2,6 +2,8 @@
 
 use leptatui::prelude::*;
 
+include!("../inspect.rs");
+
 /// Exercises every semantic document tag and supported document attribute.
 fn main() {
     let heading_style = TuiStyle::new().foreground(Color::Cyan);
@@ -92,7 +94,7 @@ fn main() {
             .line_numbers(true),
     ));
 
-    assert_eq!(view, expected);
+    assert_render_eq(&view, &expected);
 }
 
 /// Compiles every supported declarative Markdown attribute.

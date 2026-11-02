@@ -2,6 +2,8 @@
 
 use leptatui::prelude::*;
 
+include!("../inspect.rs");
+
 /// Exercises `TextArea` attributes and builder lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
@@ -17,6 +19,7 @@ fn main() {
         />
     };
 
+    inspect::<TextAreaView>(&view, |view| {
     assert_eq!(view.value(), "Ada\nLovelace");
     assert_eq!(view.placeholder_text(), Some("Notes"));
     assert_eq!(view.metadata().view_type(), ViewType::TextArea);
@@ -25,6 +28,7 @@ fn main() {
         view.metadata().classes(),
         &[String::from("field"), String::from("primary")]
     );
-    assert_eq!(view.metadata().inline_style(), Some(style));
+    assert_eq!(view.metadata().inline_style(), Some(style.clone()));
     assert!(view.has_on_input());
+    });
 }

@@ -21,7 +21,7 @@ use super::style::use_viewer_document_styles;
 /// Returns [`ViewError`] if route validation fails.
 #[component]
 pub(in crate::pages::viewer) fn ViewerDocument(
-    path: Result<Option<PathBuf>, String>,
+    #[prop(static)] path: Result<Option<PathBuf>, String>,
 ) -> ViewResult<impl IntoView> {
     use_viewer_document_styles();
 

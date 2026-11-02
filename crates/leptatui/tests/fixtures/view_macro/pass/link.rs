@@ -2,6 +2,8 @@
 
 use leptatui::prelude::*;
 
+include!("../inspect.rs");
+
 /// Exercises `Link` content, target, and selector metadata lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
@@ -14,6 +16,7 @@ fn main() {
         >{"Guide".to_owned()}</Link>
     };
 
+    inspect::<LinkView>(&view, |view| {
     assert_eq!(view.content().to_string(), "Guide");
     assert_eq!(
         view.target(),
@@ -25,5 +28,6 @@ fn main() {
         view.metadata().classes(),
         &[String::from("navigation"), String::from("primary")]
     );
-    assert_eq!(view.metadata().inline_style(), Some(style));
+    assert_eq!(view.metadata().inline_style(), Some(style.clone()));
+    });
 }

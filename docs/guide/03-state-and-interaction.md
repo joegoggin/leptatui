@@ -19,7 +19,7 @@ view! {
         <Div>
             <Text>"First note"</Text>
             <Paragraph>"Learn to build a terminal application."</Paragraph>
-            <Text>{move || format!("Revisions: {}", revisions.get())}</Text>
+            <Text>{format!("Revisions: {}", revisions.get())}</Text>
             <Button on_press=move || {
                 revisions.update(|value| *value += 1);
                 AppControl::Continue
@@ -34,22 +34,17 @@ Press Tab to focus the button, then Enter or Space. The revision count should
 increase immediately. Pointer movement can focus controls; left-click activates
 a button or link. Shift+Tab moves focus backward.
 
-## Why the closure matters
+## Automatic tracking
 
-The component body runs once per mounted component instance. A plain
-`format!("{}", revisions.get())` there captures a snapshot. The `move || ...`
-closure runs inside a tracked dynamic boundary: `.get()` subscribes it to the
-signal and a change rebuilds that part of the interface. `.with()` borrows a
-tracked value; `.set()` replaces it; `.update()` changes it in place.
+The component body runs once per mounted component instance. Expressions inside
+`view!`, including text, attributes, and data props, automatically track the
+signals they read. Changing `revisions` updates the count without rerunning
+component setup or requiring a closure around the view.
 
-Supported readable signals containing text can also be passed directly as
-children. `Memo` derives a cached value from other signals. `Effect::new`
-runs reactive side effects; use it for integration work, rather than copying
-state that can be derived directly. Untracked reads (`get_untracked` and
-`with_untracked`) deliberately avoid subscribing the current computation.
-
-The runtime wakes for reactive changes, including async completions, rather
-than continuously redrawing an idle interface.
+A value computed before `view!` is still a snapshot. Keep computations that
+should update inside the view expression. Plain Rust builder calls also use
+ordinary Rust evaluation; use `dynamic` when constructing reactive views with
+the builder API.
 
 ## Keyboard handlers and callbacks
 

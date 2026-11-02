@@ -65,11 +65,11 @@ pub fn __view_error(error: ViewError, source_file: &'static str, source_line: u3
 #[crate::component]
 #[allow(non_snake_case)]
 fn ErrorScreen(
-    message: String,
-    source_file: String,
-    source_line: u32,
-    history: Option<crate::History>,
-    error_screens: Option<StandaloneScreenRegistry>,
+    #[prop(static)] message: String,
+    #[prop(static)] source_file: String,
+    #[prop(static)] source_line: u32,
+    #[prop(static)] history: Option<crate::History>,
+    #[prop(static)] error_screens: Option<StandaloneScreenRegistry>,
 ) -> impl IntoView {
     crate::stylesheet! {
         Paragraph => { fg: Color::Red }

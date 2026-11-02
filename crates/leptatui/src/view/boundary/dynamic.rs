@@ -37,11 +37,13 @@ pub struct DynamicView {
 /// Deferred dynamic view state shared by cloned dynamic boundaries.
 struct DynamicViewInner {
     child: Box<dyn Fn() -> AnyView>,
+    /// Property update applied to the retained node under dependency tracking.
+    binding: Option<Box<dyn Fn(AnyView, bool) -> AnyView>>,
     invalidation: DynamicInvalidation,
     reconcile_on_refresh: bool,
     current: RefCell<Option<AnyView>>,
     subscriber: DynamicSubscriber,
-    configurators: RefCell<Vec<DynamicConfigurator>>,
+    configurators: RefCell<Vec<(&'static str, DynamicConfigurator)>>,
     key_handler: RefCell<Option<DynamicKeyHandler>>,
 }
 
@@ -204,6 +206,7 @@ impl DynamicView {
         Self {
             inner: Rc::new(DynamicViewInner {
                 child: Box::new(child),
+                binding: None,
                 invalidation: DynamicInvalidation::Child,
                 reconcile_on_refresh: true,
                 current: RefCell::new(None),
@@ -233,6 +236,7 @@ impl DynamicView {
         Self {
             inner: Rc::new(DynamicViewInner {
                 child: Box::new(child),
+                binding: None,
                 invalidation: DynamicInvalidation::Key(Box::new(key_changed)),
                 reconcile_on_refresh,
                 current: RefCell::new(None),
@@ -272,14 +276,14 @@ impl DynamicView {
     #[doc(hidden)]
     pub fn with_id(self, id: impl Into<String>) -> Self {
         let id = id.into();
-        self.inner
-            .configurators
-            .borrow_mut()
-            .push(Box::new(move |child| {
+        self.set_configurator(
+            "with_id",
+            Box::new(move |child| {
                 if let Some(metadata) = child.style_metadata_mut() {
                     metadata.set_id(id.clone());
                 }
-            }));
+            }),
+        );
         self
     }
 
@@ -295,14 +299,14 @@ impl DynamicView {
     #[doc(hidden)]
     pub fn with_classes(self, classes: impl Into<String>) -> Self {
         let classes = classes.into();
-        self.inner
-            .configurators
-            .borrow_mut()
-            .push(Box::new(move |child| {
+        self.set_configurator(
+            "with_classes",
+            Box::new(move |child| {
                 if let Some(metadata) = child.style_metadata_mut() {
                     metadata.set_classes(classes.clone());
                 }
-            }));
+            }),
+        );
         self
     }
 
@@ -317,14 +321,14 @@ impl DynamicView {
     /// This [`DynamicView`] with the child configurator installed.
     #[doc(hidden)]
     pub fn with_inline_style(self, style: crate::TuiStyle) -> Self {
-        self.inner
-            .configurators
-            .borrow_mut()
-            .push(Box::new(move |child| {
+        self.set_configurator(
+            "with_inline_style",
+            Box::new(move |child| {
                 if let Some(metadata) = child.style_metadata_mut() {
                     metadata.set_inline_style(style.clone());
                 }
-            }));
+            }),
+        );
         self
     }
 
@@ -339,14 +343,14 @@ impl DynamicView {
     /// This [`DynamicView`] with the child configurator installed.
     #[doc(hidden)]
     pub fn alignment(self, alignment: crate::CellAlignment) -> Self {
-        self.inner
-            .configurators
-            .borrow_mut()
-            .push(Box::new(move |child| {
+        self.set_configurator(
+            "alignment",
+            Box::new(move |child| {
                 if let Some(cell) = child.downcast_mut::<crate::TableCellView>() {
                     cell.alignment = alignment;
                 }
-            }));
+            }),
+        );
         self
     }
 
@@ -362,14 +366,14 @@ impl DynamicView {
     #[doc(hidden)]
     pub fn language(self, language: impl Into<String>) -> Self {
         let language = language.into();
-        self.inner
-            .configurators
-            .borrow_mut()
-            .push(Box::new(move |child| {
+        self.set_configurator(
+            "language",
+            Box::new(move |child| {
                 if let Some(code) = child.downcast_mut::<crate::CodeBlockView>() {
                     *code = code.clone().language(language.clone());
                 }
-            }));
+            }),
+        );
         self
     }
 
@@ -384,14 +388,14 @@ impl DynamicView {
     /// This [`DynamicView`] with the child configurator installed.
     #[doc(hidden)]
     pub fn line_numbers(self, line_numbers: bool) -> Self {
-        self.inner
-            .configurators
-            .borrow_mut()
-            .push(Box::new(move |child| {
+        self.set_configurator(
+            "line_numbers",
+            Box::new(move |child| {
                 if let Some(code) = child.downcast_mut::<crate::CodeBlockView>() {
                     *code = code.clone().line_numbers(line_numbers);
                 }
-            }));
+            }),
+        );
         self
     }
 
@@ -407,15 +411,33 @@ impl DynamicView {
     #[doc(hidden)]
     pub fn on_press(self, action: impl Fn() -> AppControl + 'static) -> Self {
         let action: crate::ButtonAction = Rc::new(action);
-        self.inner
-            .configurators
-            .borrow_mut()
-            .push(Box::new(move |child| {
+        self.set_configurator(
+            "on_press",
+            Box::new(move |child| {
                 if let Some(button) = child.downcast_mut::<crate::ButtonView>() {
                     button.on_press = Some(Rc::clone(&action));
                 }
-            }));
+            }),
+        );
         self
+    }
+
+    /// Replaces a property configurator and applies it to an existing child.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — Stable property identity.
+    /// * `configure` — Mutation retained for subsequent child refreshes.
+    fn set_configurator(&self, key: &'static str, configure: DynamicConfigurator) {
+        if let Some(child) = self.inner.current.borrow_mut().as_mut() {
+            configure(child);
+        }
+        let mut configurators = self.inner.configurators.borrow_mut();
+        if let Some(entry) = configurators.iter_mut().find(|entry| entry.0 == key) {
+            entry.1 = configure;
+        } else {
+            configurators.push((key, configure));
+        }
     }
 
     /// Refreshes the current child and reads it for the duration of `read`.
@@ -426,7 +448,7 @@ impl DynamicView {
         read(current.as_ref().expect("dynamic view should be refreshed"))
     }
 
-    /// Reads the current child without rebuilding it, initializing it if needed.
+    /// Reads the retained child, refreshing bound properties and initializing it if needed.
     ///
     /// # Arguments
     ///
@@ -436,7 +458,7 @@ impl DynamicView {
     ///
     /// An `R` value returned by `read`.
     fn with_current_view<R>(&self, read: impl FnOnce(&AnyView) -> R) -> R {
-        if self.inner.current.borrow().is_none() {
+        if self.inner.current.borrow().is_none() || self.inner.binding.is_some() {
             self.refresh();
         }
         let current = self.inner.current.borrow();
@@ -447,7 +469,7 @@ impl DynamicView {
         )
     }
 
-    /// Mutates the current child without rebuilding it, initializing it if needed.
+    /// Mutates the retained child after initializing it and refreshing bound properties.
     ///
     /// # Arguments
     ///
@@ -457,7 +479,7 @@ impl DynamicView {
     ///
     /// An `R` value returned by `write`.
     fn with_current_view_mut<R>(&self, write: impl FnOnce(&mut AnyView) -> R) -> R {
-        if self.inner.current.borrow().is_none() {
+        if self.inner.current.borrow().is_none() || self.inner.binding.is_some() {
             self.refresh();
         }
         let mut current = self.inner.current.borrow_mut();
@@ -474,6 +496,20 @@ impl DynamicView {
             return;
         }
 
+        if let Some(binding) = &self.inner.binding {
+            let previous = self.inner.current.borrow_mut().take();
+            let initial = previous.is_none();
+            let mut next = self.inner.subscriber.track(|| {
+                let child = previous.unwrap_or_else(|| (self.inner.child)());
+                binding(child, initial)
+            });
+            for (_, configure) in self.inner.configurators.borrow().iter() {
+                configure(&mut next);
+            }
+            *self.inner.current.borrow_mut() = Some(next);
+            return;
+        }
+
         let mut next = match &self.inner.invalidation {
             DynamicInvalidation::Child => self.inner.subscriber.track(|| (self.inner.child)()),
             DynamicInvalidation::Key(key_changed) => {
@@ -484,7 +520,7 @@ impl DynamicView {
                 untrack(|| (self.inner.child)())
             }
         };
-        for configure in self.inner.configurators.borrow().iter() {
+        for (_, configure) in self.inner.configurators.borrow().iter() {
             configure(&mut next);
         }
         let mut current = self.inner.current.borrow_mut();
@@ -707,6 +743,56 @@ impl fmt::Debug for DynamicView {
     }
 }
 
+/// Retains a once-produced child behind a cloneable structural boundary.
+///
+/// # Arguments
+///
+/// * `view` — Already constructed child.
+///
+/// # Returns
+///
+/// A [`DynamicView`] sharing the retained child.
+pub(crate) fn retained(view: AnyView) -> DynamicView {
+    let boundary = DynamicView::new(|| unreachable!("retained child was removed"));
+    *boundary.inner.current.borrow_mut() = Some(view);
+    boundary
+}
+
+/// Binds properties to a retained concrete node.
+///
+/// # Arguments
+///
+/// * `view` — Node constructed once with its callbacks and children.
+/// * `update` — Fluent setters receiving the retained node and whether this is its initial value.
+///
+/// # Returns
+///
+/// A [`DynamicView`] retaining the same node between property updates.
+#[doc(hidden)]
+pub fn __bind<V: View>(view: V, update: impl Fn(V, bool) -> V + 'static) -> DynamicView {
+    let initial = RefCell::new(Some(view));
+    DynamicView {
+        inner: Rc::new(DynamicViewInner {
+            child: Box::new(move || {
+                initial
+                    .borrow_mut()
+                    .take()
+                    .expect("binding initialized twice")
+                    .into_view()
+            }),
+            binding: Some(Box::new(move |view, initial| {
+                update(view.into_typed::<V>(), initial).into_view()
+            })),
+            invalidation: DynamicInvalidation::Child,
+            reconcile_on_refresh: false,
+            current: RefCell::new(None),
+            subscriber: DynamicSubscriber::new(),
+            configurators: RefCell::new(Vec::new()),
+            key_handler: RefCell::new(None),
+        }),
+    }
+}
+
 /// Creates a reactive dynamic child boundary.
 ///
 /// # Arguments
@@ -805,5 +891,44 @@ mod tests {
             .expect("signal invalidation should request a redraw")
             .expect("redraw sender should stay available");
         drop(view);
+    }
+    /// Verifies generated bindings wake redraws and unsubscribe when dropped.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// view! { <Input value={value.get()} /> }
+    /// value.set("updated"), drop(view), value.set("disposed")
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - A live binding receives invalidation through the application redraw channel.
+    /// - Dropping its last boundary removes its signal subscriptions.
+    #[tokio::test(flavor = "current_thread")]
+    async fn generated_binding_redraw_and_disposal() {
+        let _redraw_guard = redraw_test_lock().await;
+        let owner = Owner::new();
+        let (value, view) = owner.with(|| {
+            let value = RwSignal::new(String::from("initial"));
+            let view = crate::view! { <Input value={value.get()} /> };
+            view.with_view(|_| ());
+            (value, view)
+        });
+        let mut redraws = subscribe_redraws();
+        value.set(String::from("updated"));
+        timeout(Duration::from_secs(1), redraws.changed())
+            .await
+            .expect("binding should wake the application")
+            .expect("redraw channel remains open");
+        view.with_view(|_| ());
+        drop(view);
+        redraws.borrow_and_update();
+        value.set(String::from("disposed"));
+        assert!(
+            timeout(Duration::from_millis(30), redraws.changed())
+                .await
+                .is_err()
+        );
     }
 }

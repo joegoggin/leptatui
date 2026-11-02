@@ -22,35 +22,33 @@ fn NotesApp() -> impl IntoView {
     view! {
         <Div>
             <Text>"My notes"</Text>
-            {move || view! {
-                <Form
-                    on_submit=move || {
-                        status.set(String::from("Submitted in memory"));
+            <Form
+                on_submit=move || {
+                    status.set(String::from("Submitted in memory"));
+                    AppControl::Continue
+                }
+                on_cancel=move || {
+                    status.set(String::from("Canceled; draft kept"));
+                    AppControl::Continue
+                }
+            >
+                <Text>"Title"</Text>
+                <Input value={title.get()} placeholder="Title"
+                    on_input=move |next| {
+                        title.set(next);
+                        status.set(String::from("Editing"));
                         AppControl::Continue
                     }
-                    on_cancel=move || {
-                        status.set(String::from("Canceled; draft kept"));
+                />
+                <Text>"Body"</Text>
+                <TextArea value={body.get()} placeholder="Write a note"
+                    on_input=move |next| {
+                        body.set(next);
+                        status.set(String::from("Editing"));
                         AppControl::Continue
                     }
-                >
-                    <Text>"Title"</Text>
-                    <Input value={title.get()} placeholder="Title"
-                        on_input=move |next| {
-                            title.set(next);
-                            status.set(String::from("Editing"));
-                            AppControl::Continue
-                        }
-                    />
-                    <Text>"Body"</Text>
-                    <TextArea value={body.get()} placeholder="Write a note"
-                        on_input=move |next| {
-                            body.set(next);
-                            status.set(String::from("Editing"));
-                            AppControl::Continue
-                        }
-                    />
-                </Form>
-            }}
+                />
+            </Form>
             <Text>{status}</Text>
             <Text>"Tab focuses. i edits. Esc returns to normal mode. Ctrl+Q quits."</Text>
         </Div>

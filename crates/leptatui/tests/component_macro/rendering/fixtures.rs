@@ -115,6 +115,6 @@ impl View for MacroMarkdownHistoryProbe {
 
 /// Generated component forwarding Markdown history to its stored view.
 #[component]
-fn MacroMarkdownHistoryBoundary(probe: AnyView) -> impl leptatui::IntoView {
+fn MacroMarkdownHistoryBoundary(#[prop(static)] probe: AnyView) -> impl leptatui::IntoView {
     probe
 }

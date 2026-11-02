@@ -28,10 +28,10 @@ fn MacroDefaultButtonRoot() -> impl leptatui::IntoView {
 /// View that wraps one built-in button.
 #[component]
 fn MacroWrappedButton(
-    #[prop(into)] label: String,
-    on_press: fn() -> AppControl,
+    #[prop(into)] label: leptatui::Prop<String>,
+    #[prop(callback)] on_press: fn() -> AppControl,
 ) -> impl leptatui::IntoView {
-    button(label).on_press(on_press)
+    view! { <Button on_press={on_press}>{label.get()}</Button> }
 }
 
 /// Root with sibling custom button components.

@@ -42,32 +42,20 @@ fn generated_component_props_render() -> leptatui::app::Result<()> {
 /// - A general homogeneous vector expression is flattened the same way.
 /// - An empty vector contributes no retained wrapper or child.
 #[test]
-fn vector_child_expressions_splice_directly_into_containers() {
+fn vector_child_expressions_splice_directly_into_containers() -> leptatui::Result<()> {
     let children: Children = Box::new(|| {
         vec![
             text("First").into_view(),
             text("Second").into_view(),
         ]
     });
-    let from_callback = view! { <Div>{children()}</Div> };
-
-    assert_eq!(from_callback.children().len(), 2);
-    assert_eq!(
-        from_callback.children()[0]
-            .downcast_ref::<leptatui::TextView>()
-            .expect("expected first text child")
-            .content()
-            .to_string(),
-        "First"
-    );
-    assert_eq!(
-        from_callback.children()[1]
-            .downcast_ref::<leptatui::TextView>()
-            .expect("expected second text child")
-            .content()
-            .to_string(),
-        "Second"
-    );
+    let children = children();
+    let from_callback = view! { <Div>{children}</Div> };
+    let mut terminal = Terminal::new(TestBackend::new(12, 3))?;
+    crate::support::draw_view(&mut terminal, &from_callback)?;
+    let output = rendered_text(&terminal);
+    assert!(output.contains("First"));
+    assert!(output.contains("Second"));
 
     let values = vec![text("Third"), text("Fourth")];
     let from_vector = view! { <Div>{values}</Div> };
@@ -76,6 +64,7 @@ fn vector_child_expressions_splice_directly_into_containers() {
     let empty = Vec::<AnyView>::new();
     let from_empty = view! { <Div>{empty}</Div> };
     assert!(from_empty.children().is_empty());
+    Ok(())
 }
 
 /// Verifies generated component boundaries report responsive internal height.

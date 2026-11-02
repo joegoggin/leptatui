@@ -193,3 +193,25 @@ impl View for TextAreaView {
 }
 
 impl_editable_view_api!(TextAreaView);
+
+impl TextAreaView {
+    /// Updates the caller-owned property without replacing retained view state.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Latest property value.
+    /// * `initial` — Whether to initialize the cursor for the first supplied value.
+    ///
+    /// # Returns
+    ///
+    /// This view with the updated property.
+    #[doc(hidden)]
+    pub fn __value(mut self, value: impl Into<String>, initial: bool) -> Self {
+        let value = value.into();
+        if initial {
+            self.model.editable_state.set_cursor(value.len());
+        }
+        self.model.value = value;
+        self
+    }
+}

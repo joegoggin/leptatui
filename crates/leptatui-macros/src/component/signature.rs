@@ -30,6 +30,8 @@ pub(super) struct Prop {
     pub(super) default: Option<PropDefault>,
     /// Whether setter inputs should be converted with [`Into`].
     pub(super) into: bool,
+    /// Underlying value type of a live data prop.
+    pub(super) reactive_ty: Option<Box<Type>>,
 }
 
 impl Prop {
@@ -191,6 +193,34 @@ fn parse_prop(input: &FnArg) -> syn::Result<Prop> {
     }
 
     let options = parse_prop_attrs(attrs)?;
+    let reactive_ty = if let Type::Path(path) = ty.as_ref() {
+        path.path
+            .segments
+            .last()
+            .filter(|segment| segment.ident == "Prop")
+            .and_then(|segment| {
+                if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                    args.args.iter().find_map(|arg| {
+                        if let GenericArgument::Type(ty) = arg {
+                            Some(Box::new(ty.clone()))
+                        } else {
+                            None
+                        }
+                    })
+                } else {
+                    None
+                }
+            })
+    } else {
+        None
+    };
+    let structural = matches!(ty.as_ref(), Type::Path(path) if path.path.segments.last().is_some_and(|segment| matches!(segment.ident.to_string().as_str(), "Children" | "ChildrenFn" | "ChildrenMut")));
+    if reactive_ty.is_none() && !structural && !options.retained {
+        return Err(Error::new_spanned(
+            ty,
+            "component data props must use Prop<T>; use #[prop(callback)] for event callbacks or #[prop(static)] for setup-only inputs",
+        ));
+    }
     let copied_attrs = attrs
         .iter()
         .filter(|attr| !attr.path().is_ident("prop"))
@@ -203,12 +233,15 @@ fn parse_prop(input: &FnArg) -> syn::Result<Prop> {
         ty: ty.clone(),
         default: options.default,
         into: options.into,
+        reactive_ty,
     })
 }
 
 /// Parsed `#[prop(...)]` options.
 #[derive(Default)]
 struct PropOptions {
+    /// Whether this prop is a retained callback or setup-only input.
+    retained: bool,
     default: Option<PropDefault>,
     into: bool,
 }
@@ -223,6 +256,13 @@ fn parse_prop_attrs(attrs: &[Attribute]) -> syn::Result<PropOptions> {
         }
 
         attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("callback") || meta.path.is_ident("static") {
+                if options.retained {
+                    return Err(meta.error("duplicate retained prop option"));
+                }
+                options.retained = true;
+                return Ok(());
+            }
             if meta.path.is_ident("optional") {
                 set_default(&mut options, PropDefault::Optional, meta.input)?;
                 return Ok(());
@@ -247,7 +287,9 @@ fn parse_prop_attrs(attrs: &[Attribute]) -> syn::Result<PropOptions> {
                 return Ok(());
             }
 
-            Err(meta.error("unsupported prop option; expected optional, default, or into"))
+            Err(meta.error(
+                "unsupported prop option; expected optional, default, into, callback, or static",
+            ))
         })?;
     }
 

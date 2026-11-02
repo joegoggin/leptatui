@@ -29,6 +29,9 @@ pub(super) fn measure_list_item(
     marker_width: u16,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> LayoutSize<f32> {
+    if let Some(boundary) = item.downcast_ref::<crate::DynamicView>() {
+        return boundary.with_view(|item| measure_list_item(item, marker_width, ctx));
+    }
     if let Some(item) = item.downcast_ref::<ListItemView>() {
         let style = resolve_style(&item.metadata, ctx);
         let area = ctx.area();

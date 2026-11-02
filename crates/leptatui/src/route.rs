@@ -508,7 +508,7 @@ struct HistoryState {
 #[crate::component]
 #[allow(non_snake_case)]
 pub fn Router(
-    #[prop(default = String::from("/"), into)] initial_path: String,
+    #[prop(default = String::from("/"), into, static)] initial_path: String,
     children: Children,
 ) -> impl IntoView {
     let router = RouterContext::new(&initial_path);

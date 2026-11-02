@@ -47,6 +47,9 @@ pub(super) fn list_markers(item_count: usize, ordered_start: Option<usize>) -> (
 ///
 /// A [`u16`] indentation in terminal cells.
 pub(super) fn list_item_child_indent(child: &AnyView, marker_width: u16) -> u16 {
+    if let Some(boundary) = child.downcast_ref::<crate::DynamicView>() {
+        return boundary.with_view(|child| list_item_child_indent(child, marker_width));
+    }
     if child.is::<ListView>() {
         LIST_NEST_INDENT
     } else {

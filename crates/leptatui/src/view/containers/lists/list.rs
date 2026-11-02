@@ -237,20 +237,24 @@ fn list_intrinsic_width(
     items
         .iter()
         .map(|item| {
-            let children = item
-                .downcast_ref::<crate::ListItemView>()
-                .map_or_else(|| std::slice::from_ref(item), |item| item.children());
-            children
-                .iter()
-                .map(|child| {
-                    let indent = if child.is::<ListView>() {
-                        2
-                    } else {
-                        marker_width.saturating_add(1)
-                    };
-                    intrinsic_child_width(child, constraint, ctx) + f32::from(indent)
-                })
-                .fold(f32::from(marker_width), f32::max)
+            item.with_resolved(|item| {
+                let children = item
+                    .downcast_ref::<crate::ListItemView>()
+                    .map_or_else(|| std::slice::from_ref(item), |item| item.children());
+                children
+                    .iter()
+                    .map(|child| {
+                        let indent = child.with_resolved(|child| {
+                            if child.is::<ListView>() {
+                                2
+                            } else {
+                                marker_width.saturating_add(1)
+                            }
+                        });
+                        intrinsic_child_width(child, constraint, ctx) + f32::from(indent)
+                    })
+                    .fold(f32::from(marker_width), f32::max)
+            })
         })
         .fold(0.0, f32::max)
 }

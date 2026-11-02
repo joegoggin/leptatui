@@ -2,6 +2,8 @@
 
 use leptatui::prelude::*;
 
+include!("../inspect.rs");
+
 /// Exercises `Input` attributes and builder lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
@@ -17,6 +19,7 @@ fn main() {
         />
     };
 
+    inspect::<InputView>(&view, |view| {
     assert_eq!(view.value(), "Ada");
     assert_eq!(view.placeholder_text(), Some("Name"));
     assert_eq!(view.metadata().view_type(), ViewType::Input);
@@ -25,6 +28,7 @@ fn main() {
         view.metadata().classes(),
         &[String::from("field"), String::from("primary")]
     );
-    assert_eq!(view.metadata().inline_style(), Some(style));
+    assert_eq!(view.metadata().inline_style(), Some(style.clone()));
     assert!(view.has_on_input());
+    });
 }

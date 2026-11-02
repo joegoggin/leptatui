@@ -59,18 +59,20 @@ impl Element {
         let view = self.expand_text_like("A", ReactiveTextKind::RichText, |content| {
             quote! { #leptatui::route_link(#content, (#href).clone(), (#exact).clone()) }
         })?;
-        let mut expanded = view;
-        for name in ["class", "id", "style"] {
-            if let Some(value) = self.optional_attr(name)? {
-                expanded = match name {
-                    "class" => quote! { (#expanded).with_classes(#value) },
-                    "id" => quote! { (#expanded).with_id(#value) },
-                    "style" => quote! { (#expanded).with_inline_style(#value) },
-                    _ => unreachable!(),
+        let attrs = self
+            .attrs
+            .iter()
+            .filter_map(|attr| {
+                let kind = match attr.name.to_string().as_str() {
+                    "class" => super::validation::AttrKind::Class,
+                    "id" => super::validation::AttrKind::Id,
+                    "style" => super::validation::AttrKind::Style,
+                    _ => return None,
                 };
-            }
-        }
-        Ok(expanded)
+                Some(super::validation::ValidatedAttr { attr, kind })
+            })
+            .collect::<Vec<_>>();
+        self.expand_attrs(view, &attrs)
     }
 
     /// Expands a route list and its fallback factory.

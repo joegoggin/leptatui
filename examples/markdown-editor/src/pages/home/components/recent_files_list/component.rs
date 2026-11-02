@@ -22,42 +22,26 @@ use super::{
 /// A recent-file list with an empty state when applicable.
 #[component]
 pub(in crate::pages::home) fn RecentFilesList(
-    entries: Vec<PathBuf>,
-    base: PathBuf,
-    on_open: Rc<dyn Fn(PathBuf)>,
+    entries: Prop<Vec<PathBuf>>,
+    base: Prop<PathBuf>,
+    #[prop(callback)] on_open: Rc<dyn Fn(PathBuf)>,
 ) -> impl IntoView {
     use_recent_files_list_styles();
 
-    let mut rows = vec![
-        view! {
+    view! {
+        <Div class="recent-files">
             <Text class="recent-files__title">"Recent files"</Text>
-        }
-        .into_view(),
-    ];
-
-    if entries.is_empty() {
-        rows.push(
-            view! {
-                <Text class="recent-files__empty">"No recent Markdown files"</Text>
-            }
-            .into_view(),
-        );
-    } else {
-        rows.extend(entries.iter().map(|path| {
-            let entry_path = PathBuf::clone(path);
-            let entry_base = base.clone();
-            let entry_on_open = Rc::clone(&on_open);
-
-            view! {
-                <RecentFileEntry
-                    path=entry_path
-                    base=entry_base
-                    on_open=entry_on_open
-                />
-            }
-            .into_view()
-        }));
+            {if entries.get().is_empty() {
+                vec![view! { <Text class="recent-files__empty">"No recent Markdown files"</Text> }.into_view()]
+            } else {
+                entries.get().into_iter().map(|path| {
+                    let entry_base = base.clone();
+                    let entry_on_open = Rc::clone(&on_open);
+                    view! {
+                        <RecentFileEntry path=path base={entry_base.get()} on_open=entry_on_open />
+                    }.into_view()
+                }).collect::<Vec<_>>()
+            }}
+        </Div>
     }
-
-    div(rows).with_classes("recent-files")
 }

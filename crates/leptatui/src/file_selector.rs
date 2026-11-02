@@ -387,10 +387,10 @@ impl DirectoryPreviewEntry {
 #[crate::component]
 #[allow(non_snake_case)]
 fn FileSelectorScreen(
-    initial_directory: Result<PathBuf, String>,
-    options: FileSelectorOptions,
-    set_file: ArcWriteSignal<Option<PathBuf>>,
-    screens: StandaloneScreenRegistry,
+    #[prop(static)] initial_directory: Result<PathBuf, String>,
+    #[prop(static)] options: FileSelectorOptions,
+    #[prop(static)] set_file: ArcWriteSignal<Option<PathBuf>>,
+    #[prop(static)] screens: StandaloneScreenRegistry,
 ) -> impl IntoView {
     crate::stylesheet! {
         .file-selector => {

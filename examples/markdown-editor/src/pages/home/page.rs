@@ -106,7 +106,7 @@ pub(crate) fn HomePage() -> ViewResult<impl IntoView> {
 ///
 /// Returns [`ViewError`] when `error` contains a file-opening diagnostic.
 #[component]
-fn OpenFileError(error: Option<String>) -> ViewResult<impl IntoView> {
+fn OpenFileError(#[prop(static)] error: Option<String>) -> ViewResult<impl IntoView> {
     if let Some(error) = error {
         Err(ViewError::msg(error))?;
     }

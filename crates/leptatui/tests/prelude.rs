@@ -229,7 +229,12 @@ async fn prelude_exposes_reactivity_and_context() {
                 line_numbers=true
             />
         };
-        assert!(macro_markdown.downcast_ref::<DynamicView>().is_some());
+        assert!(
+            macro_markdown
+                .into_view()
+                .downcast_ref::<DynamicView>()
+                .is_some()
+        );
         let _default_file_reader = |path: &str| markdown_file(path);
         let _configured_file_reader =
             |path: &str, options: MarkdownOptions| markdown_file_with_options(path, options);

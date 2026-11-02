@@ -2,8 +2,8 @@
 //!
 //! This binary demonstrates controlled `Input`, `TextArea`, and `Form` views
 //! backed by Leptos signals. The editable controls emit proposed values through
-//! callbacks, and the dynamic form subtree reconciles focus, cursor, and
-//! Vim state across redraws.
+//! callbacks. Attribute expressions track signals automatically while controls
+//! retain their focus, cursor, undo history, and Vim state across updates.
 
 use leptatui::prelude::*;
 
@@ -136,59 +136,38 @@ fn ControlledForm() -> impl IntoView {
         <Block class="form-shell">
             <Div>
                 <Text class="title">"Controlled form"</Text>
-                {move || {
-                    text(
-                            status
-                                .get()
-                                .label(
-                                    name.get().as_str(),
-                                    notes.get().as_str(),
-                                ),
-                        )
-                        .with_classes("status")
-                }}
-                {move || {
-                    let name_value = name.get();
-                    let notes_value = notes.get();
-
-                    view! {
-                        <Form
-                            on_submit=move || {
-                                status.set(FormStatus::Submitted);
-                                AppControl::Continue
-                            }
-                            on_cancel=move || {
-                                status.set(FormStatus::Canceled);
-                                AppControl::Continue
-                            }
-                        >
-                            <Text class="label">"Name"</Text>
-                            <Input
-                                value=name_value
-                                placeholder="Name"
-                                on_input=move |next| {
-                                    name.set(next);
-                                    status.set(FormStatus::Editing);
-                                    AppControl::Continue
-                                }
-                            />
-                            <Text class="label">"Notes"</Text>
-                            <TextArea
-                                value=notes_value
-                                placeholder="Notes"
-                                on_input=move |next| {
-                                    notes.set(next);
-                                    status.set(FormStatus::Editing);
-                                    AppControl::Continue
-                                }
-                            />
-                            <Button on_press=move || {
-                                status.set(FormStatus::Submitted);
-                                AppControl::Continue
-                            }>"Submit"</Button>
-                        </Form>
+                <Text class="status">{status.get().label(&name.get(), &notes.get())}</Text>
+                <Form
+                    on_submit=move || {
+                        status.set(FormStatus::Submitted);
+                        AppControl::Continue
                     }
-                }}
+                    on_cancel=move || {
+                        status.set(FormStatus::Canceled);
+                        AppControl::Continue
+                    }
+                >
+                    <Text class="label">"Name"</Text>
+                    <Input value={name.get()} placeholder="Name"
+                        on_input=move |next| {
+                            name.set(next);
+                            status.set(FormStatus::Editing);
+                            AppControl::Continue
+                        }
+                    />
+                    <Text class="label">"Notes"</Text>
+                    <TextArea value={notes.get()} placeholder="Notes"
+                        on_input=move |next| {
+                            notes.set(next);
+                            status.set(FormStatus::Editing);
+                            AppControl::Continue
+                        }
+                    />
+                    <Button on_press=move || {
+                        status.set(FormStatus::Submitted);
+                        AppControl::Continue
+                    }>"Submit"</Button>
+                </Form>
                 <Text class="help">
                     "Tab/Shift+Tab focus. i/a enters insert mode. Esc cancels from normal mode. Ctrl+Enter submits notes. q quits."
                 </Text>

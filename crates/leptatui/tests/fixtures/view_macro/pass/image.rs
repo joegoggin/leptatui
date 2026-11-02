@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use leptatui::prelude::*;
 
+include!("../inspect.rs");
+
 /// Exercises `Image` attributes and builder lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
@@ -18,7 +20,8 @@ fn main() {
         />
     };
 
-    assert_eq!(view.source(), &ImageSource::Path(path));
+    inspect::<ImageView>(&view, |view| {
+    assert_eq!(view.source(), &ImageSource::Path(path.clone()));
     assert_eq!(view.alt_text(), Some("Project logo"));
     assert_eq!(view.metadata().view_type(), ViewType::Image);
     assert_eq!(view.metadata().id(), Some("logo"));
@@ -26,5 +29,6 @@ fn main() {
         view.metadata().classes(),
         &[String::from("media"), String::from("primary")]
     );
-    assert_eq!(view.metadata().inline_style(), Some(style));
+    assert_eq!(view.metadata().inline_style(), Some(style.clone()));
+    });
 }

@@ -17,12 +17,25 @@ controls, images, and progress bars.
 All are available through `leptatui::prelude::*` as builders and through
 PascalCase `view!` tags.
 
+`view!` tracks data expressions automatically, including text, attributes, and
+custom component data props. Write `<Input value={title.get()} ... />` directly;
+updates change the retained control and preserve its editing state. Signal
+reads inside event handlers run only for events and do not subscribe rendering.
+Values computed before `view!` remain snapshots, and plain Rust builders use
+ordinary Rust evaluation semantics.
+
+Custom components declare changing data as `Prop<T>` and read it with `.get()`
+or `.with()` inside their view expressions. Component setup runs once. Use
+`#[prop(callback)]` for retained event callbacks and `#[prop(static)]` for
+intentional setup-only inputs such as a router's initial location.
+
 `View` is an open, object-safe trait. Built-in builders retain concrete return
 types such as `TextView`, `DivView`, `InputView`, and `TextAreaView`, so their
 type-specific configuration remains available without pattern matching.
 Containers accept homogeneous collections or heterogeneous tuples through
 `IntoViews`. Braced `Vec<V>` expressions inside `Div`, `Form`, `ListItem`, or
-component children splice their views directly into the surrounding child list.
+component children render in source order without an extra layout box. Computed
+collections update through a transparent reactive boundary.
 Type erasure occurs only when children enter the tree as `AnyView` values.
 Application-defined views can implement `View` directly,
 optionally implement `StyledView` or `ContainerView`, and use

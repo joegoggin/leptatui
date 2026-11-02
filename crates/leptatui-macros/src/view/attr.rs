@@ -116,6 +116,20 @@ mod attr_value {
             }
         }
 
+        /// Emits a repeatable read, cloning owned values named by a path.
+        ///
+        /// # Returns
+        ///
+        /// A [`TokenStream`] preserving the expression's signal reads.
+        pub(in crate::view) fn repeat_tokens(&self) -> TokenStream {
+            match self {
+                Self::Expr { value, .. } if matches!(value.as_ref(), Expr::Path(_)) => {
+                    quote! { (#value).clone() }
+                }
+                _ => self.to_tokens(),
+            }
+        }
+
         /// Returns whether this value came from a string literal.
         ///
         /// # Returns
