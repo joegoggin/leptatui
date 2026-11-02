@@ -6,6 +6,8 @@ use clap::Parser;
 
 use crate::{absolute_file_path, cli::Cli};
 
+use super::support::{TestContexts, TestTree};
+
 /// Verifies the CLI accepts an omitted Markdown path.
 ///
 /// # Example Under Test
@@ -73,6 +75,8 @@ fn cli_rejects_additional_paths() {
 /// - The missing target does not cause an error.
 #[test]
 fn startup_normalizes_relative_file_paths_without_validation() {
+    let tree = TestTree::new("startup-path");
+    let _contexts = TestContexts::new(tree.root());
     let resolved = absolute_file_path(PathBuf::from("missing/../draft.md").as_path())
         .expect("lexical path resolution should not access the target");
 
