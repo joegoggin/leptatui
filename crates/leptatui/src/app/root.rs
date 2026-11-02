@@ -10,7 +10,7 @@ use crate::{
     AnyView, StyleMetadata, View,
     component::{FocusedControl, RenderCtx},
     context,
-    view::core::{events::handle_view_event_with_layout, layout::render_with_layout},
+    view::core::layout::render_with_layout,
 };
 
 use super::{AppControl, Result};
@@ -228,8 +228,7 @@ impl AppRoot for AnyView {
         {
             return Ok((AppControl::Continue, false));
         }
-        handle_view_event_with_layout(self.as_view_mut(), event)
-            .map(|outcome| (outcome.control, outcome.layout == LayoutMode::Reuse))
+        self.as_view_mut().__handle_event_with_layout(event)
     }
 
     /// Forwards pending input flushing into the view root.
@@ -272,8 +271,7 @@ where
         if View::style_metadata(self).is_some_and(StyleMetadata::is_layout_hidden) {
             return Ok((AppControl::Continue, false));
         }
-        handle_view_event_with_layout(self, event)
-            .map(|outcome| (outcome.control, outcome.layout == LayoutMode::Reuse))
+        View::__handle_event_with_layout(self, event)
     }
 
     fn __flush_pending_input(&mut self) -> Option<AppControl> {

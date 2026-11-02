@@ -292,6 +292,8 @@ fn heading_min_height(content: &RichText, style: TuiStyle, level: u16, width: u1
 }
 
 impl View for HeadingView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_heading(&self.content, &self.metadata, self.level.number(), ctx);
         self.metadata.clear_scroll_to_anchor_request();

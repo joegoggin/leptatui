@@ -103,6 +103,8 @@ impl RouteLinkView {
 }
 
 impl View for RouteLinkView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     /// Renders the internal link label.
     ///
     /// # Arguments

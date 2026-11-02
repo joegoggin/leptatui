@@ -70,6 +70,8 @@ pub(crate) fn link_with_base(
 }
 
 impl View for LinkView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         sync_visited(&self.metadata, &self.target);
         let style = resolve_style(&self.metadata, ctx);

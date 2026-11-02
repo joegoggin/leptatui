@@ -36,6 +36,8 @@ pub fn text(content: impl Into<String>) -> TextView {
 }
 
 impl View for TextView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
         if let Some(geometry) = ctx.active_layout_geometry(&self.metadata) {

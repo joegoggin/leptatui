@@ -442,6 +442,8 @@ impl FileSystem {
 
     /// Replaces a contained file through a sibling temporary file.
     ///
+    /// Existing destination permissions are preserved during replacement.
+    ///
     /// # Arguments
     ///
     /// * `path` — Relative or contained absolute destination path.
@@ -957,6 +959,20 @@ impl FileSystem {
                 "write destination has no parent",
             )
         })?;
+        let permissions = match fs::metadata(&destination) {
+            Ok(metadata) => Some(metadata.permissions()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(source) => {
+                return Err(path_error(source, "inspect destination", &destination));
+            }
+        };
+        let mut options = OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        if let Some(permissions) = &permissions {
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            options.mode(permissions.mode() & 0o777);
+        }
         let mut temporary = None;
         for _ in 0..32 {
             let sequence = TEMPORARY_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -969,11 +985,7 @@ impl FileSystem {
                     .to_string_lossy()
             );
             let candidate = parent.join(name);
-            match OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(&candidate)
-            {
+            match options.open(&candidate) {
                 Ok(file) => {
                     temporary = Some((candidate, file));
                     break;
@@ -993,10 +1005,20 @@ impl FileSystem {
                 ),
             )
         })?;
-        if let Err(source) = temporary_file.write_all(contents) {
+        let written = temporary_file
+            .write_all(contents)
+            .and_then(|()| match permissions {
+                Some(permissions) => temporary_file.set_permissions(permissions),
+                None => Ok(()),
+            });
+        if let Err(source) = written {
             drop(temporary_file);
             let _ = fs::remove_file(&temporary_path);
-            return Err(path_error(source, "write temporary file", &temporary_path));
+            return Err(path_error(
+                source,
+                "prepare replacement file",
+                &temporary_path,
+            ));
         }
         drop(temporary_file);
 
@@ -1495,7 +1517,10 @@ mod tests {
         let created_filesystem =
             use_file_system_with_options(&created, FileSystemOptions::new().create_root(true))
                 .expect("configured missing root should be created");
-        assert_eq!(created_filesystem.root(), created);
+        assert_eq!(
+            created_filesystem.root(),
+            fs::canonicalize(&created).expect("created root should canonicalize")
+        );
 
         let regular = tree.path().join("regular");
         fs::write(&regular, "data").expect("regular root fixture should be written");
@@ -1803,6 +1828,51 @@ mod tests {
             .copy_file_blocking(Path::new("data.txt"), Path::new("moved.txt"))
             .expect_err("existing transfer destination should fail");
         assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+    }
+
+    /// Verifies replacement preserves private and executable file permissions.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// replace private.txt (0600) and executable.sh (0755)
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Each file is successfully replaced with the requested contents.
+    /// - Private files retain owner-only access.
+    /// - Executable files retain their executable permission bits.
+    #[cfg(unix)]
+    #[test]
+    fn replacement_preserves_existing_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tree = TestRoot::new("replacement-permissions");
+        let filesystem = use_file_system(tree.path()).expect("fixture root should open");
+        for (name, mode) in [("private.txt", 0o600), ("executable.sh", 0o755)] {
+            let path = tree.path().join(name);
+            fs::write(&path, "original").expect("fixture file should be written");
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode))
+                .expect("fixture permissions should be set");
+
+            filesystem
+                .write_and_replace_file_blocking(Path::new(name), b"replacement")
+                .expect("file should be replaced");
+
+            assert_eq!(
+                fs::read(&path).expect("replacement should read"),
+                b"replacement"
+            );
+            assert_eq!(
+                fs::metadata(&path)
+                    .expect("replacement metadata should load")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                mode,
+            );
+        }
     }
 
     /// Verifies recursive directory operations create ancestors and protect the root.

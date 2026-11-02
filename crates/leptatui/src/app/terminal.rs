@@ -40,6 +40,8 @@ type PanicHook = dyn for<'a> Fn(&PanicHookInfo<'a>) + Send + Sync + 'static;
 
 /// Restores the previous process panic hook after a managed app finishes.
 pub(super) struct PanicHookGuard {
+    /// Cleanup target shared with the installed hook across terminal re-entry.
+    active_cleanup: Arc<Mutex<TerminalCleanup>>,
     /// Previous hook invoked after terminal restoration.
     previous: Arc<PanicHook>,
     /// Process-wide lock preventing overlapping scoped hook replacement.
@@ -240,15 +242,43 @@ impl PanicHookGuard {
             .unwrap_or_else(|error| error.into_inner());
         let previous: Arc<PanicHook> = Arc::from(std::panic::take_hook());
         let chained = Arc::clone(&previous);
+        let active_cleanup = Arc::new(Mutex::new(cleanup));
+        let hook_cleanup = Arc::clone(&active_cleanup);
         std::panic::set_hook(Box::new(move |panic| {
+            let cleanup = hook_cleanup
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .clone();
             let _ = cleanup.restore();
             chained(panic);
         }));
 
         Self {
+            active_cleanup,
             previous,
             _lock: lock,
         }
+    }
+
+    /// Tracks the active terminal session after re-entry.
+    ///
+    /// # Arguments
+    ///
+    /// * `session` — Replacement session whose terminal modes need cleanup.
+    pub(super) fn follow_session(&self, session: &TerminalSession) {
+        self.replace_cleanup(session.cleanup.clone());
+    }
+
+    /// Replaces the cleanup target without changing the process panic hook.
+    ///
+    /// # Arguments
+    ///
+    /// * `cleanup` — Shared terminal-mode state for the current session.
+    fn replace_cleanup(&self, cleanup: TerminalCleanup) {
+        *self
+            .active_cleanup
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = cleanup;
     }
 }
 
@@ -267,18 +297,20 @@ mod tests {
 
     use super::*;
 
-    /// Verifies panic cleanup runs before the previously installed hook.
+    /// Verifies current-session cleanup runs before the previously installed hook.
     ///
     /// # Example Under Test
     ///
     /// ```text
     /// managed panic hook -> terminal cleanup -> previous panic hook
+    /// replace cleanup target -> panic -> replacement cleanup -> previous hook
     /// ```
     ///
     /// # Assertions
     ///
-    /// - The synthetic panic is caught after invoking the managed hook.
-    /// - Terminal cleanup is observed before the previous hook.
+    /// - Both synthetic panics are caught after invoking the managed hook.
+    /// - Initial cleanup runs before the previous hook for the first panic.
+    /// - Only replacement cleanup runs before diagnostics after switching targets.
     #[test]
     fn panic_hook_restores_terminal_before_diagnostics() {
         static TEST_HOOK_LOCK: Mutex<()> = Mutex::new(());
@@ -287,9 +319,13 @@ mod tests {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         let original = std::panic::take_hook();
+        let test_thread = std::thread::current().id();
         let order = Arc::new(Mutex::new(Vec::new()));
         let previous_order = Arc::clone(&order);
         std::panic::set_hook(Box::new(move |_| {
+            if std::thread::current().id() != test_thread {
+                return;
+            }
             previous_order
                 .lock()
                 .unwrap_or_else(|error| error.into_inner())
@@ -300,6 +336,9 @@ mod tests {
         let cleanup_order = Arc::clone(&order);
         cleanup.update(|state| {
             state.restore_observer = Some(Arc::new(move || {
+                if std::thread::current().id() != test_thread {
+                    return;
+                }
                 cleanup_order
                     .lock()
                     .unwrap_or_else(|error| error.into_inner())
@@ -309,17 +348,30 @@ mod tests {
 
         let guard = PanicHookGuard::install(cleanup);
         let panic = std::panic::catch_unwind(|| panic!("synthetic panic"));
+        let next_cleanup = TerminalCleanup::default();
+        let next_order = Arc::clone(&order);
+        next_cleanup.update(|state| {
+            state.restore_observer = Some(Arc::new(move || {
+                if std::thread::current().id() != test_thread {
+                    return;
+                }
+                next_order
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .push("replacement restore");
+            }));
+        });
+        guard.replace_cleanup(next_cleanup);
+        let next_panic = std::panic::catch_unwind(|| panic!("panic after terminal re-entry"));
         drop(guard);
         let _ = std::panic::take_hook();
         std::panic::set_hook(original);
 
         assert!(panic.is_err());
-        assert!(
-            order
-                .lock()
-                .unwrap_or_else(|error| error.into_inner())
-                .windows(2)
-                .any(|events| events == ["restore", "previous"]),
+        assert!(next_panic.is_err());
+        assert_eq!(
+            *order.lock().unwrap_or_else(|error| error.into_inner()),
+            ["restore", "previous", "replacement restore", "previous"],
         );
     }
 }

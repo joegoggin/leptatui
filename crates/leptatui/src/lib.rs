@@ -392,6 +392,7 @@ pub mod __private {
         __optional_param, __outlet, __push_query_param, __required_param, __route_definition,
         __routes,
     };
+    pub use crate::view::core::events::__handle_builtin_event_with_layout;
     pub use crate::view::error::__view_error;
     pub use crossterm::event::{Event, KeyEvent, MouseEvent};
 

@@ -99,6 +99,8 @@ impl ListView {
 }
 
 impl View for ListView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let start = (self.kind == ListKind::Ordered).then_some(self.start);
         render_list_view(&self.children, start, &self.metadata, ctx)

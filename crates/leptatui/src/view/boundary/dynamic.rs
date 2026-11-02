@@ -500,6 +500,8 @@ impl DynamicView {
 }
 
 impl View for DynamicView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         if ctx.layout_phase() == LayoutPhase::Paint {
             self.with_current_view(|child| child.render(ctx))

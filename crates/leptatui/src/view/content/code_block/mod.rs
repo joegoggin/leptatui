@@ -360,6 +360,8 @@ fn render_code_block_view(
 }
 
 impl View for CodeBlockView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_code_block_view(
             self.language.as_deref(),

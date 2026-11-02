@@ -44,7 +44,7 @@ pub(crate) use wakeup::{request_redraw, subscribe_redraws};
 
 use event::next_events;
 use render::draw_root;
-use terminal::TerminalSession;
+use terminal::{PanicHookGuard, TerminalSession};
 
 /// Time between pending-input flush checks when no terminal input is available.
 const DEFAULT_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(16);
@@ -225,7 +225,7 @@ where
         let mut session = TerminalSession::enter()?;
         let panic_hook = session.install_panic_hook();
 
-        let loop_result = std::panic::AssertUnwindSafe(self.run_loop(&mut session))
+        let loop_result = std::panic::AssertUnwindSafe(self.run_loop(&mut session, &panic_hook))
             .catch_unwind()
             .await;
         let restore_result = session.restore();
@@ -250,6 +250,7 @@ where
     /// # Arguments
     ///
     /// * `session` — Active terminal session to draw into and eventually leave.
+    /// * `panic_hook` — Guard following the active session across re-entry.
     ///
     /// # Returns
     ///
@@ -260,7 +261,11 @@ where
     /// Returns [`Error::Io`] if drawing, event polling, or event reading fails.
     /// Returns [`Error::EventTask`] if the blocking event task fails.
     /// Returns [`Error::LinkOpen`] if an activated link cannot be opened.
-    async fn run_loop(&mut self, session: &mut TerminalSession) -> Result<()> {
+    async fn run_loop(
+        &mut self,
+        session: &mut TerminalSession,
+        panic_hook: &PanicHookGuard,
+    ) -> Result<()> {
         let mut redraw_requests = subscribe_redraws();
         let mut should_draw = true;
         let mut next_layout = LayoutMode::Recompute;
@@ -269,6 +274,11 @@ where
         tokio::pin!(event_poll);
 
         'app: loop {
+            if self.run_suspended_tasks(session, panic_hook)? {
+                should_draw = true;
+                next_layout = LayoutMode::Recompute;
+                last_viewport = None;
+            }
             if should_draw {
                 let viewport = session.terminal.size()?;
                 let layout = if next_layout == LayoutMode::Reuse && last_viewport == Some(viewport)
@@ -306,7 +316,7 @@ where
                             }
                             batch_layout = batch_layout.merge(outcome.layout);
 
-                            if self.run_suspended_tasks(session)? {
+                            if self.run_suspended_tasks(session, panic_hook)? {
                                 batch_layout = LayoutMode::Recompute;
                                 break;
                             }
@@ -346,6 +356,7 @@ where
     /// # Arguments
     ///
     /// * `session` — Active terminal session to restore and re-enter.
+    /// * `panic_hook` — Guard to retarget after terminal re-entry succeeds.
     ///
     /// # Returns
     ///
@@ -354,7 +365,11 @@ where
     /// # Errors
     ///
     /// Returns [`Error::Io`] if terminal restoration or re-entry fails.
-    fn run_suspended_tasks(&self, session: &mut TerminalSession) -> Result<bool> {
+    fn run_suspended_tasks(
+        &self,
+        session: &mut TerminalSession,
+        panic_hook: &PanicHookGuard,
+    ) -> Result<bool> {
         let mut next_session = None;
         let executed = self.run_suspended_tasks_with(
             || session.restore().map_err(Error::from),
@@ -366,6 +381,7 @@ where
 
         if let Some(next_session) = next_session {
             *session = next_session;
+            panic_hook.follow_session(session);
         }
 
         Ok(executed)

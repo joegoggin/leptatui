@@ -63,10 +63,11 @@ impl AppHandle {
 
     /// Queues work to run while Leptatui temporarily releases the terminal.
     ///
+    /// Queuing wakes the runner, including outside input event handling.
     /// Tasks run synchronously on the runner thread after the active event
-    /// handler returns. The runner restores normal terminal modes, executes
-    /// every queued task in FIFO order, re-enters the managed terminal, and
-    /// redraws the existing component tree.
+    /// handler or render returns. The runner restores normal terminal modes,
+    /// executes every queued task in FIFO order, re-enters the managed terminal,
+    /// and redraws the existing component tree.
     ///
     /// # Arguments
     ///
@@ -85,6 +86,7 @@ impl AppHandle {
                 .or_default()
                 .push_back(Box::new(task));
         });
+        crate::app::request_redraw();
     }
 
     /// Removes all currently queued terminal-suspension tasks.
@@ -165,6 +167,34 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use super::*;
+
+    /// Verifies a programmatically queued terminal task wakes the runner.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// subscribe_redraws(); suspend_terminal(task); redraws.changed().await
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Queuing without a terminal input event delivers a redraw notification.
+    /// - The queued task remains available for the runner to execute.
+    #[tokio::test(flavor = "current_thread")]
+    async fn suspended_task_wakes_runner_without_input() {
+        use crate::app::{redraw_test_lock, subscribe_redraws};
+
+        let _redraw_guard = redraw_test_lock().await;
+        let mut redraws = subscribe_redraws();
+        let handle = AppHandle::new();
+        handle.suspend_terminal(|| {});
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), redraws.changed())
+            .await
+            .expect("queued task should wake the runner")
+            .expect("redraw sender should remain available");
+        assert_eq!(handle.take_suspended_tasks().len(), 1);
+    }
 
     /// Verifies suspended tasks retain submission order.
     ///

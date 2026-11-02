@@ -181,6 +181,8 @@ fn form_action_control(action: &Option<FormAction>) -> KeyControl {
 }
 
 impl View for FormView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_with_layout(self, ctx, |ctx| {
             render_container(&self.children, &self.metadata, ctx)

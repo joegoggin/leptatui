@@ -254,6 +254,8 @@ impl ErrorScreenClear {
 }
 
 impl View for ErrorScreenClear {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     /// Clears every terminal cell assigned to this layer.
     ///
     /// # Arguments

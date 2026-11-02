@@ -553,6 +553,8 @@ impl RouterView {
 }
 
 impl View for RouterView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     /// Renders the routed child with router context.
     ///
     /// # Arguments
@@ -823,6 +825,8 @@ struct RouteDefinitionView {
 }
 
 impl View for RouteDefinitionView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     /// Renders no terminal content.
     ///
     /// # Arguments
@@ -1027,7 +1031,7 @@ fn build_match(routes: Rc<Vec<RouteDefinition>>, router: RouterContext, depth: u
     };
     let route = definition_at(&routes, &matched.chain[..=depth]);
     let factory = Rc::clone(&route.view);
-    let outlet = if depth + 1 < matched.chain.len() {
+    let outlet = if !route.children.is_empty() {
         let outlet_routes = Rc::clone(&routes);
         let outlet_router = router.clone();
         Some(Rc::new(move || {
@@ -1113,6 +1117,7 @@ fn match_routes(routes: &[RouteDefinition], pathname: &str) -> Option<RouteMatch
     matches.into_iter().max_by(|left, right| {
         left.score
             .cmp(&right.score)
+            .then_with(|| left.chain.len().cmp(&right.chain.len()))
             .then_with(|| right.chain.cmp(&left.chain))
     })
 }
@@ -1544,6 +1549,31 @@ mod tests {
         let matched = match_routes(&routes, "/settings/profile").unwrap();
         assert_eq!(matched.chain, [0, 0]);
         assert_eq!(matched.params.get("section"), Some("profile"));
+    }
+
+    /// Verifies empty-path children are selected over their matching parents.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// ParentRoute /settings
+    /// ├── Route ""
+    /// └── Route ""
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - `/settings` successfully matches the first empty-path child.
+    /// - Equal-depth siblings retain declaration-order precedence.
+    #[test]
+    fn matcher_selects_empty_path_children() {
+        let routes = vec![definition(
+            "/settings",
+            vec![definition("", Vec::new()), definition("", Vec::new())],
+        )];
+
+        let matched = match_routes(&routes, "/settings").unwrap();
+        assert_eq!(matched.chain, [0, 0]);
     }
 
     /// Verifies path normalization and last-value-wins query parsing.

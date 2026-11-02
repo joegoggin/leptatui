@@ -37,6 +37,8 @@ pub fn paragraph(content: impl Into<RichText>) -> ParagraphView {
 }
 
 impl View for ParagraphView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
         let rendered = resolved_rich_text(&self.content, &self.metadata, &style, ctx);

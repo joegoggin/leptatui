@@ -553,6 +553,8 @@ impl PartialEq for ComponentView {
 }
 
 impl View for ComponentView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         ComponentView::render(self, ctx)
     }

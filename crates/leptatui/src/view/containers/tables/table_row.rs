@@ -31,6 +31,8 @@ pub fn table_row(cells: impl IntoViews) -> TableRowView {
 }
 
 impl View for TableRowView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, _ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         Ok(())
     }

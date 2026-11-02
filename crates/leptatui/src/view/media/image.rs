@@ -133,6 +133,8 @@ pub(crate) fn image_render_area(area: Rect, image_size: Option<TuiSize>) -> Rect
 }
 
 impl View for ImageView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         let style = resolve_style(&self.metadata, ctx);
         let ImageSource::Path(path) = &self.source;

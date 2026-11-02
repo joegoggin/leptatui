@@ -39,6 +39,8 @@ pub fn list_item(children: impl IntoViews) -> ListItemView {
 }
 
 impl View for ListItemView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_with_layout(self, ctx, |ctx| {
             render_container(&self.children, &self.metadata, ctx)

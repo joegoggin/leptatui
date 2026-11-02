@@ -78,6 +78,27 @@ pub trait View: Any {
         super::events::handle_view_event(self, event)
     }
 
+    /// Handles an app event while reporting retained-layout eligibility.
+    ///
+    /// The default preserves application-defined event handling and requests
+    /// fresh layout. Built-in views opt into scroll-only layout reuse.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — Terminal event dispatched to the app root.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing application control and whether layout may be reused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] if the view's event handler fails.
+    #[doc(hidden)]
+    fn __handle_event_with_layout(&mut self, event: Event) -> Result<(AppControl, bool)> {
+        self.handle_event(event).map(|control| (control, false))
+    }
+
     /// Handles a key using custom handlers followed by built-in view behavior.
     ///
     /// # Arguments

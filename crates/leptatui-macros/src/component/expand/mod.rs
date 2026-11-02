@@ -132,6 +132,15 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         #default_impl
 
         impl #leptatui::View for #ident {
+            #[doc = "Handles a component app event with retained-layout reporting."]
+            #[doc(hidden)]
+            fn __handle_event_with_layout(
+                &mut self,
+                event: #leptatui::__private::Event,
+            ) -> #leptatui::Result<(#leptatui::AppControl, bool)> {
+                #leptatui::__private::__handle_builtin_event_with_layout(self, event)
+            }
+
             #[doc = "Renders the component into the provided Leptatui context."]
             fn render(
                 &self,

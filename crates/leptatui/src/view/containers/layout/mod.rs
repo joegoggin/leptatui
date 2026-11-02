@@ -43,6 +43,8 @@ pub fn div(children: impl IntoViews) -> DivView {
 }
 
 impl View for DivView {
+    crate::view::core::events::impl_builtin_event_dispatch!();
+
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
         render_with_layout(self, ctx, |ctx| {
             render_container(&self.children, &self.metadata, ctx)

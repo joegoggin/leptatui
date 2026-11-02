@@ -12,6 +12,48 @@ use crate::{
 
 use super::contract::View;
 
+/// Opts a built-in view into layout-aware default event dispatch.
+macro_rules! impl_builtin_event_dispatch {
+    () => {
+        /// Handles a built-in app event with retained-layout reporting.
+        #[doc(hidden)]
+        fn __handle_event_with_layout(
+            &mut self,
+            event: crossterm::event::Event,
+        ) -> $crate::Result<($crate::AppControl, bool)> {
+            $crate::__private::__handle_builtin_event_with_layout(self, event)
+        }
+    };
+}
+
+pub(crate) use impl_builtin_event_dispatch;
+
+/// Handles an event for a built-in view with retained-layout reporting.
+///
+/// # Arguments
+///
+/// * `view` — Built-in view or generated component using default event handling.
+/// * `event` — Terminal event dispatched to the app root.
+///
+/// # Returns
+///
+/// A tuple containing application control and whether layout may be reused.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] if default dispatch or a registered handler fails.
+#[doc(hidden)]
+pub fn __handle_builtin_event_with_layout<V>(
+    view: &mut V,
+    event: Event,
+) -> Result<(AppControl, bool)>
+where
+    V: View + ?Sized,
+{
+    handle_view_event_with_layout(view, event)
+        .map(|outcome| (outcome.control, outcome.layout == LayoutMode::Reuse))
+}
+
 pub(crate) fn handle_view_event<V>(view: &mut V, event: Event) -> Result<AppControl>
 where
     V: View + ?Sized,
