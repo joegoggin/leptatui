@@ -5,6 +5,11 @@ It combines Leptatui's standalone file selector, a semantic Markdown viewer,
 persistent recent files, standard error screens, and restored-terminal editing
 behind focused project layers.
 
+New to Leptatui? Start with the [progressive guide](../../docs/README.md).
+The [files and editors chapter](../../docs/guide/10-files-and-editors.md) explains
+the library integrations used here; this README covers this application's
+commands, controls, and architecture.
+
 ## Prerequisites
 
 - A current stable Rust toolchain with Cargo.

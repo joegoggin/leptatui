@@ -1,6 +1,9 @@
 # Leptatui Examples
 
 Runnable examples for the public `leptatui` crate live in this directory.
+Run the commands below from the repository root. To learn the APIs step by
+step, start with the [guide](../../../docs/README.md); this page describes
+how to operate each example.
 Each example includes responsive stylesheet rules for terminals at or below 60
 columns, which is useful when running over SSH from a phone.
 
@@ -156,72 +159,9 @@ unordered lists, a responsive table with aligned cells, and a
 syntax-highlighted code block with line numbers. Scroll with `j`/`k`, Page Up
 and Page Down, `gg`, or `G`. Press `q` to quit.
 
-Semantic views can be assembled with builders. Ordered-list starts, table-cell
-alignment, and code presentation are configured on the concrete builder return
-types:
-
-```rust
-use leptatui::prelude::*;
-
-let document = div((
-    h2("Nested list"),
-    ordered_list([list_item((
-        paragraph("Parent item"),
-        unordered_list([list_item([paragraph("Nested item")])]),
-    ))])
-    .start(3),
-    table([
-        table_head([table_row([
-            table_cell("Component"),
-            table_cell("Layout").alignment(CellAlignment::Center),
-        ])]),
-        table_body([table_row([
-            table_cell("Table"),
-            table_cell("Responsive").alignment(CellAlignment::Right),
-        ])]),
-    ]),
-    code_block("fn main() {}")
-        .language("rust")
-        .line_numbers(true),
-));
-```
-
-The showcase uses the equivalent nested tags and semantic stylesheet
-selectors:
-
-```rust
-use leptatui::prelude::*;
-
-stylesheet! {
-    H2 => { fg: Color::LightBlue }
-    OrderedList => { fg: Color::LightCyan }
-    TableHead => { fg: Color::LightCyan }
-    CodeBlock => { fg: Color::LightBlue }
-}
-
-let document = view! {
-    <Div>
-        <OrderedList start=3>
-            <ListItem>
-                <Paragraph>"Parent item"</Paragraph>
-                <UnorderedList>
-                    <ListItem><Paragraph>"Nested item"</Paragraph></ListItem>
-                </UnorderedList>
-            </ListItem>
-        </OrderedList>
-        <CodeBlock
-            language="rust"
-            line_numbers=true
-        >"fn main() {}"</CodeBlock>
-    </Div>
-};
-```
-
-All document content, including code, wraps to the terminal width instead of
-scrolling horizontally. Syntax highlighting uses the terminal's ANSI palette
-with `DarkGray` as its background, unknown code languages render as plain
-source text, and table cells contain inline text rather than nested block views
-in v1.
+For document builders, markup, and presentation options, see
+[Documents and media](../../../docs/guide/11-documents-and-media.md) and the
+[component reference](../../../docs/reference/components.md#semantic-documents).
 
 ## Markdown Reader
 
@@ -256,47 +196,9 @@ inside the reader; press Shift+H and Shift+L to move backward and forward
 through page history. URLs and other local files use the system handler. Press
 `q` to quit.
 
-Use `markdown` and `markdown_with_options` when the source is already in
-memory:
-
-```rust
-use leptatui::prelude::*;
-
-let source = "# Reader\n\n```rust\nfn main() {}\n```";
-let default_document = markdown(source);
-let configured_document = markdown_with_options(
-    source,
-    MarkdownOptions::default().line_numbers(true),
-);
-```
-
-Use the synchronous file functions or asynchronous `Markdown` tag when the
-input is a local UTF-8 path:
-
-```rust
-use leptatui::prelude::*;
-
-let default_file = markdown_file("README.md");
-let configured_file = markdown_file_with_options(
-    "README.md",
-    MarkdownOptions::default().line_numbers(true),
-);
-let tagged_file = view! {
-    <Markdown src="README.md" editable=true line_numbers=true />
-};
-```
-
-`editable` defaults to `false`. With `editable=true`, unmodified `e` opens the
-original `src` through Leptatui's external-editor support and unmodified `r`
-refetches it. A successful editor exit also refetches the file. Reloading
-replaces the local Markdown view, including its navigation history, focus, and
-scroll state; failures render the standard error screen.
-
-Markdown support targets CommonMark plus tables. Optional GFM extensions such
-as task lists, strikethrough, and footnotes are deferred. Markdown links retain
-their labels and are keyboard navigable. Local targets resolve relative to the
-source file's directory. Images render as descriptive text, and neither local
-nor remote image targets are fetched.
+For in-memory and file-backed Markdown APIs, editing behavior, and compatibility,
+see [Documents and media](../../../docs/guide/11-documents-and-media.md) and the
+[Markdown reference](../../../docs/reference/components.md#markdown-readers).
 
 ## Error Handling
 
