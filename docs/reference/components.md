@@ -59,9 +59,10 @@ automatically on edits. Pass the signal itself (`value=name`), rather than
 after the signal has been updated and can read its current text. External signal
 writes update the control without invoking the callback. Both support optional
 `placeholder` text. Wrap editable controls in `Form` to centralize submit and
-cancel behavior. Focused inputs submit with Enter; focused text areas insert a newline with Enter in insert
-mode and submit with Ctrl+Enter. Pressing Esc from editable normal mode cancels
-the nearest form when it has an `on_cancel` handler.
+cancel behavior. Focused inputs submit with Enter. Focused text areas submit
+with plain Enter in normal mode and insert a newline with Enter in insert mode.
+Ctrl+Enter submits text areas in either mode. Pressing Esc from editable normal
+mode cancels the nearest form when it has an `on_cancel` handler.
 
 Editable controls start in a compact Vim-style normal mode. Use `i`, `a`, `I`,
 or `A` to enter insert mode; Esc or `jk` returns to normal mode. Normal and

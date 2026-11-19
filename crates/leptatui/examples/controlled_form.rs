@@ -162,7 +162,7 @@ fn ControlledForm() -> impl IntoView {
                     }>"Submit"</Button>
                 </Form>
                 <Text class="help">
-                    "Tab/Shift+Tab focus. i/a enters insert mode. Esc cancels from normal mode. Ctrl+Enter submits notes. q quits."
+                    "Tab/Shift+Tab focus. i/a enters insert mode. Esc cancels from normal mode. Enter submits notes in normal mode; Ctrl+Enter submits in either mode. q quits."
                 </Text>
             </Div>
         </Block>

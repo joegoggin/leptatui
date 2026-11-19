@@ -318,7 +318,7 @@ fn focused_input_cursor_respects_retained_clip() -> leptatui::app::Result<()> {
 /// # Assertions
 ///
 /// - Focused inputs and text areas report their normal, insert, and visual state.
-/// - A pending `jk` sequence reports normal mode before the controlled value updates.
+/// - A pending `jk` sequence clears insert-cursor metadata without marking a text area as normal.
 /// - A focused button reports button state.
 /// - An unfocused input reports no focused control.
 #[test]
@@ -366,6 +366,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
     assert_eq!(
         leptatui::AppRoot::__focused_control(&normal_text_area),
         Some(FocusedControl::TextArea {
+            normal_mode: true,
             insert_mode: false,
             visual_mode: false,
         })
@@ -376,6 +377,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
     assert_eq!(
         leptatui::AppRoot::__focused_control(&insert_text_area),
         Some(FocusedControl::TextArea {
+            normal_mode: false,
             insert_mode: true,
             visual_mode: false,
         })
@@ -385,6 +387,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
     assert_eq!(
         leptatui::AppRoot::__focused_control(&insert_text_area),
         Some(FocusedControl::TextArea {
+            normal_mode: false,
             insert_mode: false,
             visual_mode: false,
         })
@@ -396,6 +399,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
     assert_eq!(
         leptatui::AppRoot::__focused_control(&visual_text_area),
         Some(FocusedControl::TextArea {
+            normal_mode: false,
             insert_mode: false,
             visual_mode: true,
         })

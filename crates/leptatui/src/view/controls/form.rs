@@ -38,6 +38,9 @@ pub struct FormView {
 impl FormView {
     /// Stores a submit callback.
     ///
+    /// Enter submits a focused input or normal-mode text area. Ctrl+Enter
+    /// submits a focused text area in any editing mode.
+    ///
     /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
     /// Explicit [`AppControl::Continue`] returns are also accepted.
     ///
@@ -136,8 +139,9 @@ fn handle_form_focused_key(
 ) -> Option<KeyControl> {
     match (focused, key.code) {
         (FocusedControl::Input { .. }, KeyCode::Enter) => Some(form_action_control(on_submit)),
-        (FocusedControl::TextArea { .. }, KeyCode::Enter)
-            if key.modifiers.contains(KeyModifiers::CONTROL) =>
+        (FocusedControl::TextArea { normal_mode, .. }, KeyCode::Enter)
+            if key.modifiers.contains(KeyModifiers::CONTROL)
+                || (normal_mode && key.modifiers.is_empty()) =>
         {
             Some(form_action_control(on_submit))
         }

@@ -89,13 +89,13 @@ fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> leptatui::
     Ok(())
 }
 
-/// Verifies text areas keep multiline Enter behavior inside forms.
+/// Verifies insert-mode text areas keep multiline Enter behavior inside forms.
 ///
 /// # Example Under Test
 ///
 /// ```text
 /// form([text_area(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)])
-/// Enter, Ctrl+Enter
+/// Insert mode: Enter, Ctrl+Enter
 /// ```
 ///
 /// # Assertions
@@ -326,4 +326,135 @@ fn form_inside_component_boundary_handles_submit_key() -> leptatui::app::Result<
     assert_eq!(submits.get(), 1);
 
     Ok(())
+}
+
+/// Verifies normal-mode text areas submit on Enter without editing their signal.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Form containing a focused normal-mode TextArea bound to "Ada".
+/// on_submit returns Continue or Exit; press Enter, then Ctrl+Enter.
+/// ```
+///
+/// # Assertions
+///
+/// - Each submit key invokes the form callback exactly once.
+/// - The callback's application control propagates to the caller.
+/// - Submission preserves the text, cursor, mode, and input-notification count.
+#[test]
+fn form_text_area_normal_enter_submits_without_editing() -> leptatui::Result<()> {
+    Owner::new().with(|| {
+        for result in [AppControl::Continue, AppControl::Exit] {
+            let value = RwSignal::new(String::from("Ada"));
+            let edits = RwSignal::new(0);
+            let submits = RwSignal::new(0);
+            let editor = text_area(value).with_focus(true).on_input(move || {
+                edits.set(edits.get_untracked() + 1);
+            });
+            let cursor = editor.editable_state().cursor();
+            let mut view = form([editor]).on_submit(move || {
+                submits.set(submits.get_untracked() + 1);
+                result
+            });
+            for (index, key) in [key_event(KeyCode::Enter), ctrl_enter_key_event()]
+                .into_iter()
+                .enumerate()
+            {
+                assert_eq!(view.handle_event(Event::Key(key))?, result);
+                assert_eq!(submits.get_untracked(), index + 1);
+                assert_eq!(value.get_untracked(), "Ada");
+                assert_eq!(edits.get_untracked(), 0);
+                assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Normal);
+                assert_eq!(editable_state(form_child(&view, 0)).cursor(), cursor);
+            }
+        }
+        Ok(())
+    })
+}
+
+/// Verifies visual-mode Enter keeps its existing selection behavior.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Focused TextArea in Visual or VisualLine mode inside a Form.
+/// Enter, Ctrl+Enter.
+/// ```
+///
+/// # Assertions
+///
+/// - Plain Enter does not submit or edit the selected text.
+/// - Plain Enter preserves the visual mode and selection anchor.
+/// - Ctrl+Enter still submits once in either visual mode.
+#[test]
+fn form_text_area_visual_enter_does_not_submit() -> leptatui::Result<()> {
+    Owner::new().with(|| {
+        for mode in [VimMode::Visual, VimMode::VisualLine] {
+            let value = RwSignal::new(String::from("Ada"));
+            let submits = RwSignal::new(0);
+            let mut editor = text_area(value).with_focus(true);
+            editor.editable_state_mut().set_mode(mode);
+            editor.editable_state_mut().set_selection_anchor(Some(0));
+            let mut view = form([editor]).on_submit(move || {
+                submits.set(submits.get_untracked() + 1);
+            });
+            view.handle_key_event(key_event(KeyCode::Enter))?;
+            assert_eq!(submits.get_untracked(), 0);
+            assert_eq!(value.get_untracked(), "Ada");
+            assert_eq!(editable_state(form_child(&view, 0)).mode(), mode);
+            assert_eq!(
+                editable_state(form_child(&view, 0)).selection_anchor(),
+                Some(0)
+            );
+            view.handle_key_event(ctrl_enter_key_event())?;
+            assert_eq!(submits.get_untracked(), 1);
+        }
+        Ok(())
+    })
+}
+
+/// Verifies a pending insert-mode escape sequence does not enable submission.
+///
+/// # Example Under Test
+///
+/// ```text
+/// Focused insert-mode TextArea bound to "Ada" inside a Form.
+/// j, Enter.
+/// ```
+///
+/// # Assertions
+///
+/// - The pending j reports a block cursor without reporting normal mode.
+/// - Enter inserts the pending j and a newline, without submitting.
+/// - The input notification runs once and the editor stays in insert mode.
+#[test]
+fn form_text_area_pending_j_enter_inserts_newline() -> leptatui::Result<()> {
+    Owner::new().with(|| {
+        let value = RwSignal::new(String::from("Ada"));
+        let submits = RwSignal::new(0);
+        let edits = RwSignal::new(0);
+        let mut editor = text_area(value).with_focus(true).on_input(move || {
+            edits.set(edits.get_untracked() + 1);
+        });
+        editor.editable_state_mut().set_mode(VimMode::Insert);
+        let mut view = form([editor]).on_submit(move || {
+            submits.set(submits.get_untracked() + 1);
+        });
+        view.handle_key_event(key_event(KeyCode::Char('j')))?;
+        assert_eq!(
+            view.__focused_control(),
+            Some(FocusedControl::TextArea {
+                normal_mode: false,
+                insert_mode: false,
+                visual_mode: false,
+            })
+        );
+        view.handle_key_event(key_event(KeyCode::Enter))?;
+        assert_eq!(value.get_untracked(), "Adaj\n");
+        assert_eq!(submits.get_untracked(), 0);
+        assert_eq!(edits.get_untracked(), 1);
+        assert_eq!(editable_state(form_child(&view, 0)).mode(), VimMode::Insert);
+        Ok(())
+    })
 }

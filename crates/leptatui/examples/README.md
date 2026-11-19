@@ -106,7 +106,8 @@ Use Tab and Shift+Tab to move focus between the input, text area, and submit
 button. Editable controls start in Vim normal mode; press `i`, `a`, `I`,
 or `A` to enter insert mode. Press Esc while a form field is in normal mode to
 cancel the form. Input fields submit with Enter. Text areas insert a newline in
-insert mode with Enter and submit with Ctrl+Enter. Press `q` to quit.
+insert mode with Enter and submit with Enter in normal mode. Ctrl+Enter submits
+in either mode. Press `q` to quit.
 
 ## Standard Library Showcase
 
@@ -122,7 +123,8 @@ fallback text, and a progress bar in one app. Use Tab and Shift+Tab to move
 focus. Press Enter or Space to activate links and buttons. Press `i`, `a`,
 `I`, or `A` to enter insert mode; Esc or `jk` returns to normal mode; `v` and
 `V` select text; `x`, `d`, `y`, `p`, `u`, and Ctrl+R edit in normal or visual
-mode. Use Enter to submit inputs, Ctrl+Enter to submit text areas, activate
+mode. Use Enter to submit inputs or normal-mode text areas; Ctrl+Enter submits
+text areas in either mode. Activate
 Advance or Reset to update progress, and press `q` to quit. The `Image` view
 renders terminal graphics automatically when the terminal supports them and
 otherwise displays deterministic fallback text.

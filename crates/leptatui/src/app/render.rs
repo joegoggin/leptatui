@@ -152,6 +152,7 @@ mod tests {
         );
         assert_eq!(
             cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                normal_mode: false,
                 insert_mode: true,
                 visual_mode: false,
             })),
@@ -191,6 +192,7 @@ mod tests {
         );
         assert_eq!(
             cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                normal_mode: true,
                 insert_mode: false,
                 visual_mode: false,
             })),
@@ -198,6 +200,7 @@ mod tests {
         );
         assert_eq!(
             cursor_style_for_focused_control(Some(FocusedControl::TextArea {
+                normal_mode: false,
                 insert_mode: false,
                 visual_mode: true,
             })),

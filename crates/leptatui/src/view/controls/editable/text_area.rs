@@ -206,6 +206,7 @@ impl View for TextAreaView {
             VimMode::Visual | VimMode::VisualLine
         );
         Some(FocusedControl::TextArea {
+            normal_mode: self.model.editable_state.mode() == VimMode::Normal,
             insert_mode,
             visual_mode,
         })

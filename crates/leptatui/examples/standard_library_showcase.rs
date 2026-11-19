@@ -294,7 +294,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
                         .with_classes("meter")
                 }}
                 <Text class="help">
-                    "Tab/Shift+Tab or pointer movement focuses controls. Enter/Space or left click activates links and buttons; the mouse wheel scrolls. i/a/I/A insert, Esc normal/cancel, jk leaves insert, v/V select, x/d/y/p/u/Ctrl+R edit, Ctrl+Enter submits notes. q quits."
+                    "Tab/Shift+Tab or pointer movement focuses controls. Enter/Space or left click activates links and buttons; the mouse wheel scrolls. i/a/I/A insert, Esc normal/cancel, jk leaves insert, v/V select, x/d/y/p/u/Ctrl+R edit, Enter submits notes in normal mode; Ctrl+Enter submits in either mode. q quits."
                 </Text>
             </Div>
         </Block>

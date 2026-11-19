@@ -17,6 +17,8 @@ pub enum FocusedControl {
     },
     /// A multiline text area is focused.
     TextArea {
+        /// Whether the text area is currently in normal mode, independent of pending keys.
+        normal_mode: bool,
         /// Whether the text area is currently in insert mode.
         insert_mode: bool,
         /// Whether the text area is currently in visual mode.

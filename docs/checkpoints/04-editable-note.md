@@ -44,7 +44,7 @@ fn NotesApp() -> impl IntoView {
                 />
             </Form>
             <Text>{status}</Text>
-            <Text>"Tab focuses. i edits. Esc returns to normal mode. Ctrl+Q quits."</Text>
+            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
         </Div>
     }
 }
@@ -57,6 +57,6 @@ async fn main() -> leptatui::app::Result<()> {
 
 ## Check the result
 
-Tab to the title, press i, and edit. Esc returns to normal mode. Ctrl+Enter submits from the body. Submit/cancel only change the status; the draft stays in memory.
+Tab to the title, press i, and edit. Esc returns to normal mode. Enter submits from the body in normal mode; Ctrl+Enter also submits in insert mode. Submit/cancel only change the status; the draft stays in memory.
 
 [Return to chapter 4](../guide/04-editing-notes.md) · [Documentation index](../README.md)

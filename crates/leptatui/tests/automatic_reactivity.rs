@@ -500,3 +500,56 @@ fn prop_defaults_conversions_and_callback_coercions() {
         assert_eq!(constant.with(String::len), 8);
     });
 }
+
+/// Creates a rendered form matching the notes tutorial's component structure.
+///
+/// # Returns
+///
+/// A view with a body editor and reactive submission status.
+#[component]
+fn NormalModeSubmitForm() -> impl IntoView {
+    let body = RwSignal::new(String::from("Tutorial body"));
+    let status = RwSignal::new("Editing");
+    view! {
+        <Block>
+            <Div>
+                <Form on_submit=move || { status.set("Submitted in memory"); }>
+                    <Text>"Body"</Text>
+                    <TextArea value=body />
+                </Form>
+                <Text>{status}</Text>
+            </Div>
+        </Block>
+    }
+}
+
+/// Verifies normal-mode TextArea submission updates a rendered component.
+///
+/// # Example Under Test
+///
+/// ```text
+/// NormalModeSubmitForm containing Block > Div > Form > TextArea.
+/// Render, Tab, Enter, render.
+/// ```
+///
+/// # Assertions
+///
+/// - Enter updates the rendered status to Submitted in memory.
+/// - The body text remains visible and unchanged after submission.
+#[test]
+fn rendered_text_area_normal_enter_submits_form() -> leptatui::Result<()> {
+    Owner::new().with(|| {
+        let mut view = view! { <NormalModeSubmitForm /> };
+        let mut terminal = Terminal::new(TestBackend::new(60, 12))?;
+        draw_view(&mut terminal, view.as_view())?;
+        for code in [KeyCode::Tab, KeyCode::Enter] {
+            let (control, _) = view.as_view_mut().__handle_event_with_layout(key(code))?;
+            assert_eq!(control, AppControl::Continue);
+        }
+        draw_view(&mut terminal, view.as_view())?;
+        let output = rendered_text(&terminal);
+        assert!(output.contains("Submitted in memory"), "{output}");
+        assert!(output.contains("Tutorial body"), "{output}");
+        Ok(())
+    })
+}

@@ -41,7 +41,7 @@ view! {
             />
         </Form>
         <Text>{status}</Text>
-        <Text>"Tab focuses. i edits. Esc returns to normal mode. Ctrl+Q quits."</Text>
+        <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
     </Div>
 }
 ```
@@ -66,7 +66,8 @@ Return `AppControl::Exit` when a callback should quit the app.
 1. Press Tab to focus the title. Controls start in Vim-style normal mode.
 2. Press `i`, type a title, then Esc to return to normal mode.
 3. Press Tab to reach the body, then `i`. Enter inserts a new line here.
-4. Ctrl+Enter submits from the body; Enter submits from the title.
+4. Press Esc, then Enter to submit from the body. Ctrl+Enter submits from the
+   body in normal or insert mode; Enter submits from the title in either mode.
 5. Esc from normal mode invokes the form's cancel callback.
 
 Submission currently updates a status message; it does not write a file.

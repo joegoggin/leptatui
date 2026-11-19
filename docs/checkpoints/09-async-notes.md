@@ -52,7 +52,7 @@ fn NoteEditor() -> impl IntoView {
                 />
             </Form>
             <Text>{status}</Text>
-            <Text>"Tab focuses. i edits. Esc returns to normal mode. Ctrl+Q quits."</Text>
+            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
         </Div>
     }
 }
