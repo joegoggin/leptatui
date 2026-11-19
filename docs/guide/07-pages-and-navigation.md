@@ -39,9 +39,8 @@ Use `exact=true` when a root anchor should match only its exact destination.
 
 Inside a component below `Router`, call `use_navigate()` to get a navigation
 function. For example, a button can call
-`navigate("/preview", NavigateOptions::default())` and return
-`AppControl::Continue`. `use_location()` gives reactive pathname and search
-state. `use_history()` exposes back and forward operations; history is local
+`navigate("/preview", NavigateOptions::default())` and return `()` to keep
+the app running. `use_location()` gives reactive pathname and search state. `use_history()` exposes back and forward operations; history is local
 to the running process. The [routing reference](../reference/routing.md)
 contains a full navigation example.
 

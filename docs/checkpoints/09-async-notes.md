@@ -33,11 +33,9 @@ fn NoteEditor() -> impl IntoView {
             <Form
                 on_submit=move || {
                     status.set(String::from("Submitted in memory"));
-                    AppControl::Continue
                 }
                 on_cancel=move || {
                     status.set(String::from("Canceled; draft kept"));
-                    AppControl::Continue
                 }
             >
                 <Text>"Title"</Text>
@@ -45,7 +43,6 @@ fn NoteEditor() -> impl IntoView {
                     on_input=move |next| {
                         title.set(next);
                         status.set(String::from("Editing"));
-                        AppControl::Continue
                     }
                 />
                 <Text>"Body"</Text>
@@ -53,7 +50,6 @@ fn NoteEditor() -> impl IntoView {
                     on_input=move |next| {
                         body.set(next);
                         status.set(String::from("Editing"));
-                        AppControl::Continue
                     }
                 />
             </Form>
@@ -108,18 +104,15 @@ fn DataToolbar() -> impl IntoView {
             <Div class="actions">
                 <Button on_press=move || {
                     reload.refetch();
-                    AppControl::Continue
                 }>"Reload"</Button>
                 <Button on_press=move || {
                     if let Some(Ok(value)) = apply.get_untracked() {
                         body.set(value);
                         status.set(String::from("Loaded note applied"));
                     }
-                    AppControl::Continue
                 }>"Use loaded note"</Button>
                 <Button on_press=move || {
                     save_button.dispatch(body.get_untracked());
-                    AppControl::Continue
                 }>"Save body"</Button>
             </Div>
             <Text>{move || {

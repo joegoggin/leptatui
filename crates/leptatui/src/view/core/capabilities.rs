@@ -191,6 +191,9 @@ pub trait EditableView: Sized {
 
     /// Stores a callback invoked with proposed controlled values.
     ///
+    /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
+    /// Explicit [`AppControl::Continue`] returns are also accepted.
+    ///
     /// # Arguments
     ///
     /// * `action` — Callback receiving each proposed next value.
@@ -198,8 +201,8 @@ pub trait EditableView: Sized {
     /// # Returns
     ///
     /// This editable view with the callback configured.
-    fn on_input(mut self, action: impl Fn(String) -> AppControl + 'static) -> Self {
-        *self.__on_input_mut() = Some(Rc::new(action));
+    fn on_input<R: Into<AppControl>>(mut self, action: impl Fn(String) -> R + 'static) -> Self {
+        *self.__on_input_mut() = Some(Rc::new(move |next| action(next).into()));
         self
     }
 }

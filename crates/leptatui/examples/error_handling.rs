@@ -189,9 +189,9 @@ fn PanicPage() -> impl IntoView {
             <Paragraph class="warning">
                 "Activating this button intentionally panics. Leptatui will restore the terminal before Rust prints the diagnostic."
             </Paragraph>
-            <Button on_press=|| {
+            <Button on_press={|| -> () {
                 panic!("intentional error_handling example panic")
-            }>"Trigger panic"</Button>
+            }}>"Trigger panic"</Button>
         </Div>
     }
 }

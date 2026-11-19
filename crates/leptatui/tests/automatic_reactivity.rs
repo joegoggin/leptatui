@@ -38,10 +38,10 @@ fn controlled_form_tracks_values_without_a_consumer_closure() -> leptatui::Resul
                 >
                     <Text>"Title"</Text>
                     <Input value={title.get()} placeholder="Title"
-                        on_input=move |next| { title.set(next); AppControl::Continue } />
+                        on_input=move |next| { title.set(next); } />
                     <Text>"Body"</Text>
                     <TextArea value={body.get()} placeholder="Write a note"
-                        on_input=move |next| { body.set(next); AppControl::Continue } />
+                        on_input=move |next| { body.set(next); } />
                 </Form>
                 <Text>{status}</Text>
             </Div>

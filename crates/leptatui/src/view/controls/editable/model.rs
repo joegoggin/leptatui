@@ -157,7 +157,21 @@ macro_rules! impl_editable_view_api {
             }
 
             /// Stores a callback invoked with proposed controlled values.
-            pub fn on_input(self, action: impl Fn(String) -> $crate::AppControl + 'static) -> Self {
+            ///
+            /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
+            /// Explicit [`AppControl::Continue`] returns are also accepted.
+            ///
+            /// # Arguments
+            ///
+            /// * `action` — Callback receiving each proposed next value.
+            ///
+            /// # Returns
+            ///
+            /// A view with the callback configured.
+            pub fn on_input<R: Into<$crate::AppControl>>(
+                self,
+                action: impl Fn(String) -> R + 'static,
+            ) -> Self {
                 $crate::view::EditableView::on_input(self, action)
             }
 

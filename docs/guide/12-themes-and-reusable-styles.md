@@ -23,9 +23,9 @@ stylesheet! {
 ```
 
 A button can call `theme.set(ThemeVariables::new().color("text",
-Color::Black).color("surface", Color::White))` and return
-`AppControl::Continue`. Styles resolve variables while rendering, so descendants
-repaint without changing their component code. For fixed themes, provide a
+Color::Black).color("surface", Color::White))` and return `()` to keep the app
+running. Styles resolve variables while rendering, so descendants repaint
+without changing their component code. For fixed themes, provide a
 plain `ThemeVariables` instead of its read signal. The complete toggle example
 is `cargo run --example theme_switcher`.
 

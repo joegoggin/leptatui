@@ -33,11 +33,9 @@ fn NoteEditor() -> impl IntoView {
             <Form
                 on_submit=move || {
                     status.set(String::from("Submitted in memory"));
-                    AppControl::Continue
                 }
                 on_cancel=move || {
                     status.set(String::from("Canceled; draft kept"));
-                    AppControl::Continue
                 }
             >
                 <Text>"Title"</Text>
@@ -45,7 +43,6 @@ fn NoteEditor() -> impl IntoView {
                     on_input=move |next| {
                         title.set(next);
                         status.set(String::from("Editing"));
-                        AppControl::Continue
                     }
                 />
                 <Text>"Body"</Text>
@@ -53,7 +50,6 @@ fn NoteEditor() -> impl IntoView {
                     on_input=move |next| {
                         body.set(next);
                         status.set(String::from("Editing"));
-                        AppControl::Continue
                     }
                 />
             </Form>

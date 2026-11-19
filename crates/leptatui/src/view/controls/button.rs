@@ -52,6 +52,9 @@ impl ButtonView {
 
     /// Stores an activation callback.
     ///
+    /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
+    /// Explicit [`AppControl::Continue`] returns are also accepted.
+    ///
     /// # Arguments
     ///
     /// * `action` — Callback invoked when this button is activated.
@@ -59,8 +62,8 @@ impl ButtonView {
     /// # Returns
     ///
     /// This button with the callback configured.
-    pub fn on_press(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
-        self.on_press = Some(Rc::new(action));
+    pub fn on_press<R: Into<AppControl>>(mut self, action: impl Fn() -> R + 'static) -> Self {
+        self.on_press = Some(Rc::new(move || action().into()));
         self
     }
 }

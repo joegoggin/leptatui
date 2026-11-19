@@ -88,13 +88,11 @@ fn TodoActions() -> impl IntoView {
         <Div style={TuiStyle::new().display(Display::Flex)}>
             <Button on_press=move || {
                 create.dispatch(String::from("Review async state"));
-                AppControl::Continue
             }>
                 "Create"
             </Button>
             <Button on_press=move || {
                 reload.update(|version| *version += 1);
-                AppControl::Continue
             }>
                 "Reload"
             </Button>

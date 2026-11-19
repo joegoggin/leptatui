@@ -38,6 +38,9 @@ pub struct FormView {
 impl FormView {
     /// Stores a submit callback.
     ///
+    /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
+    /// Explicit [`AppControl::Continue`] returns are also accepted.
+    ///
     /// # Arguments
     ///
     /// * `action` — Callback invoked when the form submits.
@@ -45,12 +48,15 @@ impl FormView {
     /// # Returns
     ///
     /// This form with the submit callback configured.
-    pub fn on_submit(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
-        self.on_submit = Some(Rc::new(action));
+    pub fn on_submit<R: Into<AppControl>>(mut self, action: impl Fn() -> R + 'static) -> Self {
+        self.on_submit = Some(Rc::new(move || action().into()));
         self
     }
 
     /// Stores a cancel callback.
+    ///
+    /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
+    /// Explicit [`AppControl::Continue`] returns are also accepted.
     ///
     /// # Arguments
     ///
@@ -59,8 +65,8 @@ impl FormView {
     /// # Returns
     ///
     /// This form with the cancel callback configured.
-    pub fn on_cancel(mut self, action: impl Fn() -> AppControl + 'static) -> Self {
-        self.on_cancel = Some(Rc::new(action));
+    pub fn on_cancel<R: Into<AppControl>>(mut self, action: impl Fn() -> R + 'static) -> Self {
+        self.on_cancel = Some(Rc::new(move || action().into()));
         self
     }
 

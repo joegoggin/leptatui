@@ -22,7 +22,6 @@ view! {
             <Text>{format!("Revisions: {}", revisions.get())}</Text>
             <Button on_press=move || {
                 revisions.update(|value| *value += 1);
-                AppControl::Continue
             }>"Revise"</Button>
             <Text>"Tab focuses the button; Enter revises. Ctrl+Q quits."</Text>
         </Div>
@@ -54,8 +53,11 @@ Registered handlers run after descendant components' handlers and before
 built-in focus and activation handling. Handle only the keys you intend to
 claim, particularly around editable controls.
 
-Button and form callbacks return `AppControl::Continue` or `AppControl::Exit`.
+Button, input, text area, and form callbacks can return `()` (including by
+omitting a return expression) to keep the app running. Return
+`AppControl::Exit` to quit; explicit `AppControl::Continue` also works.
 The two control enums serve different jobs: key propagation and app lifetime.
+Raw keyboard handlers still return `KeyControl` explicitly.
 
 For a separate example with custom shortcuts, run
 `cargo run --example counter` in the library checkout.

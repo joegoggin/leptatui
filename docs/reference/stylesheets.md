@@ -356,7 +356,6 @@ fn ThemeRoot() -> impl IntoView {
                         *mode = mode.toggle();
                         theme.set(mode.variables());
                     });
-                    AppControl::Continue
                 }>
                     "Toggle theme"
                 </Button>

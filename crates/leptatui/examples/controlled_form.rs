@@ -140,11 +140,9 @@ fn ControlledForm() -> impl IntoView {
                 <Form
                     on_submit=move || {
                         status.set(FormStatus::Submitted);
-                        AppControl::Continue
                     }
                     on_cancel=move || {
                         status.set(FormStatus::Canceled);
-                        AppControl::Continue
                     }
                 >
                     <Text class="label">"Name"</Text>
@@ -152,7 +150,6 @@ fn ControlledForm() -> impl IntoView {
                         on_input=move |next| {
                             name.set(next);
                             status.set(FormStatus::Editing);
-                            AppControl::Continue
                         }
                     />
                     <Text class="label">"Notes"</Text>
@@ -160,12 +157,10 @@ fn ControlledForm() -> impl IntoView {
                         on_input=move |next| {
                             notes.set(next);
                             status.set(FormStatus::Editing);
-                            AppControl::Continue
                         }
                     />
                     <Button on_press=move || {
                         status.set(FormStatus::Submitted);
-                        AppControl::Continue
                     }>"Submit"</Button>
                 </Form>
                 <Text class="help">

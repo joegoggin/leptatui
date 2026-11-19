@@ -58,7 +58,6 @@ fn CounterPage() -> impl IntoView {
             <Text>"Counter"</Text>
             <Button on_press=move || {
                 counter.update(|count| *count += 1);
-                AppControl::Continue
             }>
                 "Increment"
             </Button>

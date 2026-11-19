@@ -33,11 +33,9 @@ fn NoteEditor() -> impl IntoView {
             <Form
                 on_submit=move || {
                     status.set(String::from("Submitted in memory"));
-                    AppControl::Continue
                 }
                 on_cancel=move || {
                     status.set(String::from("Canceled; draft kept"));
-                    AppControl::Continue
                 }
             >
                 <Text>"Title"</Text>
@@ -45,7 +43,6 @@ fn NoteEditor() -> impl IntoView {
                     on_input=move |next| {
                         title.set(next);
                         status.set(String::from("Editing"));
-                        AppControl::Continue
                     }
                 />
                 <Text>"Body"</Text>
@@ -53,7 +50,6 @@ fn NoteEditor() -> impl IntoView {
                     on_input=move |next| {
                         body.set(next);
                         status.set(String::from("Editing"));
-                        AppControl::Continue
                     }
                 />
             </Form>
@@ -92,7 +88,6 @@ fn FileToolbar() -> ViewResult<impl IntoView> {
             <Div class="actions">
                 <Button on_press=move || {
                     latest_read.set(Some(read_files.read_file_as_string("note.md")));
-                    AppControl::Continue
                 }>"Load body"</Button>
                 <Button on_press=move || {
                     if let Some(read) = latest_read.get_untracked() {
@@ -103,13 +98,11 @@ fn FileToolbar() -> ViewResult<impl IntoView> {
                             }
                         });
                     }
-                    AppControl::Continue
                 }>"Use loaded note"</Button>
                 <Button on_press=move || {
                     latest_write.set(Some(files.write_and_replace_file(
                         "note.md", body.get_untracked(),
                     )));
-                    AppControl::Continue
                 }>"Save body"</Button>
             </Div>
             <Text>{move || match latest_read.get() {

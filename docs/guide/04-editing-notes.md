@@ -22,11 +22,9 @@ view! {
         <Form
             on_submit=move || {
                 status.set(String::from("Submitted in memory"));
-                AppControl::Continue
             }
             on_cancel=move || {
                 status.set(String::from("Canceled; draft kept"));
-                AppControl::Continue
             }
         >
             <Text>"Title"</Text>
@@ -34,7 +32,6 @@ view! {
                 on_input=move |next| {
                     title.set(next);
                     status.set(String::from("Editing"));
-                    AppControl::Continue
                 }
             />
             <Text>"Body"</Text>
@@ -42,7 +39,6 @@ view! {
                 on_input=move |next| {
                     body.set(next);
                     status.set(String::from("Editing"));
-                    AppControl::Continue
                 }
             />
         </Form>
@@ -59,6 +55,9 @@ that update, the displayed value does not change.
 `view!` automatically tracks signal reads in attribute expressions such as
 `value={title.get()}`. When the signal changes, the binding updates the existing
 control, preserving its focus, cursor, selection, undo history, and editing mode.
+
+These callbacks return `()`, which defaults to `AppControl::Continue`.
+Return `AppControl::Exit` when a callback should quit the app.
 
 ## Try editing
 

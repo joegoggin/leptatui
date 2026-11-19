@@ -100,7 +100,6 @@ fn OpenDocument() -> impl IntoView {
                         .starting_directory("docs")
                         .extensions(["md", "markdown"]),
                 );
-                AppControl::Continue
             }>
                 "Select a file"
             </Button>
@@ -140,7 +139,6 @@ fn ConfigDirButton() -> ViewResult<impl IntoView> {
         <Button on_press=move || {
             // Ignoring the handle is valid for fire-and-forget work.
             files.create_dir("my-app/cache");
-            AppControl::Continue
         }>
             "Create config directory"
         </Button>
@@ -156,7 +154,6 @@ fn ProjectsDirButton() -> ViewResult<impl IntoView> {
         <Button on_press=move || {
             // Retain the already-started operation to render pending/value/version.
             latest_read.set(Some(files.read_file_as_string("README.md")));
-            AppControl::Continue
         }>
             "Read project guide"
         </Button>

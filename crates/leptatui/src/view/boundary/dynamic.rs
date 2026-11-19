@@ -401,6 +401,9 @@ impl DynamicView {
 
     /// Applies a button action to every child produced by this boundary.
     ///
+    /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
+    /// Explicit [`AppControl::Continue`] returns are also accepted.
+    ///
     /// # Arguments
     ///
     /// * `action` — Callback assigned when the child is a button.
@@ -409,8 +412,8 @@ impl DynamicView {
     ///
     /// This [`DynamicView`] with the child configurator installed.
     #[doc(hidden)]
-    pub fn on_press(self, action: impl Fn() -> AppControl + 'static) -> Self {
-        let action: crate::ButtonAction = Rc::new(action);
+    pub fn on_press<R: Into<AppControl>>(self, action: impl Fn() -> R + 'static) -> Self {
+        let action: crate::ButtonAction = Rc::new(move || action().into());
         self.set_configurator(
             "on_press",
             Box::new(move |child| {

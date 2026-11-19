@@ -72,6 +72,48 @@ supported graphics protocol. Otherwise it renders deterministic fallback text,
 preferring the view's `alt` text when provided. `ProgressBar` renders a gauge
 with a clamped `0.0..=1.0` value and optional `label`.
 
+## Callback return values
+
+`Button::on_press`, `Input::on_input`, `TextArea::on_input`, and
+`Form::on_submit` / `Form::on_cancel` accept callbacks returning `()` or
+`AppControl`. This applies to both `view!` attributes and Rust builder methods.
+
+```rust
+use leptatui::prelude::*;
+
+let save = button("Save").on_press(|| {
+    // Update application state here; no control return is needed.
+});
+let quit = button("Quit").on_press(|| AppControl::Exit);
+```
+
+A unit return keeps the app running, just like `AppControl::Continue`.
+Return `AppControl::Exit` to quit. Each closure must have one return type;
+a handler that conditionally exits must return `AppControl` on every path:
+
+```rust
+use leptatui::prelude::*;
+
+let should_quit = false;
+let button = button("Maybe quit").on_press(move || {
+    if should_quit {
+        AppControl::Exit
+    } else {
+        AppControl::Continue
+    }
+});
+```
+
+Raw keyboard handlers registered with `use_key_event` still return
+`KeyControl` to choose whether the key propagates. Custom component callback
+props retain their declared types: a prop typed `fn() -> AppControl` still
+requires `AppControl`. Stored aliases such as `ButtonAction`, `FormAction`,
+and `EditableAction` also retain their `AppControl` return type; builder
+methods wrap unit-returning callbacks when registering them.
+
+Callbacks that never return, such as a closure whose only expression is
+`panic!()`, need an explicit return annotation such as `|| -> () { panic!("failed") }`.
+
 ## Semantic Documents
 
 Semantic document views include `H1` through `H6`, `Paragraph`, ordered and
@@ -255,13 +297,12 @@ fn StandardControls() -> impl IntoView {
                 let notes_value = notes.get();
 
                 view! {
-                    <Form on_submit=|| AppControl::Continue>
+                    <Form on_submit=|| {}>
                         <Input
                             value=name_value
                             placeholder="Name"
                             on_input=move |next| {
                                 name.set(next);
-                                AppControl::Continue
                             }
                         />
                         <TextArea
@@ -269,7 +310,6 @@ fn StandardControls() -> impl IntoView {
                             placeholder="Notes"
                             on_input=move |next| {
                                 notes.set(next);
-                                AppControl::Continue
                             }
                         />
                     </Form>
