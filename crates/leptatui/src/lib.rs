@@ -109,9 +109,10 @@
 //! Standard components are available as builders such as [`input`],
 //! [`text_area`], [`form`], [`image()`], and [`progress_bar`] and as PascalCase
 //! tags in [`macro@view`]. `Input` and `TextArea` are controlled editable views:
-//! `view!` tracks their value expressions automatically while retaining editing
-//! state. Callers pass the current value and handle proposed updates through
-//! `on_input`. Editable controls start in Vim-style normal mode and support
+//! callers supply a [`RwSignal<String>`](leptos::prelude::RwSignal), which edits
+//! update automatically. `view!` tracks the bound signal while retaining editing
+//! state. An optional zero-argument `on_input` notification runs after each edit
+//! updates the signal. Editable controls start in Vim-style normal mode and support
 //! insert, normal, and visual editing commands, including submit and cancel
 //! integration when they are nested in a `Form`. `Image` uses path-backed
 //! [`ImageSource`] values, renders through supported terminal graphics

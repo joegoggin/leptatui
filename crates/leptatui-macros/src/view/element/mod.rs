@@ -149,14 +149,14 @@ impl Element {
         if self.name == "Input" {
             return self.expand_editable_text_control("Input", |value| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::input(#value) }
+                quote! { #leptatui::InputView::__new(#value) }
             });
         }
 
         if self.name == "TextArea" {
             return self.expand_editable_text_control("TextArea", |value| {
                 let leptatui = crate::crate_path::leptatui();
-                quote! { #leptatui::text_area(#value) }
+                quote! { #leptatui::TextAreaView::__new(#value) }
             });
         }
 

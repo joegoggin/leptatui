@@ -7,12 +7,12 @@ include!("../inspect.rs");
 /// Exercises `Input` attributes and builder lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
-    let value = String::from("Ada");
+    let value = RwSignal::new(String::from("Ada"));
     let view = view! {
         <Input
             value=value
             placeholder="Name"
-            on_input={|_| AppControl::Continue}
+            on_input={|| AppControl::Continue}
             class="field primary"
             id="name"
             style={style.clone()}

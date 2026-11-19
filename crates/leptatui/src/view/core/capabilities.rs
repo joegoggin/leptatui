@@ -171,7 +171,7 @@ pub trait EditableView: Sized {
     #[doc(hidden)]
     fn __placeholder_mut(&mut self) -> &mut Option<String>;
 
-    /// Returns the mutable controlled-value callback slot.
+    /// Returns the mutable input-notification slot.
     #[doc(hidden)]
     fn __on_input_mut(&mut self) -> &mut Option<EditableAction>;
 
@@ -189,20 +189,20 @@ pub trait EditableView: Sized {
         self
     }
 
-    /// Stores a callback invoked with proposed controlled values.
+    /// Stores a notification invoked after the value signal is updated.
     ///
     /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
     /// Explicit [`AppControl::Continue`] returns are also accepted.
     ///
     /// # Arguments
     ///
-    /// * `action` — Callback receiving each proposed next value.
+    /// * `action` — Zero-argument callback that can read the updated signal.
     ///
     /// # Returns
     ///
     /// This editable view with the callback configured.
-    fn on_input<R: Into<AppControl>>(mut self, action: impl Fn(String) -> R + 'static) -> Self {
-        *self.__on_input_mut() = Some(Rc::new(move |next| action(next).into()));
+    fn on_input<R: Into<AppControl>>(mut self, action: impl Fn() -> R + 'static) -> Self {
+        *self.__on_input_mut() = Some(Rc::new(move || action().into()));
         self
     }
 }

@@ -45,22 +45,23 @@ fn check_control_callback_return<R: Copy + Into<AppControl> + 'static>(
             calls.set(calls.get() + 1);
             result
         };
-        let edit = move |next| {
+        let edit = move || {
             calls.set(calls.get() + 1);
-            next_value.set(next);
+
             result
         };
         let mut controls = [
             button("Run").with_focus(true).on_press(action).into_view(),
             dynamic(|| button("Run").with_focus(true)).on_press(action).into_view(),
-            input("").with_focus(true).on_input(edit).into_view(),
-            text_area("").with_focus(true).on_input(edit).into_view(),
+            input(next_value).with_focus(true).on_input(edit).into_view(),
+            text_area(next_value).with_focus(true).on_input(edit).into_view(),
             // Exercise the trait method independently of the inherent wrapper.
-            leptatui::EditableView::on_input(input("").with_focus(true), edit).into_view(),
-            form([input("").with_focus(true)]).on_submit(action).into_view(),
-            form([input("").with_focus(true)]).on_cancel(action).into_view(),
+            leptatui::EditableView::on_input(input(next_value).with_focus(true), edit).into_view(),
+            form([input(RwSignal::new(String::from(""))).with_focus(true)]).on_submit(action).into_view(),
+            form([input(RwSignal::new(String::from(""))).with_focus(true)]).on_cancel(action).into_view(),
         ];
         for (index, control) in controls.iter_mut().enumerate() {
+            next_value.set(String::new());
             let code = match index {
                 2..=4 => {
                     assert_eq!(control.handle_event(key(KeyCode::Char('i')))?, AppControl::Continue);
@@ -103,7 +104,7 @@ fn view_attributes_accept_unit_and_exit_callbacks() -> leptatui::Result<()> {
                     on_submit=move || status.set("submitted")
                     on_cancel=move || status.set("canceled")
                 >
-                    <Input value="" on_input=|_| {} />
+                    <Input value={RwSignal::new(String::new())} on_input=|| {} />
                 </Form>
                 <Button on_press=move || status.set("saved")>"Save"</Button>
                 <Button on_press=|| AppControl::Exit>"Quit"</Button>

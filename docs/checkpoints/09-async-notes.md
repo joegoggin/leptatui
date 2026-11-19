@@ -39,16 +39,14 @@ fn NoteEditor() -> impl IntoView {
                 }
             >
                 <Text>"Title"</Text>
-                <Input value={title.get()} placeholder="Title"
-                    on_input=move |next| {
-                        title.set(next);
+                <Input value=title placeholder="Title"
+                    on_input=move || {
                         status.set(String::from("Editing"));
                     }
                 />
                 <Text>"Body"</Text>
-                <TextArea value={body.get()} placeholder="Write a note"
-                    on_input=move |next| {
-                        body.set(next);
+                <TextArea value=body placeholder="Write a note"
+                    on_input=move || {
                         status.set(String::from("Editing"));
                     }
                 />

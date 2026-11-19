@@ -572,8 +572,8 @@ fn styleable_standard_views_share_computed_outer_geometry() -> leptatui::app::Re
         button("button")
             .with_inline_style(outer_style())
             .into_view(),
-        input("input").with_inline_style(outer_style()).into_view(),
-        text_area("area")
+        input(RwSignal::new(String::from("input"))).with_inline_style(outer_style()).into_view(),
+        text_area(RwSignal::new(String::from("area")))
             .with_inline_style(outer_style())
             .into_view(),
         image("missing.png")

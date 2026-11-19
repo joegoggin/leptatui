@@ -13,7 +13,7 @@ use support::{draw_view, key, rendered_text};
 /// # Example Under Test
 ///
 /// ```text
-/// Input value={title.get()}, TextArea value={body.get()}, Text {status}
+/// Input value=title, TextArea value=body, Text {status}
 /// Tab, i, x, y, Esc, Tab, i, z
 /// ```
 ///
@@ -37,11 +37,9 @@ fn controlled_form_tracks_values_without_a_consumer_closure() -> leptatui::Resul
                     on_cancel=move || { status.set(String::from("Canceled")); AppControl::Continue }
                 >
                     <Text>"Title"</Text>
-                    <Input value={title.get()} placeholder="Title"
-                        on_input=move |next| { title.set(next); } />
+                    <Input value=title placeholder="Title" />
                     <Text>"Body"</Text>
-                    <TextArea value={body.get()} placeholder="Write a note"
-                        on_input=move |next| { body.set(next); } />
+                    <TextArea value=body placeholder="Write a note" />
                 </Form>
                 <Text>{status}</Text>
             </Div>
@@ -69,41 +67,46 @@ fn controlled_form_tracks_values_without_a_consumer_closure() -> leptatui::Resul
     })
 }
 
-/// Verifies rejected controlled edits do not alter the displayed value.
+/// Verifies automatic updates precede retained input notifications.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// Input value={value.get()} with an on_input handler that rejects changes.
+/// Input value=value with an on_input notification.
 /// ```
 ///
 /// # Assertions
 ///
-/// - Typing invokes the handler but leaves the supplied value intact.
+/// - Typing updates the signal before invoking the handler.
 /// - The callback retains its state across externally supplied value changes.
 #[test]
-fn rejected_edits_and_retained_callbacks() -> leptatui::Result<()> {
+fn automatic_edits_and_retained_callbacks() -> leptatui::Result<()> {
     Owner::new().with(|| {
         let value = RwSignal::new(String::from("a"));
         let calls = Rc::new(Cell::new(0));
         let observed = calls.clone();
+        let values = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let observed_values = values.clone();
         let mut view = view! {
-            <Input value={value.get()} on_input=move |_| {
+            <Input value=value on_input=move || {
                 calls.set(calls.get() + 1);
+                values.borrow_mut().push(value.get_untracked());
                 AppControl::Continue
             } />
         };
         for code in [KeyCode::Tab, KeyCode::Char('i'), KeyCode::Char('x')] {
             View::handle_event(&mut view, key(code))?;
         }
-        assert_eq!(value.get(), "a");
+        assert_eq!(value.get(), "ax");
         assert_eq!(observed.get(), 1);
         value.set(String::from("b"));
         View::handle_event(&mut view, key(KeyCode::Char('y')))?;
         assert_eq!(observed.get(), 2);
         let mut terminal = Terminal::new(TestBackend::new(10, 3))?;
         draw_view(&mut terminal, &view)?;
-        assert!(!rendered_text(&terminal).contains('y'));
+        assert_eq!(value.get(), "by");
+        assert_eq!(*observed_values.borrow(), ["ax", "by"]);
+        assert!(rendered_text(&terminal).contains("by"));
         Ok(())
     })
 }
@@ -181,7 +184,7 @@ fn StatefulLabel(
     view! {
         <Div>
             <Text>{format!("Label: {}", label.get())}</Text>
-            <Input value={local.get()} on_input=move |next| { local.set(next); AppControl::Continue } />
+            <Input value=local />
             <Text>{format!("Local: {}", local.get())}</Text>
         </Div>
     }
@@ -246,7 +249,7 @@ fn data_attributes_track_without_explicit_boundaries() {
         let ratio = RwSignal::new(0.5);
         let numbered = RwSignal::new(false);
         let field = view! {
-            <Input value={value.get()} placeholder={value.get()} id={value.get()}
+            <Input value=value placeholder={value.get()} id={value.get()}
                 class={value.get()} style={TuiStyle::new().foreground(color.get())} />
         };
         let picture = view! { <Image src={value.get()} alt={value.get()} /> };
@@ -373,8 +376,7 @@ fn property_updates_preserve_editor_state() -> leptatui::Result<()> {
     Owner::new().with(|| {
         let value = RwSignal::new(String::new());
         let class = RwSignal::new(String::from("before"));
-        let mut field = view! { <Input value={value.get()} class={class.get()}
-        on_input=move |next| { value.set(next); AppControl::Continue } /> };
+        let mut field = view! { <Input value=value class={class.get()} /> };
         for code in [
             KeyCode::Tab,
             KeyCode::Char('i'),
@@ -407,7 +409,7 @@ fn property_updates_preserve_editor_state() -> leptatui::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// Input value={if choose_left.get() { left.get() } else { right.get() }}
+/// Input value={if choose_left.get() { left } else { right }}
 /// ```
 ///
 /// # Assertions
@@ -427,8 +429,8 @@ fn conditional_dependencies_and_callback_reads_are_isolated() -> leptatui::Resul
         let mut field = view! {
             <Input value={{
                 evaluations.set(evaluations.get() + 1);
-                if choose_left.get() { left.get() } else { right.get() }
-            }} on_input=move |_| { let _ = event_only.get(); AppControl::Continue } />
+                if choose_left.get() { left } else { right }
+            }} on_input=move || { let _ = event_only.get(); AppControl::Continue } />
         };
         inspect::<InputView>(&field, |node| assert_eq!(node.value(), "left"));
         assert_eq!(calls.get(), 1);
@@ -443,8 +445,8 @@ fn conditional_dependencies_and_callback_reads_are_isolated() -> leptatui::Resul
             View::handle_event(&mut field, key(code))?;
         }
         event_only.set(10);
-        inspect::<InputView>(&field, |node| assert_eq!(node.value(), "inactive"));
-        assert_eq!(calls.get(), 2);
+        inspect::<InputView>(&field, |node| assert_eq!(node.value(), "inacxtive"));
+        assert_eq!(calls.get(), 3);
         Ok(())
     })
 }

@@ -6,7 +6,7 @@ use leptatui::prelude::*;
 fn main() {
     let _view = view! {
         <Form on_submit="save">
-            <Input value="Ada" />
+            <Input value={RwSignal::new(String::from("Ada"))} />
         </Form>
     };
 }

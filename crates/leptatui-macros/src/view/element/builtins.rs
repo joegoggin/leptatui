@@ -236,7 +236,8 @@ impl Element {
 
         let value = if !required_attr.attr.value.is_literal() {
             match required_kind {
-                AttrKind::InputValue | AttrKind::ImageSource => quote! { "" },
+                AttrKind::InputValue => quote! { None },
+                AttrKind::ImageSource => quote! { "" },
                 AttrKind::ProgressValue => quote! { 0.0 },
                 _ => required_attr.attr.value.repeat_tokens(),
             }

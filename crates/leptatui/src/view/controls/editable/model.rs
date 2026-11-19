@@ -2,12 +2,17 @@
 
 use std::rc::Rc;
 
+use leptos::prelude::{RwSignal, Set};
+
 use crate::{app::AppControl, view::StyleMetadata};
 
 use super::state::{EditableState, VimMode};
 
-/// Shared callback invoked when an editable control proposes a new value.
-pub type EditableAction = Rc<dyn Fn(String) -> AppControl>;
+/// Shared notification invoked after an editable control updates its signal.
+pub type EditableAction = Rc<dyn Fn() -> AppControl>;
+
+/// Internal action that commits edited text before notifying the caller.
+pub(crate) type ValueAction = Rc<dyn Fn(String) -> AppControl>;
 
 /// Editing geometry selected by a concrete editable view.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -20,21 +25,46 @@ pub(crate) enum EditableControlKind {
 
 /// Storage shared by input and text-area views.
 pub(crate) struct EditableModel {
-    /// Caller-owned value displayed by the editor.
-    pub(crate) value: String,
+    /// Caller-owned text signal, absent only before the initial macro binding.
+    pub(crate) value: Option<RwSignal<String>>,
     /// Placeholder displayed for an empty value.
     pub(crate) placeholder: Option<String>,
     /// Editing geometry selected by the owning concrete view.
     pub(crate) kind: EditableControlKind,
     /// Selector and runtime metadata.
     pub(crate) metadata: StyleMetadata,
-    /// Optional controlled-value callback.
+    /// Optional notification invoked after a signal update.
     pub(crate) on_input: Option<EditableAction>,
     /// Retained cursor, selection, scroll, and history state.
     pub(crate) editable_state: EditableState,
 }
 
 impl EditableModel {
+    /// Returns the signal installed by the constructor or initial macro binding.
+    ///
+    /// # Returns
+    ///
+    /// A signal containing the editable text.
+    pub(crate) fn value_signal(&self) -> RwSignal<String> {
+        self.value.expect("editable value must be bound before use")
+    }
+
+    /// Creates the internal signal-writing action for an editing operation.
+    ///
+    /// # Returns
+    ///
+    /// A callback that writes the signal before invoking the optional notification.
+    pub(crate) fn handle_input(&self) -> ValueAction {
+        let value = self.value_signal();
+        let on_input = self.on_input.clone();
+        Rc::new(move |new_value| {
+            value.set(new_value);
+            on_input
+                .as_ref()
+                .map_or(AppControl::Continue, |action| action())
+        })
+    }
+
     /// Synchronizes retained editing mode into stylesheet metadata.
     pub(crate) fn sync_style_state(&self) {
         let mode = self.editable_state.mode();
@@ -156,28 +186,32 @@ macro_rules! impl_editable_view_api {
                 $crate::view::EditableView::placeholder(self, placeholder)
             }
 
-            /// Stores a callback invoked with proposed controlled values.
+            /// Stores a notification invoked after the value signal is updated.
             ///
             /// Return `()` to keep running, or [`AppControl::Exit`] to quit.
             /// Explicit [`AppControl::Continue`] returns are also accepted.
             ///
             /// # Arguments
             ///
-            /// * `action` — Callback receiving each proposed next value.
+            /// * `action` — Zero-argument callback that can read the updated signal.
             ///
             /// # Returns
             ///
             /// A view with the callback configured.
             pub fn on_input<R: Into<$crate::AppControl>>(
                 self,
-                action: impl Fn(String) -> R + 'static,
+                action: impl Fn() -> R + 'static,
             ) -> Self {
                 $crate::view::EditableView::on_input(self, action)
             }
 
-            /// Returns the controlled text value.
-            pub fn value(&self) -> &str {
-                &self.model.value
+            /// Returns the current text from the bound signal.
+            ///
+            /// # Returns
+            ///
+            /// An owned [`String`] containing the current editable text.
+            pub fn value(&self) -> String {
+                $crate::prelude::GetUntracked::get_untracked(&self.model.value_signal())
             }
 
             /// Returns optional placeholder text.
@@ -195,7 +229,7 @@ macro_rules! impl_editable_view_api {
                 &mut self.model.editable_state
             }
 
-            /// Returns whether a controlled-value callback is configured.
+            /// Returns whether an input notification is configured.
             pub fn has_on_input(&self) -> bool {
                 self.model.on_input.is_some()
             }

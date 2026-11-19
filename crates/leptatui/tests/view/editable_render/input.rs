@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada")
+/// input(RwSignal::new(String::from("Ada")))
 /// width = 8, height = 3
 /// ```
 ///
@@ -17,7 +17,7 @@
 fn renders_input_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let view = input("Ada");
+    let view = input(RwSignal::new(String::from("Ada")));
 
     draw_view(&mut terminal, &view)?;
 
@@ -37,7 +37,7 @@ fn renders_input_value() -> leptatui::app::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_inline_style(TuiStyle::new().borders(Borders::NONE))
+/// input(RwSignal::new(String::from("Ada"))).with_inline_style(TuiStyle::new().borders(Borders::NONE))
 /// width = 8
 /// ```
 ///
@@ -49,7 +49,7 @@ fn renders_input_value() -> leptatui::app::Result<()> {
 fn input_borders_none_disables_default_border() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 1);
     let mut terminal = Terminal::new(backend)?;
-    let view = input("Ada").with_inline_style(TuiStyle::new().borders(Borders::NONE));
+    let view = input(RwSignal::new(String::from("Ada"))).with_inline_style(TuiStyle::new().borders(Borders::NONE));
 
     draw_view(&mut terminal, &view)?;
 
@@ -64,7 +64,7 @@ fn input_borders_none_disables_default_border() -> leptatui::app::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// input("").placeholder("Name")
+/// input(RwSignal::new(String::from(""))).placeholder("Name")
 /// width = 8, height = 3
 /// ```
 ///
@@ -76,7 +76,7 @@ fn input_borders_none_disables_default_border() -> leptatui::app::Result<()> {
 fn renders_input_placeholder_when_value_is_empty() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let view = input("").placeholder("Name");
+    let view = input(RwSignal::new(String::from(""))).placeholder("Name");
 
     draw_view(&mut terminal, &view)?;
 
@@ -91,7 +91,7 @@ fn renders_input_placeholder_when_value_is_empty() -> leptatui::app::Result<()> 
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// :focus { fg: Black, bg: Yellow }
 /// ```
 ///
@@ -105,7 +105,7 @@ fn renders_input_placeholder_when_value_is_empty() -> leptatui::app::Result<()> 
 fn renders_focused_input_with_focus_stylesheet_rule() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let view = input("Ada").with_focus(true);
+    let view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::focus(),
         TuiStyle::new()
@@ -132,7 +132,7 @@ fn renders_focused_input_with_focus_stylesheet_rule() -> leptatui::app::Result<(
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// mode = Insert
 /// ```
 ///
@@ -144,7 +144,7 @@ fn renders_focused_input_with_focus_stylesheet_rule() -> leptatui::app::Result<(
 #[test]
 fn insert_mode_input_renders_default_palette() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
-    let mut view = input("Ada").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
 
     draw_view(&mut terminal, &view)?;
@@ -168,7 +168,7 @@ fn insert_mode_input_renders_default_palette() -> leptatui::app::Result<()> {
 ///
 /// ```text
 /// Input:insert { fg: Magenta, padding: 0 }
-/// input("Ada").with_focus(true), mode = Insert
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true), mode = Insert
 /// ```
 ///
 /// # Assertions
@@ -179,7 +179,7 @@ fn insert_mode_input_renders_default_palette() -> leptatui::app::Result<()> {
 #[test]
 fn insert_mode_stylesheet_rules_override_input_defaults() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
-    let mut view = input("Ada").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
     let stylesheet = stylesheet! {
         Input:insert => { fg: Color::Magenta, padding: TuiSpacing::ZERO }
@@ -203,7 +203,7 @@ fn insert_mode_stylesheet_rules_override_input_defaults() -> leptatui::app::Resu
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// mode = Visual, selection = first two characters
 /// ```
 ///
@@ -215,7 +215,7 @@ fn insert_mode_stylesheet_rules_override_input_defaults() -> leptatui::app::Resu
 #[test]
 fn visual_mode_input_renders_default_palette_and_selection() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
-    let mut view = input("Ada").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Visual);
     editable_state_mut(&mut view).set_selection_anchor(Some(0));
     editable_state_mut(&mut view).set_cursor(1);
@@ -240,7 +240,7 @@ fn visual_mode_input_renders_default_palette_and_selection() -> leptatui::app::R
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// cursor = end
 /// ```
 ///
@@ -252,7 +252,7 @@ fn visual_mode_input_renders_default_palette_and_selection() -> leptatui::app::R
 fn focused_input_sets_terminal_cursor_position() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let view = input("Ada").with_focus(true);
+    let view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
 
     draw_view(&mut terminal, &view)?;
 
@@ -277,7 +277,7 @@ fn focused_input_sets_terminal_cursor_position() -> leptatui::app::Result<()> {
 ///   parent's viewport.
 #[test]
 fn focused_input_cursor_respects_retained_clip() -> leptatui::app::Result<()> {
-    let child = input("A").with_focus(true).with_inline_style(
+    let child = input(RwSignal::new(String::from("A"))).with_focus(true).with_inline_style(
         TuiStyle::new()
             .box_sizing(BoxSizing::BorderBox)
             .size(LayoutSize::new(
@@ -323,7 +323,7 @@ fn focused_input_cursor_respects_retained_clip() -> leptatui::app::Result<()> {
 /// - An unfocused input reports no focused control.
 #[test]
 fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()> {
-    let normal_input = input("Ada").with_focus(true);
+    let normal_input = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     assert_eq!(
         leptatui::AppRoot::__focused_control(&normal_input),
         Some(FocusedControl::Input {
@@ -332,7 +332,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
         })
     );
 
-    let mut insert_input = input("Ada").with_focus(true);
+    let mut insert_input = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut insert_input).set_mode(VimMode::Insert);
     assert_eq!(
         leptatui::AppRoot::__focused_control(&insert_input),
@@ -351,7 +351,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
         })
     );
 
-    let mut visual_input = input("Ada").with_focus(true);
+    let mut visual_input = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut visual_input).set_mode(VimMode::Visual);
     editable_state_mut(&mut visual_input).set_selection_anchor(Some(0));
     assert_eq!(
@@ -362,7 +362,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
         })
     );
 
-    let normal_text_area = text_area("Ada").with_focus(true);
+    let normal_text_area = text_area(RwSignal::new(String::from("Ada"))).with_focus(true);
     assert_eq!(
         leptatui::AppRoot::__focused_control(&normal_text_area),
         Some(FocusedControl::TextArea {
@@ -371,7 +371,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
         })
     );
 
-    let mut insert_text_area = text_area("Ada").with_focus(true);
+    let mut insert_text_area = text_area(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut insert_text_area).set_mode(VimMode::Insert);
     assert_eq!(
         leptatui::AppRoot::__focused_control(&insert_text_area),
@@ -390,7 +390,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
         })
     );
 
-    let mut visual_text_area = text_area("Ada").with_focus(true);
+    let mut visual_text_area = text_area(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut visual_text_area).set_mode(VimMode::VisualLine);
     editable_state_mut(&mut visual_text_area).set_selection_anchor(Some(0));
     assert_eq!(
@@ -405,7 +405,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
         leptatui::AppRoot::__focused_control(&button("Save").with_focus(true)),
         Some(FocusedControl::Button)
     );
-    assert_eq!(leptatui::AppRoot::__focused_control(&input("Ada")), None);
+    assert_eq!(leptatui::AppRoot::__focused_control(&input(RwSignal::new(String::from("Ada")))), None);
 
     Ok(())
 }
@@ -415,7 +415,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
 /// # Example Under Test
 ///
 /// ```text
-/// input("abcdef").with_focus(true)
+/// input(RwSignal::new(String::from("abcdef"))).with_focus(true)
 /// width = 6, height = 3
 /// cursor = end, then cursor = 0
 /// ```
@@ -429,7 +429,7 @@ fn app_root_reports_focused_editable_control_mode() -> leptatui::app::Result<()>
 fn input_rendering_clips_and_scrolls_around_cursor() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(6, 3);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = input("abcdef").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("abcdef"))).with_focus(true);
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 2, 1, 6), "e");
@@ -448,7 +448,7 @@ fn input_rendering_clips_and_scrolls_around_cursor() -> leptatui::app::Result<()
 /// # Example Under Test
 ///
 /// ```text
-/// input("abcd").with_focus(true)
+/// input(RwSignal::new(String::from("abcd"))).with_focus(true)
 /// mode = Visual, selection = bytes 1..=2
 /// ```
 ///
@@ -460,7 +460,7 @@ fn input_rendering_clips_and_scrolls_around_cursor() -> leptatui::app::Result<()
 fn input_visual_selection_renders_reversed_cells() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = input("abcd").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("abcd"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Visual);
     editable_state_mut(&mut view).set_selection_anchor(Some(1));
     editable_state_mut(&mut view).set_cursor(2);
@@ -480,7 +480,7 @@ fn input_visual_selection_renders_reversed_cells() -> leptatui::app::Result<()> 
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// mode = Insert, key = j
 /// ```
 ///
@@ -493,7 +493,7 @@ fn input_visual_selection_renders_reversed_cells() -> leptatui::app::Result<()> 
 fn input_pending_insert_j_renders_reversed_preview() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = input("Ada").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
 
     assert_eq!(
@@ -514,7 +514,7 @@ fn input_pending_insert_j_renders_reversed_preview() -> leptatui::app::Result<()
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// mode = Insert, key = j, elapsed = 1100 ms
 /// ```
 ///
@@ -527,7 +527,7 @@ fn input_pending_insert_j_renders_reversed_preview() -> leptatui::app::Result<()
 fn input_pending_insert_j_preview_expires_to_insert_cursor() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = input("Ada").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
 
     assert_eq!(

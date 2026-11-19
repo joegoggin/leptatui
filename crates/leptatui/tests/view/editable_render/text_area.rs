@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("One\nTwo")
+/// text_area(RwSignal::new(String::from("One\nTwo")))
 /// width = 8, height = 4
 /// ```
 ///
@@ -18,7 +18,7 @@
 fn renders_text_area_multiline_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
-    let view = text_area("One\nTwo");
+    let view = text_area(RwSignal::new(String::from("One\nTwo")));
 
     draw_view(&mut terminal, &view)?;
 
@@ -37,7 +37,7 @@ fn renders_text_area_multiline_value() -> leptatui::app::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("One\nTwo").with_inline_style(TuiStyle::new().borders(Borders::NONE))
+/// text_area(RwSignal::new(String::from("One\nTwo"))).with_inline_style(TuiStyle::new().borders(Borders::NONE))
 /// width = 8, height = 2
 /// ```
 ///
@@ -49,7 +49,7 @@ fn renders_text_area_multiline_value() -> leptatui::app::Result<()> {
 fn text_area_borders_none_disables_default_border() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend)?;
-    let view = text_area("One\nTwo").with_inline_style(TuiStyle::new().borders(Borders::NONE));
+    let view = text_area(RwSignal::new(String::from("One\nTwo"))).with_inline_style(TuiStyle::new().borders(Borders::NONE));
 
     draw_view(&mut terminal, &view)?;
 
@@ -64,7 +64,7 @@ fn text_area_borders_none_disables_default_border() -> leptatui::app::Result<()>
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("").placeholder("Notes")
+/// text_area(RwSignal::new(String::from(""))).placeholder("Notes")
 /// width = 8, height = 3
 /// ```
 ///
@@ -76,7 +76,7 @@ fn text_area_borders_none_disables_default_border() -> leptatui::app::Result<()>
 fn renders_text_area_placeholder_when_value_is_empty() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let view = text_area("").placeholder("Notes");
+    let view = text_area(RwSignal::new(String::from(""))).placeholder("Notes");
 
     draw_view(&mut terminal, &view)?;
 
@@ -91,7 +91,7 @@ fn renders_text_area_placeholder_when_value_is_empty() -> leptatui::app::Result<
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada").with_focus(true)
+/// text_area(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// :focus { fg: Black, bg: Yellow }
 /// ```
 ///
@@ -105,7 +105,7 @@ fn renders_text_area_placeholder_when_value_is_empty() -> leptatui::app::Result<
 fn renders_focused_text_area_with_focus_stylesheet_rule() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let view = text_area("Ada").with_focus(true);
+    let view = text_area(RwSignal::new(String::from("Ada"))).with_focus(true);
     let stylesheet = Stylesheet::new().rule(
         StyleSelector::focus(),
         TuiStyle::new()
@@ -132,7 +132,7 @@ fn renders_focused_text_area_with_focus_stylesheet_rule() -> leptatui::app::Resu
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada").with_focus(true)
+/// text_area(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// mode = Insert
 /// ```
 ///
@@ -144,7 +144,7 @@ fn renders_focused_text_area_with_focus_stylesheet_rule() -> leptatui::app::Resu
 #[test]
 fn insert_mode_text_area_renders_default_palette() -> leptatui::app::Result<()> {
     let mut terminal = Terminal::new(TestBackend::new(8, 3))?;
-    let mut view = text_area("Ada").with_focus(true);
+    let mut view = text_area(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
 
     draw_view(&mut terminal, &view)?;
@@ -167,7 +167,7 @@ fn insert_mode_text_area_renders_default_palette() -> leptatui::app::Result<()> 
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("one\ntwo").with_focus(true)
+/// text_area(RwSignal::new(String::from("one\ntwo"))).with_focus(true)
 /// cursor = end
 /// ```
 ///
@@ -179,7 +179,7 @@ fn insert_mode_text_area_renders_default_palette() -> leptatui::app::Result<()> 
 fn focused_text_area_sets_terminal_cursor_position() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
-    let view = text_area("one\ntwo").with_focus(true);
+    let view = text_area(RwSignal::new(String::from("one\ntwo"))).with_focus(true);
 
     draw_view(&mut terminal, &view)?;
 
@@ -193,7 +193,7 @@ fn focused_text_area_sets_terminal_cursor_position() -> leptatui::app::Result<()
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("aaa\nbbb\nccc").with_focus(true)
+/// text_area(RwSignal::new(String::from("aaa\nbbb\nccc"))).with_focus(true)
 /// height = 4
 /// cursor = end, then cursor = 0
 /// ```
@@ -207,7 +207,7 @@ fn focused_text_area_sets_terminal_cursor_position() -> leptatui::app::Result<()
 fn text_area_rendering_scrolls_vertically_around_cursor() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = text_area("aaa\nbbb\nccc").with_focus(true);
+    let mut view = text_area(RwSignal::new(String::from("aaa\nbbb\nccc"))).with_focus(true);
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 2, 1, 8), "b");
@@ -226,7 +226,7 @@ fn text_area_rendering_scrolls_vertically_around_cursor() -> leptatui::app::Resu
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("one\ntwo\nthree").with_focus(true)
+/// text_area(RwSignal::new(String::from("one\ntwo\nthree"))).with_focus(true)
 /// mode = VisualLine, selection = second and third lines
 /// ```
 ///
@@ -239,7 +239,7 @@ fn text_area_rendering_scrolls_vertically_around_cursor() -> leptatui::app::Resu
 fn text_area_visual_line_selection_renders_reversed_cells() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(10, 5);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = text_area("one\ntwo\nthree").with_focus(true);
+    let mut view = text_area(RwSignal::new(String::from("one\ntwo\nthree"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::VisualLine);
     editable_state_mut(&mut view).set_selection_anchor(Some(4));
     editable_state_mut(&mut view).set_cursor(8);
@@ -266,7 +266,7 @@ fn text_area_visual_line_selection_renders_reversed_cells() -> leptatui::app::Re
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada").with_focus(true)
+/// text_area(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// width = 7, mode = Insert, key = j
 /// ```
 ///
@@ -279,7 +279,7 @@ fn text_area_visual_line_selection_renders_reversed_cells() -> leptatui::app::Re
 fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(7, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = text_area("Ada").with_focus(true);
+    let mut view = text_area(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
 
     assert_eq!(
@@ -300,7 +300,7 @@ fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> leptatui::ap
 /// # Example Under Test
 ///
 /// ```text
-/// div([text_area("Hello World"), text("End")])
+/// div([text_area(RwSignal::new(String::from("Hello World"))), text("End")])
 /// width = 6
 /// ```
 ///
@@ -312,7 +312,7 @@ fn text_area_pending_insert_j_renders_reversed_wrapped_preview() -> leptatui::ap
 fn column_reserves_height_for_wrapped_text_area() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(6, 9);
     let mut terminal = Terminal::new(backend)?;
-    let view = div((text_area("Hello World"), text("End")));
+    let view = div((text_area(RwSignal::new(String::from("Hello World"))), text("End")));
 
     draw_view(&mut terminal, &view)?;
 

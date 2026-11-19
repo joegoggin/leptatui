@@ -8,7 +8,7 @@
 ///
 /// A [`View`] containing an input with fresh editable state.
 fn editable_input(value: impl Into<String>) -> InputView {
-    input(value)
+    input(RwSignal::new(value.into()))
 }
 
 /// Creates an editable text-area test view.
@@ -21,7 +21,7 @@ fn editable_input(value: impl Into<String>) -> InputView {
 ///
 /// A [`View`] containing a text area with fresh editable state.
 fn editable_text_area(value: impl Into<String>) -> TextAreaView {
-    text_area(value)
+    text_area(RwSignal::new(value.into()))
 }
 
 /// Creates non-default editable state for reconciliation tests.

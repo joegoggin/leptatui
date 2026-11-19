@@ -3,6 +3,7 @@
 use std::{fmt, time::Instant};
 
 use crossterm::event::KeyEvent;
+use leptos::prelude::{Get, GetUntracked, RwSignal};
 
 use crate::view::{AvailableSpace, StyleMetadata, View, ViewType};
 use crate::{
@@ -29,27 +30,46 @@ pub struct InputView {
 
 /// Creates a controlled single-line input.
 ///
+/// Edits update `value` automatically. An optional zero-argument `on_input`
+/// notification runs after the signal is updated; external writes do not
+/// invoke that notification.
+///
 /// # Arguments
 ///
-/// * `value` — Caller-owned value displayed by the input.
+/// * `value` — Signal read and automatically updated by the input.
 ///
 /// # Returns
 ///
 /// An [`InputView`] with fresh editing state.
-pub fn input(value: impl Into<String>) -> InputView {
-    let value = value.into();
-    let mut editable_state = EditableState::new();
-    editable_state.set_cursor(value.len());
+pub fn input(value: RwSignal<String>) -> InputView {
+    InputView::__new(Some(value))
+}
 
-    InputView {
-        model: EditableModel {
-            value,
-            placeholder: None,
-            kind: EditableControlKind::Input,
-            metadata: StyleMetadata::new(ViewType::Input),
-            on_input: None,
-            editable_state,
-        },
+impl InputView {
+    /// Creates an editable control before its initial macro binding.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` — Initial signal, or no signal until the initial binding runs.
+    ///
+    /// # Returns
+    ///
+    /// A control with fresh editing state.
+    #[doc(hidden)]
+    pub fn __new(value: Option<RwSignal<String>>) -> Self {
+        let mut editable_state = EditableState::new();
+        editable_state.set_cursor(value.map_or(0, |value| value.get_untracked().len()));
+
+        InputView {
+            model: EditableModel {
+                value,
+                placeholder: None,
+                kind: EditableControlKind::Input,
+                metadata: StyleMetadata::new(ViewType::Input),
+                on_input: None,
+                editable_state,
+            },
+        }
     }
 }
 
@@ -107,8 +127,8 @@ impl View for InputView {
 
     fn __flush_pending_input(&mut self) -> Option<AppControl> {
         flush_expired_insert_key(
-            &self.model.value,
-            &self.model.on_input,
+            &self.model.value_signal().get_untracked(),
+            &self.model.handle_input(),
             &mut self.model.editable_state,
             Instant::now(),
         )
@@ -164,8 +184,8 @@ impl View for InputView {
             return None;
         }
         handle_input_key(
-            &self.model.value,
-            &self.model.on_input,
+            &self.model.value_signal().get_untracked(),
+            &self.model.handle_input(),
             &mut self.model.editable_state,
             &key,
         )
@@ -195,19 +215,19 @@ impl InputView {
     ///
     /// # Arguments
     ///
-    /// * `value` — Latest property value.
+    /// * `value` — Signal supplying the editable text.
     /// * `initial` — Whether to initialize the cursor for the first supplied value.
     ///
     /// # Returns
     ///
     /// This view with the updated property.
     #[doc(hidden)]
-    pub fn __value(mut self, value: impl Into<String>, initial: bool) -> Self {
-        let value = value.into();
+    pub fn __value(mut self, value: RwSignal<String>, initial: bool) -> Self {
+        let text = value.get();
         if initial {
-            self.model.editable_state.set_cursor(value.len());
+            self.model.editable_state.set_cursor(text.len());
         }
-        self.model.value = value;
+        self.model.value = Some(value);
         self
     }
 }

@@ -6,7 +6,7 @@ use crate::KeyControl;
 
 use super::{
     insert::commit_input_value,
-    model::{EditableAction, EditableControlKind},
+    model::{EditableControlKind, ValueAction},
     movement::*,
     state::{EditableState, VimMode},
     visual::{enter_visual_mode, handle_pending_normal_mode_key, replace_value_range},
@@ -17,7 +17,7 @@ use super::{
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives proposed next values.
+/// * `on_input` — Internal signal-writing action that receives proposed next values.
 /// * `editable_state` — Retained cursor, mode, and history state for the control.
 /// * `key` — Key event to apply while the control is in normal mode.
 /// * `kind` — Editable control variant receiving the key.
@@ -28,7 +28,7 @@ use super::{
 /// handles the key.
 pub(crate) fn handle_normal_mode_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
     kind: EditableControlKind,
@@ -215,7 +215,7 @@ pub(crate) fn handle_normal_vertical_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives the shortened value.
+/// * `on_input` — Internal signal-writing action that receives the shortened value.
 /// * `editable_state` — Retained cursor, mode, and history state for the control.
 ///
 /// # Returns
@@ -223,7 +223,7 @@ pub(crate) fn handle_normal_vertical_key(
 /// A [`KeyControl`] value indicating that character deletion was handled.
 pub(crate) fn handle_delete_normal_char_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
 ) -> KeyControl {
     if value.is_empty() {
@@ -244,7 +244,7 @@ pub(crate) fn handle_delete_normal_char_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives the shortened value.
+/// * `on_input` — Internal signal-writing action that receives the shortened value.
 /// * `editable_state` — Retained cursor, mode, and history state for the control.
 /// * `kind` — Editable control variant receiving the command.
 ///
@@ -253,7 +253,7 @@ pub(crate) fn handle_delete_normal_char_key(
 /// A [`KeyControl`] value indicating that line deletion was handled.
 pub(crate) fn handle_delete_line_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     kind: EditableControlKind,
 ) -> KeyControl {
@@ -325,7 +325,7 @@ pub(crate) enum OpenLinePosition {
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives the opened-line value.
+/// * `on_input` — Internal signal-writing action that receives the opened-line value.
 /// * `editable_state` — Retained cursor, mode, and history state for the
 ///   control.
 /// * `kind` — Editable control variant receiving the command.
@@ -336,7 +336,7 @@ pub(crate) enum OpenLinePosition {
 /// A [`KeyControl`] value indicating that the open-line command was handled.
 pub(crate) fn handle_open_line_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     kind: EditableControlKind,
     position: OpenLinePosition,
@@ -373,7 +373,7 @@ pub(crate) fn handle_open_line_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives the pasted value.
+/// * `on_input` — Internal signal-writing action that receives the pasted value.
 /// * `editable_state` — Retained cursor, mode, and yank-buffer state for the
 ///   control.
 /// * `kind` — Editable control variant receiving the command.
@@ -383,7 +383,7 @@ pub(crate) fn handle_open_line_key(
 /// A [`KeyControl`] value indicating that paste was handled.
 pub(crate) fn handle_paste_input_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     kind: EditableControlKind,
 ) -> KeyControl {
@@ -407,7 +407,7 @@ pub(crate) fn handle_paste_input_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives the restored value.
+/// * `on_input` — Internal signal-writing action that receives the restored value.
 /// * `editable_state` — Retained cursor, mode, and undo-history state for the
 ///   control.
 ///
@@ -416,12 +416,9 @@ pub(crate) fn handle_paste_input_key(
 /// A [`KeyControl`] value indicating that undo was handled.
 pub(crate) fn handle_undo_input_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
 ) -> KeyControl {
-    let Some(on_input) = on_input.as_ref() else {
-        return KeyControl::Handled;
-    };
     let Some(previous) = editable_state.pop_undo() else {
         return KeyControl::Handled;
     };
@@ -438,7 +435,7 @@ pub(crate) fn handle_undo_input_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives the redone value.
+/// * `on_input` — Internal signal-writing action that receives the redone value.
 /// * `editable_state` — Retained cursor, mode, and redo-history state for the
 ///   control.
 ///
@@ -447,12 +444,9 @@ pub(crate) fn handle_undo_input_key(
 /// A [`KeyControl`] value indicating that redo was handled.
 pub(crate) fn handle_redo_input_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
 ) -> KeyControl {
-    let Some(on_input) = on_input.as_ref() else {
-        return KeyControl::Handled;
-    };
     let Some(next) = editable_state.pop_redo() else {
         return KeyControl::Handled;
     };

@@ -100,7 +100,7 @@ fn prelude_exposes_macros_and_required_context() -> leptatui::app::Result<()> {
 ///     ordered_list([list_item([paragraph("First")])]),
 ///     table([table_body([table_row([table_cell("Ready")])])]),
 ///     code_block("fn main() {}").language("rust"),
-///     form([input("Ada"), text_area("Notes")]),
+///     form([input(RwSignal::new(String::from("Ada"))), text_area(RwSignal::new(String::from("Notes")))]),
 ///     image("logo.png"),
 ///     progress_bar(0.5),
 /// ]))
@@ -140,16 +140,17 @@ async fn prelude_exposes_reactivity_and_context() {
         });
 
         let form_action: FormAction = std::rc::Rc::new(|| AppControl::Continue);
-        let input_action: EditableAction = std::rc::Rc::new(|_| AppControl::Continue);
+        let input_action: EditableAction = std::rc::Rc::new(|| AppControl::Continue);
         let input_action_for_input = std::rc::Rc::clone(&input_action);
         let input_action_for_text_area = std::rc::Rc::clone(&input_action);
         let form_action_for_submit = std::rc::Rc::clone(&form_action);
         let image_source = ImageSource::from("assets/logo.png");
         assert_eq!(image_source, ImageSource::Path("assets/logo.png".into()));
 
-        let input_view = input("Ada").on_input(move |next| input_action_for_input(next));
-        let text_area_view =
-            text_area("Notes").on_input(move |next| input_action_for_text_area(next));
+        let input_view =
+            input(RwSignal::new(String::from("Ada"))).on_input(move || input_action_for_input());
+        let text_area_view = text_area(RwSignal::new(String::from("Notes")))
+            .on_input(move || input_action_for_text_area());
         let form_view = form((input_view, text_area_view))
             .on_submit(move || form_action_for_submit())
             .on_cancel(|| AppControl::Continue);
@@ -215,8 +216,8 @@ async fn prelude_exposes_reactivity_and_context() {
                     "fn main() {}"
                 </CodeBlock>
                 <Form>
-                    <Input value="Ada" />
-                    <TextArea value="Notes" />
+                    <Input value={RwSignal::new(String::from("Ada"))} />
+                    <TextArea value={RwSignal::new(String::from("Notes"))} />
                     <Image src="assets/logo.png" alt="Project logo" />
                     <ProgressBar value=0.5 label="Half" />
                 </Form>

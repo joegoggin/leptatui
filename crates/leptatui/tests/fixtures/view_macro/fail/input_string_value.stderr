@@ -1,0 +1,16 @@
+error[E0308]: mismatched types
+ --> tests/fixtures/view_macro/fail/input_string_value.rs:8:35
+  |
+8 |     let _ = view! { <Input value={value.get()} /> };
+  |             ----------------------^^^^^^^^^^^------
+  |             |                     |
+  |             |                     expected `RwSignal<String>`, found `String`
+  |             arguments to this method are incorrect
+  |
+  = note: expected struct `leptatui::prelude::RwSignal<String>`
+             found struct `String`
+note: method defined here
+ --> src/view/controls/editable/input.rs
+  |
+  |     pub fn __value(mut self, value: RwSignal<String>, initial: bool) -> Self {
+  |            ^^^^^^^

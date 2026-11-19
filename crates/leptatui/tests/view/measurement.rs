@@ -193,8 +193,8 @@ fn text_measurement_uses_unicode_terminal_width() -> leptatui::app::Result<()> {
 ///
 /// ```text
 /// button("Go")
-/// input("Ada")
-/// text_area("Ada\n")
+/// input(RwSignal::new(String::from("Ada")))
+/// text_area(RwSignal::new(String::from("Ada\n")))
 /// image("asset.png") sized 9 × 4
 /// code_block("abcdef") constrained to width 4
 /// ```
@@ -210,8 +210,8 @@ fn specialized_leaf_views_measure_width_and_height() -> leptatui::app::Result<()
     let unknown = LayoutSize::all(None);
     let max_content = LayoutSize::all(AvailableSpace::MaxContent);
     let button_size = measure_view(&button("Go"), unknown, max_content)?;
-    let input_size = measure_view(&input("Ada"), unknown, max_content)?;
-    let text_area_size = measure_view(&text_area("Ada\n"), unknown, max_content)?;
+    let input_size = measure_view(&input(RwSignal::new(String::from("Ada"))), unknown, max_content)?;
+    let text_area_size = measure_view(&text_area(RwSignal::new(String::from("Ada\n"))), unknown, max_content)?;
     let image_size = measure_view(
         &image("asset.png").with_inline_style(TuiStyle::new().image_size(TuiSize::new(9, 4))),
         unknown,

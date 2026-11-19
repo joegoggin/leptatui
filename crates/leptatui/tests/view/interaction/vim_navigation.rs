@@ -3,10 +3,10 @@
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// i, Esc, a, I, A
 ///
-/// text_area("ab\ncd").with_focus(true)
+/// text_area(RwSignal::new(String::from("ab\ncd"))).with_focus(true)
 /// I, A
 /// ```
 ///
@@ -21,7 +21,7 @@
 ///   areas.
 #[test]
 fn focused_editable_controls_support_vim_mode_transitions() -> leptatui::app::Result<()> {
-    let mut input_view = input("Ada").with_focus(true);
+    let mut input_view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     assert_eq!(editable_state(&input_view).mode(), VimMode::Normal);
 
     editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
@@ -56,7 +56,7 @@ fn focused_editable_controls_support_vim_mode_transitions() -> leptatui::app::Re
     input_view.handle_key_event(key_event(KeyCode::Char('A')))?;
     assert_eq!(editable_state(&input_view).cursor(), 3);
 
-    let mut text_area_view = text_area("ab\ncd").with_focus(true);
+    let mut text_area_view = text_area(RwSignal::new(String::from("ab\ncd"))).with_focus(true);
     editable_state_mut(&mut text_area_view).set_mode(VimMode::Normal);
     editable_state_mut(&mut text_area_view).set_cursor(4);
     text_area_view.handle_key_event(key_event(KeyCode::Char('I')))?;
@@ -76,10 +76,10 @@ fn focused_editable_controls_support_vim_mode_transitions() -> leptatui::app::Re
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("one\ntwo").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("one\ntwo"))).with_focus(true).on_input(...)
 /// o, O
 ///
-/// text_area("").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from(""))).with_focus(true).on_input(...)
 /// o, O
 /// ```
 ///
@@ -190,7 +190,7 @@ fn focused_text_area_supports_vim_open_line_commands() -> leptatui::app::Result<
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// o, O
 /// ```
 ///
@@ -229,7 +229,7 @@ fn focused_input_handles_vim_open_line_commands_without_mutation() -> leptatui::
 /// # Example Under Test
 ///
 /// ```text
-/// input("one two three").with_focus(true)
+/// input(RwSignal::new(String::from("one two three"))).with_focus(true)
 /// l, Left, Right, h, w, e, b, $, 0, G, gg
 /// ```
 ///
@@ -241,7 +241,7 @@ fn focused_input_handles_vim_open_line_commands_without_mutation() -> leptatui::
 /// - `gg` moves the cursor back to the first character.
 #[test]
 fn focused_input_supports_vim_normal_mode_movement() -> leptatui::app::Result<()> {
-    let mut view = input("one two three").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("one two three"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(0);
 
@@ -287,7 +287,7 @@ fn focused_input_supports_vim_normal_mode_movement() -> leptatui::app::Result<()
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("one\ntwo\nthree").with_focus(true)
+/// text_area(RwSignal::new(String::from("one\ntwo\nthree"))).with_focus(true)
 /// j, k, Down, Up, $, 0, G, gg
 /// ```
 ///
@@ -299,7 +299,7 @@ fn focused_input_supports_vim_normal_mode_movement() -> leptatui::app::Result<()
 /// - `G` and `gg` move to the last and first characters in the text area.
 #[test]
 fn focused_text_area_supports_vim_normal_mode_movement() -> leptatui::app::Result<()> {
-    let mut view = text_area("one\ntwo\nthree").with_focus(true);
+    let mut view = text_area(RwSignal::new(String::from("one\ntwo\nthree"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(4);
 
@@ -341,7 +341,7 @@ fn focused_text_area_supports_vim_normal_mode_movement() -> leptatui::app::Resul
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("one\ntwo\n").with_focus(true)
+/// text_area(RwSignal::new(String::from("one\ntwo\n"))).with_focus(true)
 /// Insert at trailing blank line, Esc, k, j
 /// ```
 ///
@@ -354,7 +354,7 @@ fn focused_text_area_supports_vim_normal_mode_movement() -> leptatui::app::Resul
 fn focused_text_area_supports_trailing_blank_line_normal_mode_movement() -> leptatui::app::Result<()> {
     let value = "one\ntwo\n";
     let trailing_blank_cursor = value.len();
-    let mut view = text_area(value).with_focus(true);
+    let mut view = text_area(RwSignal::new(value.into())).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
     editable_state_mut(&mut view).set_cursor(trailing_blank_cursor);
 

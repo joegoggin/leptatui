@@ -3,25 +3,29 @@
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada")
-/// text_area("Notes")
+/// input(RwSignal::new(String::from("Ada")))
+/// text_area(RwSignal::new(String::from("Notes")))
 /// ```
 ///
 /// # Assertions
 ///
 /// - `input` returns an [`InputView`].
 /// - `text_area` returns a [`TextAreaView`].
-/// - Type-erased inputs compare equal to identical inputs.
-/// - Type-erased text areas compare equal to identical text areas.
+/// - Type-erased inputs compare equal to inputs bound to the same signal.
+/// - Type-erased text areas compare equal to text areas bound to the same signal.
 /// - Inputs and text areas do not compare equal after type erasure.
+/// - Inputs bound to different signals compare unequal even with identical text.
 #[test]
 fn editable_builders_return_distinct_concrete_types() {
-    let input_view: InputView = input("Ada");
-    let text_area_view: TextAreaView = text_area("Notes");
+    let title = RwSignal::new(String::from("Ada"));
+    let notes = RwSignal::new(String::from("Notes"));
+    let input_view: InputView = input(title);
+    let text_area_view: TextAreaView = text_area(notes);
 
-    assert_eq!(input_view.into_view(), input("Ada").into_view());
-    assert_eq!(text_area_view.into_view(), text_area("Notes").into_view());
-    assert_ne!(input("same").into_view(), text_area("same").into_view());
+    assert_eq!(input_view.into_view(), input(title).into_view());
+    assert_eq!(text_area_view.into_view(), text_area(notes).into_view());
+    assert_ne!(input(title).into_view(), text_area(title).into_view());
+    assert_ne!(input(title).into_view(), input(RwSignal::new(String::from("Ada"))).into_view());
 }
 
 /// Verifies view builders store default selector metadata.
@@ -121,7 +125,7 @@ fn view_metadata_setters_store_selector_fields() {
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada"): Normal -> Insert -> Normal
+/// input(RwSignal::new(String::from("Ada"))): Normal -> Insert -> Normal
 /// ```
 ///
 /// # Assertions
@@ -131,7 +135,7 @@ fn view_metadata_setters_store_selector_fields() {
 /// - Returning to normal mode clears the insert state.
 #[test]
 fn editable_metadata_tracks_retained_insert_mode() {
-    let mut view = input("Ada");
+    let mut view = input(RwSignal::new(String::from("Ada")));
     assert!(!view.metadata().is_insert());
 
     view.editable_state_mut().set_mode(VimMode::Insert);
@@ -146,7 +150,7 @@ fn editable_metadata_tracks_retained_insert_mode() {
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada"): Normal -> Visual -> VisualLine -> Normal
+/// input(RwSignal::new(String::from("Ada"))): Normal -> Visual -> VisualLine -> Normal
 /// ```
 ///
 /// # Assertions
@@ -157,7 +161,7 @@ fn editable_metadata_tracks_retained_insert_mode() {
 /// - Returning to normal mode clears the visual state.
 #[test]
 fn editable_metadata_tracks_retained_visual_modes() {
-    let mut view = input("Ada");
+    let mut view = input(RwSignal::new(String::from("Ada")));
     assert!(!view.metadata().is_visual());
 
     view.editable_state_mut().set_mode(VimMode::Visual);

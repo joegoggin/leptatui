@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// form([text("Title"), input("Ada"), button("Save")])
+/// form([text("Title"), input(RwSignal::new(String::from("Ada"))), button("Save")])
 /// Tab, Tab
 /// ```
 ///
@@ -17,7 +17,7 @@
 fn renders_form_children_and_moves_focus_through_descendants() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 7);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = form((text("Title"), input("Ada"), button("Save")));
+    let mut view = form((text("Title"), input(RwSignal::new(String::from("Ada"))), button("Save")));
 
     draw_view(&mut terminal, &view)?;
     let title_position = symbol_position(&terminal, "T", 12);
@@ -46,7 +46,7 @@ fn renders_form_children_and_moves_focus_through_descendants() -> leptatui::app:
 /// # Example Under Test
 ///
 /// ```text
-/// form([input("Ada").with_focus(true), button("Save")])
+/// form([input(RwSignal::new(String::from("Ada"))).with_focus(true), button("Save")])
 /// Tab, Tab
 /// ```
 ///
@@ -57,7 +57,7 @@ fn renders_form_children_and_moves_focus_through_descendants() -> leptatui::app:
 /// - Cursor and yank buffer state are preserved.
 #[test]
 fn focusing_editable_control_enters_normal_mode_without_resetting_state() -> leptatui::app::Result<()> {
-    let mut input_view = input("Ada").with_focus(true);
+    let mut input_view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
     editable_state_mut(&mut input_view).set_cursor(1);
     editable_state_mut(&mut input_view).set_yank_buffer("copy");
@@ -125,7 +125,7 @@ fn form_type_styles_apply_to_descendants() -> leptatui::app::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// form([input(name), text_area(notes), button("Submit")])
+/// form([input(RwSignal::new(name.into())), text_area(RwSignal::new(notes.into())), button("Submit")])
 /// Tab, A, Char('!'), reconcile, Tab, A, Enter, reconcile
 /// :focus { fg: Black, bg: Yellow }
 /// ```
@@ -133,7 +133,7 @@ fn form_type_styles_apply_to_descendants() -> leptatui::app::Result<()> {
 /// # Assertions
 ///
 /// - The form reports input, text area, and button as focusable controls.
-/// - Input edits update caller-owned state without mutating the stale view.
+/// - Input edits update both the bound signal and caller-owned observation state.
 /// - Reconciliation displays the latest caller-owned input value and retains
 ///   focus and cursor state.
 /// - Text-area edits follow the same controlled update and reconciliation path.
@@ -163,7 +163,7 @@ fn controlled_form_reconciles_values_focus_and_rendering() -> leptatui::app::Res
         KeyControl::Handled
     );
     assert_eq!(name.borrow().as_str(), "Ada!");
-    assert_eq!(input_value(form_child(&view, 0)), "Ada");
+    assert_eq!(input_value(form_child(&view, 0)), "Ada!");
 
     view = reconcile_controlled_form(&view, &name, &notes, &submits, &cancels);
 
@@ -186,7 +186,7 @@ fn controlled_form_reconciles_values_focus_and_rendering() -> leptatui::app::Res
         KeyControl::Handled
     );
     assert_eq!(notes.borrow().as_str(), "Notes\n");
-    assert_eq!(text_area_value(form_child(&view, 1)), "Notes");
+    assert_eq!(text_area_value(form_child(&view, 1)), "Notes\n");
 
     view = reconcile_controlled_form(&view, &name, &notes, &submits, &cancels);
 
@@ -227,7 +227,7 @@ fn controlled_form_reconciles_values_focus_and_rendering() -> leptatui::app::Res
 /// # Example Under Test
 ///
 /// ```text
-/// form([input(name), text_area(notes), button("Submit")])
+/// form([input(RwSignal::new(name.into())), text_area(RwSignal::new(notes.into())), button("Submit")])
 /// Input focus: Enter, i, Esc, Esc
 /// TextArea focus: A, Enter, reconcile, Ctrl+Enter
 /// ```

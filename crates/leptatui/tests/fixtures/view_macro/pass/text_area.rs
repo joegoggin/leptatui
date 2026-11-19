@@ -7,12 +7,12 @@ include!("../inspect.rs");
 /// Exercises `TextArea` attributes and builder lowering.
 fn main() {
     let style = TuiStyle::new().foreground(Color::Yellow);
-    let value = String::from("Ada\nLovelace");
+    let value = RwSignal::new(String::from("Ada\nLovelace"));
     let view = view! {
         <TextArea
             value=value
             placeholder="Notes"
-            on_input={|_| AppControl::Continue}
+            on_input={|| AppControl::Continue}
             class="field primary"
             id="notes"
             style={style.clone()}

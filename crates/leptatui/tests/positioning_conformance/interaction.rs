@@ -210,7 +210,7 @@ fn positioned_link_areas_use_final_terminal_coordinates() -> leptatui::app::Resu
 ///
 /// ```text
 /// relative 10x5 root
-/// focused 6x3 absolute input("A") at top: 1, left: 3
+/// focused 6x3 absolute input(RwSignal::new(String::from("A"))) at top: 1, left: 3
 /// ```
 ///
 /// # Assertions
@@ -219,11 +219,13 @@ fn positioned_link_areas_use_final_terminal_coordinates() -> leptatui::app::Resu
 /// - The terminal cursor appears after `A` inside the positioned content box.
 #[test]
 fn positioned_editor_cursor_uses_final_terminal_coordinates() -> leptatui::app::Result<()> {
-    let positioned = input("A").with_focus(true).with_inline_style(
-        fixture_size(6.0, 3.0)
-            .position(Position::Absolute)
-            .inset(cell_insets(Some(1.0), None, None, Some(3.0))),
-    );
+    let positioned = input(RwSignal::new(String::from("A")))
+        .with_focus(true)
+        .with_inline_style(
+            fixture_size(6.0, 3.0)
+                .position(Position::Absolute)
+                .inset(cell_insets(Some(1.0), None, None, Some(3.0))),
+        );
     let root = div((positioned,))
         .with_inline_style(fixture_size(10.0, 5.0).position(Position::Relative))
         .into_view();

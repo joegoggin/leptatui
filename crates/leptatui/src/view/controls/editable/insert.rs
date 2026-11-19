@@ -7,7 +7,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::{AppControl, KeyControl};
 
 use super::{
-    model::{EditableAction, EditableControlKind},
+    model::{EditableControlKind, ValueAction},
     movement::*,
     normal::handle_normal_mode_key,
     state::{EditableState, PendingInsertKey, VimMode},
@@ -22,7 +22,7 @@ const INSERT_ESCAPE_TIMEOUT: Duration = Duration::from_millis(1000);
 /// # Arguments
 ///
 /// * `value` — Current controlled input value.
-/// * `on_input` — Optional callback that receives proposed next values.
+/// * `on_input` — Internal signal-writing action that receives proposed next values.
 /// * `editable_state` — Retained cursor and scroll state for the input.
 /// * `key` — Key event to apply to the input.
 ///
@@ -32,7 +32,7 @@ const INSERT_ESCAPE_TIMEOUT: Duration = Duration::from_millis(1000);
 /// input editing behavior.
 pub(crate) fn handle_input_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
 ) -> Option<KeyControl> {
@@ -50,7 +50,7 @@ pub(crate) fn handle_input_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled text-area value.
-/// * `on_input` — Optional callback that receives proposed next values.
+/// * `on_input` — Internal signal-writing action that receives proposed next values.
 /// * `editable_state` — Retained cursor and scroll state for the text area.
 /// * `key` — Key event to apply to the text area.
 ///
@@ -60,7 +60,7 @@ pub(crate) fn handle_input_key(
 /// text-area editing behavior.
 pub(crate) fn handle_text_area_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
 ) -> Option<KeyControl> {
@@ -78,7 +78,7 @@ pub(crate) fn handle_text_area_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives proposed next values.
+/// * `on_input` — Internal signal-writing action that receives proposed next values.
 /// * `editable_state` — Retained cursor, mode, and history state for the control.
 /// * `key` — Key event to apply to the control.
 /// * `kind` — Editable control variant receiving the key.
@@ -89,7 +89,7 @@ pub(crate) fn handle_text_area_key(
 /// handles the key.
 pub(crate) fn handle_editable_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
     kind: EditableControlKind,
@@ -108,7 +108,7 @@ pub(crate) fn handle_editable_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives proposed next values.
+/// * `on_input` — Internal signal-writing action that receives proposed next values.
 /// * `editable_state` — Retained cursor, mode, and history state for the control.
 /// * `key` — Key event to apply while the control is in insert mode.
 /// * `kind` — Editable control variant receiving the key.
@@ -119,7 +119,7 @@ pub(crate) fn handle_editable_key(
 /// handles the key.
 pub(crate) fn handle_insert_mode_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
     kind: EditableControlKind,
@@ -214,7 +214,7 @@ pub(crate) fn handle_insert_mode_key(
 /// Handles the second key in an insert-mode key sequence.
 pub(crate) fn handle_pending_insert_mode_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
     kind: EditableControlKind,
@@ -275,7 +275,7 @@ pub(crate) fn handle_pending_insert_mode_key(
 /// Handles a key received after an insert-mode sequence times out.
 pub(crate) fn handle_expired_pending_insert_mode_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
     kind: EditableControlKind,
@@ -321,7 +321,7 @@ pub(crate) fn has_active_insert_key_pending(editable_state: &EditableState, now:
 /// Emits an expired pending insert-mode key, if one exists.
 pub(crate) fn flush_expired_insert_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     now: Instant,
 ) -> Option<AppControl> {
@@ -345,7 +345,7 @@ pub(crate) fn exit_insert_mode(value: &str, editable_state: &mut EditableState) 
 /// # Arguments
 ///
 /// * `value` — Current controlled value.
-/// * `on_input` — Optional callback that receives the inserted value.
+/// * `on_input` — Internal signal-writing action that receives the inserted value.
 /// * `editable_state` — Retained cursor and scroll state for the control.
 /// * `character` — Character to insert at the cursor.
 ///
@@ -354,7 +354,7 @@ pub(crate) fn exit_insert_mode(value: &str, editable_state: &mut EditableState) 
 /// A [`KeyControl`] value indicating that insertion was handled.
 pub(crate) fn handle_insert_input_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     character: char,
 ) -> KeyControl {
@@ -368,7 +368,7 @@ pub(crate) fn handle_insert_input_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled value.
-/// * `on_input` — Optional callback that receives the inserted value.
+/// * `on_input` — Internal signal-writing action that receives the inserted value.
 /// * `editable_state` — Retained cursor and scroll state for the control.
 /// * `inserted` — Text to insert at the cursor.
 ///
@@ -377,7 +377,7 @@ pub(crate) fn handle_insert_input_key(
 /// A [`KeyControl`] value indicating that insertion was handled.
 pub(crate) fn handle_insert_text_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     inserted: &str,
 ) -> KeyControl {
@@ -398,7 +398,7 @@ pub(crate) fn handle_insert_text_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled value.
-/// * `on_input` — Optional callback that receives the shortened value.
+/// * `on_input` — Internal signal-writing action that receives the shortened value.
 /// * `editable_state` — Retained cursor and scroll state for the control.
 ///
 /// # Returns
@@ -406,7 +406,7 @@ pub(crate) fn handle_insert_text_key(
 /// A [`KeyControl`] value indicating that backspace was handled.
 pub(crate) fn handle_backspace_input_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     kind: EditableControlKind,
 ) -> KeyControl {
@@ -432,7 +432,7 @@ pub(crate) fn handle_backspace_input_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled value.
-/// * `on_input` — Optional callback that receives the shortened value.
+/// * `on_input` — Internal signal-writing action that receives the shortened value.
 /// * `editable_state` — Retained cursor and scroll state for the control.
 ///
 /// # Returns
@@ -440,7 +440,7 @@ pub(crate) fn handle_backspace_input_key(
 /// A [`KeyControl`] value indicating that delete was handled.
 pub(crate) fn handle_delete_input_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
 ) -> KeyControl {
     let cursor = clamp_cursor(value, editable_state.cursor());
@@ -460,26 +460,21 @@ pub(crate) fn handle_delete_input_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled value before the proposed update.
-/// * `on_input` — Optional callback that receives the proposed value.
+/// * `on_input` — Internal signal-writing action that receives the proposed value.
 /// * `editable_state` — Retained cursor and scroll state for the control.
 /// * `next` — Proposed next controlled value.
 /// * `next_cursor` — Cursor byte index to retain after emitting the value.
 ///
 /// # Returns
 ///
-/// A [`KeyControl`] value produced by the callback or handled by default when
-/// no callback exists.
+/// A [`KeyControl`] value produced after committing the value and notifying the caller.
 pub(crate) fn commit_input_value(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     next: String,
     next_cursor: usize,
 ) -> KeyControl {
-    let Some(on_input) = on_input.as_ref() else {
-        return KeyControl::Handled;
-    };
-
     if next != value {
         editable_state.push_undo(value.to_owned());
         editable_state.clear_redo();

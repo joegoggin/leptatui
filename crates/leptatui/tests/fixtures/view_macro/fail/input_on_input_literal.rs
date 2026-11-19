@@ -5,6 +5,6 @@ use leptatui::prelude::*;
 /// Triggers the `on_input` callback validation failure.
 fn main() {
     let _ = view! {
-        <Input value="Ada" on_input="save" />
+        <Input value={RwSignal::new(String::from("Ada"))} on_input="save" />
     };
 }

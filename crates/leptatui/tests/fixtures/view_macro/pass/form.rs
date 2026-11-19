@@ -16,14 +16,14 @@ fn main() {
             style={style.clone()}
         >
             <Input
-                value="Ada"
+                value={RwSignal::new(String::from("Ada"))}
                 placeholder="Name"
-                on_input={|_| AppControl::Continue}
+                on_input={|| AppControl::Continue}
             />
             <TextArea
-                value={"Notes".to_string()}
+                value={RwSignal::new(String::from("Notes"))}
                 placeholder="Notes"
-                on_input={|_| AppControl::Continue}
+                on_input={|| AppControl::Continue}
             />
         </Form>
     };

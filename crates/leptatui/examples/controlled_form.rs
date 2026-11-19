@@ -1,8 +1,8 @@
 //! Controlled form example.
 //!
 //! This binary demonstrates controlled `Input`, `TextArea`, and `Form` views
-//! backed by Leptos signals. The editable controls emit proposed values through
-//! callbacks. Attribute expressions track signals automatically while controls
+//! backed by Leptos signals. Edits update the bound signals automatically before
+//! optional input notifications run. Bindings track signals while controls
 //! retain their focus, cursor, undo history, and Vim state across updates.
 
 use leptatui::prelude::*;
@@ -146,16 +146,14 @@ fn ControlledForm() -> impl IntoView {
                     }
                 >
                     <Text class="label">"Name"</Text>
-                    <Input value={name.get()} placeholder="Name"
-                        on_input=move |next| {
-                            name.set(next);
+                    <Input value=name placeholder="Name"
+                        on_input=move || {
                             status.set(FormStatus::Editing);
                         }
                     />
                     <Text class="label">"Notes"</Text>
-                    <TextArea value={notes.get()} placeholder="Notes"
-                        on_input=move |next| {
-                            notes.set(next);
+                    <TextArea value=notes placeholder="Notes"
+                        on_input=move || {
                             status.set(FormStatus::Editing);
                         }
                     />

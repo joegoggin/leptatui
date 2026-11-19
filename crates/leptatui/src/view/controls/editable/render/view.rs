@@ -1,5 +1,7 @@
 //! Editable-control rendering and intrinsic two-axis measurement.
 
+use leptos::prelude::GetUntracked;
+
 use super::super::{
     model::{EditableControlKind, EditableModel},
     visual::visual_selection_range,
@@ -46,19 +48,20 @@ pub(crate) fn render_editable_text_view(
     view: &EditableModel,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> Result<()> {
+    let value = view.value_signal().get_untracked();
     view.sync_style_state();
     let style = resolve_style(&view.metadata, ctx);
     ctx.record_metadata_hit_area(&view.metadata);
     let block = style.to_block_with_default_borders(Borders::ALL);
     let geometry = ctx.active_layout_geometry(&view.metadata);
     let inner = geometry.map_or_else(|| block.inner(ctx.area()), |geometry| geometry.content_box);
-    let pending = pending_insert_render(&view.value, &view.editable_state);
+    let pending = pending_insert_render(&value, &view.editable_state);
     let display_value = if let Some(pending) = pending.as_ref() {
         pending.value.as_str()
-    } else if view.value.is_empty() {
+    } else if value.is_empty() {
         view.placeholder.as_deref().unwrap_or("")
     } else {
-        view.value.as_str()
+        value.as_str()
     };
     if let Some(geometry) = geometry {
         ctx.with_area(geometry.border_box, |ctx| {
@@ -77,11 +80,11 @@ pub(crate) fn render_editable_text_view(
                     view.editable_state.horizontal_scroll(),
                     inner.width,
                 )
-            } else if view.value.is_empty() {
+            } else if value.is_empty() {
                 0
             } else {
                 input_horizontal_scroll(
-                    &view.value,
+                    &value,
                     view.editable_state.cursor(),
                     view.editable_state.horizontal_scroll(),
                     inner.width,
@@ -97,17 +100,18 @@ pub(crate) fn render_editable_text_view(
                         .and_then(|pending| pending.selection.clone())
                         .or_else(|| {
                             visual_selection_range(
-                                &view.value,
+                                &value,
                                 &view.editable_state,
                                 EditableControlKind::Input,
                             )
                         }),
                 ));
                 if view.metadata.is_focused() {
-                    let (value, cursor) = pending.as_ref().map_or(
-                        (view.value.as_str(), view.editable_state.cursor()),
-                        |pending| (pending.value.as_str(), pending.cursor),
-                    );
+                    let (value, cursor) = pending
+                        .as_ref()
+                        .map_or((value.as_str(), view.editable_state.cursor()), |pending| {
+                            (pending.value.as_str(), pending.cursor)
+                        });
                     set_input_cursor(value, cursor, horizontal_scroll, ctx);
                 }
             });
@@ -121,11 +125,11 @@ pub(crate) fn render_editable_text_view(
                     inner.height,
                     inner.width,
                 )
-            } else if view.value.is_empty() {
+            } else if value.is_empty() {
                 0
             } else {
                 text_area_vertical_scroll(
-                    &view.value,
+                    &value,
                     view.editable_state.cursor(),
                     view.editable_state.vertical_scroll(),
                     inner.height,
@@ -143,7 +147,7 @@ pub(crate) fn render_editable_text_view(
                         .and_then(|pending| pending.selection.clone())
                         .or_else(|| {
                             visual_selection_range(
-                                &view.value,
+                                &value,
                                 &view.editable_state,
                                 EditableControlKind::TextArea,
                             )
@@ -160,7 +164,7 @@ pub(crate) fn render_editable_text_view(
                         );
                     } else {
                         set_text_area_cursor(
-                            &view.value,
+                            &value,
                             view.editable_state.cursor(),
                             vertical_scroll,
                             view.editable_state.horizontal_scroll(),
@@ -193,6 +197,7 @@ pub(crate) fn measure_editable_text_view(
     available_space: LayoutSize<AvailableSpace>,
     ctx: &mut RenderCtx<'_, '_>,
 ) -> LayoutSize<f32> {
+    let value = view.value_signal().get_untracked();
     view.sync_style_state();
     let style = resolve_style(&view.metadata, ctx);
     let borders = style.borders.unwrap_or(Borders::ALL);
@@ -202,10 +207,10 @@ pub(crate) fn measure_editable_text_view(
     let border_height = vertical_border_rows(borders);
     let padding_height = vertical_padding_rows(style.padding);
     let vertical_inset = border_height.saturating_add(padding_height);
-    let display_value = if view.value.is_empty() {
+    let display_value = if value.is_empty() {
         view.placeholder.as_deref().unwrap_or("")
     } else {
-        &view.value
+        &value
     };
 
     if view.kind == EditableControlKind::Input {

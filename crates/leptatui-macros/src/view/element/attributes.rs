@@ -327,7 +327,10 @@ impl Element {
                 AttrKind::InputValue if reactive => {
                     quote! { (#target).__value(#value, __leptatui_initial) }
                 }
-                AttrKind::InputValue => target,
+                AttrKind::InputValue => {
+                    reject_literal_typed_attr(attr, "value", "RwSignal<String>")?;
+                    target
+                }
                 AttrKind::ImageSource if reactive => {
                     quote! { (#target).__value(#value, __leptatui_initial) }
                 }

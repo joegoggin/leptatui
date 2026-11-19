@@ -215,62 +215,53 @@ fn StandardLibraryShowcase() -> impl IntoView {
                         )
                         .with_classes("status")
                 }}
-                {move || {
-                    let name_value = name.get();
-                    let notes_value = notes.get();
-
-                    view! {
-                        <Form
-                            on_submit=move || {
-                                status.set(ShowcaseStatus::Submitted);
-                                AppControl::Continue
-                            }
-                            on_cancel=move || {
-                                status.set(ShowcaseStatus::Canceled);
-                                AppControl::Continue
-                            }
-                        >
-                            <Text class="label">"Name"</Text>
-                            <Input
-                                value=name_value
-                                placeholder="Name"
-                                on_input=move |next| {
-                                    name.set(next);
-                                    status.set(ShowcaseStatus::Editing);
-                                    AppControl::Continue
-                                }
-                            />
-                            <Text class="label">"Notes"</Text>
-                            <TextArea
-                                value=notes_value
-                                placeholder="Notes"
-                                on_input=move |next| {
-                                    notes.set(next);
-                                    status.set(ShowcaseStatus::Editing);
-                                    AppControl::Continue
-                                }
-                            />
-                            <Div class="actions">
-                                <Button on_press=move || {
-                                    status.set(ShowcaseStatus::Submitted);
-                                    AppControl::Continue
-                                }>"Submit"</Button>
-                                <Button on_press=move || {
-                                    progress
-                                        .update(|value| {
-                                            *value = clamp_progress(*value + 0.1);
-                                        });
-                                    AppControl::Continue
-                                }>"Advance"</Button>
-                                <Button on_press=move || {
-                                    progress.set(0.0);
-                                    status.set(ShowcaseStatus::Editing);
-                                    AppControl::Continue
-                                }>"Reset"</Button>
-                            </Div>
-                        </Form>
+                <Form
+                    on_submit=move || {
+                        status.set(ShowcaseStatus::Submitted);
+                        AppControl::Continue
                     }
-                }}
+                    on_cancel=move || {
+                        status.set(ShowcaseStatus::Canceled);
+                        AppControl::Continue
+                    }
+                >
+                    <Text class="label">"Name"</Text>
+                    <Input
+                        value=name
+                        placeholder="Name"
+                        on_input=move || {
+                            status.set(ShowcaseStatus::Editing);
+                            AppControl::Continue
+                        }
+                    />
+                    <Text class="label">"Notes"</Text>
+                    <TextArea
+                        value=notes
+                        placeholder="Notes"
+                        on_input=move || {
+                            status.set(ShowcaseStatus::Editing);
+                            AppControl::Continue
+                        }
+                    />
+                    <Div class="actions">
+                        <Button on_press=move || {
+                            status.set(ShowcaseStatus::Submitted);
+                            AppControl::Continue
+                        }>"Submit"</Button>
+                        <Button on_press=move || {
+                            progress
+                                .update(|value| {
+                                    *value = clamp_progress(*value + 0.1);
+                                });
+                            AppControl::Continue
+                        }>"Advance"</Button>
+                        <Button on_press=move || {
+                            progress.set(0.0);
+                            status.set(ShowcaseStatus::Editing);
+                            AppControl::Continue
+                        }>"Reset"</Button>
+                    </Div>
+                </Form>
                 <Text class="label">"Standalone link"</Text>
                 <Link href="https://github.com/joegoggin/leptatui">
                     "Open Leptatui on GitHub"

@@ -10,7 +10,9 @@
 /// A focused insert-mode [`View`] configured as an input.
 fn emitting_input(value: impl Into<String>, emitted: &Rc<RefCell<Vec<String>>>) -> InputView {
     let emitted_for_input = Rc::clone(emitted);
-    let mut view = input(value).with_focus(true).on_input(move |next| {
+    let view_value = RwSignal::new(value.into());
+    let mut view = input(view_value).with_focus(true).on_input(move || {
+        let next = view_value.get_untracked();
         emitted_for_input.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -33,7 +35,9 @@ fn emitting_text_area(
     emitted: &Rc<RefCell<Vec<String>>>,
 ) -> TextAreaView {
     let emitted_for_text_area = Rc::clone(emitted);
-    let mut view = text_area(value).with_focus(true).on_input(move |next| {
+    let view_value = RwSignal::new(value.into());
+    let mut view = text_area(view_value).with_focus(true).on_input(move || {
+        let next = view_value.get_untracked();
         emitted_for_text_area.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -102,21 +106,23 @@ fn controlled_form_view(
     submits: &Rc<Cell<usize>>,
     cancels: &Rc<Cell<usize>>,
 ) -> FormView {
-    let name_value = name.borrow().clone();
-    let notes_value = notes.borrow().clone();
+    let name_value = RwSignal::new(name.borrow().clone());
+    let notes_value = RwSignal::new(notes.borrow().clone());
     let name_for_input = Rc::clone(name);
     let notes_for_text_area = Rc::clone(notes);
     let submits_for_form = Rc::clone(submits);
     let cancels_for_form = Rc::clone(cancels);
 
     form((
-        input(name_value).placeholder("Name").on_input(move |next| {
+        input(name_value).placeholder("Name").on_input(move || {
+            let next = name_value.get_untracked();
             *name_for_input.borrow_mut() = next;
             AppControl::Continue
         }),
         text_area(notes_value)
             .placeholder("Notes")
-            .on_input(move |next| {
+            .on_input(move || {
+                let next = notes_value.get_untracked();
                 *notes_for_text_area.borrow_mut() = next;
                 AppControl::Continue
             }),
@@ -179,8 +185,8 @@ fn form_child(view: &FormView, index: usize) -> &dyn View {
 ///
 /// # Returns
 ///
-/// A string slice containing the input's controlled value.
-fn input_value(view: &dyn View) -> &str {
+/// A string containing the input's controlled value.
+fn input_value(view: &dyn View) -> String {
     let editor = view
         .as_any()
         .downcast_ref::<InputView>()
@@ -196,8 +202,8 @@ fn input_value(view: &dyn View) -> &str {
 ///
 /// # Returns
 ///
-/// A string slice containing the text area's controlled value.
-fn text_area_value(view: &dyn View) -> &str {
+/// A string containing the text area's controlled value.
+fn text_area_value(view: &dyn View) -> String {
     let editor = view
         .as_any()
         .downcast_ref::<TextAreaView>()

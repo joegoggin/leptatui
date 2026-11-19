@@ -1,0 +1,10 @@
+error[E0593]: closure is expected to take 0 arguments, but it takes 1 argument
+ --> tests/fixtures/view_macro/fail/input_on_input_argument.rs:8:13
+  |
+8 |     let _ = view! { <Input value=value on_input=|_value: String| {} /> };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----------------^^^^^^^^
+  |             |                                   |
+  |             |                                   takes 1 argument
+  |             expected closure that takes 0 arguments
+  |
+  = note: this error originates in the macro `view` (in Nightly builds, run with -Z macro-backtrace for more info)

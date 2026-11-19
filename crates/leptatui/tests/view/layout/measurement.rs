@@ -34,7 +34,7 @@ fn flex_row_intrinsic_size_uses_tallest_child() -> leptatui::app::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada\n")
+/// text_area(RwSignal::new(String::from("Ada\n")))
 /// ```
 ///
 /// # Assertions
@@ -45,7 +45,7 @@ fn flex_row_intrinsic_size_uses_tallest_child() -> leptatui::app::Result<()> {
 fn text_area_intrinsic_size_counts_trailing_newline() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 5);
     let mut terminal = Terminal::new(backend)?;
-    let view = text_area("Ada\n");
+    let view = text_area(RwSignal::new(String::from("Ada\n")));
     let mut measured = LayoutSize::all(0.0);
 
     terminal.draw(|frame| {

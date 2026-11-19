@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// input("abcd").with_focus(true)
+/// input(RwSignal::new(String::from("abcd"))).with_focus(true)
 /// v, l, h, Esc
 /// ```
 ///
@@ -14,7 +14,7 @@
 /// - Esc returns to normal mode and clears the selection anchor.
 #[test]
 fn focused_input_supports_vim_visual_mode_transitions() -> leptatui::app::Result<()> {
-    let mut view = input("abcd").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("abcd"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Normal);
     editable_state_mut(&mut view).set_cursor(1);
 
@@ -45,7 +45,7 @@ fn focused_input_supports_vim_visual_mode_transitions() -> leptatui::app::Result
 /// # Example Under Test
 ///
 /// ```text
-/// input("abcd").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("abcd"))).with_focus(true).on_input(...)
 /// v, l, y, then v, l, d
 /// ```
 ///
@@ -99,7 +99,7 @@ fn focused_input_supports_visual_yank_and_delete() -> leptatui::app::Result<()> 
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("one\ntwo\nthree").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("one\ntwo\nthree"))).with_focus(true).on_input(...)
 /// V, j, y, G, p
 /// V, j, d
 /// ```
@@ -159,7 +159,7 @@ fn focused_text_area_supports_visual_line_yank_paste_and_delete() -> leptatui::a
 /// # Example Under Test
 ///
 /// ```text
-/// input("abc").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("abc"))).with_focus(true).on_input(...)
 /// x, yy, p, dd, u, Ctrl+r
 /// ```
 ///
@@ -232,7 +232,7 @@ fn focused_input_supports_vim_delete_yank_paste_undo_and_redo() -> leptatui::app
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("one\ntwo\nthree").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("one\ntwo\nthree"))).with_focus(true).on_input(...)
 /// yy, G, p, dd, u, Ctrl+r
 /// ```
 ///

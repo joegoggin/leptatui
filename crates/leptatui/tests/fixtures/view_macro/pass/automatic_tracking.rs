@@ -28,7 +28,7 @@ fn main() {
             <Div>
                 <Text>{format!("{label}")}</Text>
                 <Text>{label}</Text>
-                <Input value={title.get()} placeholder={label} />
+                <Input value=title placeholder={label} />
                 <AutomaticLabel label={title.get()} />
                 {values.get().into_iter().map(|label| {
                     let local = format!("Row: {label}");

@@ -141,49 +141,40 @@ fn DefaultStylesShowcase() -> impl IntoView {
                 </CodeBlock>
 
                 <H2>"Form controls"</H2>
-                {move || {
-                    let name_value = name.get();
-                    let notes_value = notes.get();
-
-                    view! {
-                        <Form
-                            on_submit=move || {
-                                form_status.set(String::from("Submitted the example form."));
-                                AppControl::Continue
-                            }
-                            on_cancel=move || {
-                                form_status.set(String::from("Canceled the example form."));
-                                AppControl::Continue
-                            }
-                        >
-                            <Text>"Input"</Text>
-                            <Input
-                                value=name_value
-                                placeholder="Enter a name"
-                                on_input=move |next| {
-                                    name.set(next);
-                                    form_status.set(String::from("Editing the example form."));
-                                    AppControl::Continue
-                                }
-                            />
-                            <Text>"TextArea"</Text>
-                            <TextArea
-                                class="text-area"
-                                value=notes_value
-                                placeholder="Enter multiple lines"
-                                on_input=move |next| {
-                                    notes.set(next);
-                                    form_status.set(String::from("Editing the example form."));
-                                    AppControl::Continue
-                                }
-                            />
-                            <Button on_press=move || {
-                                form_status.set(String::from("Pressed the default Button."));
-                                AppControl::Continue
-                            }>"Default Button"</Button>
-                        </Form>
+                <Form
+                    on_submit=move || {
+                        form_status.set(String::from("Submitted the example form."));
+                        AppControl::Continue
                     }
-                }}
+                    on_cancel=move || {
+                        form_status.set(String::from("Canceled the example form."));
+                        AppControl::Continue
+                    }
+                >
+                    <Text>"Input"</Text>
+                    <Input
+                        value=name
+                        placeholder="Enter a name"
+                        on_input=move || {
+                            form_status.set(String::from("Editing the example form."));
+                            AppControl::Continue
+                        }
+                    />
+                    <Text>"TextArea"</Text>
+                    <TextArea
+                        class="text-area"
+                        value=notes
+                        placeholder="Enter multiple lines"
+                        on_input=move || {
+                            form_status.set(String::from("Editing the example form."));
+                            AppControl::Continue
+                        }
+                    />
+                    <Button on_press=move || {
+                        form_status.set(String::from("Pressed the default Button."));
+                        AppControl::Continue
+                    }>"Default Button"</Button>
+                </Form>
                 {move || text(form_status.get())}
 
                 <H2>"Progress"</H2>

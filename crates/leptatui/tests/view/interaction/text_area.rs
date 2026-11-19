@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada\nLovelace").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("Ada\nLovelace"))).with_focus(true).on_input(...)
 /// Char('!'), Enter
 /// ```
 ///
@@ -16,9 +16,10 @@
 fn focused_text_area_emits_inserted_text_through_on_input() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_char = Rc::clone(&emitted);
-    let mut char_view = text_area("Ada\nLovelace")
-        .with_focus(true)
-        .on_input(move |next| {
+    let char_view_value = RwSignal::new(String::from("Ada\nLovelace"));
+    let mut char_view = text_area(char_view_value)
+        .with_focus(true).on_input(move || {
+        let next = char_view_value.get_untracked();
             emitted_for_char.borrow_mut().push(next);
             AppControl::Continue
         });
@@ -30,7 +31,9 @@ fn focused_text_area_emits_inserted_text_through_on_input() -> leptatui::app::Re
     );
 
     let emitted_for_enter = Rc::clone(&emitted);
-    let mut enter_view = text_area("Ada").with_focus(true).on_input(move |next| {
+    let enter_view_value = RwSignal::new(String::from("Ada"));
+    let mut enter_view = text_area(enter_view_value).with_focus(true).on_input(move || {
+        let next = enter_view_value.get_untracked();
         emitted_for_enter.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -54,7 +57,7 @@ fn focused_text_area_emits_inserted_text_through_on_input() -> leptatui::app::Re
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada\nLovelace").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("Ada\nLovelace"))).with_focus(true).on_input(...)
 /// j, k
 /// ```
 ///
@@ -91,7 +94,7 @@ fn focused_text_area_jk_returns_to_normal_mode_without_emitting_text() -> leptat
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada\nLovelace").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("Ada\nLovelace"))).with_focus(true).on_input(...)
 /// j, wait past timeout, k
 /// ```
 ///
@@ -132,7 +135,7 @@ fn focused_text_area_slow_jk_inserts_literal_text() -> leptatui::app::Result<()>
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada\nLovelace").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("Ada\nLovelace"))).with_focus(true).on_input(...)
 /// Backspace after newline, Delete before newline
 /// ```
 ///
@@ -145,9 +148,10 @@ fn focused_text_area_slow_jk_inserts_literal_text() -> leptatui::app::Result<()>
 fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_backspace = Rc::clone(&emitted);
-    let mut backspace_view = text_area("Ada\nLovelace")
-        .with_focus(true)
-        .on_input(move |next| {
+    let backspace_view_value = RwSignal::new(String::from("Ada\nLovelace"));
+    let mut backspace_view = text_area(backspace_view_value)
+        .with_focus(true).on_input(move || {
+        let next = backspace_view_value.get_untracked();
             emitted_for_backspace.borrow_mut().push(next);
             AppControl::Continue
         });
@@ -160,9 +164,10 @@ fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> leptatu
     );
 
     let emitted_for_delete = Rc::clone(&emitted);
-    let mut delete_view = text_area("Ada\nLovelace")
-        .with_focus(true)
-        .on_input(move |next| {
+    let delete_view_value = RwSignal::new(String::from("Ada\nLovelace"));
+    let mut delete_view = text_area(delete_view_value)
+        .with_focus(true).on_input(move || {
+        let next = delete_view_value.get_untracked();
             emitted_for_delete.borrow_mut().push(next);
             AppControl::Continue
         });
@@ -187,7 +192,7 @@ fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> leptatu
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("abc\nde\nfghi").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("abc\nde\nfghi"))).with_focus(true).on_input(...)
 /// Up, Up, Down, Down, Home, End
 /// ```
 ///
@@ -200,9 +205,10 @@ fn focused_text_area_emits_line_boundary_deletions_through_on_input() -> leptatu
 fn focused_text_area_cursor_keys_move_without_emitting_text() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_text_area = Rc::clone(&emitted);
-    let mut view = text_area("abc\nde\nfghi")
-        .with_focus(true)
-        .on_input(move |next| {
+    let view_value = RwSignal::new(String::from("abc\nde\nfghi"));
+    let mut view = text_area(view_value)
+        .with_focus(true).on_input(move || {
+        let next = view_value.get_untracked();
             emitted_for_text_area.borrow_mut().push(next);
             AppControl::Continue
         });

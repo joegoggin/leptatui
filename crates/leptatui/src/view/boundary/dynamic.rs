@@ -900,7 +900,7 @@ mod tests {
     /// # Example Under Test
     ///
     /// ```text
-    /// view! { <Input value={value.get()} /> }
+    /// view! { <Input value=value /> }
     /// value.set("updated"), drop(view), value.set("disposed")
     /// ```
     ///
@@ -908,13 +908,19 @@ mod tests {
     ///
     /// - A live binding receives invalidation through the application redraw channel.
     /// - Dropping its last boundary removes its signal subscriptions.
+    /// - Later writes do not invalidate the disposed subscriber.
+    ///
+    /// # Why
+    ///
+    /// Inspect the subscriber directly because unrelated tests also publish to
+    /// the application-wide redraw channel.
     #[tokio::test(flavor = "current_thread")]
     async fn generated_binding_redraw_and_disposal() {
         let _redraw_guard = redraw_test_lock().await;
         let owner = Owner::new();
         let (value, view) = owner.with(|| {
             let value = RwSignal::new(String::from("initial"));
-            let view = crate::view! { <Input value={value.get()} /> };
+            let view = crate::view! { <Input value=value /> };
             view.with_view(|_| ());
             (value, view)
         });
@@ -925,13 +931,19 @@ mod tests {
             .expect("binding should wake the application")
             .expect("redraw channel remains open");
         view.with_view(|_| ());
+        let subscriber = view.inner.subscriber.clone();
+        assert!(!subscriber.update_if_necessary());
         drop(view);
-        redraws.borrow_and_update();
-        value.set(String::from("disposed"));
         assert!(
-            timeout(Duration::from_millis(30), redraws.changed())
-                .await
-                .is_err()
+            subscriber
+                .inner
+                .state
+                .read()
+                .expect("dynamic subscriber poisoned")
+                .sources
+                .is_empty()
         );
+        value.set(String::from("disposed"));
+        assert!(!subscriber.update_if_necessary());
     }
 }

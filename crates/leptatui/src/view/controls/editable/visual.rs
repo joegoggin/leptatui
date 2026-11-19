@@ -8,7 +8,7 @@ use crate::KeyControl;
 
 use super::{
     insert::commit_input_value,
-    model::{EditableAction, EditableControlKind},
+    model::{EditableControlKind, ValueAction},
     movement::*,
     normal::{handle_delete_line_key, handle_yank_line_key},
     state::{EditableState, VimMode},
@@ -19,7 +19,7 @@ use super::{
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives proposed next values.
+/// * `on_input` — Internal signal-writing action that receives proposed next values.
 /// * `editable_state` — Retained cursor, mode, selection, and history state.
 /// * `key` — Key event to apply while the control is in visual mode.
 /// * `kind` — Editable control variant receiving the key.
@@ -30,7 +30,7 @@ use super::{
 /// handles the key.
 pub(crate) fn handle_visual_mode_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
     kind: EditableControlKind,
@@ -178,7 +178,7 @@ pub(crate) fn handle_pending_visual_mode_key(
 /// # Arguments
 ///
 /// * `value` — Current controlled editable value.
-/// * `on_input` — Optional callback that receives proposed next values.
+/// * `on_input` — Internal signal-writing action that receives proposed next values.
 /// * `editable_state` — Retained cursor, mode, and history state for the control.
 /// * `key` — Key event completing or cancelling the sequence.
 /// * `kind` — Editable control variant receiving the key.
@@ -189,7 +189,7 @@ pub(crate) fn handle_pending_visual_mode_key(
 /// A [`KeyControl`] value indicating that the pending sequence was handled.
 pub(crate) fn handle_pending_normal_mode_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     key: &KeyEvent,
     kind: EditableControlKind,
@@ -352,7 +352,7 @@ pub(crate) fn replace_value_range(value: &str, range: Range<usize>, replacement:
 /// Handles visual-mode `d` and `x`.
 pub(crate) fn handle_delete_visual_selection_key(
     value: &str,
-    on_input: &Option<EditableAction>,
+    on_input: &ValueAction,
     editable_state: &mut EditableState,
     kind: EditableControlKind,
 ) -> KeyControl {

@@ -3,10 +3,10 @@
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// Enter
 ///
-/// text_area("Ada").with_focus(true).on_input(...)
+/// text_area(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// Enter
 /// ```
 ///
@@ -44,7 +44,7 @@ fn insert_mode_keeps_input_single_line_and_text_area_multiline() -> leptatui::ap
 /// # Example Under Test
 ///
 /// ```text
-/// form([input("Ada").with_focus(true)]).on_submit(...)
+/// form([input(RwSignal::new(String::from("Ada"))).with_focus(true)]).on_submit(...)
 /// Enter
 /// ```
 ///
@@ -58,7 +58,7 @@ fn insert_mode_keeps_input_single_line_and_text_area_multiline() -> leptatui::ap
 fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> leptatui::app::Result<()> {
     let insert_submits = Rc::new(Cell::new(0));
     let insert_submits_for_form = Rc::clone(&insert_submits);
-    let mut insert_input = input("Ada").with_focus(true);
+    let mut insert_input = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut insert_input).set_mode(VimMode::Insert);
     let mut insert_view = form([insert_input]).on_submit(move || {
         insert_submits_for_form.set(insert_submits_for_form.get() + 1);
@@ -73,7 +73,7 @@ fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> leptatui::
 
     let normal_submits = Rc::new(Cell::new(0));
     let normal_submits_for_form = Rc::clone(&normal_submits);
-    let mut normal_input = input("Ada").with_focus(true);
+    let mut normal_input = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut normal_input).set_mode(VimMode::Normal);
     let mut normal_view = form([normal_input]).on_submit(move || {
         normal_submits_for_form.set(normal_submits_for_form.get() + 1);
@@ -94,7 +94,7 @@ fn form_submits_focused_input_on_enter_in_insert_and_normal_mode() -> leptatui::
 /// # Example Under Test
 ///
 /// ```text
-/// form([text_area("Ada").with_focus(true).on_input(...)])
+/// form([text_area(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)])
 /// Enter, Ctrl+Enter
 /// ```
 ///
@@ -137,7 +137,7 @@ fn form_text_area_uses_plain_enter_for_newlines_and_ctrl_enter_for_submit() -> l
 /// # Example Under Test
 ///
 /// ```text
-/// form([input("Ada").with_focus(true)]).on_cancel(...)
+/// form([input(RwSignal::new(String::from("Ada"))).with_focus(true)]).on_cancel(...)
 /// Esc, Esc
 /// ```
 ///
@@ -151,7 +151,7 @@ fn form_text_area_uses_plain_enter_for_newlines_and_ctrl_enter_for_submit() -> l
 fn form_esc_leaves_insert_mode_before_canceling() -> leptatui::app::Result<()> {
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
-    let mut input_view = input("Ada").with_focus(true);
+    let mut input_view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
     let mut view = form([input_view]).on_cancel(move || {
         cancels_for_form.set(cancels_for_form.get() + 1);
@@ -177,7 +177,7 @@ fn form_esc_leaves_insert_mode_before_canceling() -> leptatui::app::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// form([input("Ada").with_focus(true)]).on_cancel(...)
+/// form([input(RwSignal::new(String::from("Ada"))).with_focus(true)]).on_cancel(...)
 /// j, k, Esc
 /// ```
 ///
@@ -190,7 +190,7 @@ fn form_esc_leaves_insert_mode_before_canceling() -> leptatui::app::Result<()> {
 fn form_jk_leaves_insert_mode_without_canceling() -> leptatui::app::Result<()> {
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
-    let mut input_view = input("Ada").with_focus(true);
+    let mut input_view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut input_view).set_mode(VimMode::Insert);
     let mut view = form([input_view]).on_cancel(move || {
         cancels_for_form.set(cancels_for_form.get() + 1);
@@ -222,10 +222,10 @@ fn form_jk_leaves_insert_mode_without_canceling() -> leptatui::app::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// form([input("Ada").with_focus(true)]).on_cancel(...)
+/// form([input(RwSignal::new(String::from("Ada"))).with_focus(true)]).on_cancel(...)
 /// v, Esc, Esc
 ///
-/// form([text_area("one\ntwo").with_focus(true)]).on_cancel(...)
+/// form([text_area(RwSignal::new(String::from("one\ntwo"))).with_focus(true)]).on_cancel(...)
 /// V, Esc, Esc
 /// ```
 ///
@@ -238,7 +238,7 @@ fn form_jk_leaves_insert_mode_without_canceling() -> leptatui::app::Result<()> {
 fn form_esc_leaves_visual_modes_before_canceling() -> leptatui::app::Result<()> {
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
-    let mut input_view = input("Ada").with_focus(true);
+    let mut input_view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut input_view).set_mode(VimMode::Visual);
     editable_state_mut(&mut input_view).set_selection_anchor(Some(0));
     let mut view = form([input_view]).on_cancel(move || {
@@ -265,7 +265,7 @@ fn form_esc_leaves_visual_modes_before_canceling() -> leptatui::app::Result<()> 
 
     let cancels = Rc::new(Cell::new(0));
     let cancels_for_form = Rc::clone(&cancels);
-    let mut text_area_view = text_area("one\ntwo").with_focus(true);
+    let mut text_area_view = text_area(RwSignal::new(String::from("one\ntwo"))).with_focus(true);
     editable_state_mut(&mut text_area_view).set_cursor(4);
     editable_state_mut(&mut text_area_view).set_mode(VimMode::VisualLine);
     editable_state_mut(&mut text_area_view).set_selection_anchor(Some(4));
@@ -311,7 +311,7 @@ fn form_esc_leaves_visual_modes_before_canceling() -> leptatui::app::Result<()> 
 fn form_inside_component_boundary_handles_submit_key() -> leptatui::app::Result<()> {
     let submits = Rc::new(Cell::new(0));
     let submits_for_form = Rc::clone(&submits);
-    let view = form([input("Ada").with_focus(true)]).on_submit(move || {
+    let view = form([input(RwSignal::new(String::from("Ada"))).with_focus(true)]).on_submit(move || {
         submits_for_form.set(submits_for_form.get() + 1);
         AppControl::Continue
     });

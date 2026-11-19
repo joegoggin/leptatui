@@ -1,5 +1,7 @@
 //! Viewport scrolling, wrapping, cursor placement, and focus geometry.
 
+use leptos::prelude::GetUntracked;
+
 use super::super::{
     model::{EditableControlKind, EditableModel},
     movement::{char_column, clamp_cursor},
@@ -360,8 +362,9 @@ pub(crate) fn focused_control_span_for_editor(
         .to_block_with_default_borders(Borders::ALL)
         .inner(area);
     let top_offset = u32::from(inner.y.saturating_sub(area.y));
+    let value = view.value_signal().get_untracked();
     let cursor_row = u32::try_from(text_area_cursor_row(
-        &view.value,
+        &value,
         view.editable_state.cursor(),
         inner.width,
     ))

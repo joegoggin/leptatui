@@ -18,11 +18,12 @@ All are available through `leptatui::prelude::*` as builders and through
 PascalCase `view!` tags.
 
 `view!` tracks data expressions automatically, including text, attributes, and
-custom component data props. Write `<Input value={title.get()} ... />` directly;
+custom component data props. Write `<Input value=title ... />` directly;
 updates change the retained control and preserve its editing state. Signal
 reads inside event handlers run only for events and do not subscribe rendering.
 Values computed before `view!` remain snapshots, and plain Rust builders use
-ordinary Rust evaluation semantics.
+ordinary Rust evaluation semantics. Editable builders retain their supplied
+signal and read its current text when rendering or handling input.
 
 Custom components declare changing data as `Prop<T>` and read it with `.get()`
 or `.with()` inside their view expressions. Component setup runs once. Use
@@ -52,11 +53,13 @@ focus and Enter or Space to activate the focused link. Moving the pointer over
 a link focuses it, and left-clicking activates it. Empty and `#fragment` targets
 remain visible but are intentionally not focusable.
 
-`Input` and `TextArea` are controlled components: pass the displayed `value`
-from caller-owned state and update that state from `on_input` when editing
-proposes a new value. Both support optional `placeholder` text. Wrap editable
-controls in `Form` to centralize submit and cancel behavior. Focused inputs
-submit with Enter; focused text areas insert a newline with Enter in insert
+`Input` and `TextArea` require a `RwSignal<String>` as `value` and update it
+automatically on edits. Pass the signal itself (`value=name`), rather than
+`name.get()` or a string. Their optional zero-argument `on_input` callback runs
+after the signal has been updated and can read its current text. External signal
+writes update the control without invoking the callback. Both support optional
+`placeholder` text. Wrap editable controls in `Form` to centralize submit and
+cancel behavior. Focused inputs submit with Enter; focused text areas insert a newline with Enter in insert
 mode and submit with Ctrl+Enter. Pressing Esc from editable normal mode cancels
 the nearest form when it has an `on_cancel` handler.
 
@@ -71,6 +74,12 @@ visual mode support common movement (`h`, `j`, `k`, `l`, `0`, `$`, `w`, `b`,
 supported graphics protocol. Otherwise it renders deterministic fallback text,
 preferring the view's `alt` text when provided. `ProgressBar` renders a gauge
 with a clamped `0.0..=1.0` value and optional `label`.
+
+The Rust builders use the same binding: `input(name)` and `text_area(notes)`.
+Their `.value()` accessors return the current text as an owned `String`.
+To migrate older code, replace `value={name.get()}` with `value=name`, remove
+callbacks that only called `name.set(...)`, and change remaining `on_input`
+closures to `move || { ... }`. Read `name.get()` inside the callback when needed.
 
 ## Callback return values
 
@@ -292,29 +301,10 @@ fn StandardControls() -> impl IntoView {
 
     view! {
         <Div>
-            {move || {
-                let name_value = name.get();
-                let notes_value = notes.get();
-
-                view! {
-                    <Form on_submit=|| {}>
-                        <Input
-                            value=name_value
-                            placeholder="Name"
-                            on_input=move |next| {
-                                name.set(next);
-                            }
-                        />
-                        <TextArea
-                            value=notes_value
-                            placeholder="Notes"
-                            on_input=move |next| {
-                                notes.set(next);
-                            }
-                        />
-                    </Form>
-                }
-            }}
+            <Form on_submit=|| {}>
+                <Input value=name placeholder="Name" />
+                <TextArea value=notes placeholder="Notes" />
+            </Form>
             <Image
                 src="crates/leptatui/examples/assets/showcase.jpg"
                 alt="Image fallback text"

@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// Char('!'), Char(' ')
 /// ```
 ///
@@ -17,7 +17,9 @@
 fn focused_input_emits_inserted_text_through_on_input() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_char = Rc::clone(&emitted);
-    let mut char_view = input("Ada").with_focus(true).on_input(move |next| {
+    let char_view_value = RwSignal::new(String::from("Ada"));
+    let mut char_view = input(char_view_value).with_focus(true).on_input(move || {
+        let next = char_view_value.get_untracked();
         emitted_for_char.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -29,7 +31,9 @@ fn focused_input_emits_inserted_text_through_on_input() -> leptatui::app::Result
     );
 
     let emitted_for_space = Rc::clone(&emitted);
-    let mut space_view = input("Ada").with_focus(true).on_input(move |next| {
+    let space_view_value = RwSignal::new(String::from("Ada"));
+    let mut space_view = input(space_view_value).with_focus(true).on_input(move || {
+        let next = space_view_value.get_untracked();
         emitted_for_space.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -53,7 +57,7 @@ fn focused_input_emits_inserted_text_through_on_input() -> leptatui::app::Result
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// j, k
 /// ```
 ///
@@ -90,7 +94,7 @@ fn focused_input_jk_returns_to_normal_mode_without_emitting_text() -> leptatui::
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// j, x
 /// ```
 ///
@@ -126,7 +130,7 @@ fn focused_input_pending_j_inserts_with_next_non_escape_character() -> leptatui:
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// j, wait past timeout, k
 /// ```
 ///
@@ -164,7 +168,7 @@ fn focused_input_slow_jk_inserts_literal_text() -> leptatui::app::Result<()> {
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// j, wait past timeout, flush
 /// ```
 ///
@@ -200,7 +204,7 @@ fn focused_input_idle_flush_emits_expired_pending_j() -> leptatui::app::Result<(
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// Backspace, Delete at cursor 1
 /// ```
 ///
@@ -214,7 +218,9 @@ fn focused_input_idle_flush_emits_expired_pending_j() -> leptatui::app::Result<(
 fn focused_input_emits_deletions_through_on_input() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_backspace = Rc::clone(&emitted);
-    let mut backspace_view = input("Ada").with_focus(true).on_input(move |next| {
+    let backspace_view_value = RwSignal::new(String::from("Ada"));
+    let mut backspace_view = input(backspace_view_value).with_focus(true).on_input(move || {
+        let next = backspace_view_value.get_untracked();
         emitted_for_backspace.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -226,7 +232,9 @@ fn focused_input_emits_deletions_through_on_input() -> leptatui::app::Result<()>
     );
 
     let emitted_for_delete = Rc::clone(&emitted);
-    let mut delete_view = input("Ada").with_focus(true).on_input(move |next| {
+    let delete_view_value = RwSignal::new(String::from("Ada"));
+    let mut delete_view = input(delete_view_value).with_focus(true).on_input(move || {
+        let next = delete_view_value.get_untracked();
         emitted_for_delete.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -251,7 +259,7 @@ fn focused_input_emits_deletions_through_on_input() -> leptatui::app::Result<()>
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true).on_input(...)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true).on_input(...)
 /// Left, Home, Right, End
 /// ```
 ///
@@ -266,7 +274,9 @@ fn focused_input_emits_deletions_through_on_input() -> leptatui::app::Result<()>
 fn focused_input_cursor_keys_move_without_emitting_text() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_input = Rc::clone(&emitted);
-    let mut view = input("Ada").with_focus(true).on_input(move |next| {
+    let view_value = RwSignal::new(String::from("Ada"));
+    let mut view = input(view_value).with_focus(true).on_input(move || {
+        let next = view_value.get_untracked();
         emitted_for_input.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -288,38 +298,40 @@ fn focused_input_cursor_keys_move_without_emitting_text() -> leptatui::app::Resu
     Ok(())
 }
 
-/// Verifies focused inputs without callbacks do not mutate displayed values.
+/// Verifies focused inputs automatically update their signal without callbacks.
 ///
 /// # Example Under Test
 ///
 /// ```text
-/// input("Ada").with_focus(true)
+/// input(RwSignal::new(String::from("Ada"))).with_focus(true)
 /// Char('!')
 /// ```
 ///
 /// # Assertions
 ///
 /// - The character key is handled.
-/// - The retained input value remains `Ada`.
-/// - Rendering still shows `Ada`.
-/// - The cell after the value remains blank.
+/// - The retained input value becomes `Ada!`.
+/// - Rendering shows `Ada!`.
+/// - The inserted character appears after the original value.
 #[test]
-fn focused_input_without_callback_does_not_mutate_displayed_value() -> leptatui::app::Result<()> {
+fn focused_input_without_callback_updates_displayed_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(8, 3);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = input("Ada").with_focus(true);
+    let mut view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
+
+    editable_state_mut(&mut view).set_mode(VimMode::Insert);
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
         KeyControl::Handled
     );
 
-    assert_eq!(view.value(), "Ada");
+    assert_eq!(view.value(), "Ada!");
 
     draw_view(&mut terminal, &view)?;
     assert_eq!(cell_symbol(&terminal, 2, 1, 8), "A");
     assert_eq!(cell_symbol(&terminal, 4, 1, 8), "a");
-    assert_eq!(cell_symbol(&terminal, 5, 1, 8), " ");
+    assert_eq!(cell_symbol(&terminal, 5, 1, 8), "!");
 
     Ok(())
 }

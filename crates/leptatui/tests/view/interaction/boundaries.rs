@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// text_area("Ada\nLovelace").with_focus(true)
+/// text_area(RwSignal::new(String::from("Ada\nLovelace"))).with_focus(true)
 /// Char('!')
 /// ```
 ///
@@ -17,7 +17,7 @@
 fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 4);
     let mut terminal = Terminal::new(backend)?;
-    let mut view = text_area("Ada\nLovelace").with_focus(true);
+    let mut view = text_area(RwSignal::new(String::from("Ada\nLovelace"))).with_focus(true);
 
     assert_eq!(
         view.handle_key_event(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE))?,
@@ -39,7 +39,7 @@ fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> lepta
 /// # Example Under Test
 ///
 /// ```text
-/// component(FocusPanel { view: input("Ada").on_input(...) })
+/// component(FocusPanel { view: input(RwSignal::new(String::from("Ada"))).on_input(...) })
 /// Tab, A, Char('!')
 /// ```
 ///
@@ -52,7 +52,9 @@ fn focused_text_area_without_callback_does_not_mutate_displayed_value() -> lepta
 fn focused_input_inside_component_boundary_handles_editing_keys() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_input = Rc::clone(&emitted);
-    let input_view = input("Ada").on_input(move |next| {
+    let input_view_value = RwSignal::new(String::from("Ada"));
+    let input_view = input(input_view_value).on_input(move || {
+        let next = input_view_value.get_untracked();
         emitted_for_input.borrow_mut().push(next);
         AppControl::Continue
     });
@@ -80,7 +82,7 @@ fn focused_input_inside_component_boundary_handles_editing_keys() -> leptatui::a
 /// # Example Under Test
 ///
 /// ```text
-/// component(FocusPanel { view: text_area("Ada").on_input(...) })
+/// component(FocusPanel { view: text_area(RwSignal::new(String::from("Ada"))).on_input(...) })
 /// Tab, A, Enter
 /// ```
 ///
@@ -93,7 +95,9 @@ fn focused_input_inside_component_boundary_handles_editing_keys() -> leptatui::a
 fn focused_text_area_inside_component_boundary_handles_editing_keys() -> leptatui::app::Result<()> {
     let emitted = Rc::new(RefCell::new(Vec::new()));
     let emitted_for_text_area = Rc::clone(&emitted);
-    let text_area_view = text_area("Ada").on_input(move |next| {
+    let text_area_view_value = RwSignal::new(String::from("Ada"));
+    let text_area_view = text_area(text_area_view_value).on_input(move || {
+        let next = text_area_view_value.get_untracked();
         emitted_for_text_area.borrow_mut().push(next);
         AppControl::Continue
     });

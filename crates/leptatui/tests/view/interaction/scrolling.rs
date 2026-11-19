@@ -3,7 +3,7 @@
 /// # Example Under Test
 ///
 /// ```text
-/// div([text("Top"), focused text_area("one\ntwo\nthree\nfour"), text("Bottom")])
+/// div([text("Top"), focused text_area(RwSignal::new(String::from("one\ntwo\nthree\nfour"))), text("Bottom")])
 /// Enter, reconcile, render
 /// ```
 ///
@@ -29,7 +29,9 @@ fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> leptatui::app::Re
         let value = notes.borrow().clone();
         let cursor = value.len();
         let notes_for_input = Rc::clone(notes);
-        let mut notes_view = text_area(value).with_focus(true).on_input(move |next| {
+        let notes_view_value = RwSignal::new(value);
+        let mut notes_view = text_area(notes_view_value).with_focus(true).on_input(move || {
+            let next = notes_view_value.get_untracked();
             *notes_for_input.borrow_mut() = next;
             AppControl::Continue
         });
@@ -64,7 +66,7 @@ fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> leptatui::app::Re
 /// # Example Under Test
 ///
 /// ```text
-/// form([text("Top"), focused normal-mode input("Ada"), trailing text rows])
+/// form([text("Top"), focused normal-mode input(RwSignal::new(String::from("Ada"))), trailing text rows])
 /// j, k
 /// ```
 ///
@@ -82,7 +84,7 @@ fn text_area_editing_scrolls_overflowing_parent_to_cursor() -> leptatui::app::Re
 fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 5);
     let mut terminal = Terminal::new(backend)?;
-    let mut input_view = input("Ada").with_focus(true);
+    let mut input_view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut input_view).set_mode(VimMode::Normal);
     let mut view = form((
         text("Top"),
@@ -115,7 +117,7 @@ fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> leptatui::app::R
 /// # Example Under Test
 ///
 /// ```text
-/// form([text("Top"), focused normal-mode text_area("one\ntwo"), trailing text rows])
+/// form([text("Top"), focused normal-mode text_area(RwSignal::new(String::from("one\ntwo"))), trailing text rows])
 /// j, j, k, k
 /// ```
 ///
@@ -135,7 +137,7 @@ fn normal_mode_input_boundary_keys_scroll_overflowing_form() -> leptatui::app::R
 fn normal_mode_text_area_boundary_keys_scroll_overflowing_form() -> leptatui::app::Result<()> {
     let backend = TestBackend::new(12, 5);
     let mut terminal = Terminal::new(backend)?;
-    let mut text_area_view = text_area("one\ntwo").with_focus(true);
+    let mut text_area_view = text_area(RwSignal::new(String::from("one\ntwo"))).with_focus(true);
     editable_state_mut(&mut text_area_view).set_mode(VimMode::Normal);
     editable_state_mut(&mut text_area_view).set_cursor(0);
     let mut view = form((

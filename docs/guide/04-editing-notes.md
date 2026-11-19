@@ -28,16 +28,14 @@ view! {
             }
         >
             <Text>"Title"</Text>
-            <Input value={title.get()} placeholder="Title"
-                on_input=move |next| {
-                    title.set(next);
+            <Input value=title placeholder="Title"
+                on_input=move || {
                     status.set(String::from("Editing"));
                 }
             />
             <Text>"Body"</Text>
-            <TextArea value={body.get()} placeholder="Write a note"
-                on_input=move |next| {
-                    body.set(next);
+            <TextArea value=body placeholder="Write a note"
+                on_input=move || {
                     status.set(String::from("Editing"));
                 }
             />
@@ -48,12 +46,16 @@ view! {
 }
 ```
 
-The controls are **controlled**: `value` comes from your state, and `on_input`
-proposes a new string. Accept the change by storing it in the signal. Without
-that update, the displayed value does not change.
+The controls bind directly to `RwSignal<String>`: pass `value=title` or
+`value=body`, and edits update that signal automatically. You do not need an
+`on_input` callback to make the control editable.
 
-`view!` automatically tracks signal reads in attribute expressions such as
-`value={title.get()}`. When the signal changes, the binding updates the existing
+The optional `on_input` callback takes no arguments and runs **after** the signal
+is updated. Here it resets the status message; it can also read the updated text
+with `title.get()` or `body.get()`. External signal writes update the control
+without invoking `on_input`.
+
+`view!` tracks the bound signal automatically. Signal changes update the existing
 control, preserving its focus, cursor, selection, undo history, and editing mode.
 
 These callbacks return `()`, which defaults to `AppControl::Continue`.
