@@ -64,10 +64,6 @@ impl Parse for MediaBlock {
         let mut rules = Vec::new();
         while !content.is_empty() {
             rules.push(content.parse()?);
-
-            if content.peek(Token![,]) {
-                content.parse::<Token![,]>()?;
-            }
         }
 
         if rules.is_empty() {

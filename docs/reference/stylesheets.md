@@ -9,6 +9,13 @@ Start with [Styling and layout](../guide/06-styling-and-layout.md) and [Themes a
 
 ## Rules and component scope
 
+Write rules as `Selector { ... }` and terminate every declaration and
+`@include` with `;`, including the final item in a block. The previous `=>`
+rule syntax and comma-separated declarations are no longer accepted. Rule,
+media, and mixin blocks do not need trailing punctuation. Rust expressions
+inside declaration values retain their normal syntax, including commas in
+function calls and collections.
+
 Styles live with components. Invoke `stylesheet!` directly inside a
 `#[component]` body, or call a synchronous helper that invokes it, to register
 those rules for that component subtree, including descendant components. The
@@ -68,8 +75,8 @@ use leptatui::prelude::*;
 /// Registers the example card stylesheet with the active component.
 pub(super) fn use_example_card_styles() {
     stylesheet! {
-        .example-card => {
-            &__content => { fg: Color::LightCyan }
+        .example-card {
+            &__content { fg: Color::LightCyan; }
         }
     };
 }
@@ -82,13 +89,13 @@ The trailing semicolon in the helper keeps its return type as `()`;
 #[component]
 fn Panel() -> impl IntoView {
     stylesheet! {
-        .panel => {
-            bg: Color::Black
+        .panel {
+            bg: Color::Black;
 
-            Text => { fg: Color::White }
+            Text { fg: Color::White; }
 
-            Button => {
-                &:focus => { bg: Color::Yellow !important }
+            Button {
+                &:focus { bg: Color::Yellow !important; }
             }
         }
     }
@@ -107,11 +114,11 @@ the top level or beneath a type or id selector.
 #[component]
 fn ExamplePage() -> impl IntoView {
     stylesheet! {
-        .example-page => {
-            &__button => {
-                &:focus => { bg: Color::Black }
-                &--submit => { fg: Color::Green }
-                &--cancel => { fg: Color::Red }
+        .example-page {
+            &__button {
+                &:focus { bg: Color::Black; }
+                &--submit { fg: Color::Green; }
+                &--cancel { fg: Color::Red; }
             }
         }
     }
@@ -139,24 +146,24 @@ backward compatibility.
 #[component]
 fn ResponsivePanel() -> impl IntoView {
     stylesheet! {
-        .panel => {
-            padding: TuiSpacing::uniform(1)
+        .panel {
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 80) {
-                padding: TuiSpacing::ZERO
-                Text => { fg: Color::Yellow }
+                padding: TuiSpacing::ZERO;
+                Text { fg: Color::Yellow; }
             }
         }
-        .actions => {
-            display: Display::Flex
+        .actions {
+            display: Display::Flex;
 
             @media (max-width: 80) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
-        Button:focus => {
+        Button:focus {
             @media (min-width: 81) and (min-height: 24) {
-                bg: Color::Yellow
+                bg: Color::Yellow;
             }
         }
     }
@@ -185,22 +192,22 @@ bodies with `@include`.
 fn MixedPanel() -> impl IntoView {
     stylesheet! {
         @mixin panel_chrome {
-            bg: Color::Black,
-            padding: TuiSpacing::uniform(1)
+            bg: Color::Black;
+            padding: TuiSpacing::uniform(1);
         }
 
         @mixin focused_control {
-            fg: Color::Black,
-            bg: Color::Yellow
+            fg: Color::Black;
+            bg: Color::Yellow;
         }
 
-        .panel => {
-            @include panel_chrome
+        .panel {
+            @include panel_chrome;
 
-            Text => { fg: Color::White }
+            Text { fg: Color::White; }
 
-            Button => {
-                &:focus => { @include focused_control }
+            Button {
+                &:focus { @include focused_control; }
             }
         }
     }
@@ -227,17 +234,17 @@ fn button_mixins() -> StyleModule {
         @use color_variables;
 
         @mixin primary {
-            fg: color_variables.$fg,
-            bg: color_variables.$bg,
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+            fg: color_variables.$fg;
+            bg: color_variables.$bg;
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
         }
 
         @mixin inverted {
-            @include primary,
-            fg: color_variables.$bg,
-            bg: color_variables.$fg
+            @include primary;
+            fg: color_variables.$bg;
+            bg: color_variables.$fg;
         }
     }
 }
@@ -247,8 +254,8 @@ fn Actions() -> impl IntoView {
     stylesheet! {
         @use button_mixins as button;
 
-        .submit => { @include button.primary }
-        .quit => { @include button.inverted }
+        .submit { @include button.primary; }
+        .quit { @include button.inverted; }
     }
 
     view! {
@@ -284,7 +291,7 @@ fn ThemedPanel() -> impl IntoView {
         $text: theme_color("text");
         $surface: theme_color("surface");
 
-        .panel => { fg: $text, bg: $surface }
+        .panel { fg: $text; bg: $surface; }
     }
 
     view! { <Block class="panel"><Text>"Theme-aware"</Text></Block> }
@@ -344,7 +351,7 @@ fn ThemeRoot() -> impl IntoView {
         $text: theme_color("text");
         $surface: theme_color("surface");
 
-        .panel => { fg: $text, bg: $surface }
+        .panel { fg: $text; bg: $surface; }
     }
 
     view! {

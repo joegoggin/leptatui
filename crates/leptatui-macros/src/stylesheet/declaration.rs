@@ -13,8 +13,6 @@ use syn::{
 
 use crate::stylesheet::{
     import::StylesheetImports,
-    media::starts_media,
-    selector::Selector,
     value::{StyleValue, StyleValueKind},
     variable::StylesheetVariables,
 };
@@ -23,7 +21,7 @@ mod kw {
     syn::custom_keyword!(important);
 }
 
-/// Parsed style declaration such as `fg: Color::White`.
+/// Parsed style declaration such as `fg: Color::White;`.
 pub(super) struct Declaration {
     /// Declaration property name.
     name: Ident,
@@ -46,7 +44,8 @@ impl Parse for Declaration {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if the declaration is missing a colon or value.
+    /// Returns [`syn::Error`] if the declaration is missing a colon, value, or
+    /// terminating semicolon.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let name = input.parse()?;
         input.parse::<Token![:]>()?;
@@ -59,6 +58,11 @@ impl Parse for Declaration {
             false
         };
 
+        if !input.peek(Token![;]) {
+            return Err(input.error("stylesheet! declarations must end with `;`"));
+        }
+        input.parse::<Token![;]>()?;
+
         Ok(Self {
             name,
             value,
@@ -67,65 +71,41 @@ impl Parse for Declaration {
     }
 }
 
-/// Parses declaration value tokens up to a declaration, rule, or media boundary.
+/// Parses a Rust value or variable reference before its declaration terminator.
+///
+/// Groups remain intact, preserving commas and semicolons inside Rust values.
+/// The importance marker is separated before Rust parsing so qualified colors
+/// such as `Color::Yellow !important` are not interpreted as macro invocations.
 ///
 /// # Arguments
 ///
-/// * `input` — Macro input stream positioned at the first value token.
+/// * `input` — Remaining declaration tokens.
 ///
 /// # Returns
 ///
-/// A [`StyleValue`] parsed from the collected value tokens.
+/// A [`StyleValue`] containing the authored expression or variable reference.
 ///
 /// # Errors
 ///
-/// Returns [`syn::Error`] if the declaration has no value or the collected
-/// tokens do not parse as a supported style value.
+/// Returns [`syn::Error`] if the value is empty, malformed, or lacks a semicolon.
 fn parse_value(input: ParseStream<'_>) -> Result<StyleValue> {
     let mut tokens = TokenStream::new();
-
-    while !input.is_empty()
-        && !input.peek(Token![,])
-        && !starts_important(input)
-        && !starts_media(input)
-        && !starts_nested_rule(input)
-    {
+    while !input.is_empty() && !input.peek(Token![;]) {
+        let fork = input.fork();
+        if fork.parse::<Token![!]>().is_ok() && fork.peek(kw::important) {
+            break;
+        }
         tokens.extend(::std::iter::once(input.parse::<TokenTree>()?));
     }
-
     if tokens.is_empty() {
         return Err(input.error("stylesheet! declaration requires a value"));
     }
-
-    syn::parse2(tokens)
-}
-
-/// Returns whether the input starts with an `!important` marker.
-///
-/// # Arguments
-///
-/// * `input` — Macro input stream to inspect without consuming.
-///
-/// # Returns
-///
-/// A [`bool`] indicating whether `!important` is next in the stream.
-fn starts_important(input: ParseStream<'_>) -> bool {
-    let fork = input.fork();
-    fork.parse::<Token![!]>().is_ok() && fork.parse::<kw::important>().is_ok()
-}
-
-/// Returns whether the input starts with a nested stylesheet rule.
-///
-/// # Arguments
-///
-/// * `input` — Macro input stream to inspect without consuming.
-///
-/// # Returns
-///
-/// A [`bool`] indicating whether a selector followed by `=>` is next.
-fn starts_nested_rule(input: ParseStream<'_>) -> bool {
-    let fork = input.fork();
-    fork.parse::<Selector>().is_ok() && fork.peek(Token![=>])
+    if input.is_empty() {
+        return Err(input.error("stylesheet! declarations must end with `;`"));
+    }
+    syn::parse2(tokens).map_err(|error| {
+        Error::new(error.span(), format!("{error}; stylesheet! declarations require a Rust value followed by `;`, not comma separators"))
+    })
 }
 
 impl Declaration {

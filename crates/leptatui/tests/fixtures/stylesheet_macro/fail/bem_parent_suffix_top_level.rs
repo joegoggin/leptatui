@@ -5,6 +5,6 @@ use leptatui::prelude::*;
 /// Defines a top-level BEM parent-reference selector.
 fn main() {
     let _styles = stylesheet! {
-        &__button => { fg: Color::White }
+        &__button { fg: Color::White; }
     };
 }

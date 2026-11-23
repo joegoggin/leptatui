@@ -267,17 +267,17 @@ fn imported_button_mixins() -> StyleModule {
         @use imported_button_variables as colors;
 
         @mixin primary {
-            fg: colors.$fg,
-            bg: colors.$bg,
-            borders: colors.$border,
-            border_type: colors.$border_type,
-            padding: colors.$padding
+            fg: colors.$fg;
+            bg: colors.$bg;
+            borders: colors.$border;
+            border_type: colors.$border_type;
+            padding: colors.$padding;
         }
 
         @mixin inverted {
-            @include primary,
-            fg: colors.$bg,
-            bg: colors.$fg
+            @include primary;
+            fg: colors.$bg;
+            bg: colors.$fg;
         }
     }
 }
@@ -288,8 +288,8 @@ fn imported_button_mixins() -> StyleModule {
 ///
 /// ```text
 /// @use imported_button_mixins as button;
-/// .submit => { @include button.primary }
-/// .quit => { @include button.inverted }
+/// .submit { @include button.primary; }
+/// .quit { @include button.inverted; }
 /// ```
 ///
 /// # Assertions
@@ -308,8 +308,8 @@ fn stylesheet_macro_imports_variables_and_mixins() {
     let styles = stylesheet! {
         @use imported_button_mixins as button;
 
-        .submit => { @include button.primary }
-        .quit => { @include button.inverted }
+        .submit { @include button.primary; }
+        .quit { @include button.inverted; }
     };
 
     let button_base = TuiStyle::new()

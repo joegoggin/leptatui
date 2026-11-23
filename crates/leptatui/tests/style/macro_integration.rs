@@ -3,21 +3,21 @@
 /// # Example Under Test
 ///
 /// ```text
-/// .panel => {
-///     Button => {
-///         &:focus => { fg: Color::Yellow }
+/// .panel {
+///     Button {
+///         &:focus { fg: Color::Yellow; }
 ///     }
-///     A => {
-///         &:active => { fg: Color::LightCyan }
+///     A {
+///         &:active { fg: Color::LightCyan; }
 ///     }
-///     Input => {
-///         &:insert => { fg: Color::Yellow }
+///     Input {
+///         &:insert { fg: Color::Yellow; }
 ///     }
-///     TextArea => {
-///         &:visual => { fg: Color::Magenta }
+///     TextArea {
+///         &:visual { fg: Color::Magenta; }
 ///     }
-///     Link => {
-///         &:visited => { fg: Color::LightMagenta }
+///     Link {
+///         &:visited { fg: Color::LightMagenta; }
 ///     }
 /// }
 /// ```
@@ -40,21 +40,21 @@
 #[test]
 fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
     let styles = stylesheet! {
-        .panel => {
-            Button => {
-                &:focus => { fg: Color::Yellow }
+        .panel {
+            Button {
+                &:focus { fg: Color::Yellow; }
             }
-            A => {
-                &:active => { fg: Color::LightCyan }
+            A {
+                &:active { fg: Color::LightCyan; }
             }
-            Input => {
-                &:insert => { fg: Color::Yellow }
+            Input {
+                &:insert { fg: Color::Yellow; }
             }
-            TextArea => {
-                &:visual => { fg: Color::Magenta }
+            TextArea {
+                &:visual { fg: Color::Magenta; }
             }
-            Link => {
-                &:visited => { fg: Color::LightMagenta }
+            Link {
+                &:visited { fg: Color::LightMagenta; }
             }
         }
     };
@@ -121,11 +121,11 @@ fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
 /// # Example Under Test
 ///
 /// ```text
-/// .example-page => {
-///     &__button => {
-///         &:focus => { bg: Color::Black }
-///         &--submit => { fg: Color::Green }
-///         &--cancel => { fg: Color::Red }
+/// .example-page {
+///     &__button {
+///         &:focus { bg: Color::Black; }
+///         &--submit { fg: Color::Green; }
+///         &--cancel { fg: Color::Red; }
 ///     }
 /// }
 /// ```
@@ -144,11 +144,11 @@ fn stylesheet_macro_nested_selectors_resolve_against_ancestors() {
 #[test]
 fn stylesheet_macro_bem_parent_suffixes_concatenate_class_names() {
     let styles = stylesheet! {
-        .example-page => {
-            &__button => {
-                &:focus => { bg: Color::Black }
-                &--submit => { fg: Color::Green }
-                &--cancel => { fg: Color::Red }
+        .example-page {
+            &__button {
+                &:focus { bg: Color::Black; }
+                &--submit { fg: Color::Green; }
+                &--cancel { fg: Color::Red; }
             }
         }
     };
@@ -186,15 +186,15 @@ fn stylesheet_macro_bem_parent_suffixes_concatenate_class_names() {
 /// # Example Under Test
 ///
 /// ```text
-/// .panel => {
-///     fg: White
+/// .panel {
+///     fg: White;
 ///     @media (max-width: 60) {
-///         fg: Yellow
-///         Button => { padding: Zero }
+///         fg: Yellow;
+///         Button { padding: Zero; }
 ///     }
-///     &__actions => {
-///         flex_direction: Row
-///         @media (max-width: 60) { flex_direction: Column }
+///     &__actions {
+///         flex_direction: Row;
+///         @media (max-width: 60) { flex_direction: Column; }
 ///     }
 /// }
 /// ```
@@ -212,19 +212,19 @@ fn stylesheet_macro_bem_parent_suffixes_concatenate_class_names() {
 #[test]
 fn stylesheet_macro_nested_media_inherits_selector_paths() {
     let styles = stylesheet! {
-        .panel => {
-            fg: Color::White
+        .panel {
+            fg: Color::White;
 
             @media (max-width: 60) {
-                fg: Color::Yellow
-                Button => { padding: TuiSpacing::ZERO }
+                fg: Color::Yellow;
+                Button { padding: TuiSpacing::ZERO; }
             }
 
-            &__actions => {
-                flex_direction: FlexDirection::Row
+            &__actions {
+                flex_direction: FlexDirection::Row;
 
                 @media (max-width: 60) {
-                    flex_direction: FlexDirection::Column
+                    flex_direction: FlexDirection::Column;
                 }
             }
         }
@@ -283,8 +283,8 @@ fn stylesheet_macro_nested_media_inherits_selector_paths() {
 /// $primary: Color::LightCyan;
 /// $surface: Color::Black;
 /// $pad: TuiSpacing::uniform(1);
-/// Text => { fg: $primary, bg: $surface }
-/// .panel => { background: $surface, padding: $pad }
+/// Text { fg: $primary; bg: $surface; }
+/// .panel { background: $surface; padding: $pad; }
 /// ```
 ///
 /// # Assertions
@@ -305,8 +305,8 @@ fn stylesheet_macro_variables_reuse_values() {
         $surface: Color::Black;
         $pad: TuiSpacing::uniform(1);
 
-        Text => { fg: $primary, bg: $surface }
-        .panel => { background: $surface, padding: $pad }
+        Text { fg: $primary; bg: $surface; }
+        .panel { background: $surface; padding: $pad; }
     };
 
     let expected = Stylesheet::new()
@@ -331,9 +331,9 @@ fn stylesheet_macro_variables_reuse_values() {
 /// # Example Under Test
 ///
 /// ```text
-/// @mixin control_chrome { fg: Color::White, bg: Color::Blue }
-/// Button => { @include control_chrome, fg: Color::Yellow }
-/// .primary => { @include control_chrome }
+/// @mixin control_chrome { fg: Color::White; bg: Color::Blue; }
+/// Button { @include control_chrome; fg: Color::Yellow; }
+/// .primary { @include control_chrome; }
 /// ```
 ///
 /// # Assertions
@@ -350,12 +350,12 @@ fn stylesheet_macro_variables_reuse_values() {
 fn stylesheet_macro_mixins_expand_in_source_order() {
     let styles = stylesheet! {
         @mixin control_chrome {
-            fg: Color::White,
-            bg: Color::Blue
+            fg: Color::White;
+            bg: Color::Blue;
         }
 
-        Button => { @include control_chrome, fg: Color::Yellow }
-        .primary => { @include control_chrome }
+        Button { @include control_chrome; fg: Color::Yellow; }
+        .primary { @include control_chrome; }
     };
 
     let expected = Stylesheet::new()
@@ -373,5 +373,59 @@ fn stylesheet_macro_mixins_expand_in_source_order() {
                 .background(Color::Blue),
         );
 
+    assert_eq!(styles, expected);
+}
+
+/// Verifies the guide stylesheet lowers into equivalent flat style rules.
+///
+/// # Example Under Test
+///
+/// ```text
+/// H1 { fg: Color::LightCyan; }
+/// Button:focus { fg: Color::Yellow; }
+/// .notes-shell { &__actions { @media (max-width: 60) { ... } } }
+/// ```
+///
+/// # Assertions
+///
+/// - Type and focus rules preserve their selectors and colors.
+/// - BEM actions use a concatenated class rather than a descendant selector.
+/// - The responsive direction applies under the viewport media query.
+#[test]
+fn stylesheet_macro_css_syntax_matches_guide() {
+    let styles = stylesheet! {
+        H1 {
+            fg: Color::LightCyan;
+        }
+        Button:focus {
+            fg: Color::Yellow;
+        }
+        .notes-shell {
+            padding: TuiSpacing::uniform(1);
+            &__actions {
+                display: Display::Flex;
+                gap: Axes::all(Length::cells(1.0));
+                @media (max-width: 60) {
+                    flex_direction: FlexDirection::Column;
+                }
+            }
+        }
+    };
+    let expected = Stylesheet::new()
+        .rule(StyleSelector::view_type(ViewType::H1), TuiStyle::new().foreground(Color::LightCyan))
+        .rule(
+            StyleSelector::compound(vec![StyleSelector::view_type(ViewType::Button), StyleSelector::focus()]),
+            TuiStyle::new().foreground(Color::Yellow),
+        )
+        .rule(StyleSelector::class("notes-shell"), TuiStyle::new().padding(TuiSpacing::uniform(1)))
+        .rule(
+            StyleSelector::class("notes-shell__actions"),
+            TuiStyle::new().display(Display::Flex).gap(Axes::all(Length::cells(1.0))),
+        )
+        .media_rule(
+            MediaQuery::max_width(60),
+            StyleSelector::class("notes-shell__actions"),
+            TuiStyle::new().flex_direction(FlexDirection::Column),
+        );
     assert_eq!(styles, expected);
 }

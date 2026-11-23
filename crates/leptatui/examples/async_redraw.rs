@@ -59,18 +59,18 @@ fn AsyncRedraw() -> impl IntoView {
     });
 
     stylesheet! {
-        .panel => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .panel {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .title => { fg: Color::LightCyan, modifier: Modifier::BOLD }
-        .help => { fg: Color::Gray }
-        .error => { fg: Color::LightRed }
-        .ready => { fg: Color::LightGreen }
+        .title { fg: Color::LightCyan; modifier: Modifier::BOLD; }
+        .help { fg: Color::Gray; }
+        .error { fg: Color::LightRed; }
+        .ready { fg: Color::LightGreen; }
     }
 
     view! {

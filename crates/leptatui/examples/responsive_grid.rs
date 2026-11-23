@@ -40,72 +40,72 @@ fn ResponsiveGrid() -> impl IntoView {
     });
 
     stylesheet! {
-        .app-shell => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .app-shell {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
+                border_type: BorderType::Plain;
+                padding: TuiSpacing::ZERO;
             }
         }
-        .app-title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
+        .app-title {
+            fg: Color::LightCyan;
+            modifier: Modifier::BOLD;
         }
-        .dashboard => {
-            display: Display::Grid,
+        .dashboard {
+            display: Display::Grid;
             grid_template_columns: vec![
                 GridTemplateTrack::repeat(
                     GridRepeat::count(2),
                     vec![GridTrackSize::from(Fraction::new(1.0))]
                 )
-            ],
+            ];
             grid_template_rows: vec![
                 automatic_track(),
                 automatic_track()
-            ],
-            gap: Axes::all(Length::cells(1.0)),
-            align_items: AlignItems::Stretch
+            ];
+            gap: Axes::all(Length::cells(1.0));
+            align_items: AlignItems::Stretch;
 
             @media (max-width: 60) {
-                grid_template_columns: vec![fractional_track(1.0)],
+                grid_template_columns: vec![fractional_track(1.0)];
                 grid_template_rows: vec![
                     automatic_track(),
                     automatic_track(),
                     automatic_track()
-                ]
+                ];
             }
         }
-        .dashboard-title => {
+        .dashboard-title {
             grid_column: GridLine::new(
                 GridPlacement::line(1),
                 GridPlacement::line(-1)
-            )
+            );
         }
-        .summary => {
-            padding: TuiSpacing::uniform(1)
+        .summary {
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .activity => {
-            padding: TuiSpacing::uniform(1)
+        .activity {
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .section-title => {
-            fg: Color::Yellow,
-            modifier: Modifier::BOLD
+        .section-title {
+            fg: Color::Yellow;
+            modifier: Modifier::BOLD;
         }
-        .metric => {
-            fg: Color::LightGreen,
-            modifier: Modifier::BOLD
+        .metric {
+            fg: Color::LightGreen;
+            modifier: Modifier::BOLD;
         }
-        .hint => { fg: Color::DarkGray }
+        .hint { fg: Color::DarkGray; }
 
     }
 

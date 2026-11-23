@@ -25,10 +25,17 @@ Values computed before `view!` remain snapshots, and plain Rust builders use
 ordinary Rust evaluation semantics. Editable builders retain their supplied
 signal and read its current text when rendering or handling input.
 
-Custom components declare changing data as `Prop<T>` and read it with `.get()`
-or `.with()` inside their view expressions. Component setup runs once. Use
+Custom components declare data props with ordinary value types such as `String`.
+`#[component]` automatically wraps each data parameter in `Prop<T>` inside the
+body. Render the handle directly, as in `<H1>{text}</H1>`, or read it with `.get()`
+or `.with()` inside view expressions. Explicit `Prop<T>` declarations are also
+supported without double wrapping. Component setup runs once. Use
 `#[prop(callback)]` for retained event callbacks and `#[prop(static)]` for
-intentional setup-only inputs such as a router's initial location.
+intentional setup-only inputs such as a router's initial location. These inputs
+retain their declared types without automatic wrapping. Structural `Children`
+inputs become lazy, repeatable handles inside the component body: render them
+with `{children}` or call them with `{children()}`. Both forms preserve the
+original child nodes and their local state.
 
 `View` is an open, object-safe trait. Built-in builders retain concrete return
 types such as `TextView`, `DivView`, `InputView`, and `TextAreaView`, so their
@@ -171,10 +178,10 @@ use leptatui::prelude::*;
 #[component]
 fn Guide() -> impl IntoView {
     stylesheet! {
-        H1 => { fg: Color::LightCyan }
-        OrderedList => { fg: Color::LightGreen }
-        TableHead => { fg: Color::LightCyan }
-        CodeBlock => { fg: Color::LightBlue }
+        H1 { fg: Color::LightCyan; }
+        OrderedList { fg: Color::LightGreen; }
+        TableHead { fg: Color::LightCyan; }
+        CodeBlock { fg: Color::LightBlue; }
     }
 
     view! {

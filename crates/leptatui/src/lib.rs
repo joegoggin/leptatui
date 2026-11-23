@@ -176,10 +176,10 @@
 //! use leptatui::prelude::*;
 //!
 //! let _styles = stylesheet! {
-//!     H1 => { fg: Color::LightCyan }
-//!     OrderedList => { fg: Color::LightGreen }
-//!     TableHead => { fg: Color::LightCyan }
-//!     CodeBlock => { fg: Color::LightBlue }
+//!     H1 { fg: Color::LightCyan; }
+//!     OrderedList { fg: Color::LightGreen; }
+//!     TableHead { fg: Color::LightCyan; }
+//!     CodeBlock { fg: Color::LightBlue; }
 //! };
 //! let document = view! {
 //!     <Div>
@@ -486,6 +486,40 @@ pub mod __private {
         value.expect("view expression did not produce a value")
     }
 
+    /// Repeatable structural children exposed inside generated components.
+    ///
+    /// Clones share the original child nodes. Calling the handle returns those
+    /// nodes, while converting it into a view defers the call until consumption.
+    #[derive(Clone)]
+    pub struct RetainedChildren {
+        /// Shared callback returning handles to the original child nodes.
+        callback: std::rc::Rc<dyn Fn() -> Vec<AnyView>>,
+    }
+
+    impl std::ops::Deref for RetainedChildren {
+        type Target = dyn Fn() -> Vec<AnyView>;
+
+        /// Returns the repeatable callback for callable children syntax.
+        ///
+        /// # Returns
+        ///
+        /// A shared reference to the retained children callback.
+        fn deref(&self) -> &Self::Target {
+            self.callback.as_ref()
+        }
+    }
+
+    impl IntoView for RetainedChildren {
+        /// Defers child consumption behind a layout-transparent boundary.
+        ///
+        /// # Returns
+        ///
+        /// An [`AnyView`] sharing the original child nodes.
+        fn into_view(self) -> AnyView {
+            crate::dynamic(move || __fragment(self())).into_view()
+        }
+    }
+
     /// Makes structural children repeatable without rerunning their factory.
     ///
     /// # Arguments
@@ -494,11 +528,11 @@ pub mod __private {
     ///
     /// # Returns
     ///
-    /// A [`crate::ChildrenFn`] sharing the original child nodes.
-    pub fn __retain_children(children: crate::Children) -> crate::ChildrenFn {
+    /// A [`RetainedChildren`] handle sharing the original child nodes.
+    pub fn __retain_children(children: crate::Children) -> RetainedChildren {
         let factory = std::cell::RefCell::new(Some(children));
         let current = std::cell::RefCell::new(None::<Vec<crate::DynamicView>>);
-        Box::new(move || {
+        let callback = std::rc::Rc::new(move || {
             if current.borrow().is_none() {
                 let children = factory
                     .borrow_mut()
@@ -519,7 +553,8 @@ pub mod __private {
                 .cloned()
                 .map(IntoView::into_view)
                 .collect()
-        })
+        });
+        RetainedChildren { callback }
     }
 
     /// Layout-transparent output of one tracked child expression.
@@ -530,10 +565,7 @@ pub mod __private {
 
     impl View for Fragment {
         fn render(&self, ctx: &mut crate::RenderCtx<'_, '_>) -> crate::Result<()> {
-            for child in &self.children {
-                child.render(ctx)?;
-            }
-            Ok(())
+            crate::view::containers::layout::render::render_fragment(&self.children, ctx)
         }
         fn as_any(&self) -> &dyn std::any::Any {
             self

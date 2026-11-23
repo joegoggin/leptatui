@@ -141,7 +141,7 @@ fn MacroRouteNamedPage(#[prop(into)] label: leptatui::Prop<String>) -> impl lept
 #[component]
 fn MacroRouteLinkRoot() -> impl leptatui::IntoView {
     stylesheet! {
-        .active => { bg: Color::Red }
+        .active { bg: Color::Red; }
     }
 
     view! {

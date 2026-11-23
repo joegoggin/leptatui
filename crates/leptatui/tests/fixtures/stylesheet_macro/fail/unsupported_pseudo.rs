@@ -5,6 +5,6 @@ use leptatui::prelude::*;
 /// Defines a stylesheet with an unsupported pseudo-selector.
 fn main() {
     let _ = stylesheet! {
-        Button:hover => { bg: Color::Blue }
+        Button:hover { bg: Color::Blue; }
     };
 }

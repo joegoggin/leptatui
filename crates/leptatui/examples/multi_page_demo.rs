@@ -73,64 +73,64 @@ fn MultiPageDemo() -> impl IntoView {
         $focus_text: theme_color("focus_text");
         $focus_surface: theme_color("focus_surface");
 
-        .app-shell => {
-            fg: $text,
-            bg: $surface,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .app-shell {
+            fg: $text;
+            bg: $surface;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        .app-title => { fg: $accent, modifier: Modifier::BOLD }
-        .nav => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Row
+        .app-title { fg: $accent; modifier: Modifier::BOLD; }
+        .nav {
+            display: Display::Flex;
+            flex_direction: FlexDirection::Row;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
-        .actions => {
-            display: Display::Flex
+        .actions {
+            display: Display::Flex;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
-        .page => {
-            fg: $text,
-            bg: $panel,
-            padding: TuiSpacing::uniform(1)
+        .page {
+            fg: $text;
+            bg: $panel;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .page-title => { fg: $accent, modifier: Modifier::BOLD }
-        .body => { fg: $text }
-        .muted => { fg: $muted }
-        .stat => { fg: $accent, modifier: Modifier::BOLD }
-        .danger => { fg: Color::LightRed }
+        .page-title { fg: $accent; modifier: Modifier::BOLD; }
+        .body { fg: $text; }
+        .muted { fg: $muted; }
+        .stat { fg: $accent; modifier: Modifier::BOLD; }
+        .danger { fg: Color::LightRed; }
 
-        Button => {
-            fg: $text,
-            bg: $surface,
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1),
+        Button {
+            fg: $text;
+            bg: $surface;
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
 
-            &:focus => {
-                fg: $focus_text,
-                bg: $focus_surface,
-                modifier: Modifier::BOLD,
-                border_type: BorderType::Thick
+            &:focus {
+                fg: $focus_text;
+                bg: $focus_surface;
+                modifier: Modifier::BOLD;
+                border_type: BorderType::Thick;
             }
         }
     }

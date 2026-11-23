@@ -250,20 +250,20 @@ async fn prelude_exposes_reactivity_and_context() {
         let _ = style.to_block();
 
         let stylesheet = stylesheet! {
-            H1 => { modifier: Modifier::BOLD }
-            Paragraph => { fg: Color::Gray }
-            OrderedList => { fg: Color::LightRed }
-            ListItem => { fg: Color::LightGreen }
-            Table => { fg: Color::LightBlue }
-            TableBody => { fg: Color::LightCyan }
-            TableRow => { fg: Color::LightMagenta }
-            TableCell => { fg: Color::LightYellow }
-            CodeBlock => { bg: Color::DarkGray }
-            Form => { fg: Color::LightCyan }
-            Input => { fg: Color::White }
-            TextArea => { fg: Color::Yellow }
-            Image => { fg: Color::Green }
-            ProgressBar => { fg: Color::Blue }
+            H1 { modifier: Modifier::BOLD; }
+            Paragraph { fg: Color::Gray; }
+            OrderedList { fg: Color::LightRed; }
+            ListItem { fg: Color::LightGreen; }
+            Table { fg: Color::LightBlue; }
+            TableBody { fg: Color::LightCyan; }
+            TableRow { fg: Color::LightMagenta; }
+            TableCell { fg: Color::LightYellow; }
+            CodeBlock { bg: Color::DarkGray; }
+            Form { fg: Color::LightCyan; }
+            Input { fg: Color::White; }
+            TextArea { fg: Color::Yellow; }
+            Image { fg: Color::Green; }
+            ProgressBar { fg: Color::Blue; }
         };
         assert_eq!(
             stylesheet,

@@ -18,42 +18,42 @@ fn NestedOverflow() -> impl IntoView {
     });
 
     stylesheet! {
-        .app-shell => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .app-shell {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
         }
-        .title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
+        .title {
+            fg: Color::LightCyan;
+            modifier: Modifier::BOLD;
         }
-        .outer-scroll => {
-            borders: Borders::ALL,
+        .outer-scroll {
+            borders: Borders::ALL;
             size: LayoutSize::new(
                 Dimension::from(Length::percent(100.0)),
                 Dimension::from(Length::cells(14.0))
-            ),
-            overflow: Axes::new(Overflow::Hidden, Overflow::Auto),
-            padding: TuiSpacing::uniform(1)
+            );
+            overflow: Axes::new(Overflow::Hidden, Overflow::Auto);
+            padding: TuiSpacing::uniform(1);
         }
-        .inner-scroll => {
-            borders: Borders::ALL,
+        .inner-scroll {
+            borders: Borders::ALL;
             size: LayoutSize::new(
                 Dimension::from(Length::cells(52.0)),
                 Dimension::from(Length::cells(7.0))
-            ),
-            overflow: Axes::new(Overflow::Auto, Overflow::Scroll)
+            );
+            overflow: Axes::new(Overflow::Auto, Overflow::Scroll);
         }
-        .wide-content => {
+        .wide-content {
             size: LayoutSize::new(
                 Dimension::from(Length::cells(78.0)),
                 Dimension::Auto
-            )
+            );
         }
-        .inner-title => {
-            fg: Color::Yellow,
-            modifier: Modifier::BOLD
+        .inner-title {
+            fg: Color::Yellow;
+            modifier: Modifier::BOLD;
         }
-        .hint => { fg: Color::DarkGray }
+        .hint { fg: Color::DarkGray; }
     }
 
     view! {

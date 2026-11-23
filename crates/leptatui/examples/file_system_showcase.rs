@@ -843,27 +843,27 @@ fn FileSystemShowcase(#[prop(static)] root: PathBuf) -> ViewResult<impl IntoView
     });
 
     stylesheet! {
-        .screen => {
+        .screen {
             size: LayoutSize::new(
                 Dimension::from(Length::percent(100.0)),
                 Dimension::from(Length::percent(100.0))
-            ),
-            borders: Borders::ALL,
-            padding: TuiSpacing::uniform(1),
-            overflow: Axes::new(Overflow::Hidden, Overflow::Auto)
+            );
+            borders: Borders::ALL;
+            padding: TuiSpacing::uniform(1);
+            overflow: Axes::new(Overflow::Hidden, Overflow::Auto);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .title => { fg: Color::LightCyan, modifier: Modifier::BOLD }
-        .root => { fg: Color::LightGreen }
-        .help => { fg: Color::Gray }
-        .selected => { fg: Color::LightCyan, modifier: Modifier::BOLD }
-        .passed => { fg: Color::LightGreen }
-        .failed => { fg: Color::LightRed }
-        .pending => { fg: Color::Yellow }
-        .locked => { fg: Color::DarkGray }
+        .title { fg: Color::LightCyan; modifier: Modifier::BOLD; }
+        .root { fg: Color::LightGreen; }
+        .help { fg: Color::Gray; }
+        .selected { fg: Color::LightCyan; modifier: Modifier::BOLD; }
+        .passed { fg: Color::LightGreen; }
+        .failed { fg: Color::LightRed; }
+        .pending { fg: Color::Yellow; }
+        .locked { fg: Color::DarkGray; }
     }
 
     let root = filesystem.root().display().to_string();

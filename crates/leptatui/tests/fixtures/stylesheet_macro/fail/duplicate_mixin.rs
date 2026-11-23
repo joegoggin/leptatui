@@ -6,13 +6,13 @@ use leptatui::prelude::*;
 fn main() {
     let _styles = stylesheet! {
         @mixin chrome {
-            bg: Color::Black
+            bg: Color::Black;
         }
 
         @mixin chrome {
-            fg: Color::White
+            fg: Color::White;
         }
 
-        Text => { @include chrome }
+        Text { @include chrome; }
     };
 }

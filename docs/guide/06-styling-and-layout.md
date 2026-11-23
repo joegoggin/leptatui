@@ -2,28 +2,68 @@
 
 Prerequisites: [Chapter 5: Reusable components](05-reusable-components.md).
 
-Give the notes app a readable, responsive layout. Add this stylesheet inside
-`NotesApp`, before its view expression:
+Give the notes app a readable, responsive layout. Make the following two edits
+in your notes project's `src/main.rs`, continuing from chapter 5.
+
+## Add the stylesheet to `NotesApp`
+
+Find `fn NotesApp() -> impl IntoView`. Keep its quit handler, signal definitions,
+and `provide_context(Draft { title, body, status });` call. Immediately after
+that `provide_context` call, insert the following `stylesheet!` block, before
+the existing `view!` expression:
 
 ```rust
 stylesheet! {
-    .notes-shell => {
-        padding: TuiSpacing::uniform(1)
-        .actions => {
-            display: Display::Flex,
-            gap: Axes::all(Length::cells(1.0))
+    H1 { fg: Color::LightCyan; }
+    Button:focus { fg: Color::Yellow; }
+
+    .notes-shell {
+        padding: TuiSpacing::uniform(1);
+        &__actions {
+            display: Display::Flex;
+            gap: Axes::all(Length::cells(1.0));
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
     }
-    H1 => { fg: Color::LightCyan }
-    Button:focus => { fg: Color::Yellow }
 }
 ```
 
-Use `<Div class="notes-shell">` around the shell content. Apply
-`class="actions"` to its group of action buttons or navigation links.
+## Replace the shell view
+
+Still inside `NotesApp`, replace its existing `view! { <Panel> ... </Panel> }`
+expression with the following. This keeps `Panel`, `NoteHeading`, and
+`NoteEditor` from chapter 5, wraps the shell in a styled `Div`, and adds a row
+of Reset and Quit buttons:
+
+```rust
+view! {
+    <Panel>
+        <Div class="notes-shell">
+            <NoteHeading text="My notes" />
+            <Div class="notes-shell__actions">
+                <Button on_press=move || {
+                    title.set(String::from("First note"));
+                    body.set(String::from("Learn to build a terminal application."));
+                    status.set(String::from("Reset in memory"));
+                }>
+                    "Reset draft"
+                </Button>
+                <Button on_press=|| AppControl::Exit>"Quit"</Button>
+            </Div>
+            <NoteEditor />
+        </Div>
+    </Panel>
+}
+```
+
+The nested `&__actions` selector expands to `.notes-shell__actions`, matching
+that inner `Div`. Leave the `Draft`, `Panel`, `NoteHeading`, and `NoteEditor`
+definitions and `main` function as they were in chapter 5. Run `cargo run` in
+your notes project: the buttons should sit beside each other in a wide terminal
+and stack when the terminal is 60 columns wide or narrower.
+
 A stylesheet registered during component setup applies to that component's
 subtree, including descendants. Built-in defaults remain available underneath
 your rules. A helper containing `stylesheet!` must also run during setup.
@@ -35,14 +75,20 @@ one cell of padding on each side. `Length::cells`, `Length::percent`, and
 viewport units (`vw`, `vh`, `vmin`, `vmax`) express typed sizes. `Dimension`
 also supports automatic sizing.
 
-To make a container fill the available width, give it this inline style:
+The width and grid snippets below are optional experiments, rather than
+additional edits to the notes app. To try either snippet, temporarily replace
+`NotesApp`'s final `view!` expression with the entire snippet, including its
+`let` binding. Keep the setup and stylesheet above it. Restore the shell view
+from the previous section before continuing to chapter 7.
+
+This example makes a container fill the available width:
 
 ```rust
 let full_width = TuiStyle::new().size(LayoutSize::new(
     Dimension::from(Length::percent(100.0)),
     Dimension::Auto,
 ));
-let panel = view! { <Div style={full_width}><Text>"Full width"</Text></Div> };
+view! { <Div style={full_width}><Text>"Full width"</Text></Div> }
 ```
 
 `Div` defaults to vertical block flow. Flexbox arranges direct children along
@@ -56,9 +102,9 @@ let grid = TuiStyle::new()
         GridTemplateTrack::from(GridTrackSize::from(Length::cells(20.0))),
         GridTemplateTrack::from(GridTrackSize::from(Fraction::new(1.0))),
     ]);
-let layout = view! {
+view! {
     <Div style={grid}><Text>"Notes"</Text><Text>"Selected note"</Text></Div>
-};
+}
 ```
 
 ## Scrolling and responsive behavior
@@ -75,8 +121,8 @@ also scrolls controls into view. Media queries use terminal viewport dimensions
 in cells and are reevaluated when the terminal resizes.
 
 Run `responsive_flex`, `responsive_grid`, `block_layout`, or `nested_overflow`
-with `cargo run --example NAME`. Resize the notes app below 60 columns and
-confirm that its action row stacks vertically.
+with `cargo run --example NAME` from a Leptatui repository checkout. These
+examples belong to the library repository, rather than your notes project.
 
 For min/max sizing, alignment, grid placement, positioning, sticky/fixed boxes,
 stacking, retained geometry, and terminal-specific limitations, use the

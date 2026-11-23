@@ -64,9 +64,9 @@ fn DemoWorkflowRoot() -> impl IntoView {
         $surface: theme_color("surface");
         $accent: theme_color("accent");
 
-        .page => { fg: $text, bg: $surface }
-        .title => { fg: $accent, modifier: Modifier::BOLD }
-        Button => { borders: Borders::ALL }
+        .page { fg: $text; bg: $surface; }
+        .title { fg: $accent; modifier: Modifier::BOLD; }
+        Button { borders: Borders::ALL; }
     }
 
     view! {

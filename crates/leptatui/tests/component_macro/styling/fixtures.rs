@@ -2,7 +2,7 @@
 #[component]
 fn MacroStyledText() -> impl leptatui::IntoView {
     stylesheet! {
-        .scoped => { fg: Color::Yellow, bg: Color::Blue }
+        .scoped { fg: Color::Yellow; bg: Color::Blue; }
     }
 
     text("Scoped").with_classes("scoped")
@@ -12,7 +12,7 @@ fn MacroStyledText() -> impl leptatui::IntoView {
 #[component]
 fn MacroHiddenLayoutChild() -> impl leptatui::IntoView {
     stylesheet! {
-        .hidden => { display: Display::None }
+        .hidden { display: Display::None; }
     }
 
     text("Hidden").with_classes("hidden")
@@ -22,7 +22,7 @@ fn MacroHiddenLayoutChild() -> impl leptatui::IntoView {
 #[component]
 fn MacroStyledSibling() -> impl leptatui::IntoView {
     stylesheet! {
-        .shared => { fg: Color::Yellow }
+        .shared { fg: Color::Yellow; }
     }
 
     text("Styled").with_classes("shared")
@@ -38,7 +38,7 @@ fn MacroPlainSibling() -> impl leptatui::IntoView {
 #[component]
 fn MacroParentStylesChild() -> impl leptatui::IntoView {
     stylesheet! {
-        Text => { fg: Color::Green }
+        Text { fg: Color::Green; }
     }
 
     component(MacroPlainSibling::new())
@@ -48,7 +48,7 @@ fn MacroParentStylesChild() -> impl leptatui::IntoView {
 #[component]
 fn MacroParentWithChildOverride() -> impl leptatui::IntoView {
     stylesheet! {
-        Text => { fg: Color::Green }
+        Text { fg: Color::Green; }
     }
 
     component(MacroChildStyleOverride::new())
@@ -58,7 +58,7 @@ fn MacroParentWithChildOverride() -> impl leptatui::IntoView {
 #[component]
 fn MacroChildStyleOverride() -> impl leptatui::IntoView {
     stylesheet! {
-        Text => { fg: Color::Yellow }
+        Text { fg: Color::Yellow; }
     }
 
     text("Override")
@@ -68,7 +68,7 @@ fn MacroChildStyleOverride() -> impl leptatui::IntoView {
 #[component]
 fn MacroParentSpecificityBeatsChild() -> impl leptatui::IntoView {
     stylesheet! {
-        .specific => { fg: Color::Green }
+        .specific { fg: Color::Green; }
     }
 
     component(MacroChildLowerSpecificity::new())
@@ -78,7 +78,7 @@ fn MacroParentSpecificityBeatsChild() -> impl leptatui::IntoView {
 #[component]
 fn MacroChildLowerSpecificity() -> impl leptatui::IntoView {
     stylesheet! {
-        Text => { fg: Color::Yellow }
+        Text { fg: Color::Yellow; }
     }
 
     text("Specific").with_classes("specific")
@@ -90,7 +90,7 @@ fn MacroThemedStylesheet() -> impl leptatui::IntoView {
     provide_context(ThemeVariables::new().color("text", Color::LightCyan));
 
     stylesheet! {
-        .themed => { fg: theme_color("text") }
+        .themed { fg: theme_color("text"); }
     }
 
     text("Theme").with_classes("themed")

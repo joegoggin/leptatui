@@ -81,7 +81,7 @@ impl View for Badge {
 ///
 /// ```text
 /// div((Badge::new("Custom"), text("Built in")))
-/// Badge => { fg: Color::LightMagenta }
+/// Badge { fg: Color::LightMagenta; }
 /// Enter
 /// ```
 ///

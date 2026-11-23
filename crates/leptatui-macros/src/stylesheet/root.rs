@@ -81,10 +81,6 @@ impl Parse for StylesheetRoot {
             } else {
                 items.push(StylesheetItem::Rule(input.parse()?));
             }
-
-            if input.peek(Token![,]) {
-                input.parse::<Token![,]>()?;
-            }
         }
 
         if items.is_empty() && variables.is_empty() && mixins.is_empty() {

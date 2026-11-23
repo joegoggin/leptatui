@@ -24,7 +24,7 @@ pub(super) struct Prop {
     pub(super) attrs: Vec<Attribute>,
     /// Prop field and local variable name.
     pub(super) ident: Ident,
-    /// Prop value type.
+    /// Generated storage type, including the wrapper for reactive data props.
     pub(super) ty: Box<Type>,
     /// Defaulting behavior for omitted props.
     pub(super) default: Option<PropDefault>,
@@ -193,7 +193,7 @@ fn parse_prop(input: &FnArg) -> syn::Result<Prop> {
     }
 
     let options = parse_prop_attrs(attrs)?;
-    let reactive_ty = if let Type::Path(path) = ty.as_ref() {
+    let explicit_reactive_ty = if let Type::Path(path) = ty.as_ref() {
         path.path
             .segments
             .last()
@@ -215,12 +215,17 @@ fn parse_prop(input: &FnArg) -> syn::Result<Prop> {
         None
     };
     let structural = matches!(ty.as_ref(), Type::Path(path) if path.path.segments.last().is_some_and(|segment| matches!(segment.ident.to_string().as_str(), "Children" | "ChildrenFn" | "ChildrenMut")));
-    if reactive_ty.is_none() && !structural && !options.retained {
-        return Err(Error::new_spanned(
-            ty,
-            "component data props must use Prop<T>; use #[prop(callback)] for event callbacks or #[prop(static)] for setup-only inputs",
-        ));
-    }
+    let (ty, reactive_ty) = if structural || options.retained {
+        (ty.clone(), None)
+    } else if let Some(value_ty) = explicit_reactive_ty {
+        (ty.clone(), Some(value_ty))
+    } else {
+        let leptatui = crate::crate_path::leptatui();
+        (
+            Box::new(syn::parse_quote! { #leptatui::Prop<#ty> }),
+            Some(ty.clone()),
+        )
+    };
     let copied_attrs = attrs
         .iter()
         .filter(|attr| !attr.path().is_ident("prop"))
@@ -230,7 +235,7 @@ fn parse_prop(input: &FnArg) -> syn::Result<Prop> {
     Ok(Prop {
         attrs: copied_attrs,
         ident: pat_ident.ident.clone(),
-        ty: ty.clone(),
+        ty,
         default: options.default,
         into: options.into,
         reactive_ty,

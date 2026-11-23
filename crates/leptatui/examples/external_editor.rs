@@ -58,28 +58,28 @@ fn ExternalEditor() -> impl IntoView {
     });
 
     stylesheet! {
-        .editor-shell => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .editor-shell {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        .editor-title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
+        .editor-title {
+            fg: Color::LightCyan;
+            modifier: Modifier::BOLD;
         }
 
-        .editor-status => { fg: Color::LightGreen }
-        .editor-error => { fg: Color::LightRed }
-        .editor-draft => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        .editor-status { fg: Color::LightGreen; }
+        .editor-error { fg: Color::LightRed; }
+        .editor-draft {
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
         }
-        .editor-help => { fg: Color::Gray }
+        .editor-help { fg: Color::Gray; }
     }
 
     view! {

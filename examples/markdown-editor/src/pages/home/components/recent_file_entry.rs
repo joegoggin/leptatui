@@ -19,8 +19,8 @@ use crate::pages::shared::relative_path;
 /// A button that opens `path` in Viewer.
 #[component]
 pub(in crate::pages::home) fn RecentFileEntry(
-    path: Prop<PathBuf>,
-    base: Prop<PathBuf>,
+    path: PathBuf,
+    base: PathBuf,
     #[prop(callback)] on_open: Rc<dyn Fn(PathBuf)>,
 ) -> impl IntoView {
     let open_path = path.clone();

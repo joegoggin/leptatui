@@ -1,0 +1,5 @@
+error: unexpected end of input, stylesheet! mixin includes must end with `;`
+ --> tests/fixtures/stylesheet_macro/fail/missing_include_semicolon.rs:8:68
+  |
+8 |         @mixin chrome { fg: Color::White; } Text { @include chrome }
+  |                                                                    ^

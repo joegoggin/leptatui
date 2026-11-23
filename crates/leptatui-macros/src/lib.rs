@@ -21,8 +21,11 @@ use proc_macro::TokenStream;
 
 /// Converts a view-producing function into a retained Leptatui component type.
 ///
-/// Data parameters use `Prop<T>` so view expressions track changing inputs
-/// without rerunning component setup. `#[prop(callback)]` retains event handlers;
+/// Data parameters declared as `T` are automatically wrapped in `Prop<T>` inside
+/// the component body. Render the handle directly in `view!` or read it with
+/// `.get()` or `.with()` to track changing inputs without rerunning component
+/// setup. Explicit `Prop<T>` declarations remain supported without double wrapping.
+/// `#[prop(callback)]` retains event handlers;
 /// `#[prop(static)]` retains intentional setup-only inputs. Structural children
 /// are retained lazily in their consuming context.
 #[proc_macro_attribute]

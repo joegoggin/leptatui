@@ -28,35 +28,35 @@ fn Counter() -> impl IntoView {
     });
 
     stylesheet! {
-        .counter-panel => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .counter-panel {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .counter-value => { fg: Color::LightCyan, modifier: Modifier::BOLD }
-        .counter-help => { fg: Color::Gray }
-        .counter-controls => {
-            display: Display::Flex
+        .counter-value { fg: Color::LightCyan; modifier: Modifier::BOLD; }
+        .counter-help { fg: Color::Gray; }
+        .counter-controls {
+            display: Display::Flex;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
-        Button => {
-            fg: Color::White,
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        Button {
+            fg: Color::White;
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
         }
-        .counter-button => {
+        .counter-button {
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .danger => { fg: Color::LightRed }
+        .danger { fg: Color::LightRed; }
     }
 
     view! {

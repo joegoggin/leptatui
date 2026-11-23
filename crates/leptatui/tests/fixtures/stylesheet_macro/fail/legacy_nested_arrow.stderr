@@ -1,0 +1,5 @@
+error: stylesheet! rules use `Selector { ... }`; remove `=>`
+ --> tests/fixtures/stylesheet_macro/fail/legacy_nested_arrow.rs:8:25
+  |
+8 |         .panel { Button => { fg: Color::White; } }
+  |                         ^

@@ -2,8 +2,9 @@
 //!
 //! The stylesheet macro accepts terminal selector rules, including nested
 //! descendants, parent pseudo-classes, BEM class suffixes, and selector-local
-//! media queries. It lowers them into Leptatui stylesheet builder calls and
-//! registers them when invoked during generated component setup.
+//! media queries. Rules use `Selector { ... }` blocks with semicolon-terminated
+//! declarations and mixin includes. It lowers them into Leptatui stylesheet
+//! builder calls and registers them during generated component setup.
 //!
 //! # Modules
 //!

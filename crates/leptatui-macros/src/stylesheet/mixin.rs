@@ -71,7 +71,7 @@ impl Parse for Mixin {
     /// # Errors
     ///
     /// Returns [`syn::Error`] if the definition is missing `@mixin`, a name, a
-    /// braced declaration block, comma-separated declarations, or at least one
+    /// braced declaration block, semicolon-terminated declarations, or at least one
     /// declaration.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         input.parse::<Token![@]>()?;
@@ -87,14 +87,6 @@ impl Parse for Mixin {
                 items.push(MixinItem::MixinInclude(content.parse()?));
             } else {
                 items.push(MixinItem::Declaration(Box::new(content.parse()?)));
-            }
-
-            if content.peek(Token![,]) {
-                content.parse::<Token![,]>()?;
-            } else if !content.is_empty() {
-                return Err(
-                    content.error("stylesheet! mixin declarations must be separated by commas")
-                );
             }
         }
 
@@ -203,8 +195,8 @@ impl Parse for MixinInclude {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if the include is missing `@include` or a mixin
-    /// name.
+    /// Returns [`syn::Error`] if the include is missing `@include`, a mixin
+    /// name, or a terminating semicolon.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         input.parse::<Token![@]>()?;
         input.parse::<kw::include>()?;
@@ -221,6 +213,10 @@ impl Parse for MixinInclude {
             MixinReference::Local(first)
         };
 
+        if !input.peek(Token![;]) {
+            return Err(input.error("stylesheet! mixin includes must end with `;`"));
+        }
+        input.parse::<Token![;]>()?;
         Ok(Self { reference })
     }
 }

@@ -57,53 +57,53 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
     });
 
     stylesheet! {
-        .crud-screen => {
-            fg: Color::White,
-            bg: Color::Black,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .crud-screen {
+            fg: Color::White;
+            bg: Color::Black;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        .crud-title => { fg: Color::LightCyan, modifier: Modifier::BOLD }
-        .section-title => { fg: Color::Yellow, modifier: Modifier::BOLD }
-        .ready => { fg: Color::LightGreen }
-        .pending => { fg: Color::Yellow, modifier: Modifier::BOLD }
-        .success => { fg: Color::LightGreen, modifier: Modifier::BOLD }
-        .error => { fg: Color::LightRed, modifier: Modifier::BOLD }
-        .danger => { fg: Color::LightRed }
-        .muted => { fg: Color::Gray }
-        .ticket-open => { fg: Color::White }
-        .ticket-done => { fg: Color::DarkGray }
-        .crud-actions => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Row
+        .crud-title { fg: Color::LightCyan; modifier: Modifier::BOLD; }
+        .section-title { fg: Color::Yellow; modifier: Modifier::BOLD; }
+        .ready { fg: Color::LightGreen; }
+        .pending { fg: Color::Yellow; modifier: Modifier::BOLD; }
+        .success { fg: Color::LightGreen; modifier: Modifier::BOLD; }
+        .error { fg: Color::LightRed; modifier: Modifier::BOLD; }
+        .danger { fg: Color::LightRed; }
+        .muted { fg: Color::Gray; }
+        .ticket-open { fg: Color::White; }
+        .ticket-done { fg: Color::DarkGray; }
+        .crud-actions {
+            display: Display::Flex;
+            flex_direction: FlexDirection::Row;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
 
-        Button => {
-            fg: Color::White,
-            bg: Color::Black,
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        Button {
+            fg: Color::White;
+            bg: Color::Black;
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        Button:focus => {
-            fg: Color::Black,
-            bg: Color::Yellow,
-            modifier: Modifier::BOLD,
-            border_type: BorderType::Thick
+        Button:focus {
+            fg: Color::Black;
+            bg: Color::Yellow;
+            modifier: Modifier::BOLD;
+            border_type: BorderType::Thick;
         }
     }
 

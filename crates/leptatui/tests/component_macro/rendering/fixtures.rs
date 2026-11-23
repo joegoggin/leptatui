@@ -13,11 +13,11 @@ fn MacroResponsiveCaseRow() -> impl leptatui::IntoView {
 #[component]
 fn MacroResponsiveCaseRoot() -> impl leptatui::IntoView {
     stylesheet! {
-        .case-row => {
-            display: Display::Flex
+        .case-row {
+            display: Display::Flex;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
     }

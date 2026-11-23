@@ -21,7 +21,7 @@ fn stylesheet_important_flex_direction_overrides_inline_flex_direction() {
         .with_classes("controls")
         .with_inline_style(TuiStyle::new().flex_direction(FlexDirection::Row));
     let stylesheet = stylesheet! {
-        .controls => { flex_direction: FlexDirection::Column !important }
+        .controls { flex_direction: FlexDirection::Column !important; }
     };
 
     let resolved = stylesheet.resolve(
@@ -230,14 +230,14 @@ fn authored_insert_and_media_rules_override_control_defaults() {
     metadata.set_focused(true);
     metadata.set_insert(true);
     let stylesheet = stylesheet! {
-        Input:insert => {
-            fg: Color::Magenta,
-            bg: Color::Blue,
-            border_type: BorderType::Plain
+        Input:insert {
+            fg: Color::Magenta;
+            bg: Color::Blue;
+            border_type: BorderType::Plain;
         }
-        Input => {
+        Input {
             @media (max-width: 20) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
     };
@@ -275,10 +275,10 @@ fn authored_visual_rules_override_control_defaults() {
     metadata.set_focused(true);
     metadata.set_visual(true);
     let stylesheet = stylesheet! {
-        TextArea:visual => {
-            fg: Color::Cyan,
-            bg: Color::Blue,
-            border_type: BorderType::Plain
+        TextArea:visual {
+            fg: Color::Cyan;
+            bg: Color::Blue;
+            border_type: BorderType::Plain;
         }
     };
 
@@ -323,15 +323,15 @@ fn route_anchor_defaults_have_low_cascade_precedence() {
     let default_style = Stylesheet::new().resolve(&plain, &[], TuiStyle::new(), &theme);
     assert_eq!(default_style.foreground, Some(Color::Blue));
 
-    let type_stylesheet = stylesheet! { A => { fg: Color::Red } };
+    let type_stylesheet = stylesheet! { A { fg: Color::Red; } };
     let type_style = type_stylesheet.resolve(&plain, &[], TuiStyle::new(), &theme);
     assert_eq!(type_style.foreground, Some(Color::Red));
 
     let mut class = StyleMetadata::new(ViewType::A);
     class.set_classes("accent");
     let class_stylesheet = stylesheet! {
-        A => { fg: Color::Red }
-        .accent => { fg: Color::Green }
+        A { fg: Color::Red; }
+        .accent { fg: Color::Green; }
     };
     let class_style = class_stylesheet.resolve(&class, &[], TuiStyle::new(), &theme);
     assert_eq!(class_style.foreground, Some(Color::Green));
@@ -341,7 +341,7 @@ fn route_anchor_defaults_have_low_cascade_precedence() {
     assert_eq!(inline_style.foreground, Some(Color::Yellow));
 
     class.set_focused(true);
-    let focus_stylesheet = stylesheet! { A:focus => { bg: Color::Blue } };
+    let focus_stylesheet = stylesheet! { A:focus { bg: Color::Blue; } };
     let focus_style = focus_stylesheet.resolve(&class, &[], TuiStyle::new(), &theme);
     assert_eq!(focus_style.background, Some(Color::Blue));
 
@@ -354,7 +354,7 @@ fn route_anchor_defaults_have_low_cascade_precedence() {
         Some(Modifier::BOLD | Modifier::UNDERLINED)
     );
 
-    let active_stylesheet = stylesheet! { A:active => { fg: Color::Magenta } };
+    let active_stylesheet = stylesheet! { A:active { fg: Color::Magenta; } };
     let active_style = active_stylesheet.resolve(&active, &[], TuiStyle::new(), &theme);
     assert_eq!(active_style.foreground, Some(Color::Magenta));
 }
@@ -378,7 +378,7 @@ fn stylesheet_important_overrides_normal_inline_style() {
         .with_classes("alert")
         .with_inline_style(TuiStyle::new().foreground(Color::Black));
     let stylesheet = stylesheet! {
-        .alert => { fg: Color::Red !important }
+        .alert { fg: Color::Red !important; }
     };
 
     let resolved = stylesheet.resolve(
@@ -412,8 +412,8 @@ fn stylesheet_important_overrides_normal_inline_style() {
 fn stylesheet_important_overrides_normal_higher_specificity_rule() {
     let view = text("Alert").with_classes("alert");
     let stylesheet = stylesheet! {
-        Text => { fg: Color::Red !important }
-        .alert => { fg: Color::Blue }
+        Text { fg: Color::Red !important; }
+        .alert { fg: Color::Blue; }
     };
 
     let resolved = stylesheet.resolve(
@@ -447,10 +447,10 @@ fn stylesheet_important_rules_use_specificity_then_source_order() {
         .with_classes("primary danger")
         .with_focus(true);
     let stylesheet = stylesheet! {
-        Button:focus => { fg: Color::Green !important }
-        :focus => { fg: Color::Yellow !important }
-        .primary => { bg: Color::Blue !important }
-        .danger => { bg: Color::Red !important }
+        Button:focus { fg: Color::Green !important; }
+        :focus { fg: Color::Yellow !important; }
+        .primary { bg: Color::Blue !important; }
+        .danger { bg: Color::Red !important; }
     };
 
     let resolved = stylesheet.resolve(
@@ -486,10 +486,10 @@ fn stylesheet_normal_declaration_does_not_override_important_mixin_value() {
     let view = text("Alert").with_classes("alert");
     let stylesheet = stylesheet! {
         @mixin urgent {
-            fg: Color::Red !important
+            fg: Color::Red !important;
         }
 
-        .alert => { @include urgent, fg: Color::Blue }
+        .alert { @include urgent; fg: Color::Blue; }
     };
 
     let resolved = stylesheet.resolve(
@@ -570,37 +570,37 @@ fn stylesheet_important_layout_properties_override_inline_values() {
         .with_classes("layout")
         .with_inline_style(inline);
     let stylesheet = stylesheet! {
-        .layout => {
-            display: Display::Grid !important,
-            box_sizing: BoxSizing::BorderBox !important,
-            overflow: Axes::new(Overflow::Hidden, Overflow::Auto) !important,
-            size: LayoutSize::new(Dimension::MinContent, Dimension::MaxContent) !important,
-            min_size: LayoutSize::all(Dimension::from(Length::cells(2.0))) !important,
-            max_size: LayoutSize::all(Dimension::FitContent(Length::cells(40.0))) !important,
-            aspect_ratio: 1.5 !important,
-            margin: Edges::all(LengthAuto::from(Length::cells(1.0))) !important,
-            gap: Axes::new(Length::cells(2.0), Length::cells(3.0)) !important,
-            flex_direction: FlexDirection::ColumnReverse !important,
-            flex_wrap: FlexWrap::WrapReverse !important,
-            flex_basis: Dimension::from(Length::percent(25.0)) !important,
-            flex_grow: 2.0 !important,
-            flex_shrink: 0.5 !important,
-            align_items: AlignItems::Center !important,
-            align_self: AlignSelf::FlexEnd !important,
-            align_content: AlignContent::SpaceAround !important,
-            justify_items: JustifyItems::End !important,
-            justify_self: JustifySelf::Center !important,
-            justify_content: JustifyContent::SpaceEvenly !important,
-            grid_auto_flow: GridAutoFlow::ColumnDense !important,
-            grid_template_rows: important_template.clone() !important,
-            grid_template_columns: important_template.clone() !important,
-            grid_auto_rows: important_auto_tracks.clone() !important,
-            grid_auto_columns: important_auto_tracks.clone() !important,
-            grid_row: line !important,
-            grid_column: line !important,
-            position: Position::Absolute !important,
-            inset: Edges::symmetric(LengthAuto::Auto, Length::cells(4.0).into()) !important,
-            z_index: ZIndex::Integer(7) !important
+        .layout {
+            display: Display::Grid !important;
+            box_sizing: BoxSizing::BorderBox !important;
+            overflow: Axes::new(Overflow::Hidden, Overflow::Auto) !important;
+            size: LayoutSize::new(Dimension::MinContent, Dimension::MaxContent) !important;
+            min_size: LayoutSize::all(Dimension::from(Length::cells(2.0))) !important;
+            max_size: LayoutSize::all(Dimension::FitContent(Length::cells(40.0))) !important;
+            aspect_ratio: 1.5 !important;
+            margin: Edges::all(LengthAuto::from(Length::cells(1.0))) !important;
+            gap: Axes::new(Length::cells(2.0), Length::cells(3.0)) !important;
+            flex_direction: FlexDirection::ColumnReverse !important;
+            flex_wrap: FlexWrap::WrapReverse !important;
+            flex_basis: Dimension::from(Length::percent(25.0)) !important;
+            flex_grow: 2.0 !important;
+            flex_shrink: 0.5 !important;
+            align_items: AlignItems::Center !important;
+            align_self: AlignSelf::FlexEnd !important;
+            align_content: AlignContent::SpaceAround !important;
+            justify_items: JustifyItems::End !important;
+            justify_self: JustifySelf::Center !important;
+            justify_content: JustifyContent::SpaceEvenly !important;
+            grid_auto_flow: GridAutoFlow::ColumnDense !important;
+            grid_template_rows: important_template.clone() !important;
+            grid_template_columns: important_template.clone() !important;
+            grid_auto_rows: important_auto_tracks.clone() !important;
+            grid_auto_columns: important_auto_tracks.clone() !important;
+            grid_row: line !important;
+            grid_column: line !important;
+            position: Position::Absolute !important;
+            inset: Edges::symmetric(LengthAuto::Auto, Length::cells(4.0).into()) !important;
+            z_index: ZIndex::Integer(7) !important;
         }
     };
 
@@ -669,9 +669,9 @@ fn stylesheet_important_layout_properties_override_inline_values() {
 fn stylesheet_layout_properties_use_specificity_and_source_order() {
     let view = text("Panel").with_classes("panel");
     let stylesheet = stylesheet! {
-        Text => { display: Display::Block }
-        .panel => { display: Display::Flex }
-        .panel => { display: Display::Grid }
+        Text { display: Display::Block; }
+        .panel { display: Display::Flex; }
+        .panel { display: Display::Grid; }
     };
 
     let resolved = stylesheet.resolve(

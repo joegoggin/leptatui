@@ -51,37 +51,37 @@ fn main() {
     let styles = stylesheet! {
         @use layout_variables as layout;
 
-        .panel => {
-            display: layout.$display !important,
-            box_sizing: layout.$box_sizing,
-            overflow: layout.$overflow,
-            size: layout.$size,
-            min_size: layout.$min_size,
-            max_size: layout.$max_size,
-            aspect_ratio: layout.$aspect_ratio,
-            margin: layout.$margin,
-            gap: layout.$gap,
-            flex_direction: layout.$flex_direction,
-            flex_wrap: layout.$flex_wrap,
-            flex_basis: layout.$flex_basis,
-            flex_grow: layout.$flex_grow,
-            flex_shrink: layout.$flex_shrink,
-            align_items: layout.$align_items,
-            align_self: layout.$align_self,
-            align_content: layout.$align_content,
-            justify_items: layout.$justify_items,
-            justify_self: layout.$justify_self,
-            justify_content: layout.$justify_content,
-            grid_auto_flow: layout.$grid_auto_flow,
-            grid_template_rows: layout.$grid_template,
-            grid_template_columns: layout.$grid_template,
-            grid_auto_rows: layout.$grid_auto_tracks,
-            grid_auto_columns: layout.$grid_auto_tracks,
-            grid_row: layout.$grid_line,
-            grid_column: layout.$grid_line,
-            position: layout.$position,
-            inset: layout.$inset,
-            z_index: layout.$z_index
+        .panel {
+            display: layout.$display !important;
+            box_sizing: layout.$box_sizing;
+            overflow: layout.$overflow;
+            size: layout.$size;
+            min_size: layout.$min_size;
+            max_size: layout.$max_size;
+            aspect_ratio: layout.$aspect_ratio;
+            margin: layout.$margin;
+            gap: layout.$gap;
+            flex_direction: layout.$flex_direction;
+            flex_wrap: layout.$flex_wrap;
+            flex_basis: layout.$flex_basis;
+            flex_grow: layout.$flex_grow;
+            flex_shrink: layout.$flex_shrink;
+            align_items: layout.$align_items;
+            align_self: layout.$align_self;
+            align_content: layout.$align_content;
+            justify_items: layout.$justify_items;
+            justify_self: layout.$justify_self;
+            justify_content: layout.$justify_content;
+            grid_auto_flow: layout.$grid_auto_flow;
+            grid_template_rows: layout.$grid_template;
+            grid_template_columns: layout.$grid_template;
+            grid_auto_rows: layout.$grid_auto_tracks;
+            grid_auto_columns: layout.$grid_auto_tracks;
+            grid_row: layout.$grid_line;
+            grid_column: layout.$grid_line;
+            position: layout.$position;
+            inset: layout.$inset;
+            z_index: layout.$z_index;
         }
     };
     let view = text("Panel").with_classes("panel");

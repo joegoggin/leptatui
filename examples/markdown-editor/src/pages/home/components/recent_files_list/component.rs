@@ -22,8 +22,8 @@ use super::{
 /// A recent-file list with an empty state when applicable.
 #[component]
 pub(in crate::pages::home) fn RecentFilesList(
-    entries: Prop<Vec<PathBuf>>,
-    base: Prop<PathBuf>,
+    entries: Vec<PathBuf>,
+    base: PathBuf,
     #[prop(callback)] on_open: Rc<dyn Fn(PathBuf)>,
 ) -> impl IntoView {
     use_recent_files_list_styles();

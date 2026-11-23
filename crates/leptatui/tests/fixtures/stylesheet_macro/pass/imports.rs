@@ -20,18 +20,18 @@ fn button_mixins() -> StyleModule {
         @use color_variables;
 
         @mixin primary {
-            fg: color_variables.$fg,
-            bg: color_variables.$bg,
-            borders: color_variables.$border,
-            border_type: color_variables.$border_type,
-            padding: color_variables.$padding,
-            image_size: color_variables.$thumbnail
+            fg: color_variables.$fg;
+            bg: color_variables.$bg;
+            borders: color_variables.$border;
+            border_type: color_variables.$border_type;
+            padding: color_variables.$padding;
+            image_size: color_variables.$thumbnail;
         }
 
         @mixin inverted {
-            @include primary,
-            fg: color_variables.$bg,
-            bg: color_variables.$fg
+            @include primary;
+            fg: color_variables.$bg;
+            bg: color_variables.$fg;
         }
     }
 }
@@ -41,8 +41,8 @@ fn main() {
     let styles = stylesheet! {
         @use button_mixins;
 
-        .submit => { @include button_mixins.primary }
-        .quit => { @include button_mixins.inverted }
+        .submit { @include button_mixins.primary; }
+        .quit { @include button_mixins.inverted; }
     };
 
     let base = TuiStyle::new()

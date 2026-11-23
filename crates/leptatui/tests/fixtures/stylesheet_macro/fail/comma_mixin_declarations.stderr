@@ -1,0 +1,5 @@
+error: unexpected token; stylesheet! declarations require a Rust value followed by `;`, not comma separators
+ --> tests/fixtures/stylesheet_macro/fail/comma_mixin_declarations.rs:8:41
+  |
+8 |         @mixin chrome { fg: Color::White, bg: Color::Black; } Text { @include chrome; }
+  |                                         ^

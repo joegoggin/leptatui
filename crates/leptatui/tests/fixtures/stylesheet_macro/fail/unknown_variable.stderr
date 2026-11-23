@@ -1,5 +1,5 @@
 error: unknown stylesheet variable `$missing`
- --> tests/fixtures/stylesheet_macro/fail/unknown_variable.rs:9:24
+ --> tests/fixtures/stylesheet_macro/fail/unknown_variable.rs:9:21
   |
-9 |         Text => { fg: $missing }
-  |                        ^^^^^^^
+9 |         Text { fg: $missing; }
+  |                     ^^^^^^^

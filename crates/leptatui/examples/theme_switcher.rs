@@ -84,44 +84,44 @@ fn ThemeDemo() -> impl IntoView {
         $focus_text: theme_color("focus_text");
         $focus_surface: theme_color("focus_surface");
 
-        .app-panel => {
-            fg: $text,
-            bg: $surface,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1),
+        .app-panel {
+            fg: $text;
+            bg: $surface;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
 
-            .title => { fg: $accent, modifier: Modifier::BOLD }
-            .theme-status => { fg: $text }
-            .body => { fg: $muted }
-            .theme-button => {
-                fg: $text,
-                bg: $surface
+            .title { fg: $accent; modifier: Modifier::BOLD; }
+            .theme-status { fg: $text; }
+            .body { fg: $muted; }
+            .theme-button {
+                fg: $text;
+                bg: $surface;
 
                 @media (max-width: 60) {
-                    padding: TuiSpacing::ZERO
+                    padding: TuiSpacing::ZERO;
                 }
             }
-            .danger => { fg: Color::LightRed }
+            .danger { fg: Color::LightRed; }
 
-            Button => {
-                &:focus => {
-                    fg: $focus_text,
-                    bg: $focus_surface,
-                    modifier: Modifier::BOLD,
-                    border_type: BorderType::Thick
+            Button {
+                &:focus {
+                    fg: $focus_text;
+                    bg: $focus_surface;
+                    modifier: Modifier::BOLD;
+                    border_type: BorderType::Thick;
                 }
             }
         }
 
-        .controls => {
-            display: Display::Flex
+        .controls {
+            display: Display::Flex;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
     }

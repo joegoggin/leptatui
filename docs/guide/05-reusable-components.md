@@ -9,8 +9,10 @@ pieces together as a complete file.
 ## Pass inputs with props
 
 A component's function parameters become props: values supplied by its parent.
-Use `Prop<T>` for changing data. The component reads its current value with
-`.get()` or `.with()`, and `view!` automatically tracks those reads. Callers
+Declare data props with their value type, such as `String`. `#[component]`
+automatically wraps them in `Prop<T>` inside the component body. Render the
+handle directly in `view!`, or read its current value with `.get()` or `.with()`;
+`view!` automatically tracks those reads. Callers
 can write `<NoteHeading text={title.get()} />` without a tracking closure.
 Component setup runs once, so prop changes preserve local signals and state.
 
@@ -25,13 +27,13 @@ struct Draft {
 }
 
 #[component]
-fn NoteHeading(#[prop(into)] text: Prop<String>) -> impl IntoView {
-    view! { <H1>{text.get()}</H1> }
+fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
+    view! { <H1>{text}</H1> }
 }
 
 #[component]
 fn Panel(children: Children) -> impl IntoView {
-    view! { <Block><Div>{children()}</Div></Block> }
+    view! { <Block><Div>{children}</Div></Block> }
 }
 ```
 
@@ -43,27 +45,91 @@ to use its type's default; `#[prop(default = expression)]` supplies a chosen
 default. `Children` is a callable holding nested content.
 
 `#[component]` retains `Children` lazily and exposes a repeatable handle inside
-the component, so `{children()}` works without rebuilding the child nodes.
+the component. Render it directly with `{children}`; the callable form
+`{children()}` remains supported. Both forms preserve the original child nodes
+and their local state.
 Use `ChildrenFn` or `ChildrenMut` for explicitly repeatable or mutable factories.
 Mark event props with `#[prop(callback)]`; mark intentional setup-only inputs
-with `#[prop(static)]`. These inputs are retained rather than tracked.
+with `#[prop(static)]`. These inputs keep their declared types and are retained
+rather than automatically wrapped. Explicit `Prop<T>` data parameters remain
+supported without an additional wrapper.
+
+Inside the body, a data prop is a handle: use `text.get().to_uppercase()` for
+string operations. Values computed during setup remain snapshots; put those
+reads inside `view!` to make the rendered result reactive.
 
 ## Share the draft through context
 
-Move the chapter 4 form into a new `NoteEditor` component. At the start of that
-component, read:
+Move the chapter 4 form, status, and keyboard instructions into a new
+`NoteEditor` component above `NotesApp`. Read the shared draft at the start of
+the component, then use its signals in the form:
 
 ```rust
-let Draft { title, body, status } = expect_context::<Draft>();
+#[component]
+fn NoteEditor() -> impl IntoView {
+    let Draft { title, body, status } = expect_context::<Draft>();
+
+    view! {
+        <Div>
+            <Form
+                on_submit=move || {
+                    status.set(String::from("Submitted in memory"));
+                }
+                on_cancel=move || {
+                    status.set(String::from("Canceled; draft kept"));
+                }
+            >
+                <Text>"Title"</Text>
+                <Input value=title placeholder="Title"
+                    on_input=move || {
+                        status.set(String::from("Editing"));
+                    }
+                />
+                <Text>"Body"</Text>
+                <TextArea value=body placeholder="Write a note"
+                    on_input=move || {
+                        status.set(String::from("Editing"));
+                    }
+                />
+            </Form>
+            <Text>{status}</Text>
+            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
+        </Div>
+    }
+}
 ```
 
-In `NotesApp`, create the signals as before, then provide the draft before
-returning the view:
+Replace the existing `NotesApp` with the following definition. It keeps the
+quit handler and creates the draft signals, then provides them before returning
+the view. The heading stays in the shell, above the editor:
 
 ```rust
-provide_context(Draft { title, body, status });
-view! { <Panel><NoteHeading text="My notes" /><NoteEditor /></Panel> }
+#[component]
+fn NotesApp() -> impl IntoView {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            return KeyControl::Exit;
+        }
+        KeyControl::Pass
+    });
+    let title = RwSignal::new(String::from("First note"));
+    let body = RwSignal::new(String::from("Learn to build a terminal application."));
+    let status = RwSignal::new(String::from("Editing"));
+
+    provide_context(Draft { title, body, status });
+
+    view! {
+        <Panel>
+            <NoteHeading text="My notes" />
+            <NoteEditor />
+        </Panel>
+    }
+}
 ```
+
+`NotesApp` owns the signals. `expect_context::<Draft>()` retrieves handles to
+those same signals in `NoteEditor`, so editing the form updates the shared
+draft rather than creating a separate copy of its contents.
 
 Context stores a value by Rust type for descendants to retrieve. Use
 `expect_context` when it must exist, or `use_context::<Draft>()` when absence

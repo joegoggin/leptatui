@@ -16,8 +16,8 @@ struct Draft {
 }
 
 #[component]
-fn NoteHeading(#[prop(into)] text: Prop<String>) -> impl IntoView {
-    view! { <H1>{text.get()}</H1> }
+fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
+    view! { <H1>{text}</H1> }
 }
 
 #[component]
@@ -99,7 +99,7 @@ fn DataToolbar() -> impl IntoView {
     let save_button = save.clone();
     view! {
         <Div>
-            <Div class="actions">
+            <Div class="notes-shell__actions">
                 <Button on_press=move || {
                     reload.refetch();
                 }>"Reload"</Button>
@@ -156,25 +156,25 @@ fn NotesApp() -> impl IntoView {
         status,
     });
     stylesheet! {
-        .notes-shell => {
-            padding: TuiSpacing::uniform(1)
-            .actions => {
-                display: Display::Flex,
-                gap: Axes::all(Length::cells(1.0))
+        .notes-shell {
+            padding: TuiSpacing::uniform(1);
+            &__actions {
+                display: Display::Flex;
+                gap: Axes::all(Length::cells(1.0));
                 @media (max-width: 60) {
-                    flex_direction: FlexDirection::Column
+                    flex_direction: FlexDirection::Column;
                 }
             }
         }
-        H1 => { fg: Color::LightCyan }
-        A:active => { fg: Color::LightGreen }
-        Button:focus => { fg: Color::Yellow }
+        H1 { fg: Color::LightCyan; }
+        A:active { fg: Color::LightGreen; }
+        Button:focus { fg: Color::Yellow; }
     }
     view! {
         <Router initial_path="/edit">
             <Div class="notes-shell">
                 <NoteHeading text="My notes" />
-                <Div class="actions">
+                <Div class="notes-shell__actions">
                     <A href="/edit">"Edit"</A>
                     <A href="/preview">"Preview"</A>
                 </Div>

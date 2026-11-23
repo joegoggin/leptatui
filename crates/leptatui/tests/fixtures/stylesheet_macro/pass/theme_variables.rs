@@ -8,7 +8,7 @@ fn main() {
         $text: theme_color("text");
         $surface: theme_color("surface");
 
-        .panel => { fg: $text, bg: $surface }
+        .panel { fg: $text; bg: $surface; }
     };
 
     let expected = Stylesheet::new().rule(

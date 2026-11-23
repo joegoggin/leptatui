@@ -5,7 +5,7 @@ use leptatui::prelude::*;
 /// Defines a nested media block without declarations or rules.
 fn main() {
     let _styles = stylesheet! {
-        .panel => {
+        .panel {
             @media (max-width: 80) {}
         }
     };

@@ -632,6 +632,37 @@ impl<'frame, 'buffer> RenderCtx<'frame, 'buffer> {
         render(&mut child)
     }
 
+    /// Renders a structural child into its assigned geometry without adding ancestry.
+    ///
+    /// # Arguments
+    ///
+    /// * `geometry` — Geometry translated to the active render target.
+    /// * `view` — Child rendered within that geometry.
+    ///
+    /// # Returns
+    ///
+    /// An empty [`Result`] after the child paints.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Io`] if child rendering fails.
+    pub(crate) fn render_structural_child(
+        &mut self,
+        geometry: LayoutGeometry,
+        view: &AnyView,
+    ) -> Result<()> {
+        let mut child = self.child_context(
+            geometry.border_box,
+            self.inherited_style.clone(),
+            self.stylesheets.clone(),
+            self.selector_ancestors.clone(),
+        );
+        child.geometry = geometry;
+        child.geometry_owner = view.style_metadata().map(std::ptr::from_ref);
+        child.layout_state.disable_retained_geometry();
+        view.as_view().render(&mut child)
+    }
+
     /// Renders a view using its retained layout snapshot.
     ///
     /// # Arguments

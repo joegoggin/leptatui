@@ -10,14 +10,14 @@
 #[component]
 fn MacroReplacedError() -> leptatui::ViewResult<impl leptatui::IntoView> {
     stylesheet! {
-        Block => {
-            borders: Borders::NONE !important,
-            bg: Color::Blue !important
+        Block {
+            borders: Borders::NONE !important;
+            bg: Color::Blue !important;
         }
-        Div => { display: Display::None !important }
-        H1 => { fg: Color::Green !important }
-        Paragraph => { fg: Color::Yellow !important }
-        Button => { display: Display::None !important }
+        Div { display: Display::None !important; }
+        H1 { fg: Color::Green !important; }
+        Paragraph { fg: Color::Yellow !important; }
+        Button { display: Display::None !important; }
     }
 
     let operation: std::io::Result<()> = Err(std::io::Error::other("hidden source"));
@@ -74,13 +74,13 @@ fn MacroContextError() -> leptatui::ViewResult<impl leptatui::IntoView> {
 #[component]
 fn MacroErrorRouteRoot() -> impl leptatui::IntoView {
     stylesheet! {
-        Block => {
-            borders: Borders::NONE !important,
-            bg: Color::Blue !important
+        Block {
+            borders: Borders::NONE !important;
+            bg: Color::Blue !important;
         }
-        H1 => { display: Display::None !important }
-        Paragraph => { display: Display::None !important }
-        Button => { display: Display::None !important }
+        H1 { display: Display::None !important; }
+        Paragraph { display: Display::None !important; }
+        Button { display: Display::None !important; }
     }
 
     view! {
@@ -104,7 +104,7 @@ fn MacroErrorRouteRoot() -> impl leptatui::IntoView {
 #[component]
 fn MacroShellErrorRoot() -> impl leptatui::IntoView {
     stylesheet! {
-        .shell => { fg: Color::LightCyan }
+        .shell { fg: Color::LightCyan; }
     }
 
     view! {

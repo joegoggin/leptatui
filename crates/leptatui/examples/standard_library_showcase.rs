@@ -82,120 +82,120 @@ fn StandardLibraryShowcase() -> impl IntoView {
     });
 
     stylesheet! {
-        .showcase-shell => {
-            fg: Color::White,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .showcase-shell {
+            fg: Color::White;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        .title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
+        .title {
+            fg: Color::LightCyan;
+            modifier: Modifier::BOLD;
         }
 
-        .status => { fg: Color::LightGreen }
-        .label => { fg: Color::Gray }
-        .caption => { fg: Color::DarkGray }
-        .help => { fg: Color::DarkGray }
-        .meter => { fg: Color::LightGreen, bg: Color::DarkGray }
-        .image-small => {
-            image_size: TuiSize::new(24, 8)
+        .status { fg: Color::LightGreen; }
+        .label { fg: Color::Gray; }
+        .caption { fg: Color::DarkGray; }
+        .help { fg: Color::DarkGray; }
+        .meter { fg: Color::LightGreen; bg: Color::DarkGray; }
+        .image-small {
+            image_size: TuiSize::new(24, 8);
 
             @media (max-width: 60) {
-                image_size: TuiSize::new(20, 6)
+                image_size: TuiSize::new(20, 6);
             }
         }
-        .image-medium => {
-            image_size: TuiSize::new(36, 12)
+        .image-medium {
+            image_size: TuiSize::new(36, 12);
 
             @media (max-width: 60) {
-                image_size: TuiSize::new(28, 8)
+                image_size: TuiSize::new(28, 8);
             }
         }
-        .image-large => {
-            image_size: TuiSize::new(48, 16)
+        .image-large {
+            image_size: TuiSize::new(48, 16);
 
             @media (max-width: 60) {
-                image_size: TuiSize::new(36, 10)
-            }
-        }
-
-        Input => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
-
-            @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                image_size: TuiSize::new(36, 10);
             }
         }
 
-        TextArea => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        Input {
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        Image => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        TextArea {
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        Button => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        Image {
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        Input:focus => {
-            fg: Color::Black,
-            bg: Color::Yellow,
-            modifier: Modifier::BOLD,
-            border_type: BorderType::Thick
-        }
-
-        TextArea:focus => {
-            fg: Color::Black,
-            bg: Color::Yellow,
-            modifier: Modifier::BOLD,
-            border_type: BorderType::Thick
-        }
-
-        Button:focus => {
-            fg: Color::Black,
-            bg: Color::Yellow,
-            modifier: Modifier::BOLD,
-            border_type: BorderType::Thick
-        }
-
-        Link:focus => {
-            fg: Color::Black,
-            bg: Color::Yellow,
-            modifier: Modifier::BOLD | Modifier::UNDERLINED
-        }
-
-        .actions => {
-            display: Display::Flex
+        Button {
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                padding: TuiSpacing::ZERO;
+            }
+        }
+
+        Input:focus {
+            fg: Color::Black;
+            bg: Color::Yellow;
+            modifier: Modifier::BOLD;
+            border_type: BorderType::Thick;
+        }
+
+        TextArea:focus {
+            fg: Color::Black;
+            bg: Color::Yellow;
+            modifier: Modifier::BOLD;
+            border_type: BorderType::Thick;
+        }
+
+        Button:focus {
+            fg: Color::Black;
+            bg: Color::Yellow;
+            modifier: Modifier::BOLD;
+            border_type: BorderType::Thick;
+        }
+
+        Link:focus {
+            fg: Color::Black;
+            bg: Color::Yellow;
+            modifier: Modifier::BOLD | Modifier::UNDERLINED;
+        }
+
+        .actions {
+            display: Display::Flex;
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column;
             }
         }
     }

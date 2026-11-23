@@ -5,26 +5,26 @@ use leptatui::prelude::*;
 /// Exercises every supported `stylesheet!` selector shape.
 fn main() {
     let styles = stylesheet! {
-        Text => { fg: Color::White }
-        Form => { fg: Color::Cyan }
-        Input => { fg: Color::LightBlue }
-        TextArea => { fg: Color::LightMagenta }
-        Image => { fg: Color::Yellow }
-        ProgressBar => { fg: Color::Green }
-        .primary => { bg: Color::Blue, modifier: Modifier::BOLD }
-        .primary-action => { fg: Color::Green }
-        #submit => { padding: TuiSpacing::uniform(1) }
-        #submit-button => { borders: Borders::ALL }
-        :focus => { foreground: Color::Black }
-        :active => { foreground: Color::LightCyan }
-        :insert => { foreground: Color::Yellow }
-        :visual => { foreground: Color::Magenta }
-        :visited => { foreground: Color::LightMagenta }
-        Button:focus => { background: Color::Yellow }
-        A:active => { modifier: Modifier::BOLD }
-        Input:insert => { background: Color::White }
-        TextArea:visual => { background: Color::Black }
-        Link:visited => { modifier: Modifier::UNDERLINED }
+        Text { fg: Color::White; }
+        Form { fg: Color::Cyan; }
+        Input { fg: Color::LightBlue; }
+        TextArea { fg: Color::LightMagenta; }
+        Image { fg: Color::Yellow; }
+        ProgressBar { fg: Color::Green; }
+        .primary { bg: Color::Blue; modifier: Modifier::BOLD; }
+        .primary-action { fg: Color::Green; }
+        #submit { padding: TuiSpacing::uniform(1); }
+        #submit-button { borders: Borders::ALL; }
+        :focus { foreground: Color::Black; }
+        :active { foreground: Color::LightCyan; }
+        :insert { foreground: Color::Yellow; }
+        :visual { foreground: Color::Magenta; }
+        :visited { foreground: Color::LightMagenta; }
+        Button:focus { background: Color::Yellow; }
+        A:active { modifier: Modifier::BOLD; }
+        Input:insert { background: Color::White; }
+        TextArea:visual { background: Color::Black; }
+        Link:visited { modifier: Modifier::UNDERLINED; }
     };
 
     let expected = Stylesheet::new()

@@ -14,33 +14,33 @@ use leptatui::prelude::*;
 #[component]
 fn ErrorHandlingExample() -> impl IntoView {
     stylesheet! {
-        .shell => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .shell {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .title => { fg: Color::LightCyan, modifier: Modifier::BOLD }
-        .nav => {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Row
+        .title { fg: Color::LightCyan; modifier: Modifier::BOLD; }
+        .nav {
+            display: Display::Flex;
+            flex_direction: FlexDirection::Row;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
-        .page => {
-            borders: Borders::ALL,
-            padding: TuiSpacing::uniform(1)
+        .page {
+            borders: Borders::ALL;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        .warning => { fg: Color::LightYellow }
-        .danger => { fg: Color::LightRed, modifier: Modifier::BOLD }
+        .warning { fg: Color::LightYellow; }
+        .danger { fg: Color::LightRed; modifier: Modifier::BOLD; }
     }
 
     view! {

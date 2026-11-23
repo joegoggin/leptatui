@@ -1,0 +1,5 @@
+error: unexpected end of input, stylesheet! declarations must end with `;`
+ --> tests/fixtures/stylesheet_macro/fail/missing_semicolon_before_rule.rs:8:65
+  |
+8 |         .panel { fg: Color::White Button { fg: Color::Yellow; } }
+  |                                                                 ^

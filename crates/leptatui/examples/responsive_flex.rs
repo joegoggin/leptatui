@@ -18,70 +18,70 @@ fn ResponsiveFlex() -> impl IntoView {
     });
 
     stylesheet! {
-        .app-shell => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .app-shell {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
+                border_type: BorderType::Plain;
+                padding: TuiSpacing::ZERO;
             }
         }
-        .app-title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
+        .app-title {
+            fg: Color::LightCyan;
+            modifier: Modifier::BOLD;
         }
-        .nav => {
-            display: Display::Flex,
-            gap: Axes::new(Length::cells(1.0), Length::cells(0.0)),
-            align_items: AlignItems::Center
+        .nav {
+            display: Display::Flex;
+            gap: Axes::new(Length::cells(1.0), Length::cells(0.0));
+            align_items: AlignItems::Center;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Stretch
+                flex_direction: FlexDirection::Column;
+                align_items: AlignItems::Stretch;
             }
         }
-        .workspace => {
-            display: Display::Flex,
-            gap: Axes::new(Length::cells(1.0), Length::cells(0.0)),
-            align_items: AlignItems::Stretch
+        .workspace {
+            display: Display::Flex;
+            gap: Axes::new(Length::cells(1.0), Length::cells(0.0));
+            align_items: AlignItems::Stretch;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column,
-                gap: Axes::new(Length::cells(0.0), Length::cells(1.0))
+                flex_direction: FlexDirection::Column;
+                gap: Axes::new(Length::cells(0.0), Length::cells(1.0));
             }
         }
-        .content => {
-            flex_basis: Dimension::from(Length::cells(0.0)),
-            flex_grow: 1.0,
-            padding: TuiSpacing::uniform(1)
+        .content {
+            flex_basis: Dimension::from(Length::cells(0.0));
+            flex_grow: 1.0;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                flex_basis: Dimension::Auto
+                flex_basis: Dimension::Auto;
             }
         }
-        .sidebar => {
-            flex_basis: Dimension::from(Length::cells(24.0)),
-            flex_shrink: 0.0,
-            padding: TuiSpacing::uniform(1)
+        .sidebar {
+            flex_basis: Dimension::from(Length::cells(24.0));
+            flex_shrink: 0.0;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                flex_basis: Dimension::Auto,
-                flex_shrink: 1.0
+                flex_basis: Dimension::Auto;
+                flex_shrink: 1.0;
             }
         }
-        .section-title => {
-            fg: Color::Yellow,
-            modifier: Modifier::BOLD
+        .section-title {
+            fg: Color::Yellow;
+            modifier: Modifier::BOLD;
         }
-        .hint => { fg: Color::DarkGray }
+        .hint { fg: Color::DarkGray; }
 
-        Button => {
-            borders: Borders::ALL,
-            padding: TuiSpacing::horizontal(1)
+        Button {
+            borders: Borders::ALL;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
     }

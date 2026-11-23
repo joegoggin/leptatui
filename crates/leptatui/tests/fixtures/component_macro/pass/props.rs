@@ -14,15 +14,15 @@ fn RequiredLabel(#[prop(into)] label: leptatui::Prop<String>) -> impl IntoView {
 /// Builds a text view from optional and defaulted props.
 #[component]
 fn DefaultedLabel(
-    #[prop(optional, into)] prefix: leptatui::Prop<String>,
-    #[prop(default = "fallback".to_string(), into)] label: leptatui::Prop<String>,
+    #[prop(optional, into)] prefix: String,
+    #[prop(default = "fallback".to_string(), into)] label: String,
 ) -> impl IntoView {
     view! { <Text>{format!("{}{}", prefix.get(), label.get())}</Text> }
 }
 
 /// Builds a column from nested children.
 #[component]
-fn ChildPanel(#[prop(into)] title: leptatui::Prop<String>, children: Children) -> impl IntoView {
+fn ChildPanel(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! { <Div><Text>{title.get()}</Text>{children()}</Div> }
 }
 

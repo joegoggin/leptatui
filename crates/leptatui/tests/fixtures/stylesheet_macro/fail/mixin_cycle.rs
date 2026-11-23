@@ -6,11 +6,11 @@ use leptatui::prelude::*;
 fn main() {
     let _module = stylesheet! {
         @mixin first {
-            @include second
+            @include second;
         }
 
         @mixin second {
-            @include first
+            @include first;
         }
     };
 }

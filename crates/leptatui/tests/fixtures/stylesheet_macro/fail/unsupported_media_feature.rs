@@ -5,9 +5,9 @@ use leptatui::prelude::*;
 /// Defines a stylesheet with an unsupported media feature.
 fn main() {
     let _styles = stylesheet! {
-        Text => {
+        Text {
             @media (min-depth: 80) {
-                fg: Color::White
+                fg: Color::White;
             }
         }
     };

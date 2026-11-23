@@ -8,7 +8,7 @@ use leptatui::prelude::*;
 
 /// Repeated labeled row for one cascade case.
 #[component]
-fn CaseRow(#[prop(into)] title: leptatui::Prop<String>, children: Children) -> impl IntoView {
+fn CaseRow(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
         <Div class="case-row">
             <Text class="case-label">{title}</Text>
@@ -29,7 +29,7 @@ fn ChildReceivesParentStyle() -> impl IntoView {
 #[component]
 fn ChildLowerSpecificity() -> impl IntoView {
     stylesheet! {
-        Text => { fg: Color::LightRed }
+        Text { fg: Color::LightRed; }
     }
 
     view! { <Text class="parent-specific">"parent .class beats child Text"</Text> }
@@ -38,7 +38,7 @@ fn ChildLowerSpecificity() -> impl IntoView {
 /// Button component used to show focus selectors across component boundaries.
 #[component]
 fn ActionButton(
-    #[prop(into)] label: leptatui::Prop<String>,
+    #[prop(into)] label: String,
     #[prop(callback)] on_press: fn() -> AppControl,
 ) -> impl IntoView {
     view! {
@@ -60,99 +60,99 @@ fn StyleCascadeShowcase() -> impl IntoView {
     });
 
     stylesheet! {
-        .screen => {
-            fg: Color::White,
-            bg: Color::Black,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1),
+        .screen {
+            fg: Color::White;
+            bg: Color::Black;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
 
             // Baseline type rule. Class, id, descendant, inline, and important
             // cases below deliberately override it.
-            Text => { fg: Color::DarkGray }
+            Text { fg: Color::DarkGray; }
 
-            .title => { fg: Color::Yellow, modifier: Modifier::BOLD }
-            .intro => { fg: Color::Gray }
-            .case-label => { fg: Color::White, modifier: Modifier::BOLD }
-            .case-sample => { fg: Color::Gray }
+            .title { fg: Color::Yellow; modifier: Modifier::BOLD; }
+            .intro { fg: Color::Gray; }
+            .case-label { fg: Color::White; modifier: Modifier::BOLD; }
+            .case-sample { fg: Color::Gray; }
 
             // Type < class specificity.
-            .class-wins => { fg: Color::LightGreen }
+            .class-wins { fg: Color::LightGreen; }
 
             // Equal specificity: later source order wins.
-            .source-first => { fg: Color::LightBlue }
-            .source-second => { fg: Color::LightMagenta }
+            .source-first { fg: Color::LightBlue; }
+            .source-second { fg: Color::LightMagenta; }
 
             // Descendant selector specificity beats a later class selector.
-            .descendant-scope => {
-                Text => { fg: Color::LightCyan, modifier: Modifier::BOLD }
+            .descendant-scope {
+                Text { fg: Color::LightCyan; modifier: Modifier::BOLD; }
             }
-            .descendant-target => { fg: Color::LightRed }
+            .descendant-target { fg: Color::LightRed; }
 
             // Id specificity beats classes.
-            .id-class => { fg: Color::Yellow }
-            #id-wins => { fg: Color::LightCyan, modifier: Modifier::BOLD }
+            .id-class { fg: Color::Yellow; }
+            #id-wins { fg: Color::LightCyan; modifier: Modifier::BOLD; }
 
             // Parent component stylesheet crosses child component boundaries.
-            .parent-reaches-child => { fg: Color::LightGreen }
+            .parent-reaches-child { fg: Color::LightGreen; }
 
             // Higher-specificity parent rule beats lower-specificity child Text.
-            .parent-specific => { fg: Color::LightGreen, modifier: Modifier::BOLD }
+            .parent-specific { fg: Color::LightGreen; modifier: Modifier::BOLD; }
 
             // Normal inline style beats this normal stylesheet rule.
-            .inline-demo => { fg: Color::LightRed }
+            .inline-demo { fg: Color::LightRed; }
 
             // Important stylesheet declaration beats normal inline style.
-            .important-demo => { fg: Color::LightRed !important }
+            .important-demo { fg: Color::LightRed !important; }
 
             // Foreground and modifiers inherit; background does not become an
             // inherited declaration for descendants.
-            .inheritance-parent => {
-                fg: Color::LightBlue,
-                bg: Color::DarkGray,
-                modifier: Modifier::BOLD,
-                padding: TuiSpacing::uniform(1)
+            .inheritance-parent {
+                fg: Color::LightBlue;
+                bg: Color::DarkGray;
+                modifier: Modifier::BOLD;
+                padding: TuiSpacing::uniform(1);
             }
 
-            Button => {
-                fg: Color::White,
-                bg: Color::Black,
-                border_type: BorderType::Rounded
+            Button {
+                fg: Color::White;
+                bg: Color::Black;
+                border_type: BorderType::Rounded;
             }
 
-            Button:focus => {
-                fg: Color::Black,
-                bg: Color::Yellow,
-                modifier: Modifier::BOLD,
-                border_type: BorderType::Thick
+            Button:focus {
+                fg: Color::Black;
+                bg: Color::Yellow;
+                modifier: Modifier::BOLD;
+                border_type: BorderType::Thick;
             }
         }
 
-        .case-row => {
-            display: Display::Flex
+        .case-row {
+            display: Display::Flex;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
-        .focus-actions => {
-            display: Display::Flex
+        .focus-actions {
+            display: Display::Flex;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
-        .inheritance-parent => {
+        .inheritance-parent {
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
-        Button => {
+        Button {
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
     }

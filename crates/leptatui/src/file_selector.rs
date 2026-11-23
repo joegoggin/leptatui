@@ -393,116 +393,116 @@ fn FileSelectorScreen(
     #[prop(static)] screens: StandaloneScreenRegistry,
 ) -> impl IntoView {
     crate::stylesheet! {
-        .file-selector => {
-            box_sizing: BoxSizing::BorderBox,
-            position: Position::Fixed,
+        .file-selector {
+            box_sizing: BoxSizing::BorderBox;
+            position: Position::Fixed;
             inset: Edges::new(
                 Length::cells(0.0).into(),
                 LengthAuto::Auto,
                 LengthAuto::Auto,
                 Length::cells(0.0).into()
-            ),
+            );
             size: LayoutSize::new(
                 Dimension::from(Length::vw(100.0)),
                 Dimension::from(Length::vh(100.0))
-            ),
-            z_index: ZIndex::Integer(i32::MAX),
-            display: Display::Flex,
-            flex_direction: FlexDirection::Column,
-            bg: Color::Reset,
-            fg: Color::White,
-            overflow: Axes::all(Overflow::Hidden),
+            );
+            z_index: ZIndex::Integer(i32::MAX);
+            display: Display::Flex;
+            flex_direction: FlexDirection::Column;
+            bg: Color::Reset;
+            fg: Color::White;
+            overflow: Axes::all(Overflow::Hidden);
 
-            &__header => {
+            &__header {
                 size: LayoutSize::new(
                     Dimension::Auto,
                     Dimension::from(Length::cells(1.0))
-                ),
-                flex_shrink: 0.0,
-                overflow: Axes::all(Overflow::Clip),
-                fg: Color::LightCyan,
-                modifier: Modifier::BOLD
+                );
+                flex_shrink: 0.0;
+                overflow: Axes::all(Overflow::Clip);
+                fg: Color::LightCyan;
+                modifier: Modifier::BOLD;
             }
 
-            &__panes => {
-                display: Display::Grid,
+            &__panes {
+                display: Display::Grid;
                 grid_template_columns: vec![
                     fractional_track(0.75),
                     fractional_track(1.0),
                     fractional_track(1.0)
-                ],
-                grid_template_rows: vec![fractional_track(1.0)],
-                flex_basis: Dimension::from(Length::cells(0.0)),
-                flex_grow: 1.0,
-                flex_shrink: 1.0,
+                ];
+                grid_template_rows: vec![fractional_track(1.0)];
+                flex_basis: Dimension::from(Length::cells(0.0));
+                flex_grow: 1.0;
+                flex_shrink: 1.0;
                 min_size: LayoutSize::new(
                     Dimension::from(Length::cells(0.0)),
                     Dimension::from(Length::cells(0.0))
-                ),
-                overflow: Axes::all(Overflow::Hidden)
+                );
+                overflow: Axes::all(Overflow::Hidden);
 
                 @media (max-width: 79) {
                     grid_template_columns: vec![
                         fractional_track(1.0),
                         fractional_track(1.0)
-                    ]
+                    ];
                 }
 
                 @media (max-width: 49) {
-                    grid_template_columns: vec![fractional_track(1.0)]
+                    grid_template_columns: vec![fractional_track(1.0)];
                 }
             }
 
-            &__parent => {
-                borders: Borders::ALL,
-                border_type: BorderType::Plain,
-                fg: Color::DarkGray,
-                overflow: Axes::all(Overflow::Hidden)
+            &__parent {
+                borders: Borders::ALL;
+                border_type: BorderType::Plain;
+                fg: Color::DarkGray;
+                overflow: Axes::all(Overflow::Hidden);
 
-                @media (max-width: 79) { display: Display::None }
+                @media (max-width: 79) { display: Display::None; }
             }
 
-            &__current => {
-                borders: Borders::ALL,
-                border_type: BorderType::Rounded,
-                overflow: Axes::all(Overflow::Hidden)
+            &__current {
+                borders: Borders::ALL;
+                border_type: BorderType::Rounded;
+                overflow: Axes::all(Overflow::Hidden);
             }
 
-            &__preview => {
-                borders: Borders::ALL,
-                border_type: BorderType::Plain,
-                overflow: Axes::all(Overflow::Hidden)
+            &__preview {
+                borders: Borders::ALL;
+                border_type: BorderType::Plain;
+                overflow: Axes::all(Overflow::Hidden);
 
-                @media (max-width: 49) { display: Display::None }
+                @media (max-width: 49) { display: Display::None; }
             }
 
-            &__source => { borders: Borders::NONE }
+            &__source { borders: Borders::NONE; }
 
-            &__row => {
-                borders: Borders::NONE,
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO,
-                fg: Color::White,
-                bg: Color::Reset
+            &__row {
+                borders: Borders::NONE;
+                border_type: BorderType::Plain;
+                padding: TuiSpacing::ZERO;
+                fg: Color::White;
+                bg: Color::Reset;
 
-                &:focus => {
-                    fg: Color::Black,
-                    bg: Color::LightCyan,
-                    modifier: Modifier::BOLD
+                &:focus {
+                    fg: Color::Black;
+                    bg: Color::LightCyan;
+                    modifier: Modifier::BOLD;
                 }
             }
 
-            &__directory => { fg: Color::LightBlue }
-            &__symlink => { fg: Color::LightYellow }
-            &__error => { fg: Color::LightRed }
-            &__footer => {
+            &__directory { fg: Color::LightBlue; }
+            &__symlink { fg: Color::LightYellow; }
+            &__error { fg: Color::LightRed; }
+            &__footer {
                 size: LayoutSize::new(
                     Dimension::Auto,
                     Dimension::from(Length::cells(1.0))
-                ),
-                flex_shrink: 0.0,
-                overflow: Axes::all(Overflow::Clip),
-                fg: Color::DarkGray
+                );
+                flex_shrink: 0.0;
+                overflow: Axes::all(Overflow::Clip);
+                fg: Color::DarkGray;
             }
         }
     }

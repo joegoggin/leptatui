@@ -4,6 +4,11 @@ use std::rc::Rc;
 
 /// Readable component data whose source can be constant or reactive.
 ///
+/// `#[component]` automatically wraps ordinary data parameters in this type:
+/// a parameter declared as `text: String` is a `Prop<String>` inside the body.
+/// Render the handle directly in `view!` or read it with `.get()` or `.with()`.
+/// Explicit `Prop<T>` parameters remain supported without double wrapping.
+///
 /// `view!` creates deferred props automatically. Reading a prop inside a view
 /// expression tracks every signal read by its source. Clones share the source.
 pub struct Prop<T> {

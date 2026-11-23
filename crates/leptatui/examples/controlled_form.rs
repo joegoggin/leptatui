@@ -61,74 +61,74 @@ fn ControlledForm() -> impl IntoView {
     });
 
     stylesheet! {
-        .form-shell => {
-            fg: Color::White,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .form-shell {
+            fg: Color::White;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        .title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
+        .title {
+            fg: Color::LightCyan;
+            modifier: Modifier::BOLD;
         }
 
-        .status => { fg: Color::LightGreen }
-        .label => { fg: Color::Gray }
-        .help => { fg: Color::DarkGray }
+        .status { fg: Color::LightGreen; }
+        .label { fg: Color::Gray; }
+        .help { fg: Color::DarkGray; }
 
-        Input => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        Input {
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        TextArea => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        TextArea {
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        Button => {
-            borders: Borders::ALL,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::horizontal(1)
+        Button {
+            borders: Borders::ALL;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::horizontal(1);
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        Input:focus => {
-            fg: Color::Black,
-            bg: Color::Yellow,
-            modifier: Modifier::BOLD,
-            border_type: BorderType::Thick
+        Input:focus {
+            fg: Color::Black;
+            bg: Color::Yellow;
+            modifier: Modifier::BOLD;
+            border_type: BorderType::Thick;
         }
 
-        TextArea:focus => {
-            fg: Color::Black,
-            bg: Color::Yellow,
-            modifier: Modifier::BOLD,
-            border_type: BorderType::Thick
+        TextArea:focus {
+            fg: Color::Black;
+            bg: Color::Yellow;
+            modifier: Modifier::BOLD;
+            border_type: BorderType::Thick;
         }
 
-        Button:focus => {
-            fg: Color::Black,
-            bg: Color::Yellow,
-            modifier: Modifier::BOLD,
-            border_type: BorderType::Thick
+        Button:focus {
+            fg: Color::Black;
+            bg: Color::Yellow;
+            modifier: Modifier::BOLD;
+            border_type: BorderType::Thick;
         }
     }
 

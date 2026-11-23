@@ -5,6 +5,6 @@ use leptatui::prelude::*;
 /// Assigns overflow behavior to the display property.
 fn main() {
     let _styles = stylesheet! {
-        Text => { display: Overflow::Hidden }
+        Text { display: Overflow::Hidden; }
     };
 }

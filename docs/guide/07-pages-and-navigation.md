@@ -12,7 +12,7 @@ view! {
     <Router initial_path="/edit">
         <Div class="notes-shell">
             <NoteHeading text="My notes" />
-            <Div class="actions">
+            <Div class="notes-shell__actions">
                 <A href="/edit">"Edit"</A>
                 <A href="/preview">"Preview"</A>
             </Div>

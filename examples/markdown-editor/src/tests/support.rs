@@ -26,7 +26,7 @@ use crate::app::{AppRouter, AppRouterProps};
 ///
 /// A routed application using test-owned process state.
 #[component]
-fn TestAppRouter(initial_path: Prop<String>) -> impl IntoView {
+fn TestAppRouter(initial_path: String) -> impl IntoView {
     view! { <AppRouter initial_path={initial_path.get()} /> }
 }
 

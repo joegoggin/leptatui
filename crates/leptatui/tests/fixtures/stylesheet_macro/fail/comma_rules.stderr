@@ -1,0 +1,5 @@
+error: stylesheet! rule blocks are separated by whitespace, not commas
+ --> tests/fixtures/stylesheet_macro/fail/comma_rules.rs:8:35
+  |
+8 |         Text { fg: Color::White; }, Button { fg: Color::Yellow; }
+  |                                   ^

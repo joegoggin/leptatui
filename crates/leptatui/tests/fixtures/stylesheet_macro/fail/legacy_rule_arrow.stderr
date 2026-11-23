@@ -1,0 +1,5 @@
+error: stylesheet! rules use `Selector { ... }`; remove `=>`
+ --> tests/fixtures/stylesheet_macro/fail/legacy_rule_arrow.rs:8:14
+  |
+8 |         Text => { fg: Color::White; }
+  |              ^

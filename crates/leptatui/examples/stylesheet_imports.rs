@@ -35,36 +35,36 @@ fn button_styles() -> StyleModule {
         @use palette;
 
         @mixin button_chrome {
-            borders: palette.$border,
-            border_type: palette.$border_type,
-            padding: palette.$button_padding
+            borders: palette.$border;
+            border_type: palette.$border_type;
+            padding: palette.$button_padding;
         }
 
         @mixin primary {
-            @include button_chrome,
-            fg: palette.$primary_fg,
-            bg: palette.$primary_bg,
-            modifier: palette.$strong
+            @include button_chrome;
+            fg: palette.$primary_fg;
+            bg: palette.$primary_bg;
+            modifier: palette.$strong;
         }
 
         @mixin secondary {
-            @include button_chrome,
-            fg: palette.$secondary_fg,
-            bg: palette.$secondary_bg
+            @include button_chrome;
+            fg: palette.$secondary_fg;
+            bg: palette.$secondary_bg;
         }
 
         @mixin danger {
-            @include button_chrome,
-            fg: palette.$danger_fg,
-            bg: palette.$danger_bg,
-            modifier: palette.$strong
+            @include button_chrome;
+            fg: palette.$danger_fg;
+            bg: palette.$danger_bg;
+            modifier: palette.$strong;
         }
 
         @mixin focused {
-            fg: palette.$focus_fg,
-            bg: palette.$focus_bg,
-            modifier: palette.$strong,
-            border_type: palette.$focus_border_type
+            fg: palette.$focus_fg;
+            bg: palette.$focus_bg;
+            modifier: palette.$strong;
+            border_type: palette.$focus_border_type;
         }
     }
 }
@@ -86,60 +86,60 @@ fn StylesheetImportsDemo() -> impl IntoView {
         @use palette;
         @use button_styles as buttons;
 
-        .screen => {
-            fg: palette.$text,
-            bg: palette.$surface,
-            borders: palette.$border,
-            border_type: palette.$border_type,
-            padding: palette.$panel_padding,
+        .screen {
+            fg: palette.$text;
+            bg: palette.$surface;
+            borders: palette.$border;
+            border_type: palette.$border_type;
+            padding: palette.$panel_padding;
 
             @media (max-width: 60) {
-                padding: TuiSpacing::ZERO
+                padding: TuiSpacing::ZERO;
             }
 
-            .title => {
-                fg: palette.$primary_bg,
-                modifier: palette.$strong
+            .title {
+                fg: palette.$primary_bg;
+                modifier: palette.$strong;
             }
 
-            .body => { fg: palette.$muted }
+            .body { fg: palette.$muted; }
 
-            .primary-action => {
-                @include buttons.primary
+            .primary-action {
+                @include buttons.primary;
 
                 @media (max-width: 60) {
-                    padding: TuiSpacing::ZERO
+                    padding: TuiSpacing::ZERO;
                 }
 
-                &:focus => { @include buttons.focused }
+                &:focus { @include buttons.focused; }
             }
 
-            .secondary-action => {
-                @include buttons.secondary
+            .secondary-action {
+                @include buttons.secondary;
 
                 @media (max-width: 60) {
-                    padding: TuiSpacing::ZERO
+                    padding: TuiSpacing::ZERO;
                 }
 
-                &:focus => { @include buttons.focused }
+                &:focus { @include buttons.focused; }
             }
 
-            .danger-action => {
-                @include buttons.danger
+            .danger-action {
+                @include buttons.danger;
 
                 @media (max-width: 60) {
-                    padding: TuiSpacing::ZERO
+                    padding: TuiSpacing::ZERO;
                 }
 
-                &:focus => { @include buttons.focused }
+                &:focus { @include buttons.focused; }
             }
         }
 
-        .actions => {
-            display: Display::Flex
+        .actions {
+            display: Display::Flex;
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
     }

@@ -25,31 +25,31 @@ fn DocumentShowcase() -> impl IntoView {
     });
 
     stylesheet! {
-        .document-shell => {
-            fg: Color::White,
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .document-shell {
+            fg: Color::White;
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
+                border_type: BorderType::Plain;
+                padding: TuiSpacing::ZERO;
             }
         }
 
-        .help => { fg: Color::DarkGray }
+        .help { fg: Color::DarkGray; }
 
-        H1 => { fg: Color::LightCyan }
-        H2 => { fg: Color::LightBlue }
-        H3 => { fg: Color::LightGreen }
-        H4 => { fg: Color::LightYellow }
-        H5 => { fg: Color::LightMagenta }
-        H6 => { fg: Color::Gray }
-        Paragraph => { fg: Color::White }
-        OrderedList => { fg: Color::LightCyan }
-        UnorderedList => { fg: Color::LightGreen }
-        Table => { fg: Color::White }
-        TableHead => { fg: Color::LightCyan }
-        CodeBlock => { fg: Color::LightBlue }
+        H1 { fg: Color::LightCyan; }
+        H2 { fg: Color::LightBlue; }
+        H3 { fg: Color::LightGreen; }
+        H4 { fg: Color::LightYellow; }
+        H5 { fg: Color::LightMagenta; }
+        H6 { fg: Color::Gray; }
+        Paragraph { fg: Color::White; }
+        OrderedList { fg: Color::LightCyan; }
+        UnorderedList { fg: Color::LightGreen; }
+        Table { fg: Color::White; }
+        TableHead { fg: Color::LightCyan; }
+        CodeBlock { fg: Color::LightBlue; }
 
     }
 

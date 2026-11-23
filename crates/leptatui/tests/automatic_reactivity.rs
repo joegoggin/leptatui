@@ -164,6 +164,70 @@ fn read_count(count: RwSignal<i32>) -> i32 {
     count.get()
 }
 
+/// Builds the reusable-components guide's heading with an implicit prop handle.
+///
+/// # Arguments
+///
+/// * `text` — Current heading text, automatically wrapped in `Prop<String>`.
+///
+/// # Returns
+///
+/// A reactive semantic heading.
+#[component]
+fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
+    view! { <H1>{text}</H1> }
+}
+
+/// Forwards the current value of an implicit data prop to another component.
+///
+/// # Arguments
+///
+/// * `text` — Heading text read inside the child's tracked prop expression.
+///
+/// # Returns
+///
+/// A nested reactive heading.
+#[component]
+fn ForwardHeading(text: String) -> impl IntoView {
+    view! { <NoteHeading text={text.get()} /> }
+}
+
+/// Verifies implicit prop handles render directly and forward reactive reads.
+///
+/// # Example Under Test
+///
+/// ```text
+/// NoteHeading text={title.get()}
+/// ForwardHeading text={title.get()}
+/// title: First -> Second
+/// ```
+///
+/// # Assertions
+///
+/// - Both direct and forwarded headings initially display `First`.
+/// - Both headings display `Second` after the parent signal changes.
+#[test]
+fn implicit_prop_handles_render_and_forward_reactively() -> leptatui::Result<()> {
+    Owner::new().with(|| {
+        let title = RwSignal::new(String::from("First"));
+        let view = view! {
+            <Div>
+                <NoteHeading text={title.get()} />
+                <ForwardHeading text={title.get()} />
+            </Div>
+        };
+        let mut terminal = Terminal::new(TestBackend::new(30, 6))?;
+        draw_view(&mut terminal, &view)?;
+        assert_eq!(rendered_text(&terminal).matches("First").count(), 2);
+        title.set(String::from("Second"));
+        draw_view(&mut terminal, &view)?;
+        let output = rendered_text(&terminal);
+        assert_eq!(output.matches("Second").count(), 2, "{output}");
+        assert!(!output.contains("First"), "{output}");
+        Ok(())
+    })
+}
+
 /// Retains local state while rendering a changing prop.
 ///
 /// # Arguments
@@ -176,7 +240,7 @@ fn read_count(count: RwSignal<i32>) -> i32 {
 /// A view with local editable state and a changing label.
 #[component]
 fn StatefulLabel(
-    #[prop(into)] label: Prop<String>,
+    #[prop(into)] label: String,
     #[prop(static)] setups: Rc<Cell<usize>>,
 ) -> impl IntoView {
     setups.set(setups.get() + 1);
@@ -464,11 +528,11 @@ fn conditional_dependencies_and_callback_reads_are_isolated() -> leptatui::Resul
 /// A button displaying both current data values.
 #[component]
 fn DefaultProps(
-    #[prop(optional, into)] prefix: Prop<String>,
-    #[prop(default = String::from("fallback"), into)] label: Prop<String>,
+    #[prop(optional, into)] prefix: String,
+    #[prop(default = String::from("fallback"), into)] label: String,
     #[prop(callback)] action: fn() -> AppControl,
 ) -> impl IntoView {
-    view! { <Button on_press=action>{format!("{}{}", prefix.get(), label.get())}</Button> }
+    view! { <Button on_press=action>{format!("{}{}", prefix.with(Clone::clone), label.get())}</Button> }
 }
 
 /// Verifies defaults, conversions, and callbacks work through reactive props.
@@ -484,6 +548,7 @@ fn DefaultProps(
 ///
 /// - Optional and explicit defaults produce the intended text.
 /// - String conversion happens for constant and changing props.
+/// - Implicit handles support tracked `.get()` and borrowed `.with()` reads.
 /// - Constant prop clones support tracked `.get()` and borrowed `.with()` reads.
 #[test]
 fn prop_defaults_conversions_and_callback_coercions() {

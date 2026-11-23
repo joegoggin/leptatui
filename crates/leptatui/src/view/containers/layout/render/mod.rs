@@ -36,6 +36,47 @@ use crate::{
     },
 };
 
+/// Paints transparent fragment children at their individual retained positions.
+///
+/// A parent assigns the fragment the union of its children's boxes. Translate
+/// each child from that union into the assigned area instead of painting every
+/// child at the union's origin.
+///
+/// # Arguments
+///
+/// * `children` — Retained fragment children in source order.
+/// * `ctx` — Render target carrying the fragment's assigned geometry.
+///
+/// # Returns
+///
+/// An empty [`Result`] after all children paint.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::Io`] if child rendering fails.
+pub(crate) fn render_fragment(children: &[AnyView], ctx: &mut RenderCtx<'_, '_>) -> Result<()> {
+    let assigned = ctx.layout_geometry();
+    let mut bounds = None::<ratatui::layout::Rect>;
+    for child in children {
+        let geometry = geometry::child_geometry(child, ctx.area(), assigned.clip, (0, 0), ctx);
+        bounds = Some(bounds.map_or(geometry.border_box, |current| {
+            current.union(geometry.border_box)
+        }));
+    }
+    let Some(bounds) = bounds else {
+        return Ok(());
+    };
+    let offset = (
+        i32::from(assigned.border_box.x) - i32::from(bounds.x),
+        i32::from(assigned.border_box.y) - i32::from(bounds.y),
+    );
+    for child in children {
+        let geometry = geometry::child_geometry(child, ctx.area(), assigned.clip, offset, ctx);
+        ctx.render_structural_child(geometry, child)?;
+    }
+    Ok(())
+}
+
 /// Renders a generic container and its children from retained layout geometry.
 ///
 /// # Arguments

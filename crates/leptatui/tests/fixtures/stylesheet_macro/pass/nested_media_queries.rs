@@ -5,29 +5,29 @@ use leptatui::prelude::*;
 /// Exercises nested media declarations, selectors, mixins, BEM suffixes, and queries.
 fn main() {
     let styles = stylesheet! {
-        @mixin compact { padding: TuiSpacing::ZERO }
+        @mixin compact { padding: TuiSpacing::ZERO; }
 
-        .panel => {
-            padding: TuiSpacing::uniform(1)
+        .panel {
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 80) {
-                @include compact
+                @include compact;
 
-                Text => { fg: Color::Yellow }
+                Text { fg: Color::Yellow; }
             }
 
-            &__actions => {
-                display: Display::Flex
+            &__actions {
+                display: Display::Flex;
 
                 @media (max-width: 80) {
-                    flex_direction: FlexDirection::Column
+                    flex_direction: FlexDirection::Column;
                 }
             }
         }
 
-        Button:focus => {
+        Button:focus {
             @media (min-width: 81) and (min-height: 24) {
-                bg: Color::Blue
+                bg: Color::Blue;
             }
         }
     };

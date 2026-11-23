@@ -5,19 +5,19 @@ use leptatui::prelude::*;
 /// Exercises class suffix concatenation with ancestry, pseudo-classes, and media.
 fn main() {
     let styles = stylesheet! {
-        .shell => {
-            .example-page => {
-                &__button => {
-                    &:focus => { bg: Color::Black }
-                    &--submit => { fg: Color::Green }
+        .shell {
+            .example-page {
+                &__button {
+                    &:focus { bg: Color::Black; }
+                    &--submit { fg: Color::Green; }
                 }
             }
         }
 
-        .example-page => {
-            &__actions => {
+        .example-page {
+            &__actions {
                 @media (max-width: 60) {
-                    flex_direction: FlexDirection::Column
+                    flex_direction: FlexDirection::Column;
                 }
             }
         }

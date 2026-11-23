@@ -553,24 +553,24 @@ fn fractional_tracks_round_cumulatively_to_the_container_edge() -> leptatui::app
 #[component]
 fn ResponsiveGridFixture() -> impl IntoView {
     stylesheet! {
-        .fixture-dashboard => {
-            display: Display::Grid,
+        .fixture-dashboard {
+            display: Display::Grid;
             grid_template_columns: vec![
                 GridTemplateTrack::from(GridTrackSize::from(Fraction::new(2.0))),
                 GridTemplateTrack::from(GridTrackSize::from(Fraction::new(1.0)))
-            ],
+            ];
             grid_template_rows: vec![
                 GridTemplateTrack::from(GridTrackSize::from(Length::cells(1.0))),
                 GridTemplateTrack::from(GridTrackSize::from(Length::cells(1.0)))
-            ],
-            gap: Axes::all(Length::cells(1.0))
+            ];
+            gap: Axes::all(Length::cells(1.0));
 
             @media (max-width: 60) {
                 grid_template_columns: vec![
                     GridTemplateTrack::from(
                         GridTrackSize::from(Fraction::new(1.0))
                     )
-                ],
+                ];
                 grid_template_rows: vec![
                     GridTemplateTrack::from(
                         GridTrackSize::from(Length::cells(1.0))
@@ -581,14 +581,14 @@ fn ResponsiveGridFixture() -> impl IntoView {
                     GridTemplateTrack::from(
                         GridTrackSize::from(Length::cells(1.0))
                     )
-                ]
+                ];
             }
         }
-        .fixture-heading => {
+        .fixture-heading {
             grid_column: GridLine::new(
                 GridPlacement::line(1),
                 GridPlacement::line(-1)
-            )
+            );
         }
     }
 

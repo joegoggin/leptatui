@@ -111,12 +111,19 @@ impl Parse for Rule {
     ///
     /// # Errors
     ///
-    /// Returns [`syn::Error`] if the rule is missing `=>`, has malformed
-    /// declaration or include separators, or contains no style items, nested
-    /// rules, or media blocks.
+    /// Returns [`syn::Error`] if the rule uses obsolete `=>` syntax, has
+    /// malformed declaration or include terminators, or contains no style
+    /// items, nested rules, or media blocks.
     fn parse(input: ParseStream<'_>) -> Result<Self> {
+        if input.peek(Token![,]) {
+            return Err(
+                input.error("stylesheet! rule blocks are separated by whitespace, not commas")
+            );
+        }
         let selector = input.parse()?;
-        input.parse::<Token![=>]>()?;
+        if input.peek(Token![=>]) {
+            return Err(input.error("stylesheet! rules use `Selector { ... }`; remove `=>`"));
+        }
 
         let content;
         braced!(content in input);
@@ -201,6 +208,11 @@ fn parse_rule_body(content: ParseStream<'_>, allow_media: bool) -> Result<RuleBo
     let mut nested_items = Vec::new();
 
     while !content.is_empty() {
+        if content.peek(Token![,]) {
+            return Err(
+                content.error("stylesheet! rule blocks are separated by whitespace, not commas")
+            );
+        }
         if starts_media(content) {
             if !allow_media {
                 return Err(content.error(
@@ -215,32 +227,12 @@ fn parse_rule_body(content: ParseStream<'_>, allow_media: bool) -> Result<RuleBo
         } else {
             style_items.push(StyleItem::Declaration(Box::new(content.parse()?)));
         }
-
-        if content.peek(Token![,]) {
-            content.parse::<Token![,]>()?;
-        } else if !content.is_empty() && !starts_nested_item(content) {
-            return Err(content
-                .error("stylesheet! declarations and mixin includes must be separated by commas"));
-        }
     }
 
     Ok(RuleBody {
         style_items,
         nested_items,
     })
-}
-
-/// Returns whether the stream starts with a nested rule or media block.
-///
-/// # Arguments
-///
-/// * `input` — Macro input stream positioned at a rule-body item.
-///
-/// # Returns
-///
-/// A [`bool`] indicating whether the next item is structural.
-fn starts_nested_item(input: ParseStream<'_>) -> bool {
-    starts_media(input) || input.peek(Token![&]) || starts_nested_rule(input)
 }
 
 /// Returns whether the stream starts with a nested rule.
@@ -251,10 +243,11 @@ fn starts_nested_item(input: ParseStream<'_>) -> bool {
 ///
 /// # Returns
 ///
-/// A [`bool`] indicating whether a selector followed by `=>` is present.
+/// A [`bool`] indicating whether a selector followed by a brace or obsolete
+/// `=>` is present.
 fn starts_nested_rule(input: ParseStream<'_>) -> bool {
     let fork = input.fork();
-    fork.parse::<Selector>().is_ok() && fork.peek(Token![=>])
+    fork.parse::<Selector>().is_ok() && (fork.peek(syn::token::Brace) || fork.peek(Token![=>]))
 }
 
 impl Rule {

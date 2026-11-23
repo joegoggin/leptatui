@@ -6,6 +6,6 @@ fn main() {
     let _styles = stylesheet! {
         $primary: Color::LightCyan;
 
-        Text => { fg: $missing }
+        Text { fg: $missing; }
     };
 }

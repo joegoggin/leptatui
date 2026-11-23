@@ -5,29 +5,29 @@ use leptatui::prelude::*;
 /// Exercises nested selector flattening into deterministic runtime selectors.
 fn main() {
     let styles = stylesheet! {
-        .panel => {
-            bg: Color::Black
+        .panel {
+            bg: Color::Black;
 
-            Text => { fg: Color::White }
+            Text { fg: Color::White; }
 
-            Button => {
-                &:focus => { background: Color::Yellow }
+            Button {
+                &:focus { background: Color::Yellow; }
             }
 
-            A => {
-                &:active => { foreground: Color::LightCyan }
+            A {
+                &:active { foreground: Color::LightCyan; }
             }
 
-            Input => {
-                &:insert => { foreground: Color::Yellow }
+            Input {
+                &:insert { foreground: Color::Yellow; }
             }
 
-            TextArea => {
-                &:visual => { foreground: Color::Magenta }
+            TextArea {
+                &:visual { foreground: Color::Magenta; }
             }
 
-            Link => {
-                &:visited => { foreground: Color::LightMagenta }
+            Link {
+                &:visited { foreground: Color::LightMagenta; }
             }
         }
     };

@@ -6,18 +6,18 @@ use leptatui::prelude::*;
 fn main() {
     let styles = stylesheet! {
         @mixin panel_chrome {
-            bg: Color::Black,
-            padding: TuiSpacing::uniform(1)
+            bg: Color::Black;
+            padding: TuiSpacing::uniform(1);
         }
 
         @mixin control_chrome {
-            fg: Color::White,
-            bg: Color::Blue
+            fg: Color::White;
+            bg: Color::Blue;
         }
 
-        .panel => { @include panel_chrome }
-        Button => { @include control_chrome, fg: Color::Yellow }
-        .primary => { @include control_chrome }
+        .panel { @include panel_chrome; }
+        Button { @include control_chrome; fg: Color::Yellow; }
+        .primary { @include control_chrome; }
     };
 
     let expected = Stylesheet::new()

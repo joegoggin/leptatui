@@ -5,21 +5,21 @@ use leptatui::prelude::*;
 /// Exercises top-level media blocks and nested selectors inside media blocks.
 fn main() {
     let styles = stylesheet! {
-        Text => { fg: Color::White }
+        Text { fg: Color::White; }
 
         @media (max-width: 80) {
-            .panel => {
-                padding: TuiSpacing::ZERO,
-                flex_direction: FlexDirection::Column
+            .panel {
+                padding: TuiSpacing::ZERO;
+                flex_direction: FlexDirection::Column;
 
-                Text => { fg: Color::Yellow }
+                Text { fg: Color::Yellow; }
             }
 
-            Button:focus => { bg: Color::Blue }
+            Button:focus { bg: Color::Blue; }
         }
 
         @media (min-width: 81) and (min-height: 24) {
-            #submit => { borders: Borders::NONE }
+            #submit { borders: Borders::NONE; }
         }
     };
 

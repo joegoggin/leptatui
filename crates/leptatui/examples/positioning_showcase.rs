@@ -18,100 +18,100 @@ fn PositioningShowcase() -> impl IntoView {
     });
 
     stylesheet! {
-        .app-shell => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .app-shell {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
         }
-        .title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
+        .title {
+            fg: Color::LightCyan;
+            modifier: Modifier::BOLD;
         }
-        .scrollport => {
-            position: Position::Relative,
-            borders: Borders::ALL,
+        .scrollport {
+            position: Position::Relative;
+            borders: Borders::ALL;
             size: LayoutSize::new(
                 Dimension::from(Length::percent(100.0)),
                 Dimension::from(Length::cells(16.0))
-            ),
-            overflow: Axes::new(Overflow::Hidden, Overflow::Auto)
+            );
+            overflow: Axes::new(Overflow::Hidden, Overflow::Auto);
         }
-        .flow-card => {
-            borders: Borders::ALL,
-            bg: Color::DarkGray
+        .flow-card {
+            borders: Borders::ALL;
+            bg: Color::DarkGray;
         }
-        .relative-card => {
-            position: Position::Relative,
+        .relative-card {
+            position: Position::Relative;
             inset: Edges::new(
                 Length::cells(1.0).into(),
                 LengthAuto::Auto,
                 LengthAuto::Auto,
                 Length::cells(4.0).into()
-            ),
+            );
             size: LayoutSize::new(
                 Dimension::from(Length::cells(28.0)),
                 Dimension::from(Length::cells(3.0))
-            ),
-            borders: Borders::ALL,
-            bg: Color::Blue,
-            z_index: ZIndex::Integer(1)
+            );
+            borders: Borders::ALL;
+            bg: Color::Blue;
+            z_index: ZIndex::Integer(1);
         }
-        .absolute-card => {
-            position: Position::Absolute,
+        .absolute-card {
+            position: Position::Absolute;
             inset: Edges::new(
                 Length::cells(5.0).into(),
                 Length::cells(2.0).into(),
                 LengthAuto::Auto,
                 LengthAuto::Auto
-            ),
+            );
             size: LayoutSize::new(
                 Dimension::from(Length::cells(30.0)),
                 Dimension::from(Length::cells(3.0))
-            ),
-            borders: Borders::ALL,
-            bg: Color::Red,
-            z_index: ZIndex::Integer(2)
+            );
+            borders: Borders::ALL;
+            bg: Color::Red;
+            z_index: ZIndex::Integer(2);
         }
-        .fixed-card => {
-            position: Position::Fixed,
+        .fixed-card {
+            position: Position::Fixed;
             inset: Edges::new(
                 Length::cells(1.0).into(),
                 Length::cells(1.0).into(),
                 LengthAuto::Auto,
                 LengthAuto::Auto
-            ),
+            );
             size: LayoutSize::new(
                 Dimension::from(Length::cells(25.0)),
                 Dimension::from(Length::cells(3.0))
-            ),
-            borders: Borders::ALL,
-            bg: Color::Magenta,
-            z_index: ZIndex::Integer(4)
+            );
+            borders: Borders::ALL;
+            bg: Color::Magenta;
+            z_index: ZIndex::Integer(4);
         }
-        .sticky-card => {
-            position: Position::Sticky,
+        .sticky-card {
+            position: Position::Sticky;
             inset: Edges::new(
                 Length::cells(0.0).into(),
                 LengthAuto::Auto,
                 LengthAuto::Auto,
                 LengthAuto::Auto
-            ),
-            borders: Borders::ALL,
-            bg: Color::Green,
-            z_index: ZIndex::Integer(3)
+            );
+            borders: Borders::ALL;
+            bg: Color::Green;
+            z_index: ZIndex::Integer(3);
         }
-        .negative-layer => {
-            position: Position::Relative,
+        .negative-layer {
+            position: Position::Relative;
             inset: Edges::new(
                 Length::cells(1.0).into(),
                 LengthAuto::Auto,
                 LengthAuto::Auto,
                 Length::cells(2.0).into()
-            ),
-            borders: Borders::ALL,
-            bg: Color::DarkGray,
-            z_index: ZIndex::Integer(-1)
+            );
+            borders: Borders::ALL;
+            bg: Color::DarkGray;
+            z_index: ZIndex::Integer(-1);
         }
-        .hint => { fg: Color::DarkGray }
+        .hint { fg: Color::DarkGray; }
     }
 
     view! {

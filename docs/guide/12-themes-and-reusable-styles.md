@@ -15,9 +15,9 @@ let theme = RwSignal::new(
 );
 provide_context(theme.read_only());
 stylesheet! {
-    .notes-shell => {
-        fg: theme_color("text"),
-        bg: theme_color("surface")
+    .notes-shell {
+        fg: theme_color("text");
+        bg: theme_color("surface");
     }
 }
 ```
@@ -40,8 +40,8 @@ fn note_styles() -> StyleModule {
     stylesheet! {
         $accent: Color::LightCyan;
         @mixin heading {
-            fg: $accent,
-            modifier: Modifier::BOLD
+            fg: $accent;
+            modifier: Modifier::BOLD;
         }
     }
 }
@@ -50,7 +50,7 @@ fn note_styles() -> StyleModule {
 fn StyledTitle() -> impl IntoView {
     stylesheet! {
         @use note_styles as notes;
-        H1 => { @include notes.heading }
+        H1 { @include notes.heading; }
     }
     view! { <H1>"My notes"</H1> }
 }

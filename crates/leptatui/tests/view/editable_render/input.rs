@@ -182,7 +182,7 @@ fn insert_mode_stylesheet_rules_override_input_defaults() -> leptatui::app::Resu
     let mut view = input(RwSignal::new(String::from("Ada"))).with_focus(true);
     editable_state_mut(&mut view).set_mode(VimMode::Insert);
     let stylesheet = stylesheet! {
-        Input:insert => { fg: Color::Magenta, padding: TuiSpacing::ZERO }
+        Input:insert { fg: Color::Magenta; padding: TuiSpacing::ZERO; }
     };
     let mut render_result = Ok(());
 

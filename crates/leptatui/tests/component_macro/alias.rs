@@ -6,7 +6,7 @@
 /// ui = { package = "leptatui", path = "..." }
 /// use ui::prelude::*;
 /// #[component]
-/// fn Greeting() -> impl IntoView { view! { <Text>"hi"</Text> } }
+/// fn Greeting(#[prop(into)] name: String) -> impl IntoView { view! { <Text>{name}</Text> } }
 /// #[derive(RouteParams)]
 /// struct GreetingParams { name: String }
 /// ```
@@ -77,8 +77,8 @@ ui = {{ package = "leptatui", path = "{}" }}
         r#"use ui::prelude::*;
 
 #[component]
-fn Greeting() -> impl IntoView {
-    view! { <Text>"hi"</Text> }
+fn Greeting(#[prop(into)] name: String) -> impl IntoView {
+    view! { <Text>{name}</Text> }
 }
 
 #[derive(RouteParams)]
@@ -92,7 +92,7 @@ struct GreetingQuery {
 }
 
 fn main() {
-    let _view: AnyView = Greeting::new().into_view();
+    let _view: AnyView = view! { <Greeting name="hi" /> }.into_view();
     fn route_model<T: ui::RouteParams>() {}
     fn query_model<T: ui::QueryParams>() {}
     route_model::<GreetingParams>();

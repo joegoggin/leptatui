@@ -18,66 +18,66 @@ fn BlockLayout() -> impl IntoView {
     });
 
     stylesheet! {
-        .app-shell => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .app-shell {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
+                border_type: BorderType::Plain;
+                padding: TuiSpacing::ZERO;
             }
         }
-        .title => {
-            fg: Color::LightCyan,
-            modifier: Modifier::BOLD
+        .title {
+            fg: Color::LightCyan;
+            modifier: Modifier::BOLD;
         }
-        .section => {
+        .section {
             margin: Edges::symmetric(
                 Length::cells(0.0).into(),
                 Length::cells(1.0).into()
-            )
+            );
         }
-        .comparison => {
-            display: Display::Flex,
-            gap: Axes::new(Length::cells(1.0), Length::cells(0.0))
+        .comparison {
+            display: Display::Flex;
+            gap: Axes::new(Length::cells(1.0), Length::cells(0.0));
 
             @media (max-width: 60) {
-                flex_direction: FlexDirection::Column
+                flex_direction: FlexDirection::Column;
             }
         }
-        .panel => {
-            borders: Borders::ALL,
+        .panel {
+            borders: Borders::ALL;
             size: LayoutSize::new(
                 Dimension::from(Length::percent(50.0)),
                 Dimension::from(Length::cells(6.0))
-            ),
-            padding: TuiSpacing::uniform(1)
+            );
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
                 size: LayoutSize::new(
                     Dimension::from(Length::percent(100.0)),
                     Dimension::from(Length::cells(5.0))
-                )
+                );
             }
         }
-        .content-sized => { box_sizing: BoxSizing::ContentBox }
-        .border-sized => { box_sizing: BoxSizing::BorderBox }
-        .rounding-row => {
-            display: Display::Flex,
+        .content-sized { box_sizing: BoxSizing::ContentBox; }
+        .border-sized { box_sizing: BoxSizing::BorderBox; }
+        .rounding-row {
+            display: Display::Flex;
             size: LayoutSize::new(
                 Dimension::from(Length::percent(100.0)),
                 Dimension::from(Length::cells(3.0))
-            )
+            );
         }
-        .third => {
-            flex_basis: Dimension::from(Length::percent(33.333)),
-            flex_grow: 1.0,
-            borders: Borders::ALL
+        .third {
+            flex_basis: Dimension::from(Length::percent(33.333));
+            flex_grow: 1.0;
+            borders: Borders::ALL;
         }
-        .first => { bg: Color::DarkGray }
-        .second => { bg: Color::Blue }
-        .third-panel => { bg: Color::DarkGray }
-        .hint => { fg: Color::DarkGray }
+        .first { bg: Color::DarkGray; }
+        .second { bg: Color::Blue; }
+        .third-panel { bg: Color::DarkGray; }
+        .hint { fg: Color::DarkGray; }
 
     }
 

@@ -16,13 +16,13 @@ fn Root() -> impl IntoView {
     });
 
     stylesheet! {
-        .hello-panel => {
-            border_type: BorderType::Rounded,
-            padding: TuiSpacing::uniform(1)
+        .hello-panel {
+            border_type: BorderType::Rounded;
+            padding: TuiSpacing::uniform(1);
 
             @media (max-width: 60) {
-                border_type: BorderType::Plain,
-                padding: TuiSpacing::ZERO
+                border_type: BorderType::Plain;
+                padding: TuiSpacing::ZERO;
             }
         }
     }

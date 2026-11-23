@@ -12,6 +12,6 @@ fn main() {
     let _styles = stylesheet! {
         @use colors as;
 
-        Text => { fg: Color::White }
+        Text { fg: Color::White; }
     };
 }
