@@ -11,7 +11,7 @@ These instructions are for changing the library. To build an application, start 
   The runtime crate defines `view_error!`.
 - `crates/leptatui/examples`: Runnable examples for the public crate.
 - `examples/markdown-editor`: Standalone reference application.
-- `docs`: Progressive guide, complete checkpoints, and feature references.
+- `docs`: Progressive guide with complete chapter code and feature references.
 
 Within each crate, domain facades keep public imports stable while substantive
 subdirectories group related implementations. Generic pass-through layers such

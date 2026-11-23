@@ -52,7 +52,7 @@ small notes app one step at a time, then explore specialized features.
 12. [Themes and reusable styles](docs/guide/12-themes-and-reusable-styles.md)
 13. [Extending Leptatui](docs/guide/13-extending-leptatui.md)
 
-Use the [documentation index](docs/README.md) for checkpoints and reference pages.
+Use the [documentation index](docs/README.md) for complete chapter code and reference pages.
 
 ## Look things up
 

@@ -130,4 +130,118 @@ stacking, retained geometry, and terminal-specific limitations, use the
 inline overrides, and `!important`, use the
 [stylesheet reference](../reference/stylesheets.md).
 
+## Complete code
+
+Replace `src/main.rs` with the following. Use the Cargo manifest from
+[chapter 1](01-getting-started.md) and run `cargo run` in your application
+project. Ctrl+Q quits.
+
+```rust
+use leptatui::prelude::*;
+
+#[derive(Clone, Copy)]
+struct Draft {
+    title: RwSignal<String>,
+    body: RwSignal<String>,
+    status: RwSignal<String>,
+}
+
+#[component]
+fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
+    view! { <H1>{text}</H1> }
+}
+
+#[component]
+fn Panel(children: Children) -> impl IntoView {
+    view! { <Block><Div>{children}</Div></Block> }
+}
+
+#[component]
+fn NoteEditor() -> impl IntoView {
+    let Draft { title, body, status } = expect_context::<Draft>();
+
+    view! {
+        <Div>
+            <Form
+                on_submit=move || {
+                    status.set(String::from("Submitted in memory"));
+                }
+                on_cancel=move || {
+                    status.set(String::from("Canceled; draft kept"));
+                }
+            >
+                <Text>"Title"</Text>
+                <Input value=title placeholder="Title"
+                    on_input=move || {
+                        status.set(String::from("Editing"));
+                    }
+                />
+                <Text>"Body"</Text>
+                <TextArea value=body placeholder="Write a note"
+                    on_input=move || {
+                        status.set(String::from("Editing"));
+                    }
+                />
+            </Form>
+            <Text>{status}</Text>
+            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
+        </Div>
+    }
+}
+
+#[component]
+fn NotesApp() -> impl IntoView {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            return KeyControl::Exit;
+        }
+        KeyControl::Pass
+    });
+    let title = RwSignal::new(String::from("First note"));
+    let body = RwSignal::new(String::from("Learn to build a terminal application."));
+    let status = RwSignal::new(String::from("Editing"));
+
+    provide_context(Draft { title, body, status });
+
+    stylesheet! {
+        H1 { fg: Color::LightCyan; }
+        Button:focus { fg: Color::Yellow; }
+
+        .notes-shell {
+            padding: TuiSpacing::uniform(1);
+            &__actions {
+                display: Display::Flex;
+                gap: Axes::all(Length::cells(1.0));
+                @media (max-width: 60) {
+                    flex_direction: FlexDirection::Column;
+                }
+            }
+        }
+    }
+    view! {
+        <Panel>
+            <Div class="notes-shell">
+                <NoteHeading text="My notes" />
+                <Div class="notes-shell__actions">
+                    <Button on_press=move || {
+                        title.set(String::from("First note"));
+                        body.set(String::from("Learn to build a terminal application."));
+                        status.set(String::from("Reset in memory"));
+                    }>
+                        "Reset draft"
+                    </Button>
+                    <Button on_press=|| AppControl::Exit>"Quit"</Button>
+                </Div>
+                <NoteEditor />
+            </Div>
+        </Panel>
+    }
+}
+
+#[tokio::main]
+async fn main() -> leptatui::app::Result<()> {
+    App::new(view! { <NotesApp /> }).run().await
+}
+```
+
 [Previous: Reusable components](05-reusable-components.md) · [Documentation index](../README.md) · [Next: Pages and navigation](07-pages-and-navigation.md)

@@ -3,8 +3,7 @@
 Prerequisites: [Chapter 4: Editing notes](04-editing-notes.md).
 
 Split the editor from the application shell without losing the draft.
-The [routed checkpoint](../checkpoints/07-routed-notes.md) will bring these
-pieces together as a complete file.
+The final listing below combines the components and application shell.
 
 ## Pass inputs with props
 
@@ -139,7 +138,8 @@ configuration; context is useful across many descendants.
 
 ## Collections and replacement
 
-For a list of titles, a container can accept a vector of views:
+The following optional experiment is separate from the notes app. Inside a
+component, a container can accept a vector of views; return `list` to display it:
 
 ```rust
 let titles = ["First note", "Second note"];
@@ -156,5 +156,92 @@ Use `keyed(move || selected_id.get(), move || view! { <NoteEditor /> })` when
 changing a selection should mount a fresh editor and reset its local view
 state. The key closure tracks dependencies; the child factory is untracked.
 This is subtree replacement, not automatic keyed-list diffing. Ordinary controlled inputs retain their editing state automatically.
+
+## Complete code
+
+Replace `src/main.rs` with the following. Use the Cargo manifest from
+[chapter 1](01-getting-started.md) and run `cargo run` in your application
+project. Ctrl+Q quits.
+
+```rust
+use leptatui::prelude::*;
+
+#[derive(Clone, Copy)]
+struct Draft {
+    title: RwSignal<String>,
+    body: RwSignal<String>,
+    status: RwSignal<String>,
+}
+
+#[component]
+fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
+    view! { <H1>{text}</H1> }
+}
+
+#[component]
+fn Panel(children: Children) -> impl IntoView {
+    view! { <Block><Div>{children}</Div></Block> }
+}
+
+#[component]
+fn NoteEditor() -> impl IntoView {
+    let Draft { title, body, status } = expect_context::<Draft>();
+
+    view! {
+        <Div>
+            <Form
+                on_submit=move || {
+                    status.set(String::from("Submitted in memory"));
+                }
+                on_cancel=move || {
+                    status.set(String::from("Canceled; draft kept"));
+                }
+            >
+                <Text>"Title"</Text>
+                <Input value=title placeholder="Title"
+                    on_input=move || {
+                        status.set(String::from("Editing"));
+                    }
+                />
+                <Text>"Body"</Text>
+                <TextArea value=body placeholder="Write a note"
+                    on_input=move || {
+                        status.set(String::from("Editing"));
+                    }
+                />
+            </Form>
+            <Text>{status}</Text>
+            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
+        </Div>
+    }
+}
+
+#[component]
+fn NotesApp() -> impl IntoView {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            return KeyControl::Exit;
+        }
+        KeyControl::Pass
+    });
+    let title = RwSignal::new(String::from("First note"));
+    let body = RwSignal::new(String::from("Learn to build a terminal application."));
+    let status = RwSignal::new(String::from("Editing"));
+
+    provide_context(Draft { title, body, status });
+
+    view! {
+        <Panel>
+            <NoteHeading text="My notes" />
+            <NoteEditor />
+        </Panel>
+    }
+}
+
+#[tokio::main]
+async fn main() -> leptatui::app::Result<()> {
+    App::new(view! { <NotesApp /> }).run().await
+}
+```
 
 [Previous: Editing notes](04-editing-notes.md) · [Documentation index](../README.md) · [Next: Styling and layout](06-styling-and-layout.md)

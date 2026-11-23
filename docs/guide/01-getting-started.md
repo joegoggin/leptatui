@@ -45,22 +45,14 @@ replacing the placeholder with the desired commit SHA. See Cargo's
 [Git dependency documentation](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-dependencies-from-git-repositories)
 for more options.
 
-Replace `src/main.rs` with:
+First replace the generated `src/main.rs` with a component and a Tokio entry
+point:
 
 ```rust
 use leptatui::prelude::*;
 
 #[component]
 fn NotesApp() -> impl IntoView {
-    use_key_event(KeyEventKind::Press, |key| {
-        if key.code == KeyCode::Char('q')
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-        {
-            return KeyControl::Exit;
-        }
-        KeyControl::Pass
-    });
-
     view! { <Text>"My notes — Ctrl+Q to quit"</Text> }
 }
 
@@ -68,6 +60,20 @@ fn NotesApp() -> impl IntoView {
 async fn main() -> leptatui::app::Result<()> {
     App::new(view! { <NotesApp /> }).run().await
 }
+```
+
+Before running the app, add the following handler at the start of `NotesApp`,
+before `view!`, so you can exit cleanly:
+
+```rust
+use_key_event(KeyEventKind::Press, |key| {
+    if key.code == KeyCode::Char('q')
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+    {
+        return KeyControl::Exit;
+    }
+    KeyControl::Pass
+});
 ```
 
 Run `cargo run` from the notes project. You should see the text, and Ctrl+Q
@@ -98,5 +104,33 @@ You should see a greeting inside a bordered panel. Press `q` to return to your
 shell. Commands starting with `cargo run --example` run from this **library
 checkout**. Return to your **notes project** to continue the guide with plain
 `cargo run`; its Git dependency works independently of the optional checkout.
+
+## Complete code
+
+This is the complete `src/main.rs` after both edits. Use the Cargo manifest
+above and run `cargo run` in your notes project. Ctrl+Q quits.
+
+```rust
+use leptatui::prelude::*;
+
+#[component]
+fn NotesApp() -> impl IntoView {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q')
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+        {
+            return KeyControl::Exit;
+        }
+        KeyControl::Pass
+    });
+
+    view! { <Text>"My notes — Ctrl+Q to quit"</Text> }
+}
+
+#[tokio::main]
+async fn main() -> leptatui::app::Result<()> {
+    App::new(view! { <NotesApp /> }).run().await
+}
+```
 
 [Documentation index](../README.md) · [Next: Building a screen](02-building-a-screen.md)

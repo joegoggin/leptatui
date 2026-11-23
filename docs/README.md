@@ -1,9 +1,9 @@
 # Leptatui documentation
 
 Start here if you know basic Rust but are new to terminal interfaces or reactive
-programming. Chapters 1–10 build a notes app: display a note, edit it, organize
-its components and pages, then load and save data. Chapters 11–13 explore
-additional capabilities using focused examples.
+programming. Chapters 1–12 build a notes app: display a note, edit it, organize
+its components and pages, load and save data, then add Markdown and themes.
+Chapter 13 explores custom views in a standalone application.
 
 ## Read in order
 
@@ -21,15 +21,12 @@ additional capabilities using focused examples.
 12. [Themes and reusable styles](guide/12-themes-and-reusable-styles.md)
 13. [Extending Leptatui](guide/13-extending-leptatui.md)
 
-## Complete checkpoints
+## Code in each chapter
 
-Each checkpoint contains a complete `src/main.rs`. Use the same Cargo setup
-from chapter 1; each later checkpoint replaces the earlier file.
-
-- [Editable note, after chapter 4](checkpoints/04-editable-note.md)
-- [Routed notes app, after chapter 7](checkpoints/07-routed-notes.md)
-- [Async notes app, after chapter 9](checkpoints/09-async-notes.md)
-- [File-backed notes app, after chapter 10](checkpoints/10-file-notes.md)
+Each chapter explains incremental edits and ends with a complete, runnable
+`src/main.rs`. Use the Cargo manifest from chapter 1 throughout. Chapters 1–12
+progressively build the notes app; chapter 13 is a standalone extension lesson.
+Optional experiments are marked separately from the code to carry forward.
 
 ## Reference
 

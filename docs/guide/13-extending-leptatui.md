@@ -4,13 +4,14 @@ Prerequisites: [Chapter 12: Themes and reusable styles](12-themes-and-reusable-s
 
 Use the extension interfaces when existing builders cannot express a custom
 rendering need. This is an advanced, standalone lesson; the notes app can keep
-using built-in views.
+using built-in views. Use a separate project with the chapter 1 Cargo manifest
+for this lesson so you can keep your notes app.
 
 ## A custom leaf view
 
 `View` is an open, object-safe trait. A render-only leaf implements `render`,
 `as_any`, and `as_any_mut`; other methods have defaults. Add the following
-code above a component, then return `Rule` from it:
+code below the prelude import and above `NotesApp`:
 
 ```rust
 struct Rule;
@@ -78,5 +79,63 @@ test backend, check measurement and clipping, and exercise any focus and event
 behavior it adds. The [existing view tests](../../crates/leptatui/tests/view/support/render.rs)
 show how the library tests rendering. Contributor checks live in
 [Working on Leptatui](../contributing.md).
+
+## Mount the custom view
+
+Use the chapter 1 `NotesApp` with its Ctrl+Q handler and `main` function.
+Replace only its final view with:
+
+```rust
+view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> }
+```
+
+Run `cargo run`. You should see a heading and a horizontal line of dashes;
+Ctrl+Q exits. This small example adds no direct Ratatui dependency.
+
+## Complete code
+
+Replace `src/main.rs` with the following. Use the Cargo manifest from
+[chapter 1](01-getting-started.md) and run `cargo run` in your application
+project. Ctrl+Q quits.
+
+```rust
+use leptatui::prelude::*;
+
+struct Rule;
+
+impl View for Rule {
+    fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::Result<()> {
+        text("----------------").render(ctx)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+#[component]
+fn NotesApp() -> impl IntoView {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q')
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+        {
+            return KeyControl::Exit;
+        }
+        KeyControl::Pass
+    });
+
+
+    view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> }
+}
+
+#[tokio::main]
+async fn main() -> leptatui::app::Result<()> {
+    App::new(view! { <NotesApp /> }).run().await
+}
+```
 
 [Previous: Themes and reusable styles](12-themes-and-reusable-styles.md) · [Documentation index](../README.md)

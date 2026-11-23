@@ -52,4 +52,43 @@ below the previous one. Resize the terminal to see paragraph wrapping.
 The [component reference](../reference/components.md) lists the available
 views. We will introduce them as the application needs them.
 
+## Complete code
+
+Replace `src/main.rs` with the following. Use the Cargo manifest from
+[chapter 1](01-getting-started.md) and run `cargo run` in your application
+project. Ctrl+Q quits.
+
+```rust
+use leptatui::prelude::*;
+
+#[component]
+fn NotesApp() -> impl IntoView {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q')
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+        {
+            return KeyControl::Exit;
+        }
+        KeyControl::Pass
+    });
+
+
+    view! {
+        <Block>
+            <Div>
+                <Text>"My notes"</Text>
+                <Text>"First note"</Text>
+                <Paragraph>"Learn to build a terminal application."</Paragraph>
+                <Text>"Ctrl+Q quits"</Text>
+            </Div>
+        </Block>
+    }
+}
+
+#[tokio::main]
+async fn main() -> leptatui::app::Result<()> {
+    App::new(view! { <NotesApp /> }).run().await
+}
+```
+
 [Previous: Getting started](01-getting-started.md) · [Documentation index](../README.md) · [Next: State and interaction](03-state-and-interaction.md)
