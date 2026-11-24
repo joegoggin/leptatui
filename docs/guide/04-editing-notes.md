@@ -95,9 +95,11 @@ fn NotesApp() -> impl IntoView {
         }
         KeyControl::Pass
     });
+
     let title = RwSignal::new(String::from("First note"));
     let body = RwSignal::new(String::from("Learn to build a terminal application."));
     let status = RwSignal::new(String::from("Editing"));
+
     view! {
         <Div>
             <Text>"My notes"</Text>
