@@ -1718,6 +1718,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "leptatui-lsp"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "serde_json",
+ "syn",
+ "url",
+]
+
+[[package]]
 name = "leptatui-macros"
 version = "0.1.0"
 dependencies = [

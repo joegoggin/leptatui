@@ -8,5 +8,5 @@
 mod recent_file_entry;
 mod recent_files_list;
 
-pub(super) use recent_file_entry::{RecentFileEntry, RecentFileEntryProps};
-pub(super) use recent_files_list::{RecentFilesList, RecentFilesListProps};
+pub(super) use recent_file_entry::RecentFileEntry;
+pub(super) use recent_files_list::RecentFilesList;

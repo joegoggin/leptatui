@@ -81,3 +81,10 @@ pub fn derive_query_params(input: TokenStream) -> TokenStream {
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
+
+/// Generates the built-in semantic vocabulary for the runtime crate.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __view_ide_catalog(_input: TokenStream) -> TokenStream {
+    view::catalog::expand().into()
+}

@@ -4,10 +4,7 @@ use std::{path::PathBuf, rc::Rc};
 
 use leptatui::prelude::*;
 
-use super::{
-    super::{RecentFileEntry, RecentFileEntryProps},
-    style::use_recent_files_list_styles,
-};
+use super::{super::RecentFileEntry, style::use_recent_files_list_styles};
 
 /// Renders the recent-file section on Home.
 ///

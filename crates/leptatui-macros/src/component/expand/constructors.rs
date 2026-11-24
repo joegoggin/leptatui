@@ -106,11 +106,11 @@ pub(super) fn expand_setup_fn(
         let syn::Type::Path(path) = prop.ty.as_ref() else {
             return None;
         };
-        if !path
+        if path
             .path
             .segments
             .last()
-            .is_some_and(|segment| segment.ident == "Children")
+            .is_none_or(|segment| segment.ident != "Children")
         {
             return None;
         }

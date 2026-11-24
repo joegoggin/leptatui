@@ -35,3 +35,18 @@ jobs:
 
       - name: Check examples
         run: cargo check --workspace --examples
+
+  editor-support:
+    name: Editor protocol checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install tested Rust and rust-analyzer
+        run: rustup toolchain install 1.92.0 --profile minimal --component rust-analyzer
+      - name: Use tested toolchain
+        run: rustup default 1.92.0
+      - name: Build language-server proxy
+        run: cargo build --locked -p leptatui-lsp
+      - name: Check editor semantics
+        run: python3 tools/lsp/test_view.py

@@ -60,6 +60,12 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         }
     }
 
+    let semantic_props = if props.is_empty() {
+        quote! { () }
+    } else {
+        let props_ident = props::props_ident(&ident);
+        quote! { #props_ident }
+    };
     let props_api = expand_props_api(&vis, &ident, &props);
     let constructors = expand_constructors(&vis, &ident, &props);
     let setup_body = if fallible_error.is_some() {
@@ -78,6 +84,10 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
     Ok(quote! {
         #props_api
+
+        impl #leptatui::__ide::__Component for #ident {
+            type Props = #semantic_props;
+        }
 
         #[allow(non_camel_case_types)]
         #(#attrs)*

@@ -6,6 +6,8 @@
 //! # Modules
 //!
 //! - [`attr`] — Element attribute parsing and value classification.
+//! - [`catalog`] — Built-in semantic vocabulary.
+//! - [`ide`] — Source-preserving editor probes.
 //! - [`captures`] — Owned captures for generated tracking closures.
 //! - [`child`] — Nested element and text-like child parsing.
 //! - [`element`] — Built-in and component element validation and expansion.
@@ -15,8 +17,10 @@
 
 mod attr;
 mod captures;
+pub(crate) mod catalog;
 mod child;
 mod element;
+mod ide;
 mod root;
 mod syntax;
 mod text_content;
@@ -36,8 +40,13 @@ use syn::Error;
 ///
 /// A [`TokenStream`] containing generated view code or compile errors.
 pub(crate) fn expand(input: TokenStream) -> TokenStream {
-    syn::parse::<ViewRoot>(input)
-        .and_then(ViewRoot::expand)
-        .unwrap_or_else(Error::into_compile_error)
-        .into()
+    let input: proc_macro2::TokenStream = input.into();
+    let result = syn::parse2::<ViewRoot>(input.clone()).and_then(ViewRoot::expand);
+    let references = ide::references(input);
+    let view = result.unwrap_or_else(Error::into_compile_error);
+    quote::quote! {{
+        #references
+        #view
+    }}
+    .into()
 }

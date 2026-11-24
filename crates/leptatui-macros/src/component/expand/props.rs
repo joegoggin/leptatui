@@ -233,15 +233,15 @@ fn expand_prop_setter(
 
 /// Returns the generated props struct identifier.
 pub(super) fn props_ident(component: &Ident) -> Ident {
-    format_ident!("{component}Props")
+    format_ident!("{component}Props", span = component.span())
 }
 
 /// Returns the generated props builder identifier.
 fn builder_ident(component: &Ident) -> Ident {
-    format_ident!("{component}PropsBuilder")
+    format_ident!("{component}PropsBuilder", span = component.span())
 }
 
 /// Returns the generated missing-prop marker identifier.
 fn missing_ident(component: &Ident) -> Ident {
-    format_ident!("{component}PropsMissing")
+    format_ident!("{component}PropsMissing", span = component.span())
 }

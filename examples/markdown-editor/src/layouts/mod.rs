@@ -6,4 +6,4 @@
 
 mod root;
 
-pub(crate) use root::{RootLayout, RootLayoutProps};
+pub(crate) use root::RootLayout;

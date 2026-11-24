@@ -61,40 +61,7 @@ pub(super) fn reject_literal_typed_attr(
 
 /// Returns whether an identifier is one of the built-in `view!` elements.
 pub(super) fn is_builtin_element(name: &Ident) -> bool {
-    matches!(
-        name.to_string().as_str(),
-        "Block"
-            | "Div"
-            | "Form"
-            | "Text"
-            | "H1"
-            | "H2"
-            | "H3"
-            | "H4"
-            | "H5"
-            | "H6"
-            | "Paragraph"
-            | "Link"
-            | "A"
-            | "Routes"
-            | "Route"
-            | "ParentRoute"
-            | "Markdown"
-            | "CodeBlock"
-            | "OrderedList"
-            | "UnorderedList"
-            | "ListItem"
-            | "Table"
-            | "TableHead"
-            | "TableBody"
-            | "TableRow"
-            | "TableCell"
-            | "Button"
-            | "Input"
-            | "TextArea"
-            | "Image"
-            | "ProgressBar"
-    )
+    super::super::catalog::is_builtin(&name.to_string())
 }
 
 /// Returns whether an identifier should be treated as a component tag.

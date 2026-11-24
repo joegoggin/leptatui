@@ -147,14 +147,14 @@ impl<'ast> Visit<'ast> for Captures {
         else {
             return;
         };
-        if name == "vec" {
-            if let Ok(array) = {
+        // A comma-separated vector shares expression-list syntax with format arguments.
+        if name == "vec"
+            && let Ok(array) = {
                 let tokens = &expr.mac.tokens;
                 syn::parse2::<Expr>(quote! { [#tokens] })
-            } {
-                self.visit_expr(&array);
             }
-            // A comma-separated vector shares expression-list syntax with format arguments.
+        {
+            self.visit_expr(&array);
         }
         if !matches!(name.as_str(), "format" | "format_args" | "vec") {
             return;
@@ -168,10 +168,10 @@ impl<'ast> Visit<'ast> for Captures {
         let explicit = args
             .iter()
             .filter_map(|arg| {
-                if let Expr::Assign(assign) = arg {
-                    if let Expr::Path(path) = assign.left.as_ref() {
-                        return path.path.get_ident().map(ToString::to_string);
-                    }
+                if let Expr::Assign(assign) = arg
+                    && let Expr::Path(path) = assign.left.as_ref()
+                {
+                    return path.path.get_ident().map(ToString::to_string);
                 }
                 None
             })

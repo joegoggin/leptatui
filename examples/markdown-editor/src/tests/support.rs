@@ -15,7 +15,7 @@ use leptatui::prelude::*;
 use ratatui::{Terminal, backend::TestBackend};
 use tokio::{runtime::Runtime, task::LocalSet};
 
-use crate::app::{AppRouter, AppRouterProps};
+use crate::app::AppRouter;
 
 /// Provides deterministic services to the routed application during tests.
 ///

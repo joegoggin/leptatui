@@ -39,7 +39,7 @@ impl Element {
         let component = if self.attrs.is_empty() && self.children.is_empty() {
             quote! { #name::new() }
         } else {
-            let props = format_ident!("{name}Props");
+            let props = quote! { <#name as #leptatui::__ide::__Component>::Props };
             let attr_setters = self.attrs.iter().map(|attr| {
                 let name = format_ident!("__view_{}", attr.name);
                 let value = attr.value.to_tokens();
@@ -60,7 +60,7 @@ impl Element {
                     #preserve_on_reconcile,
                     move || {
                         #name::with_props(
-                            #props::builder()
+                            <#props>::builder()
                                 #(#attr_setters)*
                                 #children
                                 .build()

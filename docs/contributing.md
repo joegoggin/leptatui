@@ -6,6 +6,7 @@ These instructions are for changing the library. To build an application, start 
 
 - `crates/leptatui`: Public runtime crate with app, component, view, context,
   style, and prelude APIs.
+- `crates/leptatui-lsp`: Rust-analyzer proxy completing generated-symbol rename and references.
 - `crates/leptatui-macros`: Internal proc-macro crate that implements
   `#[component]`, `view!`, `stylesheet!`, and the route/query parameter derives.
   The runtime crate defines `view_error!`.
@@ -30,6 +31,20 @@ cargo test --workspace
 cargo doc --workspace --no-deps
 cargo check --workspace --examples
 ```
+
+## Editor protocol checks
+
+The LSP suite requires Python 3 and rust-analyzer. It creates temporary consumer
+applications and validates completion, hover, navigation, references, and
+compilable rename edits through the real language server:
+
+```sh
+cargo build -p leptatui-lsp
+python3 tools/lsp/test_view.py
+```
+
+CI runs this separately with Rust/rust-analyzer 1.92.0. See
+[editor support](reference/editor-support.md) for Neovim configuration.
 
 ## Layout conformance and benchmarks
 

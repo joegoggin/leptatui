@@ -8,4 +8,4 @@
 mod component;
 mod style;
 
-pub(in crate::pages::viewer) use component::{ViewerDocument, ViewerDocumentProps};
+pub(in crate::pages::viewer) use component::ViewerDocument;

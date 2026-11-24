@@ -8,4 +8,4 @@
 mod component;
 mod style;
 
-pub(crate) use component::{RootLayout, RootLayoutProps};
+pub(crate) use component::RootLayout;

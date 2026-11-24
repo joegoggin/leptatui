@@ -2,6 +2,7 @@
 members = [
     "crates/leptatui",
     "crates/leptatui-macros",
+    "crates/leptatui-lsp",
     "examples/markdown-editor",
 ]
 default-members = ["crates/leptatui"]

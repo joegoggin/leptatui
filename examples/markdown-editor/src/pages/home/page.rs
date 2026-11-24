@@ -6,10 +6,7 @@ use leptatui::prelude::*;
 
 use crate::{pages::viewer_location, services::RecentFilesStore};
 
-use super::{
-    components::{RecentFilesList, RecentFilesListProps},
-    style::use_home_page_styles,
-};
+use super::{components::RecentFilesList, style::use_home_page_styles};
 
 /// Renders the landing page and its recent-file actions.
 ///

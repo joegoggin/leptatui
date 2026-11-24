@@ -21,7 +21,7 @@ use anyhow::{Context as _, Result};
 use clap::Parser;
 use leptatui::prelude::*;
 
-use crate::app::{AppRouter, AppRouterProps};
+use crate::app::AppRouter;
 use crate::{cli::Cli, pages::viewer_location};
 
 /// Resolves a file path against the process current directory without requiring it to exist.

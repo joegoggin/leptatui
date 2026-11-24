@@ -23,27 +23,30 @@ impl Element {
         let element_name = self.name.to_string();
         let mut attrs = Vec::with_capacity(self.attrs.len());
 
+        let accepted = crate::view::catalog::attributes(&element_name);
         for attr in &self.attrs {
-            let kind = match attr.name.to_string().as_str() {
+            let attr_name = attr.name.to_string();
+            let supported = accepted.contains(&attr_name.as_str());
+            let kind = match attr_name.as_str() {
                 "class" => AttrKind::Class,
                 "id" => AttrKind::Id,
                 "style" => AttrKind::Style,
                 "src" if element_name == "Image" => AttrKind::ImageSource,
-                "src" if element_name == "Markdown" => AttrKind::MarkdownSrc,
+                "src" if supported => AttrKind::MarkdownSrc,
                 "src" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! src attribute is only supported on Image or Markdown",
                     ));
                 }
-                "href" if element_name == "Link" => AttrKind::Href,
+                "href" if supported => AttrKind::Href,
                 "href" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! href attribute is only supported on Link",
                     ));
                 }
-                "alt" if element_name == "Image" => AttrKind::Alt,
+                "alt" if supported => AttrKind::Alt,
                 "alt" => {
                     return Err(Error::new_spanned(
                         &attr.name,
@@ -60,83 +63,77 @@ impl Element {
                         "view! value attribute is only supported on Input, TextArea, or ProgressBar",
                     ));
                 }
-                "label" if element_name == "ProgressBar" => AttrKind::Label,
+                "label" if supported => AttrKind::Label,
                 "label" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! label attribute is only supported on ProgressBar",
                     ));
                 }
-                "placeholder" if matches!(element_name.as_str(), "Input" | "TextArea") => {
-                    AttrKind::Placeholder
-                }
+                "placeholder" if supported => AttrKind::Placeholder,
                 "placeholder" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! placeholder attribute is only supported on Input or TextArea",
                     ));
                 }
-                "on_press" if element_name == "Button" => AttrKind::OnPress,
+                "on_press" if supported => AttrKind::OnPress,
                 "on_press" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! on_press attribute is only supported on Button",
                     ));
                 }
-                "on_submit" if element_name == "Form" => AttrKind::OnSubmit,
+                "on_submit" if supported => AttrKind::OnSubmit,
                 "on_submit" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! on_submit attribute is only supported on Form",
                     ));
                 }
-                "on_cancel" if element_name == "Form" => AttrKind::OnCancel,
+                "on_cancel" if supported => AttrKind::OnCancel,
                 "on_cancel" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! on_cancel attribute is only supported on Form",
                     ));
                 }
-                "on_input" if matches!(element_name.as_str(), "Input" | "TextArea") => {
-                    AttrKind::OnInput
-                }
+                "on_input" if supported => AttrKind::OnInput,
                 "on_input" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! on_input attribute is only supported on Input or TextArea",
                     ));
                 }
-                "start" if element_name == "OrderedList" => AttrKind::Start,
+                "start" if supported => AttrKind::Start,
                 "start" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! start attribute is only supported on OrderedList",
                     ));
                 }
-                "alignment" if element_name == "TableCell" => AttrKind::Alignment,
+                "alignment" if supported => AttrKind::Alignment,
                 "alignment" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! alignment attribute is only supported on TableCell",
                     ));
                 }
-                "language" if element_name == "CodeBlock" => AttrKind::Language,
+                "language" if supported => AttrKind::Language,
                 "language" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! language attribute is only supported on CodeBlock",
                     ));
                 }
-                "line_numbers" if matches!(element_name.as_str(), "CodeBlock" | "Markdown") => {
-                    AttrKind::LineNumbers
-                }
+                "line_numbers" if supported => AttrKind::LineNumbers,
                 "line_numbers" => {
                     return Err(Error::new_spanned(
                         &attr.name,
                         "view! line_numbers attribute is only supported on CodeBlock or Markdown",
                     ));
                 }
-                "editable" if element_name == "Markdown" => AttrKind::Editable,
+                "editable" if supported => AttrKind::Editable,
                 "editable" => {
                     return Err(Error::new_spanned(
                         &attr.name,
@@ -273,19 +270,17 @@ impl Element {
         let mut captured_expressions = Vec::new();
 
         for ValidatedAttr { attr, kind } in attrs {
-            let reactive = track
-                && !attr.value.is_literal()
-                && !matches!(
-                    kind,
-                    AttrKind::OnPress
-                        | AttrKind::OnSubmit
-                        | AttrKind::OnCancel
-                        | AttrKind::OnInput
-                        | AttrKind::Href
-                        | AttrKind::MarkdownSrc
-                        | AttrKind::Editable
-                )
-                && !(self.name == "Markdown" && *kind == AttrKind::LineNumbers);
+            let setup_only = matches!(
+                kind,
+                AttrKind::OnPress
+                    | AttrKind::OnSubmit
+                    | AttrKind::OnCancel
+                    | AttrKind::OnInput
+                    | AttrKind::Href
+                    | AttrKind::MarkdownSrc
+                    | AttrKind::Editable
+            ) || (self.name == "Markdown" && *kind == AttrKind::LineNumbers);
+            let reactive = track && !attr.value.is_literal() && !setup_only;
             if reactive {
                 captured_expressions.push(syn::parse2::<syn::Expr>(attr.value.to_tokens())?);
             }
@@ -413,6 +408,48 @@ impl Element {
             }})
         } else {
             Ok(expanded)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Checks editor attribute metadata against the actual macro validator.
+
+    use super::*;
+    use crate::view::catalog;
+
+    /// Verifies built-in attribute suggestions agree with parser validation.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// Every non-routing built-in paired with every documented attribute name.
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Accepted and rejected attributes match the editor catalog for each tag.
+    #[test]
+    fn editor_catalog_matches_attribute_validation() {
+        let candidates: std::collections::BTreeSet<_> = catalog::ELEMENTS
+            .iter()
+            .flat_map(|(name, _, _)| catalog::attributes(name))
+            .collect();
+        for (name, _, _) in catalog::ELEMENTS {
+            if matches!(*name, "A" | "Routes" | "Route" | "ParentRoute" | "Outlet") {
+                continue;
+            }
+            let accepted = catalog::attributes(name);
+            for attr in &candidates {
+                let element: Element =
+                    syn::parse_str(&format!("<{name} {attr}={{value}} />")).unwrap();
+                assert_eq!(
+                    element.validate_attrs().is_ok(),
+                    accepted.contains(attr),
+                    "{name}.{attr}"
+                );
+            }
         }
     }
 }

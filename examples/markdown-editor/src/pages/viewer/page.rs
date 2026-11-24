@@ -6,10 +6,7 @@ use leptatui::prelude::*;
 
 use crate::services::is_markdown_path;
 
-use super::{
-    components::{ViewerDocument, ViewerDocumentProps},
-    style::use_viewer_page_styles,
-};
+use super::{components::ViewerDocument, style::use_viewer_page_styles};
 
 /// Typed query parameters read by the Viewer route.
 #[derive(QueryParams)]

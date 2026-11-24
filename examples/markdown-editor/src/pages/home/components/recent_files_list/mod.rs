@@ -8,4 +8,4 @@
 mod component;
 mod style;
 
-pub(in crate::pages::home) use component::{RecentFilesList, RecentFilesListProps};
+pub(in crate::pages::home) use component::RecentFilesList;

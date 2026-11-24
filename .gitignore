@@ -1,2 +1,4 @@
 issues
 target
+
+__pycache__/

@@ -683,3 +683,22 @@ pub mod __private {
         crate::view::reconcile_views(next, previous);
     }
 }
+
+/// Semantic vocabulary used by the view macro's editor probes.
+#[doc(hidden)]
+pub mod __ide {
+    leptatui_macros::__view_ide_catalog!();
+
+    /// Connects a component tag to its props without requiring a props import.
+    pub trait __Component {
+        /// Generated props available on this component.
+        type Props;
+    }
+}
+
+/// Delays parsing editor probes until the rust-analyzer configuration is active.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __view_ide_probe {
+    ($($tokens:tt)*) => { $($tokens)* };
+}

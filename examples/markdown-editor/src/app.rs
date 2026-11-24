@@ -3,7 +3,7 @@
 use leptatui::prelude::*;
 
 use crate::{
-    layouts::{RootLayout, RootLayoutProps},
+    layouts::RootLayout,
     pages::{HomePage, NotFoundPage, ViewerPage},
 };
 
