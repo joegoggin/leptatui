@@ -90,6 +90,39 @@ pub(super) const ELEMENTS: &[(&str, &str, &[&str])] = &[
     ),
 ];
 
+/// Returns whether a built-in tag accepts nested view or text content.
+///
+/// # Arguments
+///
+/// * `name` — Built-in tag name.
+///
+/// # Returns
+///
+/// A [`bool`] selecting paired tags rather than self-closing tags.
+pub(super) fn accepts_children(name: &str) -> bool {
+    !matches!(
+        name,
+        "Input" | "TextArea" | "Image" | "ProgressBar" | "Markdown" | "Outlet" | "Route"
+    )
+}
+
+/// Returns user-facing shape documentation carried by semantic completions.
+///
+/// # Arguments
+///
+/// * `children` — Whether markup can supply nested children.
+///
+/// # Returns
+///
+/// A stable documentation section understood by the companion server.
+pub(crate) fn markup_docs(children: bool) -> &'static str {
+    if children {
+        "\n\n# View syntax\n\nAccepts nested child content."
+    } else {
+        "\n\n# View syntax\n\nDoes not accept nested child content."
+    }
+}
+
 /// Returns whether a name belongs to the built-in markup vocabulary.
 ///
 /// # Arguments
@@ -132,6 +165,7 @@ pub(crate) fn expand() -> TokenStream {
     let leptatui = crate::crate_path::leptatui();
     let elements = ELEMENTS.iter().map(|(name, doc, _)| {
         let ident = format_ident!("{name}");
+        let markup_doc = markup_docs(accepts_children(name));
         let fields = attributes(name).into_iter().map(|attr| {
             let ident = format_ident!("{attr}");
             let (ty, doc) = match attr {
@@ -189,7 +223,14 @@ pub(crate) fn expand() -> TokenStream {
             };
             quote! { #[doc = #doc] pub #ident: #ty }
         });
-        quote! { #[doc = #doc] pub struct #ident { #(#fields,)* } }
+        quote! {
+            #[doc = #doc]
+            #[doc = #markup_doc]
+            pub struct #ident { #(#fields,)* }
+            impl #leptatui::__ide::__Component for #ident {
+                type Props = Self;
+            }
+        }
     });
     quote! { #(#elements)* }
 }

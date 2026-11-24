@@ -34,6 +34,7 @@ mod widgets {
     }
 }
 use widgets::{Greeting, GreetingProps};
+use extra::{Panel, RepeatPanel, MutPanel, DefaultPanel};
 
 #[derive(Clone)]
 struct Person { name: String }
@@ -58,6 +59,27 @@ fn main() {
 '''
 
 EXTRA = '''use leptatui::prelude::*;
+#[component]
+pub fn Panel(children: leptatui::Children) -> impl IntoView {
+    drop(children);
+    view! { <Text>"Panel"</Text> }
+}
+#[component]
+pub fn RepeatPanel(children: ChildrenFn) -> impl IntoView {
+    drop(children);
+    view! { <Text>"Repeat"</Text> }
+}
+#[component]
+pub fn MutPanel(children: ChildrenMut) -> impl IntoView {
+    drop(children);
+    view! { <Text>"Mutable"</Text> }
+}
+#[component]
+pub fn DefaultPanel(#[prop(default = Box::new(Vec::new))] children: Children) -> impl IntoView {
+    drop(children);
+    view! { <Text>"Default"</Text> }
+}
+
 use crate::widgets::{Greeting, GreetingProps};
 pub fn extra() {
     let _ = view! { <Greeting title="Extra"></Greeting> };
@@ -83,7 +105,14 @@ class Client:
             "processId": os.getpid(), "rootUri": project.as_uri(),
             "capabilities": {
                 "experimental": {"serverStatusNotification": True},
-                "textDocument": {"publishDiagnostics": {"versionSupport": True}},
+                "textDocument": {
+                    "publishDiagnostics": {"versionSupport": True},
+                    "completion": {"completionItem": {
+                        "snippetSupport": True,
+                        "insertReplaceSupport": True,
+                        "resolveSupport": {"properties": ["documentation", "detail", "additionalTextEdits"]},
+                    }},
+                },
             },
             "initializationOptions": {
                 "cargo": {"targetDir": str(ROOT / "target")},
@@ -208,8 +237,165 @@ class ViewEditorTests(unittest.TestCase):
 
     def completions(self, needle, source):
         result = self.query("completion", needle, source=source, end=True)
-        items = result.get("items", []) if isinstance(result, dict) else result or []
+        items = result.get("items") or [] if isinstance(result, dict) else result or []
         return {item["label"].split("(")[0].strip() for item in items}
+
+    def completion_item(self, label, source, needle):
+        result = self.query("completion", needle, source=source, end=True)
+        items = result.get("items") or [] if isinstance(result, dict) else result or []
+        found = [item for item in items if item["label"] == label or item["label"].startswith(label + " ")]
+        self.assertTrue(found, "Missing " + label + ": " + repr([item["label"] for item in items]))
+        return found[0]
+
+    def apply_completion(self, source, item):
+        edits = [item["textEdit"]] + item.get("additionalTextEdits", [])
+        def offset(pos):
+            lines = source.splitlines(keepends=True)
+            return sum(map(len, lines[:pos["line"]])) + len(
+                lines[pos["line"]].encode("utf-16-le")[:pos["character"] * 2].decode("utf-16-le")
+            )
+        def edit_range(edit):
+            return edit.get("range") or edit.get("replace") or edit["insert"]
+        result = source
+        for edit in sorted(edits, key=lambda edit: offset(edit_range(edit)["start"]), reverse=True):
+            text = edit["newText"].replace("$0", "")
+            if edit is item["textEdit"] and item.get("insertTextFormat") == 2:
+                import re
+                text = re.sub(r"\\([\\$}])", r"\1", text)
+            start, end = (offset(edit_range(edit)[key]) for key in ("start", "end"))
+            result = result[:start] + text + result[end:]
+        return result
+
+    def test_all_builtin_tag_shapes(self):
+        paired = ["Block", "Div", "Form", "Text", "H1", "H2", "H3", "H4", "H5", "H6", "Paragraph", "Link", "A", "Routes", "ParentRoute", "CodeBlock", "OrderedList", "UnorderedList", "ListItem", "Table", "TableHead", "TableBody", "TableRow", "TableCell", "Button"]
+        leaves = ["Input", "TextArea", "Image", "ProgressBar", "Markdown", "Outlet", "Route"]
+        for name in paired + leaves:
+            with self.subTest(component=name):
+                source = SOURCE.replace('<Greeting title={person.name.clone()} />', '<' + name)
+                item = self.completion_item(name, source, '            <' + name)
+                expected = '<' + name + '>$0</' + name + '>' if name in paired else '<' + name + ' $0 />'
+                self.assertEqual(item["textEdit"]["newText"], expected)
+                result = self.apply_completion(source, item)
+                self.assertNotIn("<<", result)
+
+    def test_custom_children_tag_shapes(self):
+        for name in ["Panel", "RepeatPanel", "MutPanel", "DefaultPanel"]:
+            with self.subTest(component=name):
+                source = SOURCE.replace('<Greeting title={person.name.clone()} />', name[:3])
+                item = self.completion_item(name, source, '            ' + name[:3])
+                self.assertEqual(item["textEdit"]["newText"], '<' + name + '>$0</' + name + '>')
+                result = self.apply_completion(source, item)
+                result = result.replace('<' + name + '></' + name + '>', '<' + name + '><Text>"Child"</Text></' + name + '>')
+                self.check_source(result)
+
+    def test_aliased_tag_snippet(self):
+        source = SOURCE.replace('mod extra;', 'mod extra;\nuse extra::Panel as Wrapper;')
+        source = source.replace('<Greeting title={person.name.clone()} />', '<Wrap')
+        item = self.completion_item("Wrapper", source, "<Wrap")
+        self.assertEqual(item["textEdit"]["newText"], "<Wrapper>$0</Wrapper>")
+
+    def test_unsaved_children_metadata(self):
+        source = SOURCE.replace('#[prop(into)] title: String,', '#[prop(into)] title: String, children: Children,', 1)
+        source = source.replace('<Greeting title={person.name.clone()} />', '<Gree')
+        item = self.completion_item("Greeting", source, "<Gree")
+        self.assertEqual(item["textEdit"]["newText"], "<Greeting>$0</Greeting>")
+
+    def test_existing_tags_and_attributes(self):
+        for original, expected in [
+            ('<For />', '<Form></Form>'),
+            ('<For>', '<Form></Form>'),
+            ('<For class="panel" />', '<Form class="panel"></Form>'),
+            ('<For class="panel"><Text>"Nested"</Text></For>', '<Form class="panel"><Text>"Nested"</Text></Form>'),
+            ('<For><Text>"Nested"</Text></Form>', '<Form><Text>"Nested"</Text></Form>'),
+        ]:
+            with self.subTest(original=original):
+                source = SOURCE.replace('<Greeting title={person.name.clone()} />', original)
+                item = self.completion_item("Form", source, '<For')
+                result = self.apply_completion(source, item)
+                self.assertIn(expected, result)
+                self.assertEqual(result.count('</Form>'), 1)
+
+    def test_resolve_keeps_tag_snippet(self):
+        source = SOURCE.replace('<Greeting title={person.name.clone()} />', '<For><Text>"Child"</Text></For>')
+        item = self.completion_item("Form", source, "<For")
+        resolved = self.client.request("completionItem/resolve", item)
+        self.assertEqual(resolved["textEdit"], item["textEdit"])
+        self.assertEqual(resolved.get("data"), item.get("data"))
+        result = self.apply_completion(source, resolved)
+        self.assertIn('<Form><Text>"Child"</Text></Form>', result)
+        self.check_source(result)
+
+    def test_lazy_resolve_in_empty_markup(self):
+        source = SOURCE.replace('<Greeting title={person.name.clone()} />', '')
+        result = self.query("completion", '<Div>\n            ', source=source, end=True)
+        items = result.get("items") or [] if isinstance(result, dict) else result or []
+        item = next(item for item in items if item["label"] == "Form")
+        resolved = self.client.request("completionItem/resolve", item)
+        self.assertEqual(resolved["textEdit"]["newText"], "<Form>$0</Form>")
+        self.assertIn('<Form></Form>', self.apply_completion(source, resolved))
+
+    def test_lazy_resolve_nonmatching_candidate(self):
+        source = SOURCE.replace('<Greeting title={person.name.clone()} />', '<Pan')
+        item = self.completion_item("Form", source, "<Pan")
+        resolved = self.client.request("completionItem/resolve", item)
+        self.assertEqual(resolved["textEdit"]["newText"], "<Form>$0</Form>")
+        self.assertIn('<Form></Form>', self.apply_completion(source, resolved))
+
+    def test_rust_expression_types_are_not_tags(self):
+        source = SOURCE.replace('<Greeting title={person.name.clone()} />', '{Pane}')
+        item = self.completion_item("Panel", source, "{Pane")
+        self.assertFalse(item["textEdit"]["newText"].startswith('<'))
+
+    def test_closing_tag_completion_stays_a_name(self):
+        source = SOURCE.replace('</Div>', '</Di')
+        item = self.completion_item("Div", source, "</Di")
+        self.assertEqual(item["textEdit"]["newText"], "Div")
+
+    def test_form_tag_snippet(self):
+        source = SOURCE.replace('<Greeting title={person.name.clone()} />', '<For')
+        item = self.completion_item("Form", source, "<For")
+        self.assertEqual(item["textEdit"]["newText"], "<Form>$0</Form>")
+        self.assertEqual(item["insertTextFormat"], 2)
+
+    def test_completion_errors_keep_jsonrpc_error_shape(self):
+        request_id = "invalid-completion-test"
+        self.client._write({"jsonrpc": "2.0", "id": request_id, "method": "textDocument/completion", "params": {
+            "textDocument": {"uri": "not a URI"}, "position": {"line": 0, "character": 0},
+        }})
+        while True:
+            message = self.client.messages.get(timeout=30)
+            if message.get("id") == request_id:
+                self.assertIn("error", message)
+                self.assertNotIn("result", message)
+                break
+            if "method" in message:
+                self.client.notifications.append(message)
+
+    def test_completion_before_existing_tag_name(self):
+        source = SOURCE.replace('<Greeting title={person.name.clone()} />', '<  For />')
+        item = self.completion_item("Form", source, "< ")
+        resolved = self.client.request("completionItem/resolve", item)
+        self.assertIn('<Form></Form>', self.apply_completion(source, resolved))
+
+    def test_input_tag_snippet(self):
+        source = SOURCE.replace('<Greeting title={person.name.clone()} />', '<Inp')
+        item = self.completion_item("Input", source, "<Inp")
+        self.assertEqual(item["textEdit"]["newText"], "<Input $0 />")
+
+    def test_bare_component_tag_snippet(self):
+        source = SOURCE.replace('<Greeting title={person.name.clone()} />', 'Gree')
+        item = self.completion_item("Greeting", source, "            Gree")
+        self.assertEqual(item["textEdit"]["newText"], "<Greeting $0 />")
+
+    def test_macro_braces_snippet(self):
+        source = SOURCE.replace('fn main() {', 'fn main() {\n    let _ = vie;')
+        result = self.query("completion", "fn main() {\n    let _ = vie", source=source, end=True)
+        items = result.get("items") or [] if isinstance(result, dict) else result or []
+        item = next((item for item in items if item["label"].startswith("view!")), None)
+        self.assertIsNotNone(item, repr([item["label"] for item in items]))
+        self.assertEqual(item["textEdit"]["newText"], "view! { $0 }")
+        result = self.apply_completion(source, item).replace('view! {  }', 'view! { <Text>"Macro"</Text> }')
+        self.check_source(result)
 
     def test_custom_prop_completion(self):
         source = SOURCE.replace('title={person.name.clone()}', 'tit')

@@ -1,10 +1,12 @@
-//! Rust-analyzer proxy completing rename across Leptatui's generated APIs.
+//! Rust-analyzer proxy providing tag snippets and complete component refactoring.
 //!
 //! # Modules
 //!
+//! - [`completion`] — Macro and component tag snippets.
 //! - [`protocol`] — Framed JSON-RPC transport.
 //! - [`source`] — Rust identifier indexing and source position conversion.
 
+mod completion;
 mod protocol;
 mod source;
 
@@ -51,6 +53,10 @@ struct Proxy {
     active: Option<Value>,
     /// Whether the client cancelled the active request.
     cancelled: bool,
+    /// Whether the client can expand LSP snippet tab stops.
+    snippets: bool,
+    /// Source contexts for deferred tag completions from the latest response.
+    completion_contexts: HashMap<String, completion::Snapshot>,
 }
 
 impl Proxy {
@@ -82,7 +88,12 @@ impl Proxy {
                 Incoming::Client(message) => {
                     if matches!(
                         message["method"].as_str(),
-                        Some("textDocument/rename" | "textDocument/references")
+                        Some(
+                            "textDocument/rename"
+                                | "textDocument/references"
+                                | "textDocument/completion"
+                                | "completionItem/resolve"
+                        )
                     ) {
                         self.pending.push_back(message);
                         continue;
@@ -116,6 +127,10 @@ impl Proxy {
         let params = &message["params"];
         match message["method"].as_str().unwrap_or("") {
             "initialize" => {
+                self.snippets = params
+                    .pointer("/capabilities/textDocument/completion/completionItem/snippetSupport")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
                 if let Some(folders) = params["workspaceFolders"].as_array() {
                     for folder in folders {
                         self.add_root(&folder["uri"]);
@@ -461,7 +476,7 @@ fn main() -> io::Result<()> {
     }
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         println!(
-            "leptatui-lsp [rust-analyzer runtime options]\n\nRuns rust-analyzer with complete Leptatui component/prop rename and references.\nSet RUST_ANALYZER to override the rust-analyzer executable."
+            "leptatui-lsp [rust-analyzer runtime options]\n\nRuns rust-analyzer with Leptatui tag snippets and complete component/prop rename and references.\nSet RUST_ANALYZER to override the rust-analyzer executable."
         );
         return Ok(());
     }
@@ -512,6 +527,8 @@ fn main() -> io::Result<()> {
         pending: VecDeque::new(),
         active: None,
         cancelled: false,
+        snippets: false,
+        completion_contexts: HashMap::new(),
     };
     let result = (|| {
         loop {
@@ -531,6 +548,12 @@ fn main() -> io::Result<()> {
                     ) && message.get("id").is_some()
                     {
                         proxy.rename(message)?;
+                    } else if matches!(
+                        message["method"].as_str(),
+                        Some("textDocument/completion" | "completionItem/resolve")
+                    ) && message.get("id").is_some()
+                    {
+                        proxy.complete(message)?;
                     } else {
                         protocol::write(&mut proxy.server, &message)?;
                     }

@@ -7,7 +7,7 @@ use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
 use quote::quote;
 use syn::parse::{ParseStream, Parser};
 
-use super::{attr::Attr, catalog};
+use super::attr::Attr;
 
 /// Emits tag and attribute references without requiring well-formed markup.
 ///
@@ -30,6 +30,9 @@ pub(super) fn references(input: TokenStream) -> TokenStream {
             output.extend(expression_reference(group.stream()));
         }
         if !punct(&tokens[index], '<') {
+            if let TokenTree::Ident(name) = &tokens[index] {
+                output.extend(tag_reference(name, &[]));
+            }
             index += 1;
             continue;
         }
@@ -93,6 +96,12 @@ pub(super) fn references(input: TokenStream) -> TokenStream {
         }
         output.extend(tag_reference(&name, &attrs));
     }
+    if output.is_empty() {
+        output.extend(tag_reference(
+            &Ident::new("__leptatui_incomplete", Span::mixed_site()),
+            &[],
+        ));
+    }
     quote! {
         #[allow(unexpected_cfgs)]
         {
@@ -120,16 +129,10 @@ pub(super) fn references(input: TokenStream) -> TokenStream {
 /// A [`TokenStream`] of type and field probes with the original source spans.
 fn tag_reference(name: &Ident, attrs: &[Ident]) -> TokenStream {
     let leptatui = crate::crate_path::leptatui();
-    let ty = if catalog::is_builtin(&name.to_string()) {
-        quote! { #leptatui::__ide::#name }
-    } else {
-        quote! { #name }
-    };
-    let props = if catalog::is_builtin(&name.to_string()) {
-        ty.clone()
-    } else {
-        quote! { <#ty as #leptatui::__ide::__Component>::Props }
-    };
+    // Keep the expansion shape identical for an exact built-in name and the
+    // speculative identifier rust-analyzer inserts while requesting completion.
+    let ty = quote! { #name };
+    let props = quote! { <#ty as #leptatui::__ide::__Component>::Props };
     // Preserve the field-access shape when the first attribute is inserted.
     // The synthetic field has no source identifier to diagnose or rename.
     let fields = if attrs.is_empty() {

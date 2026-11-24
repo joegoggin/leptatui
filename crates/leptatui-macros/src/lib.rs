@@ -37,6 +37,12 @@ pub fn component(args: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// Data expressions track the signals they read; event callbacks are retained
 /// and execute only for events. Updates preserve compatible control state.
+/// Construct terminal markup with `view! { ... }`.
+///
+/// # View syntax
+///
+/// Use brace-delimited terminal markup.
+#[rust_analyzer::macro_style(braces)]
 #[proc_macro]
 pub fn view(input: TokenStream) -> TokenStream {
     view::expand(input)

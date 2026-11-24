@@ -60,6 +60,11 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
         }
     }
 
+    let accepts_children = props.iter().any(|prop| {
+        prop.ident == "children"
+            && matches!(prop.ty.as_ref(), syn::Type::Path(path) if path.path.segments.last().is_some_and(|segment| matches!(segment.ident.to_string().as_str(), "Children" | "ChildrenFn" | "ChildrenMut")))
+    });
+    let markup_doc = crate::view::catalog::markup_docs(accepts_children);
     let semantic_props = if props.is_empty() {
         quote! { () }
     } else {
@@ -91,6 +96,7 @@ pub(super) fn component(input_fn: ItemFn) -> syn::Result<TokenStream> {
 
         #[allow(non_camel_case_types)]
         #(#attrs)*
+        #[doc = #markup_doc]
         #vis struct #ident {
             __leptatui_owner: #leptatui::prelude::Owner,
             __leptatui_view: #leptatui::AnyView,

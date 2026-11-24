@@ -6,7 +6,9 @@ unfinished markup. No alternative markup syntax is required.
 
 | Feature | Provider |
 | --- | --- |
-| Built-in and custom component completion | rust-analyzer |
+| Built-in and custom component names | rust-analyzer |
+| Complete paired/self-closing tag snippets | `leptatui-lsp` proxy |
+| Brace-delimited `view! { }` completion | rust-analyzer and `leptatui-lsp` |
 | Component props and built-in attributes | rust-analyzer |
 | Rust fields, methods, and values inside expressions | rust-analyzer |
 | Hover documentation and definitions | rust-analyzer |
@@ -19,6 +21,32 @@ symbols that resolve to the same original declaration. A rename includes markup,
 component-local prop bindings, builder methods, and generated props type names.
 Comments and strings are excluded from the identifier index. Unsaved documents
 participate, and an edit during rename invalidates the result so it can be retried.
+
+## Completion snippets
+
+Accepting `view!` completion inserts `view! { }` with the cursor between the
+braces. Inside markup, component completion inserts the full tag structure:
+
+```text
+Form or <Form    → <Form>$0</Form>
+Input or <Input  → <Input $0 />
+```
+
+Here `$0` marks the snippet cursor; it is not inserted literally. Paired tags
+place the cursor in the body. Self-closing tags put a space on either side of
+the cursor so you can add props. Required props are left for you to enter.
+
+Built-ins accepting child views or text receive paired tags. Leaf controls,
+images, Markdown files, outlets, and leaf routes receive self-closing tags.
+Custom components receive paired tags when they declare a `children` prop of
+type `Children`, `ChildrenFn`, or `ChildrenMut`, including qualified type names.
+A defaulted children prop still counts. Other custom components receive
+self-closing tags. The resolved component contract follows imports and aliases.
+
+Completion reuses existing delimiters and closing tags and preserves attributes
+and child content. Rust expressions, attribute values, strings, and comments
+keep their normal completion behavior. Clients without snippet support receive
+plain tag text.
 
 ## Install
 
@@ -74,7 +102,7 @@ Use `LEPTATUI_LSP=rust-analyzer` to run the same cases against the native server
 and inspect the gaps covered by the proxy. The suite uses temporary applications
 and applies rename edits before compiling the result.
 
-The tested baseline is rust-analyzer/Rust 1.92.0. Formatting, automatic closing-tag
-insertion, and language services inside arbitrary strings are outside this
-feature. Diagnostics still reject invalid markup; recovery preserves semantic
+The tested baseline is rust-analyzer/Rust 1.92.0. Formatting, automatically adding
+closing tags while typing outside completion, and language services inside
+arbitrary strings are outside this feature. Diagnostics still reject invalid markup; recovery preserves semantic
 information around the error rather than accepting that markup as valid Rust.

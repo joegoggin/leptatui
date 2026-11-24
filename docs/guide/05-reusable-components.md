@@ -111,6 +111,7 @@ fn NotesApp() -> impl IntoView {
         }
         KeyControl::Pass
     });
+
     let title = RwSignal::new(String::from("First note"));
     let body = RwSignal::new(String::from("Learn to build a terminal application."));
     let status = RwSignal::new(String::from("Editing"));
@@ -180,7 +181,11 @@ fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
 
 #[component]
 fn Panel(children: Children) -> impl IntoView {
-    view! { <Block><Div>{children}</Div></Block> }
+    view! {
+        <Block>
+            <Div>{children}</Div>
+        </Block>
+    }
 }
 
 #[component]
