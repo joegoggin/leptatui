@@ -11,7 +11,7 @@ extension interfaces; internal generated-code hooks are excluded.
 | Feature and main APIs | Learn | Reference / source | Example |
 | --- | --- | --- | --- |
 | Startup, terminal lifecycle, `App`, `AppControl`, runtime `Result`/`Error` | [Getting started](../guide/01-getting-started.md) | [App API](../../crates/leptatui/src/app/mod.rs) | `hello_world` |
-| `#[component]`, `view!`, builders, `IntoView` | [Building a screen](../guide/02-building-a-screen.md) | [Components](components.md) | `hello_world` |
+| `#[component]`, `view!`, `IntoView` | [Building a screen](../guide/02-building-a-screen.md) | [Components](components.md) | `hello_world` |
 | Signals, tracked/untracked reads, memos, effects, reactive redraw | [State and interaction](../guide/03-state-and-interaction.md) | [Prelude exports](../../crates/leptatui/src/prelude.rs) | `counter`, `async_redraw` |
 | Keyboard handlers, `KeyControl`, focus, pointer activation | [State and interaction](../guide/03-state-and-interaction.md) | [Controls](components.md) | `counter`, `standard_library_showcase` |
 | Buttons, `Input`, `TextArea`, forms, editable state and Vim modes | [Editing notes](../guide/04-editing-notes.md) | [Controls and editing keys](components.md) | `controlled_form` |

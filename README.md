@@ -4,7 +4,9 @@ Leptatui is an experimental Rust library for building interactive terminal
 applications. It combines Leptos reactive state, Ratatui rendering, and
 Crossterm input in a managed terminal runtime.
 
-Describe your interface with components and `view!` markup or Rust builders.
+Describe your interface with components and `view!` markup, and style it with
+`stylesheet!`. Direct view and style builders are low-level escape hatches;
+using them for ordinary application UI is an anti-pattern.
 Signals keep displayed data up to date, and the runtime manages input, redraws,
 and restoring the terminal when your app exits.
 

@@ -12,17 +12,23 @@
 //! ```
 //! use leptatui::prelude::*;
 //!
-//! let inline = TuiStyle::new()
-//!     .display(Display::Flex)
-//!     .size(LayoutSize::new(
-//!         Dimension::from(Length::percent(100.0)),
-//!         Dimension::from(Length::vh(50.0)),
-//!     ))
-//!     .gap(Axes::all(Length::cells(1.0)))
-//!     .overflow(Axes::new(Overflow::Hidden, Overflow::Auto));
-//!
-//! let panel = div((text("Main"), text("Sidebar"))).with_inline_style(inline);
-//! let _ = panel;
+//! #[component]
+//! fn LayoutPanel() -> impl IntoView {
+//!     stylesheet! {
+//!         .layout-panel {
+//!             display: Display::Flex;
+//!             size: LayoutSize::new(
+//!                 Dimension::from(Length::percent(100.0)),
+//!                 Dimension::from(Length::vh(50.0)),
+//!             );
+//!             gap: Axes::all(Length::cells(1.0));
+//!             overflow: Axes::new(Overflow::Hidden, Overflow::Auto);
+//!         }
+//!     }
+//!     view! {
+//!         <Div class="layout-panel"><Text>"Main"</Text><Text>"Sidebar"</Text></Div>
+//!     }
+//! }
 //! ```
 //!
 //! General [`Dimension::MinContent`] and [`Dimension::MaxContent`] values

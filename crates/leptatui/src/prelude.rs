@@ -24,7 +24,7 @@
 //! }
 //! ```
 //!
-//! Semantic document builders include headings, paragraphs, nested ordered or
+//! Semantic document tags include headings, paragraphs, nested ordered or
 //! unordered lists, responsive tables, syntax-highlighted code blocks, and
 //! infallible in-memory or explicit path-based Markdown readers. Low-level
 //! render metadata and generated-code hooks stay outside the default import.

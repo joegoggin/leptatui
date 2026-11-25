@@ -19,6 +19,15 @@ subdirectories group related implementations. Generic pass-through layers such
 as `model`, `utils`, or `expansion` are avoided; a directory either owns direct
 source files or is flattened into its parent.
 
+## Teaching examples
+
+Use `view!` for application structure and `stylesheet!` for styling in guides,
+references, rustdoc, and runnable examples. Direct constructors and fluent style
+builders are an anti-pattern for ordinary application UI. Use tracked children
+in markup for conditional content. Keep helpers without macro equivalents
+inside markup, and explain their purpose. Inline style builders are appropriate
+only when an example specifically teaches inline precedence or `!important`.
+
 ## Quality Gates
 
 CI validates the full workspace with the same commands expected for local

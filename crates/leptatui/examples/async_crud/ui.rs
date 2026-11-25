@@ -49,6 +49,9 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
         refresh: set_refresh,
     };
 
+    let tickets = context.tickets.clone();
+    let mutation = context.mutation.clone();
+
     provide_context(context.clone());
 
     let context_for_keys = context.clone();
@@ -111,8 +114,16 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
         <Block class="crud-screen">
             <Div>
                 <Text class="crud-title">"Async CRUD mock API"</Text>
-                <TicketList />
-                <MutationStatus />
+                {move || match tickets.get() {
+                    None => view! { <Text class="pending">"Loading tickets from mock API..."</Text> }.into_view(),
+                    Some(Ok(tickets)) => render_ticket_list(tickets),
+                    Some(Err(error)) => view! { <Text class="error">{format!("Load error: {error}")}</Text> }.into_view(),
+                }}
+                {move || render_mutation_status(
+                    mutation.is_pending(),
+                    mutation.input().get(),
+                    mutation.value().get(),
+                )}
                 <CrudControls />
                 <Text class="muted">
                     "n create | u update first | r reload | l fail load | e fail action | q quit"
@@ -120,44 +131,6 @@ pub(super) fn AsyncCrudDemo() -> impl IntoView {
             </Div>
         </Block>
     }
-}
-
-/// Renders the current ticket-list resource state.
-///
-/// # Returns
-///
-/// A [`View`] showing pending, ready, or error content for the ticket list.
-#[component]
-fn TicketList() -> impl IntoView {
-    let context = expect_context::<CrudContext>();
-
-    dynamic(move || match context.tickets.get() {
-        None => text("Loading tickets from mock API...")
-            .with_classes("pending")
-            .into_view(),
-        Some(Ok(tickets)) => render_ticket_list(tickets),
-        Some(Err(error)) => text(format!("Load error: {error}"))
-            .with_classes("error")
-            .into_view(),
-    })
-}
-
-/// Renders the current mutation action state.
-///
-/// # Returns
-///
-/// A [`View`] showing idle, pending, success, or error mutation status.
-#[component]
-fn MutationStatus() -> impl IntoView {
-    let context = expect_context::<CrudContext>();
-
-    dynamic(move || {
-        render_mutation_status(
-            context.mutation.is_pending(),
-            context.mutation.input().get(),
-            context.mutation.value().get(),
-        )
-    })
 }
 
 /// Renders button controls for demo mutations and reloads.
@@ -223,22 +196,17 @@ fn CrudControls() -> impl IntoView {
 fn render_ticket_list(tickets: Vec<Ticket>) -> AnyView {
     let mut rows = Vec::with_capacity(tickets.len() + 1);
     rows.push(
-        text(format!("Tickets ({})", tickets.len()))
-            .with_classes("section-title ready")
+        view! { <Text class="section-title ready">{format!("Tickets ({})", tickets.len())}</Text> }
             .into_view(),
     );
 
     if tickets.is_empty() {
-        rows.push(
-            text("No tickets returned")
-                .with_classes("muted")
-                .into_view(),
-        );
+        rows.push(view! { <Text class="muted">"No tickets returned"</Text> }.into_view());
     } else {
         rows.extend(tickets.into_iter().map(render_ticket));
     }
 
-    div(rows).with_classes("ticket-list").into_view()
+    view! { <Div class="ticket-list">{rows}</Div> }.into_view()
 }
 
 /// Renders one ticket row.
@@ -256,13 +224,12 @@ fn render_ticket(ticket: Ticket) -> AnyView {
         TicketStatus::Done => "ticket-done",
     };
 
-    text(format!(
+    view! { <Text class={class}>{format!(
         "#{} [{}] {}",
         ticket.id,
         ticket.status.label(),
         ticket.title
-    ))
-    .with_classes(class)
+    )}</Text> }
     .into_view()
 }
 
@@ -288,18 +255,18 @@ fn render_mutation_status(
             .map(TicketMutation::label)
             .unwrap_or("mutation");
 
-        return text(format!("Mutation pending: {label}"))
-            .with_classes("pending")
+        return view! { <Text class="pending">{format!("Mutation pending: {label}")}</Text> }
             .into_view();
     }
 
     match value {
-        Some(Ok(result)) => text(format!("Last mutation: {}", result.label()))
-            .with_classes("success")
-            .into_view(),
-        Some(Err(error)) => text(format!("Mutation error: {error}"))
-            .with_classes("error")
-            .into_view(),
-        None => text("Mutation idle").with_classes("muted").into_view(),
+        Some(Ok(result)) => {
+            view! { <Text class="success">{format!("Last mutation: {}", result.label())}</Text> }
+                .into_view()
+        }
+        Some(Err(error)) => {
+            view! { <Text class="error">{format!("Mutation error: {error}")}</Text> }.into_view()
+        }
+        None => view! { <Text class="muted">"Mutation idle"</Text> }.into_view(),
     }
 }

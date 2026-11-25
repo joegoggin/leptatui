@@ -204,17 +204,7 @@ fn StandardLibraryShowcase() -> impl IntoView {
         <Block class="showcase-shell">
             <Div>
                 <Text class="title">"Standard library showcase"</Text>
-                {move || {
-                    let current_name = name.get();
-                    let current_notes = notes.get();
-                    let current_progress = progress.get();
-                    text(
-                            status
-                                .get()
-                                .label(&current_name, &current_notes, current_progress),
-                        )
-                        .with_classes("status")
-                }}
+                <Text class="status">{status.get().label(&name.get(), &notes.get(), progress.get())}</Text>
                 <Form
                     on_submit=move || {
                         status.set(ShowcaseStatus::Submitted);
@@ -287,12 +277,11 @@ fn StandardLibraryShowcase() -> impl IntoView {
                 <Text class="caption">
                     "Image sizes come from stylesheet classes; supported terminals render graphics and other targets show fallback text."
                 </Text>
-                {move || {
-                    let current_progress = progress.get();
-                    progress_bar(current_progress)
-                        .label(format!("{:.0}% complete", current_progress * 100.0))
-                        .with_classes("meter")
-                }}
+                <ProgressBar
+                    value=progress.get()
+                    label={format!("{:.0}% complete", progress.get() * 100.0)}
+                    class="meter"
+                />
                 <Text class="help">
                     "Tab/Shift+Tab or pointer movement focuses controls. Enter/Space or left click activates links and buttons; the mouse wheel scrolls. i/a/I/A insert, Esc normal/cancel, jk leaves insert, v/V select, x/d/y/p/u/Ctrl+R edit, Enter submits notes in normal mode; Ctrl+Enter submits in either mode. q quits."
                 </Text>

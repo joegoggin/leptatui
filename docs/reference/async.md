@@ -54,28 +54,26 @@ fn TodoApp() -> impl IntoView {
     });
 
     provide_context(Todos {
-        items,
+        items: items.clone(),
         create,
         refresh: set_refresh,
     });
 
     view! {
         <Div>
-            <TodoList />
+            {move || match items.get() {
+                Some(Ok(items)) => {
+                    let rows = items.into_iter()
+                        .map(|item| view! { <Text>{item}</Text> })
+                        .collect::<Vec<_>>();
+                    view! { <Div>{rows}</Div> }.into_view()
+                },
+                Some(Err(error)) => view! { <Text>{format!("Load failed: {error}")}</Text> }.into_view(),
+                None => view! { <Text>"Loading todos..."</Text> }.into_view(),
+            }}
             <TodoActions />
         </Div>
     }
-}
-
-#[component]
-fn TodoList() -> impl IntoView {
-    let todos = expect_context::<Todos>();
-
-    dynamic(move || match todos.items.get() {
-        Some(Ok(items)) => div(items.into_iter().map(text).collect::<Vec<_>>()),
-        Some(Err(error)) => text(format!("Load failed: {error}")),
-        None => text("Loading todos..."),
-    })
 }
 
 #[component]
@@ -84,8 +82,12 @@ fn TodoActions() -> impl IntoView {
     let create = todos.create.clone();
     let reload = todos.refresh;
 
+    stylesheet! {
+        .actions { display: Display::Flex; }
+    }
+
     view! {
-        <Div style={TuiStyle::new().display(Display::Flex)}>
+        <Div class="actions">
             <Button on_press=move || {
                 create.dispatch(String::from("Review async state"));
             }>

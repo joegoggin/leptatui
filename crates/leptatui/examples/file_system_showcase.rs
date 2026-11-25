@@ -869,7 +869,6 @@ fn FileSystemShowcase(#[prop(static)] root: PathBuf) -> ViewResult<impl IntoView
     let root = filesystem.root().display().to_string();
     let view_state = state.clone();
     let view_active = active.clone();
-    let walkthrough = dynamic(move || render_walkthrough(&view_state, &view_active));
 
     view! {
         <Div class="screen">
@@ -881,7 +880,7 @@ fn FileSystemShowcase(#[prop(static)] root: PathBuf) -> ViewResult<impl IntoView
             <Text class="help">
                 "n/Enter next or run | b inspect previous | r retry failure | R reset | f failure tour | q quit"
             </Text>
-            {walkthrough}
+            {move || render_walkthrough(&view_state, &view_active)}
         </Div>
     }
 }
@@ -1054,54 +1053,47 @@ fn render_walkthrough(
         .is_some_and(|task| task.operation().is_pending());
     let mut views = Vec::new();
     views.push(
-        text(format!(
+        view! { <Text class="selected">{format!(
             "{} · {}/{} completed",
             state.tour.name(),
             state.frontier,
             steps.len()
-        ))
-        .with_classes("selected")
+        )}</Text> }
         .into_view(),
     );
     if let Some(step) = steps.get(state.selected) {
         views.push(
-            text(format!(
+            view! { <Text class="help">{format!(
                 "Selected: {} — {}",
                 step.label(),
                 step.explanation()
-            ))
-            .with_classes("help")
+            )}</Text> }
             .into_view(),
         );
     }
     if state.resetting {
         views.push(
-            text("Resetting the walkthrough directory...")
-                .with_classes("pending")
+            view! { <Text class="pending">"Resetting the walkthrough directory..."</Text> }
                 .into_view(),
         );
-    } else if let Some(error) = &state.reset_error {
+    } else if let Some(error) = state.reset_error.clone() {
         views.push(
-            text(format!("Reset failed: {error} · press R to retry"))
-                .with_classes("failed")
+            view! { <Text class="failed">{format!("Reset failed: {error} · press R to retry")}</Text> }
                 .into_view(),
         );
     } else if state.is_complete() && state.tour == TourKind::Success {
         views.push(
-            text("Success tour complete · press f for the expected failure tour or R to restart")
-                .with_classes("passed")
+            view! { <Text class="passed">"Success tour complete · press f for the expected failure tour or R to restart"</Text> }
                 .into_view(),
         );
     } else if state.is_complete() {
         views.push(
-            text("Expected failure tour complete · press R to restart")
-                .with_classes("passed")
+            view! { <Text class="passed">"Expected failure tour complete · press R to restart"</Text> }
                 .into_view(),
         );
     } else if pending {
         views.push(
-            text("Current operation is pending; advancement waits for its result.")
-                .with_classes("pending")
+            view! { <Text class="pending">"Current operation is pending; advancement waits for its result."</Text> }
                 .into_view(),
         );
     } else if state
@@ -1110,14 +1102,12 @@ fn render_walkthrough(
         .is_some_and(|record| record.status == StepStatus::Failed)
     {
         views.push(
-            text("The current step returned an unexpected result · press r to retry")
-                .with_classes("failed")
+            view! { <Text class="failed">"The current step returned an unexpected result · press r to retry"</Text> }
                 .into_view(),
         );
     } else {
         views.push(
-            text("Press n or Enter to run the selected unlocked step.")
-                .with_classes("help")
+            view! { <Text class="help">"Press n or Enter to run the selected unlocked step."</Text> }
                 .into_view(),
         );
     }
@@ -1155,9 +1145,9 @@ fn render_walkthrough(
                 StepStatus::Failed => "failed",
             }
         };
-        views.push(text(line).with_classes(class).into_view());
+        views.push(view! { <Text class={class}>{line}</Text> }.into_view());
     }
-    div(views).into_view()
+    view! { <Div>{views}</Div> }.into_view()
 }
 
 /// Chooses an isolated showcase root and runs the terminal application.

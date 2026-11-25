@@ -7,6 +7,10 @@ how to operate each example.
 Each example includes responsive stylesheet rules for terminals at or below 60
 columns, which is useful when running over SSH from a phone.
 
+Build application views with `view!` and declare their styles with `stylesheet!`.
+These examples use the macros as the standard application authoring interface.
+The cascade showcase uses inline styles only to demonstrate precedence.
+
 ## Hello World
 
 Run the Hello World example:
@@ -161,7 +165,7 @@ unordered lists, a responsive table with aligned cells, and a
 syntax-highlighted code block with line numbers. Scroll with `j`/`k`, Page Up
 and Page Down, `gg`, or `G`. Press `q` to quit.
 
-For document builders, markup, and presentation options, see
+For document markup and presentation options, see
 [Documents and media](../../../docs/guide/11-documents-and-media.md) and the
 [component reference](../../../docs/reference/components.md#semantic-documents).
 

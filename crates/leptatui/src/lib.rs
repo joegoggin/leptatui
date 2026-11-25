@@ -16,7 +16,7 @@
 //! - `markdown` — CommonMark parsing and semantic view conversion.
 //! - [`route`] — Signal-backed route state helpers for page switches.
 //! - [`resource`] — Signal-backed async resource state helpers.
-//! - [`mod@view`] — Basic renderable view builders for hand-written terminal UI.
+//! - [`mod@view`] — Terminal view types and low-level construction interfaces.
 //! - [`prelude`] — Common imports for application code.
 //! - [`prop`] — Constant and deferred component data inputs.
 //! - [`style`] — Styling and spacing helpers built on Ratatui types.
@@ -24,6 +24,9 @@
 //!
 //! # Public API Shape
 //!
+//! Author application structure with [`macro@view`] and styles with
+//! [`macro@stylesheet`]. Direct constructors and fluent style builders are
+//! low-level escape hatches and an anti-pattern for ordinary application UI.
 //! Application code should normally import [`prelude`] and run a root component
 //! with `App::new(view).run().await`. Explicit module or top-level imports remain
 //! available for lower-level manual rendering and style inspection.
@@ -76,28 +79,30 @@
 //!
 //! [`DivView`] is the generic multi-child layout container and defaults to
 //! block flow. [`BlockView`] adds bordered single-child chrome while using the
-//! same computed layout path. Typed [`TuiStyle`] values and
-//! [`macro@stylesheet`] declarations configure block, flexbox, grid, overflow,
-//! positioning, stacking, and terminal-relative geometry without exposing
+//! same computed layout path. [`macro@stylesheet`] declarations configure block,
+//! flexbox, grid, overflow, positioning, stacking, and terminal-relative geometry
+//! without exposing
 //! layout-engine types.
 //!
 //! ```
 //! use leptatui::prelude::*;
 //!
-//! let layout = div((
-//!     text("Main"),
-//!     text("Sidebar"),
-//! ))
-//! .with_inline_style(
-//!     TuiStyle::new()
-//!         .display(Display::Flex)
-//!         .gap(Axes::all(Length::cells(1.0)))
-//!         .size(LayoutSize::new(
-//!             Dimension::from(Length::percent(100.0)),
-//!             Dimension::Auto,
-//!         )),
-//! );
-//! let _ = layout;
+//! #[component]
+//! fn Layout() -> impl IntoView {
+//!     stylesheet! {
+//!         .layout {
+//!             display: Display::Flex;
+//!             gap: Axes::all(Length::cells(1.0));
+//!             size: LayoutSize::new(
+//!                 Dimension::from(Length::percent(100.0)),
+//!                 Dimension::Auto,
+//!             );
+//!         }
+//!     }
+//!     view! {
+//!         <Div class="layout"><Text>"Main"</Text><Text>"Sidebar"</Text></Div>
+//!     }
+//! }
 //! ```
 //!
 //! Visible styleable views retain a [`LayoutGeometry`] snapshot containing
@@ -106,9 +111,8 @@
 //! cumulatively into terminal cells. See [`style`] for the complete typed
 //! vocabulary and current intrinsic-sizing differences.
 //!
-//! Standard components are available as builders such as [`input`],
-//! [`text_area`], [`form`], [`image()`], and [`progress_bar`] and as PascalCase
-//! tags in [`macro@view`]. `Input` and `TextArea` are controlled editable views:
+//! Use standard components as PascalCase tags in [`macro@view`]. `Input` and
+//! `TextArea` are controlled editable views:
 //! callers supply a [`RwSignal<String>`](leptos::prelude::RwSignal), which edits
 //! update automatically. `view!` tracks the bound signal while retaining editing
 //! state. An optional zero-argument `on_input` notification runs after each edit
@@ -118,8 +122,8 @@
 //! [`ImageSource`] values, renders through supported terminal graphics
 //! protocols, and falls back to deterministic text when graphics support is
 //! unavailable. `ProgressBar` renders a clamped `0.0..=1.0` gauge with an
-//! optional label. [`link`] creates a standalone URL or local-path control;
-//! the equivalent tag is `<Link href="https://example.com">"label"</Link>`.
+//! optional label. Use `<Link href="https://example.com">"label"</Link>`
+//! for a standalone URL or local-path control.
 //! Links receive focus with Tab or Shift+Tab and activate with Enter or Space.
 //! Moving the pointer over an interactive control focuses it, left-clicking a
 //! button or link activates it, and vertical or horizontal mouse-wheel events
@@ -127,108 +131,81 @@
 //!
 //! # Semantic Documents and Markdown
 //!
-//! Semantic headings are available through [`h1`] through [`h6`], and
-//! [`paragraph`] creates unmodified body text. [`code_block`] creates a
-//! bordered, width-aware source view with optional syntax highlighting through
-//! the terminal's ANSI palette and optional line numbers. [`ordered_list`] and
-//! [`unordered_list`] group block-oriented [`list_item`] values with terminal
-//! markers. [`table`] groups semantic table sections, rows, and aligned cells
+//! Use `H1` through `H6` for semantic headings and `Paragraph` for unmodified
+//! body text. `CodeBlock` creates a bordered, width-aware source view with
+//! optional syntax highlighting through
+//! the terminal's ANSI palette and optional line numbers. `OrderedList` and
+//! `UnorderedList` group block-oriented `ListItem` values with terminal
+//! markers. `Table` groups semantic table sections, rows, and aligned cells
 //! into a bordered responsive grid. These semantic views accept
 //! owned Ratatui rich text, wrap to the available width, and contribute their
 //! wrapped height to parent layouts. Code wraps instead of scrolling
 //! horizontally, unknown language tokens retain plain source, and table cells
 //! contain inline text rather than nested block views in the v1 API.
 //!
-//! Builder configuration methods set ordered-list starts, table-cell
-//! alignment, and code presentation:
+//! Use [`macro@view`] attributes for ordered-list starts, table-cell alignment,
+//! code presentation, and [`macro@stylesheet`] for semantic type selectors:
 //!
 //! ```
 //! use leptatui::prelude::*;
 //!
-//! let document = div((
-//!     h1("Guide"),
-//!     ordered_list([list_item((
-//!         paragraph("Parent item"),
-//!         unordered_list([list_item([paragraph("Nested item")])]),
-//!     ))])
-//!     .start(3),
-//!     table([
-//!         table_head([table_row([
-//!             table_cell("Component"),
-//!             table_cell("Status").alignment(CellAlignment::Center),
-//!         ])]),
-//!         table_body([table_row([
-//!             table_cell("CodeBlock"),
-//!             table_cell("Ready").alignment(CellAlignment::Right),
-//!         ])]),
-//!     ]),
-//!     code_block("fn main() {}")
-//!         .language("rust")
-//!         .line_numbers(true),
-//! ));
-//! # let _ = document;
-//! ```
-//!
-//! The [`macro@view`] and [`macro@stylesheet`] macros expose the same semantic
-//! structure and type selectors:
-//!
-//! ```
-//! use leptatui::prelude::*;
-//!
-//! let _styles = stylesheet! {
-//!     H1 { fg: Color::LightCyan; }
-//!     OrderedList { fg: Color::LightGreen; }
-//!     TableHead { fg: Color::LightCyan; }
-//!     CodeBlock { fg: Color::LightBlue; }
-//! };
-//! let document = view! {
-//!     <Div>
-//!         <H1>"Guide"</H1>
-//!         <OrderedList start=3>
-//!             <ListItem>
-//!                 <Paragraph>"Parent item"</Paragraph>
-//!                 <UnorderedList>
-//!                     <ListItem><Paragraph>"Nested item"</Paragraph></ListItem>
-//!                 </UnorderedList>
-//!             </ListItem>
-//!         </OrderedList>
-//!         <Table>
-//!             <TableHead>
-//!                 <TableRow>
-//!                     <TableCell>"Component"</TableCell>
-//!                     <TableCell alignment={CellAlignment::Center}>"Status"</TableCell>
-//!                 </TableRow>
-//!             </TableHead>
-//!             <TableBody>
-//!                 <TableRow>
-//!                     <TableCell>"CodeBlock"</TableCell>
-//!                     <TableCell alignment={CellAlignment::Right}>"Ready"</TableCell>
-//!                 </TableRow>
-//!             </TableBody>
-//!         </Table>
-//!         <CodeBlock language="rust" line_numbers=true>
-//!             "fn main() {}"
-//!         </CodeBlock>
-//!     </Div>
-//! };
-//! # let _ = document;
+//! #[component]
+//! fn Document() -> impl IntoView {
+//!     stylesheet! {
+//!         H1 { fg: Color::LightCyan; }
+//!         OrderedList { fg: Color::LightGreen; }
+//!         TableHead { fg: Color::LightCyan; }
+//!         CodeBlock { fg: Color::LightBlue; }
+//!     }
+//!     view! {
+//!         <Div>
+//!             <H1>"Guide"</H1>
+//!             <OrderedList start=3>
+//!                 <ListItem>
+//!                     <Paragraph>"Parent item"</Paragraph>
+//!                     <UnorderedList>
+//!                         <ListItem><Paragraph>"Nested item"</Paragraph></ListItem>
+//!                     </UnorderedList>
+//!                 </ListItem>
+//!             </OrderedList>
+//!             <Table>
+//!                 <TableHead>
+//!                     <TableRow>
+//!                         <TableCell>"Component"</TableCell>
+//!                         <TableCell alignment={CellAlignment::Center}>"Status"</TableCell>
+//!                     </TableRow>
+//!                 </TableHead>
+//!                 <TableBody>
+//!                     <TableRow>
+//!                         <TableCell>"CodeBlock"</TableCell>
+//!                         <TableCell alignment={CellAlignment::Right}>"Ready"</TableCell>
+//!                     </TableRow>
+//!                 </TableBody>
+//!             </Table>
+//!             <CodeBlock language="rust" line_numbers=true>
+//!                 "fn main() {}"
+//!             </CodeBlock>
+//!         </Div>
+//!     }
+//! }
 //! ```
 //!
 //! [`markdown()`] and [`markdown_with_options`] convert in-memory CommonMark.
 //! [`markdown_file`] and [`markdown_file_with_options`] synchronously load
 //! UTF-8 paths before returning a view. The path-backed `Markdown` tag loads
-//! asynchronously through a volume-rooted [`file_system::FileSystem`]:
+//! asynchronously through a volume-rooted [`file_system::FileSystem`]. Keep
+//! synchronous and in-memory helpers inside markup when those capabilities are
+//! needed; they have no equivalent tag:
 //!
 //! ```no_run
 //! use leptatui::prelude::*;
 //!
 //! let source = "# Guide\n\n```rust\nfn main() {}\n```";
-//! let default_document = markdown(source);
-//! let configured_document = markdown_with_options(
-//!     source,
-//!     MarkdownOptions::default().line_numbers(true),
-//! );
-//! let file_document = markdown_file("README.md");
+//! let default_document = view! { <Div>{markdown(source)}</Div> };
+//! let configured_document = view! {
+//!     <Div>{markdown_with_options(source, MarkdownOptions::default().line_numbers(true))}</Div>
+//! };
+//! let file_document = view! { <Div>{markdown_file("README.md")}</Div> };
 //! let tagged_document = view! {
 //!     <Markdown src="README.md" editable=true line_numbers=true />
 //! };

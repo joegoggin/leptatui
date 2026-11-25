@@ -80,17 +80,21 @@ also supports automatic sizing.
 The width and grid snippets below are optional experiments, rather than
 additional edits to the notes app. To try either snippet, temporarily replace
 `NotesApp`'s final `view!` expression with the entire snippet, including its
-`let` binding. Keep the setup and stylesheet above it. Restore the shell view
-from the previous section before continuing to chapter 7.
+`stylesheet!` declaration. Keep the existing setup and stylesheet above it.
+Restore the shell view from the previous section before continuing to chapter 7.
 
 This example makes a container fill the available width:
 
 ```rust
-let full_width = TuiStyle::new().size(LayoutSize::new(
-    Dimension::from(Length::percent(100.0)),
-    Dimension::Auto,
-));
-view! { <Div style={full_width}><Text>"Full width"</Text></Div> }
+stylesheet! {
+    .full-width {
+        size: LayoutSize::new(
+            Dimension::from(Length::percent(100.0)),
+            Dimension::Auto,
+        );
+    }
+}
+view! { <Div class="full-width"><Text>"Full width"</Text></Div> }
 ```
 
 `Div` defaults to vertical block flow. Flexbox arranges direct children along
@@ -98,14 +102,17 @@ an axis; use `FlexDirection::Column` to stack a row when the terminal narrows.
 Grid is useful for aligned dashboard rows and columns:
 
 ```rust
-let grid = TuiStyle::new()
-    .display(Display::Grid)
-    .grid_template_columns(vec![
-        GridTemplateTrack::from(GridTrackSize::from(Length::cells(20.0))),
-        GridTemplateTrack::from(GridTrackSize::from(Fraction::new(1.0))),
-    ]);
+stylesheet! {
+    .notes-grid {
+        display: Display::Grid;
+        grid_template_columns: vec![
+            GridTemplateTrack::from(GridTrackSize::from(Length::cells(20.0))),
+            GridTemplateTrack::from(GridTrackSize::from(Fraction::new(1.0))),
+        ];
+    }
+}
 view! {
-    <Div style={grid}><Text>"Notes"</Text><Text>"Selected note"</Text></Div>
+    <Div class="notes-grid"><Text>"Notes"</Text><Text>"Selected note"</Text></Div>
 }
 ```
 

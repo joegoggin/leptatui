@@ -24,8 +24,12 @@ use leptatui::prelude::*;
 
 #[component]
 fn Nav() -> impl IntoView {
+    stylesheet! {
+        .actions { display: Display::Flex; }
+    }
+
     view! {
-        <Div style={TuiStyle::new().display(Display::Flex)}>
+        <Div class="actions">
             <A href="/" exact=true>"Home"</A>
             <A href="/counter">"Counter"</A>
             <A href="/settings">"Settings"</A>

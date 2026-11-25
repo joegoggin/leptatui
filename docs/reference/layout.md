@@ -15,28 +15,31 @@ Start with [Styling and layout](../guide/06-styling-and-layout.md). These sectio
 ## Layout and Typed Styles
 
 Leptatui exposes layout as Rust values rather than parsed CSS strings or
-layout-engine types. Apply a `TuiStyle` directly with a view's `style`
-attribute or declare the same properties in `stylesheet!`. Inline and
-stylesheet declarations both resolve into one computed style before every
-root layout pass.
+layout-engine types. Declare properties in `stylesheet!` and attach them to
+`view!` markup with selectors. Styles resolve into one computed style before
+every root layout pass. The low-level `style` attribute also accepts `TuiStyle`
+values, but ordinary application layout should use stylesheets.
 
 ```rust
 use leptatui::prelude::*;
 
-let inline = TuiStyle::new()
-    .display(Display::Flex)
-    .size(LayoutSize::new(
-        Dimension::from(Length::percent(100.0)),
-        Dimension::from(Length::vh(50.0)),
-    ))
-    .gap(Axes::all(Length::cells(1.0)))
-    .overflow(Axes::new(Overflow::Hidden, Overflow::Auto));
-
-let panel = view! {
-    <Div style={inline}>
-        <Text>"Typed layout values"</Text>
-    </Div>
-};
+#[component]
+fn LayoutPanel() -> impl IntoView {
+    stylesheet! {
+        .layout-panel {
+            display: Display::Flex;
+            size: LayoutSize::new(
+                Dimension::from(Length::percent(100.0)),
+                Dimension::from(Length::vh(50.0)),
+            );
+            gap: Axes::all(Length::cells(1.0));
+            overflow: Axes::new(Overflow::Hidden, Overflow::Auto);
+        }
+    }
+    view! {
+        <Div class="layout-panel"><Text>"Typed layout values"</Text></Div>
+    }
+}
 ```
 
 The public layout properties and their value types are:
@@ -229,7 +232,7 @@ Leptatui implements a deliberately typed, terminal-specific subset of
 web-style layout. Terminal cells are the absolute unit, all edges are physical
 rather than writing-mode-relative, and no DOM, CSS parser, cascade origins,
 animations, floats, multicolumn layout, or browser compatibility layer are
-provided. Styles are authored through Rust builders and `stylesheet!`; the
+provided. Author styles through `stylesheet!`; the
 underlying layout engine remains private.
 
 Padding and borders are integral terminal cells, scrollbars occupy a cell

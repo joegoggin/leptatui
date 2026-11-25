@@ -175,13 +175,13 @@ fn DefaultStylesShowcase() -> impl IntoView {
                         AppControl::Continue
                     }>"Default Button"</Button>
                 </Form>
-                {move || text(form_status.get())}
+                <Text>{form_status.get()}</Text>
 
                 <H2>"Progress"</H2>
-                {move || {
-                    let current = progress.get();
-                    progress_bar(current).label(format!("{:.0}% complete", current * 100.0))
-                }}
+                <ProgressBar
+                    value=progress.get()
+                    label={format!("{:.0}% complete", progress.get() * 100.0)}
+                />
                 <Div class="row">
                     <Button on_press=move || {
                         progress.update(|value| *value = (*value + 0.1).min(1.0));

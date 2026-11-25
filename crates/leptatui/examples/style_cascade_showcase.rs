@@ -2,7 +2,9 @@
 //!
 //! This binary demonstrates CSS-like specificity, source order, descendant
 //! selectors, component stylesheet boundaries, inline styles, `!important`,
-//! inheritance, and focus styling.
+//! inheritance, and focus styling. Inline style builders are a low-level escape
+//! hatch used here only to demonstrate precedence; ordinary application styles
+//! belong in `stylesheet!`.
 
 use leptatui::prelude::*;
 
@@ -12,7 +14,7 @@ fn CaseRow(#[prop(into)] title: String, children: Children) -> impl IntoView {
     view! {
         <Div class="case-row">
             <Text class="case-label">{title}</Text>
-            <Div class="case-sample">{div(children())}</Div>
+            <Div class="case-sample"><Div>{children}</Div></Div>
         </Div>
     }
 }

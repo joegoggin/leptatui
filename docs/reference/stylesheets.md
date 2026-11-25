@@ -256,10 +256,11 @@ fn Actions() -> impl IntoView {
 
         .submit { @include button.primary; }
         .quit { @include button.inverted; }
+        .actions { display: Display::Flex; }
     }
 
     view! {
-        <Div style={TuiStyle::new().display(Display::Flex)}>
+        <Div class="actions">
             <Button class="submit">"Submit"</Button>
             <Button class="quit">"Quit"</Button>
         </Div>
@@ -334,9 +335,7 @@ impl ThemeMode {
 fn ThemeLabel() -> impl IntoView {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
-    dynamic(move || {
-        view! { <Text>{format!("Theme: {:?}", mode.get())}</Text> }
-    })
+    view! { <Text>{format!("Theme: {:?}", mode.get())}</Text> }
 }
 
 #[component]

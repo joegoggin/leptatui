@@ -28,23 +28,14 @@ Tags begin with capitals. Literal content is quoted, and braces insert a Rust
 expression. For example, `<Text>{String::from("First note")}</Text>` inserts a
 computed string. These tags produce Leptatui terminal views, not HTML.
 
-## The builder alternative
+## Use macros for application UI
 
-You can return the same structure using ordinary Rust functions. Replace the
-whole `view!` expression above with:
-
-```rust
-block(div((
-    text("My notes"),
-    text("First note"),
-    paragraph("Learn to build a terminal application."),
-    text("Ctrl+Q quits"),
-)))
-```
-
-A tuple allows different child view types in one container. Builders keep their
-concrete types so you can call their configuration methods; both approaches
-ultimately implement `IntoView`. Use markup for the remaining tutorial.
+Build interfaces with `view!` and declare their styles with `stylesheet!`.
+These macros are the intended application authoring interface: they abstract
+view construction and stylesheet registration and keep structure and styling
+consistent across components. Direct view constructors and fluent style
+builders are low-level escape hatches; using them for ordinary application UI
+is an anti-pattern. The tutorials use macros throughout.
 
 Run the app. You should see the note inside a border, with each text child
 below the previous one. Resize the terminal to see paragraph wrapping.

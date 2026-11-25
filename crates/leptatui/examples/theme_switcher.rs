@@ -58,9 +58,7 @@ impl ThemeMode {
 fn ThemeStatus() -> impl IntoView {
     let mode = expect_context::<ReadSignal<ThemeMode>>();
 
-    dynamic(move || {
-        view! { <Text class="theme-status">{format!("Active theme: {:?}", mode.get())}</Text> }
-    })
+    view! { <Text class="theme-status">{format!("Active theme: {:?}", mode.get())}</Text> }
 }
 
 /// Renders the interactive theme switching demo.

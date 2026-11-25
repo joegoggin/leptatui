@@ -2,7 +2,7 @@
 
 Prerequisites: [Chapter 12: Themes and reusable styles](12-themes-and-reusable-styles.md).
 
-Use the extension interfaces when existing builders cannot express a custom
+Use the extension interfaces when existing components cannot express a custom
 rendering need. This is an advanced, standalone lesson; the notes app can keep
 using built-in views. Use a separate project with the chapter 1 Cargo manifest
 for this lesson so you can keep your notes app.
@@ -18,7 +18,7 @@ struct Rule;
 
 impl View for Rule {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::Result<()> {
-        text("----------------").render(ctx)
+        view! { <Text>"----------------"</Text> }.render(ctx)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -48,7 +48,7 @@ To join the normal cascade, retain `StyleMetadata`, expose it through the view
 trait, and use `RenderCtx::resolve_style` when drawing. `StyledView` provides
 the styling interface and `ContainerView` exposes child configuration.
 `TextualView` configures textual content; `EditableView` configures controlled
-editable content and callbacks. Built-in builders implement these capabilities
+editable content and callbacks. Built-in views implement these capabilities
 where applicable. `ViewType::new("MyWidget")` assigns a custom type selector that a stylesheet
 can target. Read the built-in [Text implementation](../../crates/leptatui/src/view/content/text.rs)
 and [view contract](../../crates/leptatui/src/view/core/contract.rs) for the
@@ -105,7 +105,7 @@ struct Rule;
 
 impl View for Rule {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::Result<()> {
-        text("----------------").render(ctx)
+        view! { <Text>"----------------"</Text> }.render(ctx)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

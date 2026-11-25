@@ -104,7 +104,7 @@ fn NavigationKeys() -> impl IntoView {
         KeyCode::Char('q') => KeyControl::Exit,
         _ => KeyControl::Pass,
     });
-    div(())
+    view! { <Div>{Vec::<AnyView>::new()}</Div> }
 }
 
 /// Landing page explaining the available demonstrations.

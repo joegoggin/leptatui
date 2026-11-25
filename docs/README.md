@@ -5,6 +5,10 @@ programming. Chapters 1–12 build a notes app: display a note, edit it, organiz
 its components and pages, load and save data, then add Markdown and themes.
 Chapter 13 explores custom views in a standalone application.
 
+Build application UI with `view!` and declare styles with `stylesheet!`.
+Direct view and style builders are low-level escape hatches and an anti-pattern
+for ordinary application code.
+
 ## Read in order
 
 1. [Getting started](guide/01-getting-started.md)

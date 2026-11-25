@@ -9,7 +9,7 @@ The later document and media examples are optional experiments.
 ## Preview Markdown
 
 In `NotePreview`, replace the paragraph displaying the body with a tracked
-Markdown builder:
+Markdown rendering helper inside `view!`:
 
 ```rust
 {move || markdown_with_options(
@@ -20,7 +20,9 @@ Markdown builder:
 
 Type `# Heading` and a fenced Rust code block into the editor, then navigate
 to Preview. You should see semantic headings and highlighted source. This
-renders the draft in memory; it does not read or write a file.
+renders the draft in memory; it does not read or write a file. The `Markdown`
+tag loads files, so this in-memory preview needs `markdown_with_options`;
+there is currently no equivalent tag for rendering a string.
 
 For synchronous UTF-8 file loading, use `markdown_file` or
 `markdown_file_with_options`. `markdown_source_with_options` supplies a source
@@ -47,34 +49,42 @@ optional GFM extensions remain deferred.
 
 ## Optional: Build documents directly
 
-Inside a component body, this builder expression creates a small semantic
-document without parsing Markdown:
+Inside a component body, use `view!` to create a semantic document without
+parsing Markdown:
 
 ```rust
-let document = div((
-    h1("Notes"),
-    paragraph("Things to learn"),
-    ordered_list([list_item((
-        paragraph("Understand signals"),
-        unordered_list([list_item([paragraph("Try a tracked closure")])]),
-    ))]).start(1),
-    table([
-        table_head([table_row([table_cell("Topic"), table_cell("Status")])]),
-        table_body([table_row([
-            table_cell("Editing"),
-            table_cell("Ready").alignment(CellAlignment::Center),
-        ])]),
-    ]),
-    code_block("let count = 1;").language("rust").line_numbers(true),
-));
+let document = view! {
+    <Div>
+        <H1>"Notes"</H1>
+        <Paragraph>"Things to learn"</Paragraph>
+        <OrderedList start=1>
+            <ListItem>
+                <Paragraph>"Understand signals"</Paragraph>
+                <UnorderedList>
+                    <ListItem><Paragraph>"Try a tracked closure"</Paragraph></ListItem>
+                </UnorderedList>
+            </ListItem>
+        </OrderedList>
+        <Table>
+            <TableHead>
+                <TableRow><TableCell>"Topic"</TableCell><TableCell>"Status"</TableCell></TableRow>
+            </TableHead>
+            <TableBody>
+                <TableRow>
+                    <TableCell>"Editing"</TableCell>
+                    <TableCell alignment={CellAlignment::Center}>"Ready"</TableCell>
+                </TableRow>
+            </TableBody>
+        </Table>
+        <CodeBlock language="rust" line_numbers=true>"let count = 1;"</CodeBlock>
+    </Div>
+};
 ```
 
 To try this experiment, replace `NotePreview`'s body with the binding above
 and return `document`. Restore the Markdown preview before chapter 12.
 
-Headings `h1`–`h6`, paragraphs,
-list sections/items, table sections/rows/cells, and code blocks have equivalent
-PascalCase tags. Textual views accept owned Ratatui rich text (`RichText`) for
+Textual views accept owned Ratatui rich text (`RichText`) for
 styled spans. Code wraps to the terminal width, unknown languages stay plain,
 and table cells contain inline text rather than nested block views.
 
@@ -93,9 +103,8 @@ does not require an image asset. `ImageSource` represents its path-backed source
 terminals display deterministic fallback text. This differs from an image
 inside Markdown, which always uses descriptive text.
 
-Use `progress_bar(0.5).label("Saving")` or
-`<ProgressBar value=0.5 label="Saving" />` to show progress. Values clamp to
-`0.0..=1.0`; wrap a signal read in a dynamic closure to update the gauge.
+Use `<ProgressBar value=0.5 label="Saving" />` to show progress. Values clamp to
+`0.0..=1.0`; use `value=progress.get()` to track a progress signal automatically.
 
 Run `document_showcase`, `markdown_reader`, or `standard_library_showcase`
 with `cargo run --example NAME`. The [component reference](../reference/components.md)

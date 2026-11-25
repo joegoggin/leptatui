@@ -57,9 +57,6 @@ pub(crate) fn HomePage() -> ViewResult<impl IntoView> {
     });
 
     let directory_label = format!("Current directory: {}", current_directory.display());
-    let open_error_view = dynamic(move || {
-        view! { <OpenFileError error=open_error.get() /> }
-    });
 
     use_home_page_styles();
 
@@ -84,7 +81,7 @@ pub(crate) fn HomePage() -> ViewResult<impl IntoView> {
                 />
             </Block>
             <Text class="home-page__help">"o open file | Tab/Enter actions | q quit"</Text>
-            {open_error_view}
+            {move || view! { <OpenFileError error=open_error.get() /> }}
         </Div>
     }
 }
@@ -108,7 +105,7 @@ fn OpenFileError(#[prop(static)] error: Option<String>) -> ViewResult<impl IntoV
         Err(ViewError::msg(error))?;
     }
 
-    text("")
+    view! { <Text>""</Text> }
 }
 
 /// Records a Home-selected path before producing its Viewer location.

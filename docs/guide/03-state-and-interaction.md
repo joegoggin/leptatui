@@ -53,9 +53,8 @@ signals they read. Changing `count` updates the count without rerunning
 component setup or requiring a closure around the view.
 
 A value computed before `view!` is still a snapshot. Keep computations that
-should update inside the view expression. Plain Rust builder calls also use
-ordinary Rust evaluation; use `dynamic` when constructing reactive views with
-the builder API.
+should update inside the view expression. For conditional UI, use a tracked
+child closure inside `view!` so signal changes update the displayed branch.
 
 ## Keyboard handlers and callbacks
 

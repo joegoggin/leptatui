@@ -144,14 +144,15 @@ component, a container can accept a vector of views; return `list` to display it
 
 ```rust
 let titles = ["First note", "Second note"];
-let rows = titles.into_iter().map(text).collect::<Vec<_>>();
+let rows = titles.into_iter()
+    .map(|title| view! { <Text>{title}</Text> })
+    .collect::<Vec<_>>();
 let list = view! { <Div>{rows}</Div> };
 ```
 
 `IntoViews` accepts homogeneous collections and mixed tuples. Children are
-stored as `AnyView` when entering the tree. `dynamic(move || ...)` is the
-builder equivalent of a tracked child closure and can return different view
-types as its inputs change.
+stored as `AnyView` when entering the tree. A tracked child closure inside
+`view!` can return different views as its inputs change.
 
 Use `keyed(move || selected_id.get(), move || view! { <NoteEditor /> })` when
 changing a selection should mount a fresh editor and reset its local view

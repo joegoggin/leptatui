@@ -14,16 +14,14 @@ Leptatui's standard view set includes layout containers (`Block`, `Div`),
 plain and semantic text, nested lists, responsive tables,
 syntax-highlighted code blocks, CommonMark documents, buttons, controlled form
 controls, images, and progress bars.
-All are available through `leptatui::prelude::*` as builders and through
-PascalCase `view!` tags.
+Use them through `leptatui::prelude::*` as PascalCase `view!` tags.
+Direct constructors remain low-level APIs; prefer markup for application UI.
 
 `view!` tracks data expressions automatically, including text, attributes, and
 custom component data props. Write `<Input value=title ... />` directly;
 updates change the retained control and preserve its editing state. Signal
 reads inside event handlers run only for events and do not subscribe rendering.
-Values computed before `view!` remain snapshots, and plain Rust builders use
-ordinary Rust evaluation semantics. Editable builders retain their supplied
-signal and read its current text when rendering or handling input.
+Values computed before `view!` remain snapshots.
 
 Custom components declare data props with ordinary value types such as `String`.
 `#[component]` automatically wraps each data parameter in `Prop<T>` inside the
@@ -52,7 +50,7 @@ Custom selector names are created with `ViewType::new("Name")`, and the same
 name can be used as a `stylesheet!` type selector.
 
 `Link` opens URLs and local paths with the operating system's configured
-handler. Use `link("Project site", "https://example.com")` or
+handler. Use
 `<Link href="https://example.com">"Project site"</Link>` anywhere in a view.
 Links are blue and underlined by default, then magenta and underlined after a
 successful visit during the current app session. Use Tab and Shift+Tab to move
@@ -83,8 +81,6 @@ supported graphics protocol. Otherwise it renders deterministic fallback text,
 preferring the view's `alt` text when provided. `ProgressBar` renders a gauge
 with a clamped `0.0..=1.0` value and optional `label`.
 
-The Rust builders use the same binding: `input(name)` and `text_area(notes)`.
-Their `.value()` accessors return the current text as an owned `String`.
 To migrate older code, replace `value={name.get()}` with `value=name`, remove
 callbacks that only called `name.set(...)`, and change remaining `on_input`
 closures to `move || { ... }`. Read `name.get()` inside the callback when needed.
@@ -98,10 +94,14 @@ closures to `move || { ... }`. Read `name.get()` inside the callback when needed
 ```rust
 use leptatui::prelude::*;
 
-let save = button("Save").on_press(|| {
-    // Update application state here; no control return is needed.
-});
-let quit = button("Quit").on_press(|| AppControl::Exit);
+let actions = view! {
+    <Div>
+        <Button on_press=|| {
+            // Update application state here; no control return is needed.
+        }>"Save"</Button>
+        <Button on_press=|| AppControl::Exit>"Quit"</Button>
+    </Div>
+};
 ```
 
 A unit return keeps the app running, just like `AppControl::Continue`.
@@ -112,13 +112,15 @@ a handler that conditionally exits must return `AppControl` on every path:
 use leptatui::prelude::*;
 
 let should_quit = false;
-let button = button("Maybe quit").on_press(move || {
-    if should_quit {
-        AppControl::Exit
-    } else {
-        AppControl::Continue
-    }
-});
+let button = view! {
+    <Button on_press=move || {
+        if should_quit {
+            AppControl::Exit
+        } else {
+            AppControl::Continue
+        }
+    }>"Maybe quit"</Button>
+};
 ```
 
 Raw keyboard handlers registered with `use_key_event` still return
@@ -136,41 +138,10 @@ Callbacks that never return, such as a closure whose only expression is
 Semantic document views include `H1` through `H6`, `Paragraph`, ordered and
 unordered lists, responsive tables, and `CodeBlock`. Lists contain block-based
 `ListItem` children, while tables use `TableHead` or `TableBody`, `TableRow`,
-and inline-text `TableCell` values. Builders compose the same tree as the
-PascalCase `view!` tags:
+and inline-text `TableCell` values.
 
-```rust
-use leptatui::prelude::*;
-
-let document = div((
-    h1("Leptatui guide"),
-    paragraph("Semantic content wraps with the terminal viewport."),
-    ordered_list([
-        list_item((
-            paragraph("Compose block-oriented list items."),
-            unordered_list([list_item([paragraph("Nest list types freely.")])]),
-        )),
-        list_item([paragraph("Choose the first decimal marker.")]),
-    ])
-    .start(3),
-    table([
-        table_head([table_row([
-            table_cell("Component"),
-            table_cell("Status").alignment(CellAlignment::Center),
-        ])]),
-        table_body([table_row([
-            table_cell("CodeBlock"),
-            table_cell("Ready").alignment(CellAlignment::Right),
-        ])]),
-    ]),
-    code_block("fn main() { println!(\"hello\"); }")
-        .language("rust")
-        .line_numbers(true),
-));
-```
-
-The same document shape can be written and styled with nested tags. Semantic
-view names are also stylesheet type selectors:
+Use nested `view!` tags and `stylesheet!` declarations. Semantic view names
+are also stylesheet type selectors:
 
 ```rust
 use leptatui::prelude::*;
@@ -317,7 +288,7 @@ fn StandardControls() -> impl IntoView {
                 src="crates/leptatui/examples/assets/showcase.jpg"
                 alt="Image fallback text"
             />
-            {move || progress_bar(progress.get()).label("Progress")}
+            <ProgressBar value=progress.get() label="Progress" />
         </Div>
     }
 }
