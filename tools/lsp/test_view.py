@@ -91,24 +91,24 @@ pub fn extra() {
 class Client:
     """A small framed JSON-RPC client with server-request acknowledgement."""
 
-    def __init__(self, project):
+    def __init__(self, project, *, snippets=True, completion_command=True, rustfmt_command=None, env=None):
         self.messages = queue.Queue()
         self.sequence = 0
         self.notifications = []
         self.process = subprocess.Popen(
             [os.environ.get("LEPTATUI_LSP", str(ROOT / "target/debug/leptatui-lsp"))],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, cwd=project,
+            stderr=None if os.environ.get("LEPTATUI_LSP_DEBUG") else subprocess.DEVNULL, cwd=project, env=env,
         )
         threading.Thread(target=self._read, daemon=True).start()
-        self.request("initialize", {
+        self.initialize_result = self.request("initialize", {
             "processId": os.getpid(), "rootUri": project.as_uri(),
             "capabilities": {
-                "experimental": {"serverStatusNotification": True},
+                "experimental": {"serverStatusNotification": True, "commands": {"commands": ["editor.action.triggerSuggest"] if completion_command else []}},
                 "textDocument": {
                     "publishDiagnostics": {"versionSupport": True},
                     "completion": {"completionItem": {
-                        "snippetSupport": True,
+                        "snippetSupport": snippets,
                         "insertReplaceSupport": True,
                         "resolveSupport": {"properties": ["documentation", "detail", "additionalTextEdits"]},
                     }},
@@ -117,6 +117,7 @@ class Client:
             "initializationOptions": {
                 "cargo": {"targetDir": str(ROOT / "target")},
                 "checkOnSave": False,
+                **({"rustfmt": {"overrideCommand": rustfmt_command}} if rustfmt_command else {}),
             },
         })
         self.send("initialized", {})
@@ -250,7 +251,7 @@ class ViewEditorTests(unittest.TestCase):
     def apply_completion(self, source, item):
         edits = [item["textEdit"]] + item.get("additionalTextEdits", [])
         def offset(pos):
-            lines = source.splitlines(keepends=True)
+            lines = source.splitlines(keepends=True) + [""]
             return sum(map(len, lines[:pos["line"]])) + len(
                 lines[pos["line"]].encode("utf-16-le")[:pos["character"] * 2].decode("utf-16-le")
             )
@@ -261,6 +262,7 @@ class ViewEditorTests(unittest.TestCase):
             text = edit["newText"].replace("$0", "")
             if edit is item["textEdit"] and item.get("insertTextFormat") == 2:
                 import re
+                text = re.sub(r"\$\{\d+:([^}]*)\}", lambda match: match.group(1), text)
                 text = re.sub(r"\\([\\$}])", r"\1", text)
             start, end = (offset(edit_range(edit)[key]) for key in ("start", "end"))
             result = result[:start] + text + result[end:]

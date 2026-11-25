@@ -59,6 +59,8 @@ struct Proxy {
     cancelled: bool,
     /// Whether the client can expand LSP snippet tab stops.
     snippets: bool,
+    /// Advertised editor command for requesting completion after insertion.
+    completion_command: Option<String>,
     /// Source contexts for deferred tag completions from the latest response.
     completion_contexts: HashMap<String, completion::Snapshot>,
     /// Revision-scoped stylesheet module resolution.
@@ -104,6 +106,7 @@ impl Proxy {
                                 | "textDocument/hover"
                                 | "textDocument/definition"
                                 | "textDocument/prepareRename"
+                                | "textDocument/formatting"
                         )
                     ) {
                         self.pending.push_back(message);
@@ -160,6 +163,17 @@ impl Proxy {
                     .pointer("/capabilities/textDocument/completion/completionItem/snippetSupport")
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
+                self.completion_command = params
+                    .pointer("/capabilities/experimental/commands/commands")
+                    .and_then(Value::as_array)
+                    .and_then(|commands| {
+                        commands.iter().find_map(|command| {
+                            command
+                                .as_str()
+                                .filter(|name| *name == "editor.action.triggerSuggest")
+                                .map(str::to_owned)
+                        })
+                    });
                 if let Some(folders) = params["workspaceFolders"].as_array() {
                     for folder in folders {
                         self.add_root(&folder["uri"]);
@@ -574,6 +588,7 @@ fn main() -> io::Result<()> {
         active: None,
         cancelled: false,
         snippets: false,
+        completion_command: None,
         completion_contexts: HashMap::new(),
         stylesheet_imports: None,
         stylesheet_upstream_diagnostics: HashMap::new(),
@@ -600,6 +615,11 @@ fn main() -> io::Result<()> {
                     ) && let Some(uri) = message["params"]["textDocument"]["uri"].as_str()
                     {
                         proxy.publish_style_diagnostics(uri)?;
+                    }
+                    if message["method"] == "textDocument/formatting" && message.get("id").is_some()
+                    {
+                        proxy.format_document(message)?;
+                        continue;
                     }
                     if message.get("id").is_some() && proxy.style_semantic(&message)? {
                         continue;

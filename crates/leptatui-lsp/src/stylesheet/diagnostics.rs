@@ -222,6 +222,7 @@ impl Proxy {
                     }
                 }
             }
+            capabilities["documentFormattingProvider"] = json!(true);
             capabilities["hoverProvider"] = json!(true);
             capabilities["definitionProvider"] = json!(true);
             capabilities["referencesProvider"] = json!(true);

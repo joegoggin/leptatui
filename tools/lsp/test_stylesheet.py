@@ -36,6 +36,88 @@ class StylesheetEditorTests(unittest.TestCase):
     def styled(self, stylesheet):
         return SOURCE.replace('fn main() {', 'fn main() {\n    ' + stylesheet + '\n')
 
+    def test_empty_rule_prioritizes_all_properties(self):
+        source = self.styled('stylesheet! { H1 {  } };')
+        result = self.query('completion', 'H1 { ', source=source, end=True)
+        items = result['items']
+        fg = next(item for item in items if item['label'] == 'fg')
+        selector = next(item for item in items if item['label'] == 'Text')
+        self.assertLess(fg['sortText'], selector['sortText'])
+        self.assertIn('Color', str(fg['documentation']))
+        self.assertEqual(fg['command']['command'], 'editor.action.triggerSuggest')
+        for name in ['foreground', 'padding', 'display', 'grid_row', 'z_index']:
+            self.assertIn(name, {item['label'] for item in items})
+
+    def test_expected_values_merge_and_compile(self):
+        # Compile every advertised template, not just an independently maintained sample.
+        properties = ['fg', 'bg', 'modifier', 'borders', 'border_type', 'padding',
+                      'image_size', 'display', 'box_sizing', 'overflow', 'size',
+                      'min_size', 'max_size', 'aspect_ratio', 'margin', 'gap',
+                      'flex_direction', 'flex_wrap', 'flex_basis', 'flex_grow',
+                      'flex_shrink', 'align_items', 'align_self', 'align_content',
+                      'justify_items', 'justify_self', 'justify_content',
+                      'grid_auto_flow', 'grid_template_rows', 'grid_template_columns',
+                      'grid_auto_rows', 'grid_auto_columns', 'grid_row', 'grid_column',
+                      'position', 'inset', 'z_index']
+        declarations = []
+        import re
+        for prop in properties:
+            source = self.styled('stylesheet! { H1 { ' + prop + ':  } };')
+            result = self.query('completion', prop + ': ', source=source, end=True)
+            items = result.get('items', []) if isinstance(result, dict) else result or []
+            expected = [item for item in items if item.get('data', {}).get('leptatuiStylesheet')
+                        and item.get('sortText', '').startswith('0_')]
+            self.assertTrue(expected, prop)
+            for item in expected:
+                self.assertEqual(self.client.request('completionItem/resolve', item), item)
+                expression = re.sub(r'\$\{\d+:([^}]*)\}', lambda m: m.group(1), item['textEdit']['newText'])
+                declarations.append(prop + ': ' + expression + ';')
+        self.check_source(self.styled('stylesheet! { H1 { ' + ' '.join(declarations) + ' } };'))
+
+    def test_enum_choices_cover_upstream_variants(self):
+        for prop, ty in [('fg', 'Color'), ('border_type', 'BorderType')]:
+            source = self.styled('stylesheet! { H1 { ' + prop + ':  } };')
+            result = self.query('completion', prop + ': ', source=source, end=True)
+            items = result.get('items', []) if isinstance(result, dict) else result or []
+            expected = {item['label'].removeprefix(ty + '::') for item in items}
+            source = self.styled('stylesheet! { H1 { ' + prop + ': ' + ty + ':: } };')
+            result = self.query('completion', prop + ': ' + ty + '::', source=source, end=True)
+            items = result.get('items', []) if isinstance(result, dict) else result or []
+            native = {item['label'].split('(')[0].strip() for item in items
+                      if item.get('kind') == 20 and not item.get('data', {}).get('leptatuiStylesheet')}
+            self.assertTrue(native, ty)
+            self.assertLessEqual(native, expected)
+
+    def test_value_prefix_and_flag_edits(self):
+        cases = [
+            ('fg: Re', 'Color::Red'),
+            ('fg: Color::Li', 'Color::LightRed'),
+            ('fg: leptatui::Color::Rg', 'Color::Rgb'),
+            ('modifier: Modifier::BOLD | un', 'Modifier::UNDERLINED'),
+            ('borders: Borders::TOP | LE', 'Borders::LEFT'),
+            ('overflow: Ax', 'Axes::all(Overflow::Hidden)'),
+            ('grid_template_rows: ve', 'vec![GridTemplateTrack::repeat]'),
+        ]
+        for declaration, label in cases:
+            with self.subTest(declaration=declaration):
+                source = self.styled('stylesheet! { H1 { ' + declaration + '; } };')
+                result = self.query('completion', declaration, source=source, end=True)
+                items = result.get('items', []) if isinstance(result, dict) else result or []
+                labels = {label, label.rsplit('::', 1)[-1]}
+                item = next(item for item in items if item['label'] in labels)
+                self.check_source(self.apply_completion(source, item))
+
+    def test_value_suggestions_keep_rust_names(self):
+        source = self.styled('let red_color = Color::Red; stylesheet! { H1 { fg: re } };')
+        result = self.query('completion', 'fg: re', source=source, end=True)
+        items = result.get('items', []) if isinstance(result, dict) else result or []
+        self.assertTrue(any(item['label'].startswith('red_color') for item in items), [item['label'] for item in items])
+        local = next(item for item in items if item['label'].startswith('red_color'))
+        expected = next(item for item in items if item['label'] == 'Color::Red')
+        self.assertLess(expected['sortText'], local['sortText'])
+        self.assertTrue(local.get('data'))
+        self.client.request('completionItem/resolve', local)
+
     def test_imported_variable_completion(self):
         source = self.styled('stylesheet! { @use extra::palette as colors; Text { fg: colors.$ac } };')
         item = self.completion_item('accent', source, 'colors.$ac')
@@ -239,6 +321,51 @@ class StylesheetEditorTests(unittest.TestCase):
         applied = self.apply_completion(source, item).replace('flex_direction: ;', 'flex_direction: FlexDirection::Column;')
         self.check_source(applied)
 
+
+
+class RenamedStylesheetEditorTests(unittest.TestCase):
+    """Exercise a renamed runtime dependency with imported style types."""
+
+    tearDownClass = classmethod(harness.ViewEditorTests.tearDownClass.__func__)
+    query = harness.ViewEditorTests.query
+    completion_item = harness.ViewEditorTests.completion_item
+    apply_completion = harness.ViewEditorTests.apply_completion
+
+    @classmethod
+    def setUpClass(cls):
+        import json
+        harness.ViewEditorTests.setUpClass.__func__(cls)
+        cls.client.close()
+        project = cls.file.parent.parent
+        (project / 'Cargo.toml').write_text(
+            '[package]\nname = "renamed-editor-fixture"\nversion = "0.0.0"\nedition = "2024"\n'
+            '[dependencies]\nterminal-ui = { package = "leptatui", path = '
+            + json.dumps(str(harness.ROOT / 'crates/leptatui')) + ' }\n')
+        cls.file.write_text('fn main() {}')
+        cls.client = harness.Client(project, snippets=False, completion_command=False)
+        cls.client.send('textDocument/didOpen', {'textDocument': {
+            'uri': cls.uri, 'languageId': 'rust', 'version': 0, 'text': 'fn main() {}',
+        }})
+        cls.version = 0
+
+    def test_plain_property_has_no_editor_command(self):
+        source = 'fn main() { terminal_ui::stylesheet! { H1 { pa } }; }'
+        item = self.completion_item('padding', source, 'H1 { pa')
+        self.assertEqual(item['textEdit']['newText'], 'padding: ;')
+        self.assertNotIn('command', item)
+
+    def test_unqualified_constructor_compiles_with_imports(self):
+        import subprocess
+        source = 'use terminal_ui::prelude::*; fn main() { terminal_ui::stylesheet! { H1 { size: La; } }; }'
+        item = self.completion_item('LayoutSize::new', source, 'size: La')
+        self.assertEqual(item['textEdit']['newText'],
+                         'LayoutSize::new(Dimension::Length(Length::percent(100.0)), Dimension::Auto)')
+        self.assertEqual(item['insertTextFormat'], 1)
+        self.assertNotIn('$', item['textEdit']['newText'])
+        self.file.write_text(self.apply_completion(source, item))
+        result = subprocess.run(['cargo', 'check', '--offline', '--quiet', '--target-dir', str(harness.ROOT / 'target')],
+                                cwd=self.file.parent.parent, capture_output=True, text=True, timeout=180)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == '__main__':

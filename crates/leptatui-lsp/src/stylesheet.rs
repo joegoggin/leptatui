@@ -7,6 +7,8 @@
 //! - [`proxy`] — Protocol request and completion lifecycle.
 //! - [`diagnostics`] — Source diagnostics and upstream result merging.
 //! - `properties` — Property metadata shared with compiler validation.
+//! - [`formatting`] — Stylesheet printing and document-formatting composition.
+//! - [`values`] — Expected-value contexts, documentation, and expression templates.
 
 #[path = "../../leptatui-macros/src/stylesheet/properties.rs"]
 mod properties;
@@ -15,9 +17,11 @@ use serde_json::{Value, json};
 use std::ops::Range;
 
 mod diagnostics;
+pub(crate) mod formatting;
 pub(crate) mod imports;
 mod proxy;
 pub(crate) mod syntax;
+pub(crate) mod values;
 use syntax::{Kind, Syntax};
 
 /// Converts byte offsets to UTF-16 protocol ranges.
@@ -262,10 +266,29 @@ pub(crate) fn complete(text: &str, cursor: usize, snippets: bool) -> Option<Vec<
     }
     candidates.sort();
     candidates.dedup();
-    Some(candidates.into_iter().filter(|(name,_,_,_)|name.to_lowercase().starts_with(&prefix.to_lowercase())).map(|(name,insert,detail,kind)|json!({
-        "label":name,"kind":kind,"detail":detail,"documentation":{"kind":"markdown","value":detail},
-        "textEdit":{"range":range(text,word.clone()),"newText":insert},"insertTextFormat":if snippets {2} else {1},"data":{"leptatuiStylesheet":true}
-    })).collect())
+    Some(
+        candidates
+            .into_iter()
+            .filter(|(name, _, _, _)| name.to_lowercase().starts_with(&prefix.to_lowercase()))
+            .map(|(name, insert, detail, kind)| {
+                let documentation = properties::PROPERTIES
+                    .iter()
+                    .find(|p| p.0 == name)
+                    .map(|p| values::property_documentation(p.0, p.1, p.2))
+                    .unwrap_or_else(|| detail.clone());
+                json!({
+                    "label": name,
+                    "kind": kind,
+                    "sortText": format!("{}_{}", if kind == 10 { 0 } else { 1 }, name),
+                    "detail": detail,
+                    "documentation": {"kind": "markdown", "value": documentation},
+                    "textEdit": {"range": range(text, word.clone()), "newText": insert},
+                    "insertTextFormat": if snippets { 2 } else { 1 },
+                    "data": {"leptatuiStylesheet": true}
+                })
+            })
+            .collect(),
+    )
 }
 
 /// Returns the Rust type corresponding to a compiler value category.
@@ -726,10 +749,7 @@ fn language_hover(text: &str, cursor: usize) -> Option<Value> {
         .position(|t| t.span.start == word.start)?;
     let detail = if s.kind == Kind::Property && token == s.head.start {
         let (_, kind, builder, _) = properties::PROPERTIES.iter().find(|p| p.0 == name)?;
-        format!(
-            "`{name}: {};`\n\nSets the `{builder}` style declaration. Supports `!important`.",
-            property_type(kind)
-        )
+        values::property_documentation(name, kind, builder)
     } else if name == "important" && token > 0 && syntax.at(token - 1) == "!" {
         "`!important` gives this declaration priority over normal inline and stylesheet styles."
             .into()

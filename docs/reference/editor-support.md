@@ -15,6 +15,7 @@ while the proxy supplies stylesheet syntax and symbol services.
 | Hover documentation and definitions | rust-analyzer |
 | Diagnostics for syntax, unknown props, and value types | rust-analyzer and Cargo |
 | Complete component/prop rename and references across generated APIs | `leptatui-lsp` proxy |
+| Whole-document formatting of `stylesheet!` | `leptatui-lsp` and rustfmt |
 
 The proxy runs rust-analyzer and forwards normal Rust requests. For component
 and prop rename and references, it combines rust-analyzer results for generated
@@ -52,18 +53,43 @@ plain tag text.
 ## Stylesheet support
 
 Accepting `stylesheet!` inserts `stylesheet! { }` with the cursor inside the
-braces. The proxy completes property names and aliases, terminal type selectors,
-pseudo-classes, media features, directives, local variables, mixins, and imported
-members. Property snippets insert the colon, value cursor, and semicolon. Rust
-values retain rust-analyzer's enum, field, method, hover, and definition support,
-including while the surrounding stylesheet is unfinished.
+braces. Inside a rule such as `H1 { }`, the proxy lists all supported properties
+and aliases before nested type selectors. It also completes pseudo-classes,
+media features, directives, local variables, mixins, and imported members.
+Property suggestions include descriptions, expected types, and examples; accepting
+one inserts the colon, value cursor, and semicolon without duplicating existing
+punctuation.
+
+At an empty property value or a partial value name, the proxy prioritizes choices
+for that property's expected type: colors, enum variants, flags, and constructors
+for spacing, sizing, axes, edges, and grid tracks. Wrapped properties receive
+complete expressions, such as `Axes::all(Overflow::Hidden)`. Constructor snippets
+provide numbered argument defaults; clients without snippet support receive
+editable Rust defaults. Generated expressions use type names such as `Color` and
+`LayoutSize` without a crate prefix; import the required types, for example with
+`use leptatui::prelude::*;`. Explicitly authored paths such as `leptatui::Color::`
+are preserved when completing their members. Completion does not add imports.
+
+Expected values merge with the Rust completions available from rust-analyzer.
+Local Rust names remain available as you type, and fields, methods, function
+arguments, and struct literals retain ordinary Rust completion. These services
+also work while the surrounding stylesheet is unfinished.
 
 ```text
 flex_di              → flex_direction: $0;
+fg: Re               → fg: Color::Red
+fg: Color::Li        → fg: Color::LightRed
+modifier: Modifier::BOLD | un → modifier: Modifier::BOLD | Modifier::UNDERLINED
 &:fo                 → &:focus
 @include colors.ch   → @include colors.chrome
 fg: colors.$ac       → fg: colors.$accent
 ```
+
+Typing `:` or manually requesting completion opens value suggestions. After
+accepting a property snippet, clients advertising `editor.action.triggerSuggest`
+in `capabilities.experimental.commands.commands` also receive a command to open
+value completion immediately. Other clients can invoke completion manually;
+automatic popup behavior depends on the editor's completion configuration.
 
 Property hover describes the expected Rust value type. Variables, mixins, and
 module namespaces support hover, definitions, references, and rename. Imported
@@ -86,8 +112,70 @@ The proxy contributes stylesheet syntax and symbol diagnostics and merges them
 with rust-analyzer's diagnostics. Compiler validation and Rust type checking
 remain active. Comments and string contents do not trigger stylesheet syntax
 completion; class and ID literal attributes have their own name completions.
-Formatting and automatic edits outside accepted completion or rename requests
-are not provided.
+Document formatting is described below. Formatting while typing and automatic
+edits outside accepted completion, formatting, or rename requests are not provided.
+
+## Stylesheet formatting
+
+The proxy extends ordinary `textDocument/formatting` requests with formatting for
+complete `stylesheet!` invocations, including qualified names and imported aliases.
+Rust formatting remains provided by rust-analyzer and its configured formatter.
+The proxy composes those results with stylesheet edits against the current unsaved
+buffer; it does not write source files. Range formatting keeps rust-analyzer's
+existing behavior.
+
+The outer macro body is multiline. A short rule with one declaration stays inline;
+rules containing multiple declarations, nested blocks, comments, or multiline
+values expand. Media and mixin blocks are always multiline. Consecutive declarations
+stay together, with one blank line between rules and around nested blocks:
+
+```rust
+stylesheet! {
+    H1 { fg: Color::LightCyan; }
+
+    H2 { fg: Color::Cyan; }
+
+    .shell {
+        padding: TuiSpacing::uniform(1);
+
+        &__actions {
+            display: Display::Flex;
+            gap: Axes::all(Length::cells(1.0));
+
+            @media (max-width: 60) {
+                flex_direction: FlexDirection::Column;
+            }
+        }
+    }
+}
+```
+
+The formatter preserves statement order, comments, literal contents, stylesheet
+variable references, and `!important`. It uses rustfmt for embedded Rust expressions
+and leaves an expression unchanged if it cannot safely format it. Incomplete or
+malformed macros are left alone. A buffer change or cancellation during formatting
+invalidates the response so stale edits are not applied.
+
+Editor formatting options determine indentation; project rustfmt settings determine
+line width, with four spaces and 100 columns as defaults. The consumer package's
+Rust edition is discovered through Cargo metadata without updating its lockfile.
+Ensure `rustfmt` is available with `rustup component add rustfmt`.
+
+`view!` formatting can continue to use the external `leptosfmt` executable. To
+compose it with stylesheet formatting through one LSP request, add this setting
+under `settings["rust-analyzer"]` in the Neovim configuration below:
+
+```lua
+rustfmt = {
+    overrideCommand = { "leptosfmt", "--stdin", "--rustfmt" },
+},
+```
+
+This optional setting requires `leptosfmt` on `PATH`. When none-ls also supplies
+Rust formatting, select only the Rust LSP for buffers containing stylesheet macros
+and suppress the none-ls source for those requests. Other Rust buffers can retain
+their existing none-ls formatting. Wait for synchronous formatting to finish before
+saving the buffer.
 
 ## Install
 
@@ -138,14 +226,15 @@ Run the protocol suite from the repository root:
 cargo build -p leptatui-lsp
 python3 tools/lsp/test_view.py
 python3 tools/lsp/test_stylesheet.py
+python3 tools/lsp/test_formatting.py
 ```
 
 Use `LEPTATUI_LSP=rust-analyzer` to run the same cases against the native server
 and inspect the gaps covered by the proxy. The suite uses temporary applications
 and applies rename edits before compiling the result.
 
-The tested baseline is rust-analyzer/Rust 1.92.0. Formatting, automatically adding
-closing tags while typing outside completion, and language services inside
+The tested baseline is rust-analyzer/Rust 1.92.0. Automatically adding closing
+tags while typing outside completion and language services inside
 arbitrary strings are outside this feature. Diagnostics still reject invalid
 markup; recovery preserves semantic information around the error rather than
 accepting that markup as valid Rust.

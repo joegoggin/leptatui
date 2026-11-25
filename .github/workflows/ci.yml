@@ -43,7 +43,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Install tested Rust and rust-analyzer
-        run: rustup toolchain install 1.92.0 --profile minimal --component rust-analyzer
+        run: rustup toolchain install 1.92.0 --profile minimal --component rust-analyzer --component rustfmt
       - name: Use tested toolchain
         run: rustup default 1.92.0
       - name: Build language-server proxy
@@ -52,3 +52,5 @@ jobs:
         run: python3 tools/lsp/test_view.py
       - name: Check stylesheet editor semantics
         run: python3 tools/lsp/test_stylesheet.py
+      - name: Check stylesheet formatting
+        run: python3 tools/lsp/test_formatting.py

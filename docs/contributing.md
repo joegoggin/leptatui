@@ -34,7 +34,9 @@ cargo check --workspace --examples
 
 ## Editor protocol checks
 
-The LSP suite requires Python 3 and rust-analyzer. It creates temporary consumer
+The LSP suite requires Python 3, rust-analyzer, and rustfmt. An optional
+`leptosfmt` executable enables the mixed view/stylesheet formatting check.
+The suite creates temporary consumer
 applications and validates completion, hover, navigation, references, and
 compilable rename edits through the real language server:
 
@@ -42,6 +44,7 @@ compilable rename edits through the real language server:
 cargo build -p leptatui-lsp
 python3 tools/lsp/test_view.py
 python3 tools/lsp/test_stylesheet.py
+python3 tools/lsp/test_formatting.py
 ```
 
 CI runs this separately with Rust/rust-analyzer 1.92.0. See

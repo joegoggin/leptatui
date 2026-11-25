@@ -150,6 +150,19 @@ impl Proxy {
         }
         let mut items = super::complete(&text, cursor, self.snippets);
         if let Some(items) = &mut items {
+            if let Some(command) = &self.completion_command {
+                for item in items.iter_mut().filter(|item| {
+                    item["kind"] == 10
+                        && super::properties::PROPERTIES
+                            .iter()
+                            .any(|p| item["label"] == p.0)
+                        && item["textEdit"]["newText"]
+                            .as_str()
+                            .is_some_and(|text| text.contains("$0"))
+                }) {
+                    item["command"] = json!({"title":"Suggest property values", "command":command});
+                }
+            }
             let extras = super::type_completions(&self.workspace(), uri, cursor, self.snippets);
             for extra in extras {
                 if !items.iter().any(|item| item["label"] == extra["label"]) {

@@ -65,8 +65,7 @@ impl Proxy {
         if message["method"] == "completionItem/resolve"
             && message["params"]["data"]["leptatuiStylesheet"] == true
         {
-            let response =
-                json!({"jsonrpc":"2.0","id":message["id"],"result":message["params"]});
+            let response = json!({"jsonrpc":"2.0","id":message["id"],"result":message["params"]});
             return protocol::write(&mut self.client, &response);
         }
         let revision = self.revision;
@@ -139,6 +138,11 @@ impl Proxy {
             });
             if let (Some(text), Some(cursor)) = (text.as_deref(), cursor) {
                 let mut extras = crate::stylesheet::rust_completions(text, cursor);
+                extras.extend(crate::stylesheet::values::complete(
+                    text,
+                    cursor,
+                    self.snippets,
+                ));
                 for item in &mut extras {
                     item["data"]["revision"] = json!(revision);
                 }
@@ -147,9 +151,9 @@ impl Proxy {
                         response["result"] = json!([]);
                     }
                     if let Some(items) = response["result"].as_array_mut() {
-                        items.extend(extras);
+                        merge_stylesheet_values(text, items, extras);
                     } else if let Some(items) = response["result"]["items"].as_array_mut() {
-                        items.extend(extras);
+                        merge_stylesheet_values(text, items, extras);
                     }
                 }
             }
@@ -479,6 +483,65 @@ fn range(text: &str, bytes: Range<usize>) -> Value {
     json!({"start":position(text, bytes.start), "end":position(text, bytes.end)})
 }
 
+/// Merges expected-value items while preserving upstream completion identity.
+///
+/// # Arguments
+///
+/// * `text` — Source overlay used to compare effective edits.
+/// * `items` — Upstream items, including their opaque resolution data.
+/// * `extras` — Stylesheet candidates to prioritize.
+fn merge_stylesheet_values(text: &str, items: &mut Vec<Value>, extras: Vec<Value>) {
+    for item in items.iter_mut() {
+        let previous = item["sortText"]
+            .as_str()
+            .or_else(|| item["label"].as_str())
+            .unwrap_or("");
+        item["sortText"] = json!(format!("1_{previous}"));
+    }
+    for mut extra in extras {
+        if extra["sortText"].is_null() {
+            extra["sortText"] = json!(format!("1_{}", extra["label"].as_str().unwrap_or("")));
+        }
+        let edited = completion_result(text, &extra);
+        let duplicate = items.iter_mut().find(|item| {
+            item["additionalTextEdits"] == extra["additionalTextEdits"]
+                && edited.is_some()
+                && completion_result(text, item) == edited
+        });
+        if let Some(item) = duplicate {
+            item["sortText"] = extra["sortText"].clone();
+        } else {
+            items.push(extra);
+        }
+    }
+}
+
+/// Applies a primary completion edit for equivalence comparison.
+///
+/// # Arguments
+///
+/// * `text` — Current source overlay.
+/// * `item` — Candidate with a text edit.
+///
+/// # Returns
+///
+/// An optional resulting document; unsupported or invalid edits are not equivalent.
+fn completion_result(text: &str, item: &Value) -> Option<String> {
+    let edit = &item["textEdit"];
+    let range = edit.get("range").or_else(|| edit.get("replace"))?;
+    let start = source::offset(text, &range["start"])?;
+    let end = source::offset(text, &range["end"])?;
+    if start > end {
+        return None;
+    }
+    Some(format!(
+        "{}{}{}",
+        &text[..start],
+        edit["newText"].as_str()?,
+        &text[end..]
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     //! Text-edit and snippet regressions independent of the language server.
@@ -580,5 +643,32 @@ mod tests {
             assert_eq!(item["textEdit"]["replace"], replace);
             assert!(decorated(&item));
         }
+    }
+
+    /// Verifies equivalent qualified edits retain rust-analyzer identity.
+    ///
+    /// # Example Under Test
+    ///
+    /// `Color::Re` completed by a member edit or a whole-path edit.
+    ///
+    /// # Assertions
+    ///
+    /// - Equivalent edits merge while preserving upstream data and prioritizing the item.
+    /// - Distinct variants remain available.
+    #[test]
+    fn value_merging_preserves_upstream_identity() {
+        let text = "Color::Re";
+        let mut items = vec![
+            json!({"label":"Red", "data":{"opaque":123}, "sortText":"old", "textEdit":{"range":range(text,7..9),"newText":"Red"}}),
+        ];
+        let extras = vec![
+            json!({"label":"Color::Red", "sortText":"0_red", "textEdit":{"range":range(text,0..9),"newText":"Color::Red"}}),
+            json!({"label":"Color::Reset", "sortText":"0_reset", "textEdit":{"range":range(text,0..9),"newText":"Color::Reset"}}),
+        ];
+        merge_stylesheet_values(text, &mut items, extras);
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["data"], json!({"opaque":123}));
+        assert_eq!(items[0]["sortText"], "0_red");
+        assert_eq!(items[1]["label"], "Color::Reset");
     }
 }
