@@ -1,14 +1,15 @@
-# Editor support inside `view!`
+# Editor support inside `view!` and `stylesheet!`
 
 Use rust-analyzer with procedural macro expansion enabled. Leptatui provides
 source references for tag names, props, and embedded Rust expressions, including
-unfinished markup. No alternative markup syntax is required.
+unfinished markup. Stylesheet values preserve the same Rust expression support,
+while the proxy supplies stylesheet syntax and symbol services.
 
 | Feature | Provider |
 | --- | --- |
 | Built-in and custom component names | rust-analyzer |
 | Complete paired/self-closing tag snippets | `leptatui-lsp` proxy |
-| Brace-delimited `view! { }` completion | rust-analyzer and `leptatui-lsp` |
+| Brace-delimited `view! { }` and `stylesheet! { }` completion | rust-analyzer and `leptatui-lsp` |
 | Component props and built-in attributes | rust-analyzer |
 | Rust fields, methods, and values inside expressions | rust-analyzer |
 | Hover documentation and definitions | rust-analyzer |
@@ -48,6 +49,46 @@ and child content. Rust expressions, attribute values, strings, and comments
 keep their normal completion behavior. Clients without snippet support receive
 plain tag text.
 
+## Stylesheet support
+
+Accepting `stylesheet!` inserts `stylesheet! { }` with the cursor inside the
+braces. The proxy completes property names and aliases, terminal type selectors,
+pseudo-classes, media features, directives, local variables, mixins, and imported
+members. Property snippets insert the colon, value cursor, and semicolon. Rust
+values retain rust-analyzer's enum, field, method, hover, and definition support,
+including while the surrounding stylesheet is unfinished.
+
+```text
+flex_di              → flex_direction: $0;
+&:fo                 → &:focus
+@include colors.ch   → @include colors.chrome
+fg: colors.$ac       → fg: colors.$accent
+```
+
+Property hover describes the expected Rust value type. Variables, mixins, and
+module namespaces support hover, definitions, references, and rename. Imported
+helpers are resolved through rust-analyzer, so qualified paths and `as` aliases
+keep their Rust meaning. Static exports are discovered from helpers that directly
+return a single `stylesheet!` module. Runtime-built or dynamically extended
+`StyleModule` values are not evaluated, and their unknown exports are not
+reported as missing. Renaming an implicit import namespace introduces an `as`
+alias; renaming the Rust helper also updates namespaces that follow its name.
+
+Class and ID selectors link to matching literal `class` and `id` attributes
+across workspace files, including unsaved edits, plain, escaped, or raw strings, and
+single-literal brace expressions. These are associations by name, with separate
+class and ID namespaces; they do not infer component scope at runtime. BEM
+suffixes resolve to their full class names. Parent renames update expanded names
+in view attributes while preserving implicit suffixes in stylesheets. Renames
+that require changing a different BEM parent are rejected. Dynamic attribute expressions are left to Rust tooling.
+
+The proxy contributes stylesheet syntax and symbol diagnostics and merges them
+with rust-analyzer's diagnostics. Compiler validation and Rust type checking
+remain active. Comments and string contents do not trigger stylesheet syntax
+completion; class and ID literal attributes have their own name completions.
+Formatting and automatic edits outside accepted completion or rename requests
+are not provided.
+
 ## Install
 
 From this checkout:
@@ -86,8 +127,8 @@ If another plugin manages Rust LSP startup, configure its server command instead
 Use `:checkhealth vim.lsp` to check which client is attached. Restart the server
 after rebuilding the macro crate or installing a new proxy binary.
 
-Do not put Leptatui's `view` or `component` macros on rust-analyzer's ignored macro
-list: their expansion supplies the semantic information.
+Do not put Leptatui's `view`, `stylesheet`, or `component` macros on
+rust-analyzer's ignored macro list: their expansion supplies the semantic information.
 
 ## Validation and boundaries
 
@@ -96,6 +137,7 @@ Run the protocol suite from the repository root:
 ```sh
 cargo build -p leptatui-lsp
 python3 tools/lsp/test_view.py
+python3 tools/lsp/test_stylesheet.py
 ```
 
 Use `LEPTATUI_LSP=rust-analyzer` to run the same cases against the native server
@@ -104,5 +146,6 @@ and applies rename edits before compiling the result.
 
 The tested baseline is rust-analyzer/Rust 1.92.0. Formatting, automatically adding
 closing tags while typing outside completion, and language services inside
-arbitrary strings are outside this feature. Diagnostics still reject invalid markup; recovery preserves semantic
-information around the error rather than accepting that markup as valid Rust.
+arbitrary strings are outside this feature. Diagnostics still reject invalid
+markup; recovery preserves semantic information around the error rather than
+accepting that markup as valid Rust.

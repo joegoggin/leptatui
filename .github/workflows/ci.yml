@@ -50,3 +50,5 @@ jobs:
         run: cargo build --locked -p leptatui-lsp
       - name: Check editor semantics
         run: python3 tools/lsp/test_view.py
+      - name: Check stylesheet editor semantics
+        run: python3 tools/lsp/test_stylesheet.py

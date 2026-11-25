@@ -9,6 +9,8 @@
 //! # Modules
 //!
 //! - [`declaration`] — Property declaration parsing and expansion.
+//! - [`ide`] — Source-preserving editor probes.
+//! - [`properties`] — Shared property validation and editor metadata.
 //! - [`import`] — Imported stylesheet module bindings.
 //! - [`media`] — Responsive media-query parsing and expansion.
 //! - [`mixin`] — Mixin definitions, includes, and cycle detection.
@@ -19,9 +21,11 @@
 //! - [`variable`] — Stylesheet variable definitions and references.
 
 mod declaration;
+mod ide;
 mod import;
 mod media;
 mod mixin;
+mod properties;
 mod root;
 mod rule;
 mod selector;
@@ -44,8 +48,10 @@ use syn::Error;
 ///
 /// A [`TokenStream`] containing generated stylesheet code or compile errors.
 pub(crate) fn expand(input: TokenStream) -> TokenStream {
-    syn::parse::<StylesheetRoot>(input)
+    let input: proc_macro2::TokenStream = input.into();
+    let references = ide::references(input.clone());
+    let expanded = syn::parse2::<StylesheetRoot>(input)
         .and_then(StylesheetRoot::expand)
-        .unwrap_or_else(Error::into_compile_error)
-        .into()
+        .unwrap_or_else(Error::into_compile_error);
+    quote::quote! {{ #references #expanded }}.into()
 }

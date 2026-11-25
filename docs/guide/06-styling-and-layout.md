@@ -15,10 +15,12 @@ the existing `view!` expression:
 ```rust
 stylesheet! {
     H1 { fg: Color::LightCyan; }
+
     Button:focus { fg: Color::Yellow; }
 
     .notes-shell {
         padding: TuiSpacing::uniform(1);
+
         &__actions {
             display: Display::Flex;
             gap: Axes::all(Length::cells(1.0));

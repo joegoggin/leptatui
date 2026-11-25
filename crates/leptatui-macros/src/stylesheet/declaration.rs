@@ -159,123 +159,61 @@ impl Declaration {
 ///
 /// Returns [`syn::Error`] if the declaration name is unsupported.
 fn declaration_target(name: &Ident) -> Result<(StyleValueKind, &'static str, &'static str)> {
-    match name.to_string().as_str() {
-        "fg" | "foreground" => Ok((StyleValueKind::Color, "foreground", "foreground_important")),
-        "bg" | "background" => Ok((StyleValueKind::Color, "background", "background_important")),
-        "modifier" => Ok((StyleValueKind::Modifier, "modifier", "modifier_important")),
-        "borders" => Ok((StyleValueKind::Borders, "borders", "borders_important")),
-        "border_type" => Ok((
-            StyleValueKind::BorderType,
-            "border_type",
-            "border_type_important",
-        )),
-        "padding" => Ok((StyleValueKind::Spacing, "padding", "padding_important")),
-        "image_size" => Ok((StyleValueKind::Size, "image_size", "image_size_important")),
-        "display" => Ok((StyleValueKind::Display, "display", "display_important")),
-        "box_sizing" => Ok((
-            StyleValueKind::BoxSizing,
-            "box_sizing",
-            "box_sizing_important",
-        )),
-        "overflow" => Ok((StyleValueKind::Overflow, "overflow", "overflow_important")),
-        "size" => Ok((StyleValueKind::LayoutSize, "size", "size_important")),
-        "min_size" => Ok((StyleValueKind::LayoutSize, "min_size", "min_size_important")),
-        "max_size" => Ok((StyleValueKind::LayoutSize, "max_size", "max_size_important")),
-        "aspect_ratio" => Ok((
-            StyleValueKind::Number,
-            "aspect_ratio",
-            "aspect_ratio_important",
-        )),
-        "margin" => Ok((
-            StyleValueKind::LengthAutoEdges,
-            "margin",
-            "margin_important",
-        )),
-        "gap" => Ok((StyleValueKind::Gap, "gap", "gap_important")),
-        "flex_direction" => Ok((
-            StyleValueKind::FlexDirection,
-            "flex_direction",
-            "flex_direction_important",
-        )),
-        "flex_wrap" => Ok((StyleValueKind::FlexWrap, "flex_wrap", "flex_wrap_important")),
-        "flex_basis" => Ok((
-            StyleValueKind::Dimension,
-            "flex_basis",
-            "flex_basis_important",
-        )),
-        "flex_grow" => Ok((StyleValueKind::Number, "flex_grow", "flex_grow_important")),
-        "flex_shrink" => Ok((
-            StyleValueKind::Number,
-            "flex_shrink",
-            "flex_shrink_important",
-        )),
-        "align_items" => Ok((
-            StyleValueKind::AlignItems,
-            "align_items",
-            "align_items_important",
-        )),
-        "align_self" => Ok((
-            StyleValueKind::AlignSelf,
-            "align_self",
-            "align_self_important",
-        )),
-        "align_content" => Ok((
-            StyleValueKind::AlignContent,
-            "align_content",
-            "align_content_important",
-        )),
-        "justify_items" => Ok((
-            StyleValueKind::JustifyItems,
-            "justify_items",
-            "justify_items_important",
-        )),
-        "justify_self" => Ok((
-            StyleValueKind::JustifySelf,
-            "justify_self",
-            "justify_self_important",
-        )),
-        "justify_content" => Ok((
-            StyleValueKind::JustifyContent,
-            "justify_content",
-            "justify_content_important",
-        )),
-        "grid_auto_flow" => Ok((
-            StyleValueKind::GridAutoFlow,
-            "grid_auto_flow",
-            "grid_auto_flow_important",
-        )),
-        "grid_template_rows" => Ok((
-            StyleValueKind::GridTemplateTracks,
-            "grid_template_rows",
-            "grid_template_rows_important",
-        )),
-        "grid_template_columns" => Ok((
-            StyleValueKind::GridTemplateTracks,
-            "grid_template_columns",
-            "grid_template_columns_important",
-        )),
-        "grid_auto_rows" => Ok((
-            StyleValueKind::GridAutoTracks,
-            "grid_auto_rows",
-            "grid_auto_rows_important",
-        )),
-        "grid_auto_columns" => Ok((
-            StyleValueKind::GridAutoTracks,
-            "grid_auto_columns",
-            "grid_auto_columns_important",
-        )),
-        "grid_row" => Ok((StyleValueKind::GridLine, "grid_row", "grid_row_important")),
-        "grid_column" => Ok((
-            StyleValueKind::GridLine,
-            "grid_column",
-            "grid_column_important",
-        )),
-        "position" => Ok((StyleValueKind::Position, "position", "position_important")),
-        "inset" => Ok((StyleValueKind::LengthAutoEdges, "inset", "inset_important")),
-        "z_index" => Ok((StyleValueKind::ZIndex, "z_index", "z_index_important")),
-        _ => Err(Error::new_spanned(
+    let spelling = name.to_string();
+    let Some(&(_, category, normal, important)) = super::properties::PROPERTIES
+        .iter()
+        .find(|p| p.0 == spelling)
+    else {
+        let names = super::properties::PROPERTIES
+            .iter()
+            .map(|p| p.0)
+            .collect::<Vec<_>>();
+        let (last, rest) = names
+            .split_last()
+            .expect("stylesheet properties are nonempty");
+        return Err(Error::new_spanned(
             name,
-            "unsupported stylesheet declaration; expected fg, foreground, bg, background, modifier, borders, border_type, padding, image_size, display, box_sizing, overflow, size, min_size, max_size, aspect_ratio, margin, gap, flex_direction, flex_wrap, flex_basis, flex_grow, flex_shrink, align_items, align_self, align_content, justify_items, justify_self, justify_content, grid_auto_flow, grid_template_rows, grid_template_columns, grid_auto_rows, grid_auto_columns, grid_row, grid_column, position, inset, or z_index",
-        )),
-    }
+            format!(
+                "unsupported stylesheet declaration; expected {}, or {last}",
+                rest.join(", ")
+            ),
+        ));
+    };
+    let kind = match category {
+        "Color" => StyleValueKind::Color,
+        "Modifier" => StyleValueKind::Modifier,
+        "Borders" => StyleValueKind::Borders,
+        "BorderType" => StyleValueKind::BorderType,
+        "Spacing" => StyleValueKind::Spacing,
+        "Size" => StyleValueKind::Size,
+        "Display" => StyleValueKind::Display,
+        "BoxSizing" => StyleValueKind::BoxSizing,
+        "Overflow" => StyleValueKind::Overflow,
+        "LayoutSize" => StyleValueKind::LayoutSize,
+        "Number" => StyleValueKind::Number,
+        "LengthAutoEdges" => StyleValueKind::LengthAutoEdges,
+        "Gap" => StyleValueKind::Gap,
+        "FlexDirection" => StyleValueKind::FlexDirection,
+        "FlexWrap" => StyleValueKind::FlexWrap,
+        "Dimension" => StyleValueKind::Dimension,
+        "AlignItems" => StyleValueKind::AlignItems,
+        "AlignSelf" => StyleValueKind::AlignSelf,
+        "AlignContent" => StyleValueKind::AlignContent,
+        "JustifyItems" => StyleValueKind::JustifyItems,
+        "JustifySelf" => StyleValueKind::JustifySelf,
+        "JustifyContent" => StyleValueKind::JustifyContent,
+        "GridAutoFlow" => StyleValueKind::GridAutoFlow,
+        "GridTemplateTracks" => StyleValueKind::GridTemplateTracks,
+        "GridAutoTracks" => StyleValueKind::GridAutoTracks,
+        "GridLine" => StyleValueKind::GridLine,
+        "Position" => StyleValueKind::Position,
+        "ZIndex" => StyleValueKind::ZIndex,
+        _ => {
+            return Err(Error::new_spanned(
+                name,
+                "unsupported stylesheet value category",
+            ));
+        }
+    };
+    Ok((kind, normal, important))
 }

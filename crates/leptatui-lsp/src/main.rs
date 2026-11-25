@@ -1,14 +1,18 @@
-//! Rust-analyzer proxy providing tag snippets and complete component refactoring.
+//! Rust-analyzer proxy providing markup, stylesheet editing, and component refactoring.
 //!
 //! # Modules
 //!
 //! - [`completion`] — Macro and component tag snippets.
 //! - [`protocol`] — Framed JSON-RPC transport.
+//! - [`stylesheet`] — Recovering stylesheet syntax, symbols, imports, and diagnostics.
+//! - [`selectors`] — Static class and ID links across stylesheet and view macros.
 //! - [`source`] — Rust identifier indexing and source position conversion.
 
 mod completion;
 mod protocol;
+mod selectors;
 mod source;
+mod stylesheet;
 
 use serde_json::{Value, json};
 use std::{
@@ -57,6 +61,10 @@ struct Proxy {
     snippets: bool,
     /// Source contexts for deferred tag completions from the latest response.
     completion_contexts: HashMap<String, completion::Snapshot>,
+    /// Revision-scoped stylesheet module resolution.
+    stylesheet_imports: Option<stylesheet::imports::Snapshot>,
+    /// Last unmodified diagnostic notification for each document.
+    stylesheet_upstream_diagnostics: HashMap<String, Value>,
 }
 
 impl Proxy {
@@ -84,7 +92,7 @@ impl Proxy {
         loop {
             match self.incoming.recv().map_err(io::Error::other)? {
                 Incoming::Server(message) if message["id"] == id => return Ok(message),
-                Incoming::Server(message) => protocol::write(&mut self.client, &message)?,
+                Incoming::Server(message) => self.forward_server(message)?,
                 Incoming::Client(message) => {
                     if matches!(
                         message["method"].as_str(),
@@ -93,6 +101,9 @@ impl Proxy {
                                 | "textDocument/references"
                                 | "textDocument/completion"
                                 | "completionItem/resolve"
+                                | "textDocument/hover"
+                                | "textDocument/definition"
+                                | "textDocument/prepareRename"
                         )
                     ) {
                         self.pending.push_back(message);
@@ -110,6 +121,17 @@ impl Proxy {
                         )?;
                     } else {
                         self.observe(&message);
+                        if matches!(
+                            message["method"].as_str(),
+                            Some(
+                                "textDocument/didOpen"
+                                    | "textDocument/didChange"
+                                    | "textDocument/didClose"
+                            )
+                        ) && let Some(uri) = message["params"]["textDocument"]["uri"].as_str()
+                        {
+                            self.publish_style_diagnostics(uri)?;
+                        }
                         protocol::write(&mut self.server, &message)?;
                     }
                 }
@@ -125,6 +147,13 @@ impl Proxy {
     /// * `message` — Incoming client message.
     fn observe(&mut self, message: &Value) {
         let params = &message["params"];
+        if matches!(
+            message["method"].as_str(),
+            Some("textDocument/didChange" | "textDocument/didClose")
+        ) && let Some(uri) = params["textDocument"]["uri"].as_str()
+        {
+            self.stylesheet_upstream_diagnostics.remove(uri);
+        }
         match message["method"].as_str().unwrap_or("") {
             "initialize" => {
                 self.snippets = params
@@ -141,6 +170,7 @@ impl Proxy {
                 }
             }
             "workspace/didChangeWorkspaceFolders" => {
+                self.revision += 1;
                 if let Some(folders) = params["event"]["removed"].as_array() {
                     for folder in folders {
                         if let Some(path) = file_path(&folder["uri"]) {
@@ -268,6 +298,7 @@ impl Proxy {
             source::documents(root, &mut documents);
         }
         let mut edits = edit_map(&response["result"]);
+        let alias_locations = stylesheet::augment_aliases(&documents, &mut edits, new_name);
         let mut symbols = Vec::new();
         for (uri, text) in &documents {
             for symbol in source::component_symbols(text) {
@@ -278,7 +309,7 @@ impl Proxy {
                 }
             }
         }
-        if symbols.is_empty() {
+        if symbols.is_empty() && alias_locations.is_empty() {
             if references {
                 response = self.request("textDocument/references", message["params"].clone())?;
                 response["id"] = message["id"].clone();
@@ -365,6 +396,16 @@ impl Proxy {
             response = json!({"jsonrpc":"2.0", "id":message["id"], "error":{"code":-32800,"message":"request cancelled"}});
         } else if self.revision != revision {
             response = json!({"jsonrpc":"2.0", "id":message["id"], "error":{"code":-32801,"message":"document changed during rename; retry"}});
+        } else if references && symbols.is_empty() {
+            response = self.request("textDocument/references", message["params"].clone())?;
+            response["id"] = message["id"].clone();
+            if let Some(locations) = response["result"].as_array_mut() {
+                for location in alias_locations {
+                    if !locations.contains(&location) {
+                        locations.push(location);
+                    }
+                }
+            }
         } else if references {
             let include_declaration = message["params"]["context"]["includeDeclaration"]
                 .as_bool()
@@ -386,6 +427,11 @@ impl Proxy {
         } else {
             // A single changes map avoids duplicate document entries and version drift.
             response["result"] = json!({"changes":edits});
+        }
+        if self.cancelled {
+            response = json!({"jsonrpc":"2.0","id":message["id"],"error":{"code":-32800,"message":"request cancelled"}});
+        } else if self.revision != revision {
+            response = json!({"jsonrpc":"2.0","id":message["id"],"error":{"code":-32801,"message":"document changed during rename; retry"}});
         }
         protocol::write(&mut self.client, &response)
     }
@@ -529,6 +575,8 @@ fn main() -> io::Result<()> {
         cancelled: false,
         snippets: false,
         completion_contexts: HashMap::new(),
+        stylesheet_imports: None,
+        stylesheet_upstream_diagnostics: HashMap::new(),
     };
     let result = (|| {
         loop {
@@ -544,6 +592,19 @@ fn main() -> io::Result<()> {
                     proxy.observe(&message);
                     if matches!(
                         message["method"].as_str(),
+                        Some(
+                            "textDocument/didOpen"
+                                | "textDocument/didChange"
+                                | "textDocument/didClose"
+                        )
+                    ) && let Some(uri) = message["params"]["textDocument"]["uri"].as_str()
+                    {
+                        proxy.publish_style_diagnostics(uri)?;
+                    }
+                    if message.get("id").is_some() && proxy.style_semantic(&message)? {
+                        continue;
+                    } else if matches!(
+                        message["method"].as_str(),
                         Some("textDocument/rename" | "textDocument/references")
                     ) && message.get("id").is_some()
                     {
@@ -556,9 +617,21 @@ fn main() -> io::Result<()> {
                         proxy.complete(message)?;
                     } else {
                         protocol::write(&mut proxy.server, &message)?;
+                        if matches!(
+                            message["method"].as_str(),
+                            Some(
+                                "textDocument/didOpen"
+                                    | "textDocument/didChange"
+                                    | "workspace/didChangeWatchedFiles"
+                                    | "textDocument/didClose"
+                                    | "workspace/didChangeWorkspaceFolders"
+                            )
+                        ) {
+                            proxy.refresh_style_imports()?;
+                        }
                     }
                 }
-                Incoming::Server(message) => protocol::write(&mut proxy.client, &message)?,
+                Incoming::Server(message) => proxy.forward_server(message)?,
                 Incoming::Closed => break,
             }
         }

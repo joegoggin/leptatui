@@ -32,7 +32,7 @@ Optional experiments are marked separately from the code to carry forward.
 
 Read these when you need exact behavior or a supported-property list.
 
-- [Editor support inside `view!`](reference/editor-support.md)
+- [Editor support inside `view!` and `stylesheet!`](reference/editor-support.md)
 - [Feature index](reference/features.md)
 - [Standard components, editing keys, semantic documents, and Markdown](reference/components.md)
 - [Layout values, overflow, flexbox, grid, positioning, and CSS differences](reference/layout.md)

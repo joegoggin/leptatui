@@ -397,6 +397,27 @@ class ViewEditorTests(unittest.TestCase):
         result = self.apply_completion(source, item).replace('view! {  }', 'view! { <Text>"Macro"</Text> }')
         self.check_source(result)
 
+    def test_stylesheet_completions(self):
+        source = SOURCE.replace('fn main() {', 'fn main() {\n    stylesheet! { .panel { flex_di } };')
+        item = self.completion_item("flex_direction", source, "flex_di")
+        self.assertEqual(item["textEdit"]["newText"], "flex_direction: $0;")
+        resolved = self.client.request("completionItem/resolve", item)
+        self.assertEqual(resolved, item)
+
+    def test_stylesheet_macro_braces(self):
+        source = SOURCE.replace('fn main() {', 'fn main() {\n    let _ = stylesh;')
+        result = self.query("completion", "let _ = stylesh", source=source, end=True)
+        items = result.get("items", []) if isinstance(result, dict) else result or []
+        item = next(item for item in items if item["label"].startswith("stylesheet!"))
+        self.assertEqual(item["textEdit"]["newText"], "stylesheet! { $0 }")
+
+    def test_stylesheet_local_navigation(self):
+        source = SOURCE.replace('fn main() {', 'fn main() {\n    stylesheet! { $accent: Color::Red; Text { fg: $accent; } };')
+        definition = self.query("definition", "accent;", source=source, end=False)
+        self.assertEqual(definition["uri"], self.uri)
+        renamed = self.query("rename", "accent;", source=source, newName="primary")
+        self.assertEqual(len(renamed["changes"][self.uri]), 2)
+
     def test_custom_prop_completion(self):
         source = SOURCE.replace('title={person.name.clone()}', 'tit')
         self.assertIn("title", self.completions("<Greeting tit", source))

@@ -6,7 +6,7 @@ These instructions are for changing the library. To build an application, start 
 
 - `crates/leptatui`: Public runtime crate with app, component, view, context,
   style, and prelude APIs.
-- `crates/leptatui-lsp`: Rust-analyzer proxy completing generated-symbol rename and references.
+- `crates/leptatui-lsp`: Rust-analyzer proxy providing markup and stylesheet editor support.
 - `crates/leptatui-macros`: Internal proc-macro crate that implements
   `#[component]`, `view!`, `stylesheet!`, and the route/query parameter derives.
   The runtime crate defines `view_error!`.
@@ -41,6 +41,7 @@ compilable rename edits through the real language server:
 ```sh
 cargo build -p leptatui-lsp
 python3 tools/lsp/test_view.py
+python3 tools/lsp/test_stylesheet.py
 ```
 
 CI runs this separately with Rust/rust-analyzer 1.92.0. See

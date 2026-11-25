@@ -49,6 +49,11 @@ pub fn view(input: TokenStream) -> TokenStream {
 }
 
 /// Converts declarative terminal stylesheet syntax into Leptatui style rules.
+///
+/// # View syntax
+///
+/// Use brace-delimited terminal stylesheets.
+#[rust_analyzer::macro_style(braces)]
 #[proc_macro]
 pub fn stylesheet(input: TokenStream) -> TokenStream {
     stylesheet::expand(input)

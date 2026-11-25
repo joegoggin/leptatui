@@ -62,7 +62,30 @@ impl Proxy {
     ///
     /// Returns [`io::Error`] if a transport fails.
     fn complete_inner(&mut self, message: &Value) -> io::Result<()> {
+        if message["method"] == "completionItem/resolve"
+            && message["params"]["data"]["leptatuiStylesheet"] == true
+        {
+            let response =
+                json!({"jsonrpc":"2.0","id":message["id"],"result":message["params"]});
+            return protocol::write(&mut self.client, &response);
+        }
         let revision = self.revision;
+        if message["method"] == "textDocument/completion"
+            && let Some(mut items) = self.style_completions(&message["params"])?
+        {
+            for item in &mut items {
+                item["data"]["revision"] = json!(revision);
+            }
+            let response = if self.cancelled {
+                json!({"jsonrpc":"2.0","id":message["id"],"error":{"code":-32800,"message":"request cancelled"}})
+            } else if self.revision != revision {
+                json!({"jsonrpc":"2.0","id":message["id"],"error":{"code":-32801,"message":"document changed during completion; retry"}})
+            } else {
+                json!({"jsonrpc":"2.0","id":message["id"],"result":{"isIncomplete":false,"items":items}})
+            };
+            return protocol::write(&mut self.client, &response);
+        }
+
         let method = message["method"].as_str().unwrap_or("");
         let mut response = self.request(method, message["params"].clone())?;
         response["id"] = message["id"].clone();
@@ -114,6 +137,22 @@ impl Proxy {
                 source::offset(text, &message["params"]["position"])
                     .and_then(|offset| Context::find(text, offset))
             });
+            if let (Some(text), Some(cursor)) = (text.as_deref(), cursor) {
+                let mut extras = crate::stylesheet::rust_completions(text, cursor);
+                for item in &mut extras {
+                    item["data"]["revision"] = json!(revision);
+                }
+                if !extras.is_empty() {
+                    if response["result"].is_null() {
+                        response["result"] = json!([]);
+                    }
+                    if let Some(items) = response["result"].as_array_mut() {
+                        items.extend(extras);
+                    } else if let Some(items) = response["result"]["items"].as_array_mut() {
+                        items.extend(extras);
+                    }
+                }
+            }
             let items = if response["result"].is_array() {
                 response["result"].as_array_mut()
             } else {
@@ -127,7 +166,11 @@ impl Proxy {
                         && item["kind"] == 22;
                     let view_macro = (item["kind"] == 3 || item["kind"] == 14)
                         && item["label"].as_str().is_some_and(|label| {
-                            label == "view"
+                            label.contains('!')
+                                || label == "stylesheet"
+                                || label.starts_with("stylesheet!")
+                                || label.starts_with("stylesheet(")
+                                || label == "view"
                                 || label.starts_with("view!")
                                 || label.starts_with("view(")
                         });
@@ -273,7 +316,10 @@ fn children(item: &Value) -> Option<bool> {
 /// * `item` — Completion item to normalize in place.
 /// * `snippets` — Whether the client supports LSP snippets.
 fn macro_snippet(item: &mut Value, snippets: bool) {
-    if syntax(item) != Some("Use brace-delimited terminal markup.") {
+    if !matches!(
+        syntax(item),
+        Some("Use brace-delimited terminal markup." | "Use brace-delimited terminal stylesheets.")
+    ) {
         return;
     }
     let Some(text) = item["textEdit"]["newText"].as_str() else {
@@ -395,7 +441,13 @@ fn append_edit(item: &mut Value, edit: Value) {
 fn decorated(item: &Value) -> bool {
     let text = item["textEdit"]["newText"].as_str().unwrap_or("");
     (children(item).is_some() && text.starts_with('<'))
-        || (syntax(item) == Some("Use brace-delimited terminal markup.") && text.contains("! { "))
+        || (matches!(
+            syntax(item),
+            Some(
+                "Use brace-delimited terminal markup."
+                    | "Use brace-delimited terminal stylesheets."
+            )
+        ) && text.contains("! { "))
 }
 
 /// Converts a byte range into a UTF-16 LSP text range.
@@ -495,5 +547,38 @@ mod tests {
         tag_snippet(&mut item, text, &context, false, false);
         assert_eq!(item["textEdit"]["newText"], "<Input />");
         assert_eq!(item["insertTextFormat"], 1);
+    }
+    /// Verifies stylesheet macro snippets preserve aliases and upstream edit identity.
+    ///
+    /// # Example Under Test
+    ///
+    /// ```text
+    /// stylesheet!($0)
+    /// styles! {$0}
+    /// stylesheet!
+    /// ```
+    ///
+    /// # Assertions
+    ///
+    /// - Snippet and plain-text clients receive brace-delimited macros.
+    /// - Upstream opaque data and insert/replace ranges are retained.
+    #[test]
+    fn stylesheet_macro_snippets_preserve_identity() {
+        for (source, snippets, expected) in [
+            ("stylesheet!($0)", true, "stylesheet! { $0 }"),
+            ("styles! {$0}", true, "styles! { $0 }"),
+            ("stylesheet!", false, "stylesheet! { }"),
+        ] {
+            let mut item = json!({"label":"stylesheet!","data":{"opaque":123},"documentation":"# View syntax\n\nUse brace-delimited terminal stylesheets.","textEdit":{"newText":source,"insert":{"start":{"line":0,"character":0},"end":{"line":0,"character":3}},"replace":{"start":{"line":0,"character":0},"end":{"line":0,"character":5}}}});
+            let identity = item["data"].clone();
+            let insert = item["textEdit"]["insert"].clone();
+            let replace = item["textEdit"]["replace"].clone();
+            macro_snippet(&mut item, snippets);
+            assert_eq!(item["textEdit"]["newText"], expected);
+            assert_eq!(item["data"], identity);
+            assert_eq!(item["textEdit"]["insert"], insert);
+            assert_eq!(item["textEdit"]["replace"], replace);
+            assert!(decorated(&item));
+        }
     }
 }
