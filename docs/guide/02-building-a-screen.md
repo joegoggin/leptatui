@@ -3,8 +3,8 @@
 Prerequisites: [Chapter 1: Getting started](01-getting-started.md).
 
 Build a static note and learn how the view tree describes its structure.
-Keep the imports, quit handler, and `main` from chapter 1. Replace only the
-`view!` expression in `NotesApp` with:
+Keep `src/main.rs` from chapter 1. In `src/app.rs`, keep the imports and
+quit handler, and replace only the `view!` expression in `NotesApp` with:
 
 ```rust
 view! {
@@ -43,26 +43,26 @@ below the previous one. Resize the terminal to see paragraph wrapping.
 The [component reference](../reference/components.md) lists the available
 views. We will introduce them as the application needs them.
 
-## Complete code
+## Complete files for this chapter
 
-Replace `src/main.rs` with the following. Use the Cargo manifest from
-[chapter 1](01-getting-started.md) and run `cargo run` in your application
-project. Ctrl+Q quits.
+Create or replace only the files listed below; retain all other files from
+the previous chapter. Keep the Cargo manifest from [chapter 1](01-getting-started.md).
+
+Run `cargo run` in your application project. Ctrl+Q quits.
+
+### `src/app.rs`
 
 ```rust
 use leptatui::prelude::*;
 
 #[component]
-fn NotesApp() -> impl IntoView {
+pub(crate) fn NotesApp() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
-        if key.code == KeyCode::Char('q')
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-        {
+        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return KeyControl::Exit;
         }
         KeyControl::Pass
     });
-
 
     view! {
         <Block>
@@ -74,11 +74,6 @@ fn NotesApp() -> impl IntoView {
             </Div>
         </Block>
     }
-}
-
-#[tokio::main]
-async fn main() -> leptatui::app::Result<()> {
-    App::new(view! { <NotesApp /> }).run().await
 }
 ```
 

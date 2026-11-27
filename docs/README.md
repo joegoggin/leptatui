@@ -27,10 +27,17 @@ for ordinary application code.
 
 ## Code in each chapter
 
-Each chapter explains incremental edits and ends with a complete, runnable
-`src/main.rs`. Use the Cargo manifest from chapter 1 throughout. Chapters 1–12
-progressively build the notes app; chapter 13 is a standalone extension lesson.
-Optional experiments are marked separately from the code to carry forward.
+Each chapter explains incremental edits and ends with complete contents of
+every new or changed file, labeled by path. Keep other files from the previous
+chapter and delete superseded files where instructed. Use the Cargo manifest
+from chapter 1 throughout. Chapters 1–12 progressively build the notes app;
+chapter 13 is a standalone extension lesson. Optional experiments are marked
+separately from the code to carry forward.
+
+Organize the project from chapter 1: keep startup in `main.rs`, application
+composition in `app.rs`, and add focused layout, page, component, and service
+modules as needed. Styled views keep their stylesheet in an adjacent `style.rs`.
+The guide follows the [Markdown editor's organization](../examples/markdown-editor/README.md#architecture-and-data-flow).
 
 ## Reference
 

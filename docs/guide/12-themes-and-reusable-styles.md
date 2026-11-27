@@ -5,7 +5,8 @@ Prerequisites: [Chapter 11: Documents and media](11-documents-and-media.md).
 Make the app's appearance reusable. Keep literal palette colors in a theme
 model and use named variables in component styles.
 
-Inside `NotesApp`, after providing `Draft` and before its stylesheet, add:
+Inside `NotesApp` in `src/app.rs`, after providing `Draft` and before its
+`view!`, add:
 
 ```rust
 let light = RwSignal::new(false);
@@ -17,7 +18,7 @@ let theme = RwSignal::new(
 provide_context(theme.read_only());
 ```
 
-In the existing shell stylesheet, remove `H1 { fg: Color::LightCyan; }`;
+In `src/layouts/root/style.rs`, remove `H1 { fg: Color::LightCyan; }`;
 we will style the heading through a reusable mixin below. Add these declarations
 inside the existing `.notes-shell` rule, keeping its layout rules:
 
@@ -26,7 +27,7 @@ fg: theme_color("text");
 bg: theme_color("surface");
 ```
 
-Add the following button after Preview in the navigation `Div`:
+In `src/app.rs`, add the following button after Preview in the navigation `Div`:
 
 ```rust
 <Button on_press=move || {
@@ -50,30 +51,20 @@ The separate library example is `cargo run --example theme_switcher`.
 
 Local `$variables` avoid repeating values; `@mixin` defines reusable
 declarations. Helpers returning only variables and mixins produce a
-`StyleModule`, which another stylesheet imports with `@use`. Add `note_styles`
-above `NoteHeading`, then replace `NoteHeading` with the definition below.
-Keep its `text` prop so existing callers continue to work:
+`StyleModule`, which another stylesheet imports with `@use`.
 
-```rust
-fn note_styles() -> StyleModule {
-    stylesheet! {
-        $accent: Color::LightCyan;
-        @mixin heading {
-            fg: $accent;
-            modifier: Modifier::BOLD;
-        }
-    }
-}
+The heading now has its own styles. Replace
+`src/layouts/root/components/note_heading.rs` with a `note_heading` directory
+containing `component.rs`, `style.rs`, and `mod.rs`. Delete the old flat file
+so Rust sees only one module. Keep the parent `mod note_heading;` declaration
+and re-export unchanged.
 
-#[component]
-fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
-    stylesheet! {
-        @use note_styles as notes;
-        H1 { @include notes.heading; }
-    }
-    view! { <H1>{text}</H1> }
-}
-```
+Put `note_styles() -> StyleModule` and `use_note_heading_styles()` in the new
+`style.rs`. The first helper defines the reusable accent variable and heading
+mixin; the second imports it with `@use note_styles as notes` and applies
+`@include notes.heading` to `H1`. Call `use_note_heading_styles()` during
+`NoteHeading` setup in `component.rs`. Keep the `text` prop unchanged.
+The complete files below include both helpers and the module facade.
 
 Nested rules express descendant selectors. `&:focus`, `&:active`, `&:insert`,
 `&:visual`, and `&:visited` combine supported states with the containing
@@ -83,182 +74,74 @@ choose between rules; inline styles override normal stylesheet rules, while
 stylesheet `!important` overrides normal inline declarations. Inheritable
 values flow through the tree; do not assume every layout property inherits.
 
-As components grow, place a component and its style helper together in a
-module directory. A helper in `style.rs` should invoke `stylesheet!` during
-component setup and end it with a semicolon when returning `()`. Routed pages
-can use the same pattern. The [stylesheet reference](../reference/stylesheets.md)
-contains the module layout and exact cascade examples.
+This is the same co-location pattern introduced for the root layout in chapter 6.
+A style helper registers rules for its calling component's subtree; keep it
+synchronous and terminate `stylesheet!` with a semicolon when returning `()`.
+The [stylesheet reference](../reference/stylesheets.md) explains the cascade.
 
 Run `stylesheet_imports`, `style_cascade_showcase`, or
 `default_styles_showcase` with `cargo run --example NAME`.
 
-## Complete code
+## Complete files for this chapter
 
-Replace `src/main.rs` with the following. Use the Cargo manifest from
-[chapter 1](01-getting-started.md) and run `cargo run` in your application
-project. Ctrl+Q quits.
+Create or replace only the files listed below; retain all other files from
+the previous chapter. Keep the Cargo manifest from [chapter 1](01-getting-started.md).
+
+Delete these superseded files: `src/layouts/root/components/note_heading.rs`.
+
+The project now contains:
+
+```text
+└── src/
+    ├── app.rs
+    ├── draft.rs
+    ├── layouts/
+    │   ├── mod.rs
+    │   └── root/
+    │       ├── component.rs
+    │       ├── components/
+    │       │   ├── file_toolbar.rs
+    │       │   ├── mod.rs
+    │       │   └── note_heading/
+    │       │       ├── component.rs
+    │       │       ├── mod.rs
+    │       │       └── style.rs
+    │       ├── mod.rs
+    │       └── style.rs
+    ├── main.rs
+    └── pages/
+        ├── edit/
+        │   ├── mod.rs
+        │   └── page.rs
+        ├── mod.rs
+        ├── not_found/
+        │   ├── mod.rs
+        │   └── page.rs
+        ├── note_details/
+        │   ├── mod.rs
+        │   └── page.rs
+        ├── preview/
+        │   ├── mod.rs
+        │   └── page.rs
+        └── required_file/
+            ├── mod.rs
+            └── page.rs
+```
+
+Run `cargo run` in your application project. Ctrl+Q quits.
+
+### `src/app.rs`
 
 ```rust
 use leptatui::prelude::*;
 
-#[derive(Clone, Copy)]
-struct Draft {
-    title: RwSignal<String>,
-    body: RwSignal<String>,
-    status: RwSignal<String>,
-}
-
-fn note_styles() -> StyleModule {
-    stylesheet! {
-        $accent: Color::LightCyan;
-        @mixin heading {
-            fg: $accent;
-            modifier: Modifier::BOLD;
-        }
-    }
-}
+use crate::draft::Draft;
+use crate::layouts::FileToolbar;
+use crate::layouts::RootLayout;
+use crate::pages::{NotFound, NoteDetails, NoteEditor, NotePreview, RequiredFile};
 
 #[component]
-fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
-    stylesheet! {
-        @use note_styles as notes;
-        H1 { @include notes.heading; }
-    }
-    view! { <H1>{text}</H1> }
-}
-
-#[component]
-fn NoteEditor() -> impl IntoView {
-    let Draft { title, body, status } = expect_context::<Draft>();
-
-    view! {
-        <Div>
-            <Form
-                on_submit=move || {
-                    status.set(String::from("Submitted in memory"));
-                }
-                on_cancel=move || {
-                    status.set(String::from("Canceled; draft kept"));
-                }
-            >
-                <Text>"Title"</Text>
-                <Input value=title placeholder="Title"
-                    on_input=move || {
-                        status.set(String::from("Editing"));
-                    }
-                />
-                <Text>"Body"</Text>
-                <TextArea value=body placeholder="Write a note"
-                    on_input=move || {
-                        status.set(String::from("Editing"));
-                    }
-                />
-            </Form>
-            <Text>{status}</Text>
-            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
-        </Div>
-    }
-}
-
-#[component]
-fn NotePreview() -> impl IntoView {
-    let Draft { title, body, .. } = expect_context::<Draft>();
-    view! {
-        <Div>
-            <H2>{title}</H2>
-            {move || markdown_with_options(
-                body.get(),
-                MarkdownOptions::default().line_numbers(true),
-            )}
-        </Div>
-    }
-}
-
-#[component]
-fn NotFound() -> impl IntoView {
-    view! { <Text>"Page not found. Choose Edit or Preview."</Text> }
-}
-
-#[derive(Clone, RouteParams)]
-struct NoteParams {
-    id: usize,
-}
-
-#[derive(Clone, QueryParams)]
-struct NoteQuery {
-    line: Option<usize>,
-}
-
-#[component]
-fn NoteDetails() -> ViewResult<impl IntoView> {
-    let params = use_params::<NoteParams>()?;
-    let query = use_query::<NoteQuery>()?;
-    view! { <Text>{format!("Note {}, line {:?}", params.id, query.line)}</Text> }
-}
-
-#[component]
-fn RequiredFile() -> ViewResult<impl IntoView> {
-    let source = match std::fs::read_to_string("note.md") {
-        Ok(source) => source,
-        Err(error) => view_error!(error => "Could not load note.md"),
-    };
-    view! { <Paragraph>{source}</Paragraph> }
-}
-
-#[component]
-fn FileToolbar() -> ViewResult<impl IntoView> {
-    let Draft { body, status, .. } = expect_context::<Draft>();
-    let files =
-        use_file_system_with_options("notes-data", FileSystemOptions::new().create_root(true))?;
-    let latest_read = RwSignal::new(None::<FileOperation<String>>);
-    let latest_write = RwSignal::new(None::<FileOperation<()>>);
-    let read_files = files.clone();
-    view! {
-        <Div>
-            <Div class="notes-shell__actions">
-                        <Button on_press=move || {
-                            latest_read.set(Some(read_files.read_file_as_string("note.md")));
-                        }>"Load body"</Button>
-                <Button on_press=move || {
-                    if let Some(read) = latest_read.get_untracked() {
-                        read.value().with_untracked(|result| {
-                            if let Some(Ok(value)) = result {
-                                body.set(value.clone());
-                                status.set(String::from("File applied to draft"));
-                            }
-                        });
-                    }
-                }>"Use loaded note"</Button>
-                <Button on_press=move || {
-                    latest_write.set(Some(files.write_and_replace_file(
-                        "note.md", body.get_untracked(),
-                    )));
-                }>"Save body"</Button>
-            </Div>
-            <Text>{move || match latest_read.get() {
-                None => String::from("No read yet"),
-                Some(read) if read.is_pending() => String::from("Reading..."),
-                Some(read) => read.value().with(|result| match result {
-                    Some(Ok(_)) => String::from("Read complete; choose Use loaded note"),
-                    Some(Err(error)) => format!("Read failed: {error}"),
-                    None => String::from("Waiting for read"),
-                }),
-            }}</Text>
-            <Text>{move || match latest_write.get() {
-                None => String::from("No save yet"),
-                Some(write) if write.is_pending() => String::from("Saving..."),
-                Some(write) => write.value().with(|result| match result {
-                    Some(Ok(())) => String::from("Saved notes-data/note.md"),
-                    Some(Err(error)) => format!("Save failed: {error}"),
-                    None => String::from("Waiting for save"),
-                }),
-            }}</Text>
-        </Div>
-    }
-}
-
-#[component]
-fn NotesApp() -> impl IntoView {
+pub(crate) fn NotesApp() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return KeyControl::Exit;
@@ -269,7 +152,11 @@ fn NotesApp() -> impl IntoView {
     let body = RwSignal::new(String::from("Learn to build a terminal application."));
     let status = RwSignal::new(String::from("Editing"));
 
-    provide_context(Draft { title, body, status });
+    provide_context(Draft {
+        title,
+        body,
+        status,
+    });
 
     let light = RwSignal::new(false);
     let theme = RwSignal::new(
@@ -278,6 +165,91 @@ fn NotesApp() -> impl IntoView {
             .color("surface", Color::Black),
     );
     provide_context(theme.read_only());
+
+    view! {
+        <Router initial_path="/edit">
+            <RootLayout>
+                <Div class="notes-shell__actions">
+                    <A href="/edit">"Edit"</A>
+                    <A href="/preview">"Preview"</A>
+                    <Button on_press=move || {
+                        light.update(|value| *value = !*value);
+                        let (text, surface) = if light.get_untracked() {
+                            (Color::Black, Color::White)
+                        } else {
+                            (Color::White, Color::Black)
+                        };
+                        theme.set(ThemeVariables::new().color("text", text).color("surface", surface));
+                    }>"Toggle theme"</Button>
+                    <A href="/notes/1?line=3">"Note details"</A>
+                    <A href="/notes/abc">"Invalid note"</A>
+                    <A href="/required-file">"Read note.md"</A>
+                </Div>
+                <FileToolbar />
+                <Routes fallback=NotFound>
+                    <Route path="/edit" view=NoteEditor />
+                    <Route path="/preview" view=NotePreview />
+                    <Route path="/notes/:id" view=NoteDetails />
+                    <Route path="/required-file" view=RequiredFile />
+                </Routes>
+            </RootLayout>
+        </Router>
+    }
+}
+```
+
+### `src/layouts/root/components/note_heading/component.rs`
+
+```rust
+use leptatui::prelude::*;
+
+use super::style::use_note_heading_styles;
+
+#[component]
+pub(in crate::layouts::root) fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
+    use_note_heading_styles();
+    view! { <H1>{text}</H1> }
+}
+```
+
+### `src/layouts/root/components/note_heading/mod.rs`
+
+```rust
+mod component;
+mod style;
+
+pub(in crate::layouts::root) use component::NoteHeading;
+```
+
+### `src/layouts/root/components/note_heading/style.rs`
+
+```rust
+use leptatui::prelude::*;
+
+fn note_styles() -> StyleModule {
+    stylesheet! {
+        $accent: Color::LightCyan;
+        @mixin heading {
+            fg: $accent;
+            modifier: Modifier::BOLD;
+        }
+    }
+}
+
+pub(super) fn use_note_heading_styles() {
+    stylesheet! {
+        @use note_styles as notes;
+        H1 { @include notes.heading; }
+    };
+}
+```
+
+### `src/layouts/root/style.rs`
+
+```rust
+use leptatui::prelude::*;
+
+pub(super) fn use_root_layout_styles() {
     stylesheet! {
         A:active { fg: Color::LightGreen; }
         Button:focus { fg: Color::Yellow; }
@@ -294,42 +266,7 @@ fn NotesApp() -> impl IntoView {
                 }
             }
         }
-    }
-    view! {
-        <Router initial_path="/edit">
-            <Div class="notes-shell">
-                <NoteHeading text="My notes" />
-                <Div class="notes-shell__actions">
-                    <A href="/edit">"Edit"</A>
-                    <A href="/preview">"Preview"</A>
-                <Button on_press=move || {
-                    light.update(|value| *value = !*value);
-                    let (text, surface) = if light.get_untracked() {
-                        (Color::Black, Color::White)
-                    } else {
-                        (Color::White, Color::Black)
-                    };
-                    theme.set(ThemeVariables::new().color("text", text).color("surface", surface));
-                }>"Toggle theme"</Button>
-                    <A href="/notes/1?line=3">"Note details"</A>
-                    <A href="/notes/abc">"Invalid note"</A>
-                    <A href="/required-file">"Read note.md"</A>
-                </Div>
-                <FileToolbar />
-                <Routes fallback=NotFound>
-                    <Route path="/edit" view=NoteEditor />
-                    <Route path="/preview" view=NotePreview />
-                    <Route path="/notes/:id" view=NoteDetails />
-                    <Route path="/required-file" view=RequiredFile />
-                </Routes>
-            </Div>
-        </Router>
-    }
-}
-
-#[tokio::main]
-async fn main() -> leptatui::app::Result<()> {
-    App::new(view! { <NotesApp /> }).run().await
+    };
 }
 ```
 

@@ -28,6 +28,17 @@ in markup for conditional content. Keep helpers without macro equivalents
 inside markup, and explain their purpose. Inline style builders are appropriate
 only when an example specifically teaches inline precedence or `!important`.
 
+Progressive application guides should teach file organization from project
+creation, following `examples/markdown-editor`: a startup entry point, application
+composition, feature-owned pages and components, layouts, and data services as
+needed. Keep styled components in `component.rs`, `style.rs`, and `mod.rs`;
+use `page.rs` for routed pages. Small unstyled components can remain flat files.
+Register co-located styles through a helper called during component setup.
+Avoid accumulating the whole application in `main.rs` or another large file.
+Show complete new or changed files with explicit paths, module declarations,
+re-exports, and move/deletion instructions; retain unchanged files between
+chapters. Do not create empty architectural layers ahead of their use.
+
 ## Quality Gates
 
 CI validates the full workspace with the same commands expected for local

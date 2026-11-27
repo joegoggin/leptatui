@@ -5,7 +5,7 @@ Prerequisites: [Chapter 2: Building a screen](02-building-a-screen.md).
 Make the note respond to counter buttons. A signal is a value that remembers who
 reads it, allowing the interface to update when that value changes.
 
-Immediately after the quit handler in `NotesApp`, add:
+In `src/app.rs`, immediately after the quit handler in `NotesApp`, add:
 
 ```rust
 let count = RwSignal::new(0_i32);
@@ -73,21 +73,22 @@ Raw keyboard handlers still return `KeyControl` explicitly.
 For a separate example with custom shortcuts, run
 `cargo run --example counter` in the library checkout.
 
-## Complete code
+## Complete files for this chapter
 
-Replace `src/main.rs` with the following. Use the Cargo manifest from
-[chapter 1](01-getting-started.md) and run `cargo run` in your application
-project. Ctrl+Q quits.
+Create or replace only the files listed below; retain all other files from
+the previous chapter. Keep the Cargo manifest from [chapter 1](01-getting-started.md).
+
+Run `cargo run` in your application project. Ctrl+Q quits.
+
+### `src/app.rs`
 
 ```rust
 use leptatui::prelude::*;
 
 #[component]
-fn NotesApp() -> impl IntoView {
+pub(crate) fn NotesApp() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
-        if key.code == KeyCode::Char('q')
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-        {
+        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return KeyControl::Exit;
         }
         KeyControl::Pass
@@ -114,11 +115,6 @@ fn NotesApp() -> impl IntoView {
             </Div>
         </Block>
     }
-}
-
-#[tokio::main]
-async fn main() -> leptatui::app::Result<()> {
-    App::new(view! { <NotesApp /> }).run().await
 }
 ```
 

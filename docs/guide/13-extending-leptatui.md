@@ -11,10 +11,12 @@ for this lesson so you can keep your notes app.
 
 `View` is an open, object-safe trait. A render-only leaf implements `render`,
 `as_any`, and `as_any_mut`; other methods have defaults. Add the following
-code below the prelude import and above `NotesApp`:
+code in `src/views/rule.rs`, with its own prelude import. Make `Rule`
+`pub(crate)`, re-export it from `src/views/mod.rs`, and declare `mod views;`
+in `main.rs`:
 
 ```rust
-struct Rule;
+pub(crate) struct Rule;
 
 impl View for Rule {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::Result<()> {
@@ -82,8 +84,9 @@ show how the library tests rendering. Contributor checks live in
 
 ## Mount the custom view
 
-Use the chapter 1 `NotesApp` with its Ctrl+Q handler and `main` function.
-Replace only its final view with:
+Start from chapter 1's two-file application in this separate project. Keep
+`main.rs` for startup and the Ctrl+Q handler in `app.rs`. Import
+`crate::views::Rule` in `app.rs`, then replace `NotesApp`'s final view with:
 
 ```rust
 view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> }
@@ -92,17 +95,74 @@ view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> 
 Run `cargo run`. You should see a heading and a horizontal line of dashes;
 Ctrl+Q exits. This small example adds no direct Ratatui dependency.
 
-## Complete code
+## Complete files for this chapter
 
-Replace `src/main.rs` with the following. Use the Cargo manifest from
-[chapter 1](01-getting-started.md) and run `cargo run` in your application
-project. Ctrl+Q quits.
+These are all files for the separate extension project. Use chapter 1's
+Cargo manifest.
+
+The project now contains:
+
+```text
+└── src/
+    ├── app.rs
+    ├── main.rs
+    └── views/
+        ├── mod.rs
+        └── rule.rs
+```
+
+Run `cargo run` in your application project. Ctrl+Q quits.
+
+### `src/app.rs`
 
 ```rust
 use leptatui::prelude::*;
 
-struct Rule;
+use crate::views::Rule;
 
+#[component]
+pub(crate) fn NotesApp() -> impl IntoView {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            return KeyControl::Exit;
+        }
+        KeyControl::Pass
+    });
+
+    view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> }
+}
+```
+
+### `src/main.rs`
+
+```rust
+mod app;
+mod views;
+
+use leptatui::prelude::*;
+
+use crate::app::NotesApp;
+
+#[tokio::main]
+async fn main() -> leptatui::app::Result<()> {
+    App::new(view! { <NotesApp /> }).run().await
+}
+```
+
+### `src/views/mod.rs`
+
+```rust
+mod rule;
+
+pub(crate) use rule::Rule;
+```
+
+### `src/views/rule.rs`
+
+```rust
+use leptatui::prelude::*;
+
+pub(crate) struct Rule;
 impl View for Rule {
     fn render(&self, ctx: &mut RenderCtx<'_, '_>) -> leptatui::Result<()> {
         view! { <Text>"----------------"</Text> }.render(ctx)
@@ -115,26 +175,6 @@ impl View for Rule {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
-}
-
-#[component]
-fn NotesApp() -> impl IntoView {
-    use_key_event(KeyEventKind::Press, |key| {
-        if key.code == KeyCode::Char('q')
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-        {
-            return KeyControl::Exit;
-        }
-        KeyControl::Pass
-    });
-
-
-    view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> }
-}
-
-#[tokio::main]
-async fn main() -> leptatui::app::Result<()> {
-    App::new(view! { <NotesApp /> }).run().await
 }
 ```
 

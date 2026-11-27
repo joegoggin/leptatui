@@ -2,73 +2,29 @@
 
 Prerequisites: [Chapter 5: Reusable components](05-reusable-components.md).
 
-Give the notes app a readable, responsive layout. Make the following two edits
-in your notes project's `src/main.rs`, continuing from chapter 5.
+Give the notes app a readable, responsive layout, continuing from chapter 5.
 
-## Add the stylesheet to `NotesApp`
+## Co-locate styles with the shell
 
-Find `fn NotesApp() -> impl IntoView`. Keep its quit handler, signal definitions,
-and `provide_context(Draft { title, body, status });` call. Immediately after
-that `provide_context` call, insert the following `stylesheet!` block, before
-the existing `view!` expression:
+Create `src/layouts/root/style.rs` with a synchronous
+`pub(super) fn use_root_layout_styles()` helper. Put the shell's `stylesheet!`
+in that helper and end the macro invocation with `;`, so the function returns
+`()`. Declare `mod style;` in `src/layouts/root/mod.rs`.
 
-```rust
-stylesheet! {
-    H1 { fg: Color::LightCyan; }
-
-    Button:focus { fg: Color::Yellow; }
-
-    .notes-shell {
-        padding: TuiSpacing::uniform(1);
-
-        &__actions {
-            display: Display::Flex;
-            gap: Axes::all(Length::cells(1.0));
-            @media (max-width: 60) {
-                flex_direction: FlexDirection::Column;
-            }
-        }
-    }
-}
-```
-
-## Replace the shell view
-
-Still inside `NotesApp`, replace its existing `view! { <Panel> ... </Panel> }`
-expression with the following. This keeps `Panel`, `NoteHeading`, and
-`NoteEditor` from chapter 5, wraps the shell in a styled `Div`, and adds a row
-of Reset and Quit buttons:
-
-```rust
-view! {
-    <Panel>
-        <Div class="notes-shell">
-            <NoteHeading text="My notes" />
-            <Div class="notes-shell__actions">
-                <Button on_press=move || {
-                    title.set(String::from("First note"));
-                    body.set(String::from("Learn to build a terminal application."));
-                    status.set(String::from("Reset in memory"));
-                }>
-                    "Reset draft"
-                </Button>
-                <Button on_press=|| AppControl::Exit>"Quit"</Button>
-            </Div>
-            <NoteEditor />
-        </Div>
-    </Panel>
-}
-```
+In `src/layouts/root/component.rs`, import the helper and call it at the start
+of `RootLayout`, before returning its view. Add a `Div class="notes-shell"`
+around the heading and children. This keeps shell presentation in the layout,
+while `src/app.rs` keeps the Reset and Quit callbacks and the editor composition.
+The complete files below show these changes.
 
 The nested `&__actions` selector expands to `.notes-shell__actions`, matching
-that inner `Div`. Leave the `Draft`, `Panel`, `NoteHeading`, and `NoteEditor`
-definitions and `main` function as they were in chapter 5. Run `cargo run` in
-your notes project: the buttons should sit beside each other in a wide terminal
-and stack when the terminal is 60 columns wide or narrower.
+the action row in `app.rs`. The heading rule and focus rule apply throughout
+the layout's subtree. Register styles in the component that owns that subtree;
+placing Rust code in another file does not change stylesheet scope.
 
-A stylesheet registered during component setup applies to that component's
-subtree, including descendants. Built-in defaults remain available underneath
-your rules. A helper containing `stylesheet!` must also run during setup.
+Run `cargo run`: the buttons should sit beside each other in a wide terminal
+and stack when the terminal is 60 columns wide or narrower. Reset should
+replace the draft and status; Quit should return to the shell.
 
 ## Work in terminal cells
 
@@ -79,9 +35,10 @@ also supports automatic sizing.
 
 The width and grid snippets below are optional experiments, rather than
 additional edits to the notes app. To try either snippet, temporarily replace
-`NotesApp`'s final `view!` expression with the entire snippet, including its
-`stylesheet!` declaration. Keep the existing setup and stylesheet above it.
-Restore the shell view from the previous section before continuing to chapter 7.
+`RootLayout`'s final `view!` expression in `src/layouts/root/component.rs` with
+the entire snippet, including its `stylesheet!` declaration. Keep the existing
+setup and call to `use_root_layout_styles()` before it. Restore the root layout
+view from the complete files below before continuing to chapter 7.
 
 This example makes a container fill the available width:
 
@@ -139,67 +96,45 @@ stacking, retained geometry, and terminal-specific limitations, use the
 inline overrides, and `!important`, use the
 [stylesheet reference](../reference/stylesheets.md).
 
-## Complete code
+## Complete files for this chapter
 
-Replace `src/main.rs` with the following. Use the Cargo manifest from
-[chapter 1](01-getting-started.md) and run `cargo run` in your application
-project. Ctrl+Q quits.
+Create or replace only the files listed below; retain all other files from
+the previous chapter. Keep the Cargo manifest from [chapter 1](01-getting-started.md).
+
+The project now contains:
+
+```text
+└── src/
+    ├── app.rs
+    ├── components/
+    │   ├── mod.rs
+    │   └── note_editor.rs
+    ├── draft.rs
+    ├── layouts/
+    │   ├── mod.rs
+    │   └── root/
+    │       ├── component.rs
+    │       ├── components/
+    │       │   ├── mod.rs
+    │       │   └── note_heading.rs
+    │       ├── mod.rs
+    │       └── style.rs
+    └── main.rs
+```
+
+Run `cargo run` in your application project. Ctrl+Q quits.
+
+### `src/app.rs`
 
 ```rust
 use leptatui::prelude::*;
 
-#[derive(Clone, Copy)]
-struct Draft {
-    title: RwSignal<String>,
-    body: RwSignal<String>,
-    status: RwSignal<String>,
-}
+use crate::components::NoteEditor;
+use crate::draft::Draft;
+use crate::layouts::RootLayout;
 
 #[component]
-fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
-    view! { <H1>{text}</H1> }
-}
-
-#[component]
-fn Panel(children: Children) -> impl IntoView {
-    view! { <Block><Div>{children}</Div></Block> }
-}
-
-#[component]
-fn NoteEditor() -> impl IntoView {
-    let Draft { title, body, status } = expect_context::<Draft>();
-
-    view! {
-        <Div>
-            <Form
-                on_submit=move || {
-                    status.set(String::from("Submitted in memory"));
-                }
-                on_cancel=move || {
-                    status.set(String::from("Canceled; draft kept"));
-                }
-            >
-                <Text>"Title"</Text>
-                <Input value=title placeholder="Title"
-                    on_input=move || {
-                        status.set(String::from("Editing"));
-                    }
-                />
-                <Text>"Body"</Text>
-                <TextArea value=body placeholder="Write a note"
-                    on_input=move || {
-                        status.set(String::from("Editing"));
-                    }
-                />
-            </Form>
-            <Text>{status}</Text>
-            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
-        </Div>
-    }
-}
-
-#[component]
-fn NotesApp() -> impl IntoView {
+pub(crate) fn NotesApp() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return KeyControl::Exit;
@@ -210,8 +145,71 @@ fn NotesApp() -> impl IntoView {
     let body = RwSignal::new(String::from("Learn to build a terminal application."));
     let status = RwSignal::new(String::from("Editing"));
 
-    provide_context(Draft { title, body, status });
+    provide_context(Draft {
+        title,
+        body,
+        status,
+    });
 
+    view! {
+        <RootLayout>
+            <Div class="notes-shell__actions">
+                <Button on_press=move || {
+                    title.set(String::from("First note"));
+                    body.set(String::from("Learn to build a terminal application."));
+                    status.set(String::from("Reset in memory"));
+                }>
+                    "Reset draft"
+                </Button>
+                <Button on_press=|| AppControl::Exit>"Quit"</Button>
+            </Div>
+            <NoteEditor />
+        </RootLayout>
+    }
+}
+```
+
+### `src/layouts/root/component.rs`
+
+```rust
+use leptatui::prelude::*;
+
+use super::components::NoteHeading;
+use super::style::use_root_layout_styles;
+
+#[component]
+pub(crate) fn RootLayout(children: Children) -> impl IntoView {
+    use_root_layout_styles();
+
+    view! {
+        <Block>
+            <Div>
+                <Div class="notes-shell">
+                    <NoteHeading text="My notes" />
+                    {children}
+                </Div>
+            </Div>
+        </Block>
+    }
+}
+```
+
+### `src/layouts/root/mod.rs`
+
+```rust
+mod component;
+mod components;
+mod style;
+
+pub(crate) use component::RootLayout;
+```
+
+### `src/layouts/root/style.rs`
+
+```rust
+use leptatui::prelude::*;
+
+pub(super) fn use_root_layout_styles() {
     stylesheet! {
         H1 { fg: Color::LightCyan; }
         Button:focus { fg: Color::Yellow; }
@@ -226,30 +224,7 @@ fn NotesApp() -> impl IntoView {
                 }
             }
         }
-    }
-    view! {
-        <Panel>
-            <Div class="notes-shell">
-                <NoteHeading text="My notes" />
-                <Div class="notes-shell__actions">
-                    <Button on_press=move || {
-                        title.set(String::from("First note"));
-                        body.set(String::from("Learn to build a terminal application."));
-                        status.set(String::from("Reset in memory"));
-                    }>
-                        "Reset draft"
-                    </Button>
-                    <Button on_press=|| AppControl::Exit>"Quit"</Button>
-                </Div>
-                <NoteEditor />
-            </Div>
-        </Panel>
-    }
-}
-
-#[tokio::main]
-async fn main() -> leptatui::app::Result<()> {
-    App::new(view! { <NotesApp /> }).run().await
+    };
 }
 ```
 

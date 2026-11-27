@@ -2,7 +2,12 @@
 
 Prerequisites: [Chapter 9: Async data](09-async-data.md).
 
-Replace the mock service with real note files. Keep the editor and routes
+Replace the mock service with real note files. Delete
+`src/layouts/root/components/data_toolbar.rs` and the `src/services` directory;
+remove their module declarations and re-exports, including `mod services;`
+in `main.rs`. Create `src/layouts/root/components/file_toolbar.rs` instead,
+re-export `FileToolbar` through the layout modules, and update its import and
+usage in `src/app.rs`. Keep the editor and routes
 from chapter 9, and replace the data toolbar with load/save controls.
 It stores the body as `notes-data/note.md`, relative to the notes project's
 working directory. The title remains in memory.
@@ -49,12 +54,13 @@ atomic replacement, copy, rename, deletion, retries, and expected failures.
 
 ## Connect file loading and saving
 
-Replace the entire `DataToolbar` definition with this `FileToolbar`. Replace
+Put this `FileToolbar` in the new `file_toolbar.rs`, importing the prelude and
+`crate::draft::Draft`. Replace
 `<DataToolbar />` in `NotesApp` with `<FileToolbar />`:
 
 ```rust
 #[component]
-fn FileToolbar() -> ViewResult<impl IntoView> {
+pub(crate) fn FileToolbar() -> ViewResult<impl IntoView> {
     let Draft { body, status, .. } = expect_context::<Draft>();
     let files =
         use_file_system_with_options("notes-data", FileSystemOptions::new().create_root(true))?;
@@ -108,13 +114,15 @@ fn FileToolbar() -> ViewResult<impl IntoView> {
 
 ## Optional: Choose a file
 
-The selector owns its own full-screen interface. To try it, add this component
-above `NotesApp`, then insert `<FilePicker />` after `<FileToolbar />` in the
-shell. The selected path is displayed without replacing the draft:
+The selector owns its own full-screen interface. To try it, create
+`src/layouts/root/components/file_picker.rs` with the prelude import and this
+`pub(crate)` component. Declare and re-export it through the same layout modules
+as `FileToolbar`, then import it in `src/app.rs` and insert `<FilePicker />`
+after `<FileToolbar />`. The selected path is displayed without replacing the draft:
 
 ```rust
 #[component]
-fn FilePicker() -> impl IntoView {
+pub(crate) fn FilePicker() -> impl IntoView {
     let selector = use_file_selector();
     let open = selector.clone();
     view! {
@@ -144,14 +152,16 @@ inside your filesystem root: use an appropriate root before operating on it.
 
 ## Optional: Open an external editor
 
-Add this component above `NotesApp` and insert `<EditorTools />` after
-`<FileToolbar />` in the shell. Save a note first before trying the saved-file
-button. The first button edits the draft signal through a temporary Markdown
-file; the second edits the saved file:
+Create `src/layouts/root/components/editor_tools.rs`, importing the prelude
+and `crate::draft::Draft`. Declare and re-export `EditorTools` through the layout
+modules as above, then import it in `src/app.rs` and insert `<EditorTools />`
+after `<FileToolbar />`. Save a note first before trying the saved-file button.
+The first button edits the draft signal through a temporary Markdown file;
+the second edits the saved file:
 
 ```rust
 #[component]
-fn EditorTools() -> impl IntoView {
+pub(crate) fn EditorTools() -> impl IntoView {
     let Draft { body, .. } = expect_context::<Draft>();
     let editor = use_editor();
     let text_editor = editor.clone();
@@ -192,108 +202,125 @@ normal rendering. Run `cargo run --example external_editor` or explore the
 [Markdown editor application](../../examples/markdown-editor/README.md).
 
 The selector and external editor sections are optional integrations. Remove
-`FilePicker`, `EditorTools`, and their shell tags after trying them. The final
+`file_picker.rs`, `editor_tools.rs`, their module declarations, re-exports,
+imports, and shell tags after trying them. The final
 application below uses the fixed `notes-data/note.md` path and is the version
 to continue with in chapter 11. No additional Cargo dependencies are required.
 
-## Complete code
+## Complete files for this chapter
 
-Replace `src/main.rs` with the following. Use the Cargo manifest from
-[chapter 1](01-getting-started.md) and run `cargo run` in your application
-project. Ctrl+Q quits.
+Create or replace only the files listed below; retain all other files from
+the previous chapter. Keep the Cargo manifest from [chapter 1](01-getting-started.md).
+
+Delete these superseded files: `src/layouts/root/components/data_toolbar.rs`, `src/services/mod.rs`, `src/services/notes.rs`.
+
+The project now contains:
+
+```text
+└── src/
+    ├── app.rs
+    ├── draft.rs
+    ├── layouts/
+    │   ├── mod.rs
+    │   └── root/
+    │       ├── component.rs
+    │       ├── components/
+    │       │   ├── file_toolbar.rs
+    │       │   ├── mod.rs
+    │       │   └── note_heading.rs
+    │       ├── mod.rs
+    │       └── style.rs
+    ├── main.rs
+    └── pages/
+        ├── edit/
+        │   ├── mod.rs
+        │   └── page.rs
+        ├── mod.rs
+        ├── not_found/
+        │   ├── mod.rs
+        │   └── page.rs
+        ├── note_details/
+        │   ├── mod.rs
+        │   └── page.rs
+        ├── preview/
+        │   ├── mod.rs
+        │   └── page.rs
+        └── required_file/
+            ├── mod.rs
+            └── page.rs
+```
+
+Run `cargo run` in your application project. Ctrl+Q quits.
+
+### `src/app.rs`
 
 ```rust
 use leptatui::prelude::*;
 
-#[derive(Clone, Copy)]
-struct Draft {
-    title: RwSignal<String>,
-    body: RwSignal<String>,
-    status: RwSignal<String>,
-}
+use crate::draft::Draft;
+use crate::layouts::FileToolbar;
+use crate::layouts::RootLayout;
+use crate::pages::{NotFound, NoteDetails, NoteEditor, NotePreview, RequiredFile};
 
 #[component]
-fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
-    view! { <H1>{text}</H1> }
-}
+pub(crate) fn NotesApp() -> impl IntoView {
+    use_key_event(KeyEventKind::Press, |key| {
+        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            return KeyControl::Exit;
+        }
+        KeyControl::Pass
+    });
+    let title = RwSignal::new(String::from("First note"));
+    let body = RwSignal::new(String::from("Learn to build a terminal application."));
+    let status = RwSignal::new(String::from("Editing"));
 
-#[component]
-fn NoteEditor() -> impl IntoView {
-    let Draft { title, body, status } = expect_context::<Draft>();
+    provide_context(Draft {
+        title,
+        body,
+        status,
+    });
 
     view! {
-        <Div>
-            <Form
-                on_submit=move || {
-                    status.set(String::from("Submitted in memory"));
-                }
-                on_cancel=move || {
-                    status.set(String::from("Canceled; draft kept"));
-                }
-            >
-                <Text>"Title"</Text>
-                <Input value=title placeholder="Title"
-                    on_input=move || {
-                        status.set(String::from("Editing"));
-                    }
-                />
-                <Text>"Body"</Text>
-                <TextArea value=body placeholder="Write a note"
-                    on_input=move || {
-                        status.set(String::from("Editing"));
-                    }
-                />
-            </Form>
-            <Text>{status}</Text>
-            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
-        </Div>
+        <Router initial_path="/edit">
+            <RootLayout>
+                <Div class="notes-shell__actions">
+                    <A href="/edit">"Edit"</A>
+                    <A href="/preview">"Preview"</A>
+                    <A href="/notes/1?line=3">"Note details"</A>
+                    <A href="/notes/abc">"Invalid note"</A>
+                    <A href="/required-file">"Read note.md"</A>
+                </Div>
+                <FileToolbar />
+                <Routes fallback=NotFound>
+                    <Route path="/edit" view=NoteEditor />
+                    <Route path="/preview" view=NotePreview />
+                    <Route path="/notes/:id" view=NoteDetails />
+                    <Route path="/required-file" view=RequiredFile />
+                </Routes>
+            </RootLayout>
+        </Router>
     }
 }
+```
+
+### `src/layouts/mod.rs`
+
+```rust
+mod root;
+
+pub(crate) use root::FileToolbar;
+pub(crate) use root::RootLayout;
+```
+
+### `src/layouts/root/components/file_toolbar.rs`
+
+```rust
+use leptatui::prelude::*;
+
+use crate::draft::Draft;
 
 #[component]
-fn NotePreview() -> impl IntoView {
-    let Draft { title, body, .. } = expect_context::<Draft>();
-    view! {
-        <Div>
-            <H2>{title}</H2>
-            <Paragraph>{body}</Paragraph>
-        </Div>
-    }
-}
-
-#[component]
-fn NotFound() -> impl IntoView {
-    view! { <Text>"Page not found. Choose Edit or Preview."</Text> }
-}
-
-#[derive(Clone, RouteParams)]
-struct NoteParams {
-    id: usize,
-}
-
-#[derive(Clone, QueryParams)]
-struct NoteQuery {
-    line: Option<usize>,
-}
-
-#[component]
-fn NoteDetails() -> ViewResult<impl IntoView> {
-    let params = use_params::<NoteParams>()?;
-    let query = use_query::<NoteQuery>()?;
-    view! { <Text>{format!("Note {}, line {:?}", params.id, query.line)}</Text> }
-}
-
-#[component]
-fn RequiredFile() -> ViewResult<impl IntoView> {
-    let source = match std::fs::read_to_string("note.md") {
-        Ok(source) => source,
-        Err(error) => view_error!(error => "Could not load note.md"),
-    };
-    view! { <Paragraph>{source}</Paragraph> }
-}
-
-#[component]
-fn FileToolbar() -> ViewResult<impl IntoView> {
+pub(crate) fn FileToolbar() -> ViewResult<impl IntoView> {
     let Draft { body, status, .. } = expect_context::<Draft>();
     let files =
         use_file_system_with_options("notes-data", FileSystemOptions::new().create_root(true))?;
@@ -343,59 +370,40 @@ fn FileToolbar() -> ViewResult<impl IntoView> {
         </Div>
     }
 }
+```
 
-#[component]
-fn NotesApp() -> impl IntoView {
-    use_key_event(KeyEventKind::Press, |key| {
-        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            return KeyControl::Exit;
-        }
-        KeyControl::Pass
-    });
-    let title = RwSignal::new(String::from("First note"));
-    let body = RwSignal::new(String::from("Learn to build a terminal application."));
-    let status = RwSignal::new(String::from("Editing"));
+### `src/layouts/root/components/mod.rs`
 
-    provide_context(Draft { title, body, status });
+```rust
+mod file_toolbar;
+mod note_heading;
 
-    stylesheet! {
-        H1 { fg: Color::LightCyan; }
-        A:active { fg: Color::LightGreen; }
-        Button:focus { fg: Color::Yellow; }
+pub(crate) use file_toolbar::FileToolbar;
+pub(super) use note_heading::NoteHeading;
+```
 
-        .notes-shell {
-            padding: TuiSpacing::uniform(1);
-            &__actions {
-                display: Display::Flex;
-                gap: Axes::all(Length::cells(1.0));
-                @media (max-width: 60) {
-                    flex_direction: FlexDirection::Column;
-                }
-            }
-        }
-    }
-    view! {
-        <Router initial_path="/edit">
-            <Div class="notes-shell">
-                <NoteHeading text="My notes" />
-                <Div class="notes-shell__actions">
-                    <A href="/edit">"Edit"</A>
-                    <A href="/preview">"Preview"</A>
-                    <A href="/notes/1?line=3">"Note details"</A>
-                    <A href="/notes/abc">"Invalid note"</A>
-                    <A href="/required-file">"Read note.md"</A>
-                </Div>
-                <FileToolbar />
-                <Routes fallback=NotFound>
-                    <Route path="/edit" view=NoteEditor />
-                    <Route path="/preview" view=NotePreview />
-                    <Route path="/notes/:id" view=NoteDetails />
-                    <Route path="/required-file" view=RequiredFile />
-                </Routes>
-            </Div>
-        </Router>
-    }
-}
+### `src/layouts/root/mod.rs`
+
+```rust
+mod component;
+mod components;
+mod style;
+
+pub(crate) use component::RootLayout;
+pub(crate) use components::FileToolbar;
+```
+
+### `src/main.rs`
+
+```rust
+mod app;
+mod draft;
+mod layouts;
+mod pages;
+
+use leptatui::prelude::*;
+
+use crate::app::NotesApp;
 
 #[tokio::main]
 async fn main() -> leptatui::app::Result<()> {

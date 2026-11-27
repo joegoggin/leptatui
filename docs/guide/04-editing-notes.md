@@ -5,7 +5,7 @@ Prerequisites: [Chapter 3: State and interaction](03-state-and-interaction.md).
 Turn the static note into an editable title and body. This chapter replaces
 the counter demonstration; we now keep the actual note in signals.
 
-After the quit handler, replace `count` with:
+In `src/app.rs`, after the quit handler in `NotesApp`, replace `count` with:
 
 ```rust
 let title = RwSignal::new(String::from("First note"));
@@ -78,17 +78,20 @@ The [component reference](../reference/components.md) explains additional
 movement, selection, undo, redo, and clipboard commands. Run
 `cargo run --example controlled_form` for a separate form demonstration.
 
-## Complete code
+## Complete files for this chapter
 
-Replace `src/main.rs` with the following. Use the Cargo manifest from
-[chapter 1](01-getting-started.md) and run `cargo run` in your application
-project. Ctrl+Q quits.
+Create or replace only the files listed below; retain all other files from
+the previous chapter. Keep the Cargo manifest from [chapter 1](01-getting-started.md).
+
+Run `cargo run` in your application project. Ctrl+Q quits.
+
+### `src/app.rs`
 
 ```rust
 use leptatui::prelude::*;
 
 #[component]
-fn NotesApp() -> impl IntoView {
+pub(crate) fn NotesApp() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
         if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return KeyControl::Exit;
@@ -128,11 +131,6 @@ fn NotesApp() -> impl IntoView {
             <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
         </Div>
     }
-}
-
-#[tokio::main]
-async fn main() -> leptatui::app::Result<()> {
-    App::new(view! { <NotesApp /> }).run().await
 }
 ```
 
