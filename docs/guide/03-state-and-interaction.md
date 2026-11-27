@@ -1,8 +1,11 @@
 # 3. State and interaction
 
-Prerequisites: [Chapter 2: Building a screen](02-building-a-screen.md).
+Continue from [chapter 2: Building a screen](02-building-a-screen.md).
 
-Make the note respond to counter buttons. A signal is a value that remembers who
+The note always shows the same text. Let's add a counter to see how a
+button press changes what Leptatui draws.
+
+A signal is a value that remembers who
 reads it, allowing the interface to update when that value changes.
 
 In `src/app.rs`, immediately after the quit handler in `NotesApp`, add:
@@ -35,7 +38,7 @@ view! {
 }
 ```
 
-Press Tab to focus Increment, then Enter or Space to increase the count.
+Run `cargo run`. Press Tab to focus Increment, then Enter or Space to increase the count.
 Tab again to reach Decrement, which decreases the count, then Reset, which
 returns it to zero. Shift+Tab moves focus backward. Pointer movement can focus
 controls; left-click activates a button or link.
@@ -52,23 +55,42 @@ The component body runs once per mounted component instance. Expressions inside
 signals they read. Changing `count` updates the count without rerunning
 component setup or requiring a closure around the view.
 
-A value computed before `view!` is still a snapshot. Keep computations that
-should update inside the view expression. For conditional UI, use a tracked
-child closure inside `view!` so signal changes update the displayed branch.
+If you build the label with `let label = format!("Count: {}", count.get());`
+before `view!`, it captures the starting count and keeps showing `Count: 0`.
+In the example above, `count.get()` is inside `view!`, so Leptatui can read
+the latest count and format the label again whenever it changes.
+
+To show different content depending on the count, put the `if` inside a
+`move ||` closure in `view!`. For example, you could add this line below the
+count label. Leptatui runs the closure again when `count` changes, so pressing
+Increment replaces the first message and pressing Reset brings it back.
+
+```rust
+<Text>{move || if count.get() == 0 { "At zero" } else { "Away from zero" }}</Text>
+```
 
 ## Keyboard handlers and callbacks
 
-The chapter 1 handler returns `KeyControl::Pass` for keys it does not handle.
-`Handled` stops propagation while keeping the app running; `Exit` exits.
-Registered handlers run after descendant components' handlers and before
-built-in focus and activation handling. Handle only the keys you intend to
-claim, particularly around editable controls.
+Think about what happens when you press Tab. The keyboard handler you wrote
+in chapter 1 sees that Tab doesn't match Ctrl+Q and returns `KeyControl::Pass`.
+That gives Leptatui's built-in focus handling a chance to move you to the next
+button. Every `use_key_event` handler returns a `KeyControl` value to say what
+should happen next.
 
-Button, input, text area, and form callbacks can return `()` (including by
-omitting a return expression) to keep the app running. Return
-`AppControl::Exit` to quit; explicit `AppControl::Continue` also works.
-The two control enums serve different jobs: key propagation and app lifetime.
-Raw keyboard handlers still return `KeyControl` explicitly.
+- `KeyControl::Pass` lets other handlers and built-in behavior try the key.
+- `KeyControl::Handled` consumes the key and keeps the app running.
+- `KeyControl::Exit` quits the app, as Ctrl+Q does here.
+
+Components nested inside yours get the first chance to handle the key. If
+they pass it along, your handler runs before Leptatui's built-in focus and
+activation behavior. Use `Pass` for keys outside your shortcut so controls
+can still respond to their usual keys.
+
+Now press Enter while Increment is focused. Leptatui activates the button
+and calls its `on_press` callback, which updates the count and returns `()`.
+That keeps the app running, just like returning `AppControl::Continue`.
+If you add a Quit button, its callback can return `AppControl::Exit` instead.
+Input, text area, and form callbacks follow the same convention.
 
 For a separate example with custom shortcuts, run
 `cargo run --example counter` in the library checkout.

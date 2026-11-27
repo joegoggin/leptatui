@@ -1,9 +1,9 @@
 # 1. Getting started
 
-Prerequisites: Basic Rust and Cargo.
+This chapter assumes basic Rust and Cargo.
 
-By the end of this chapter, you will have a running application that owns the
-terminal and exits cleanly.
+Let's build a notes app. You'll start with a line of text and a
+keyboard shortcut that returns you to your shell.
 
 ## Create your notes project
 
@@ -45,14 +45,10 @@ replacing the placeholder with the desired commit SHA. See Cargo's
 [Git dependency documentation](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-dependencies-from-git-repositories)
 for more options.
 
-## Organize the project from the start
+## Run your first screen
 
-Keep `src/main.rs` focused on startup and put application composition in
-`src/app.rs`. Declare `mod app;` in the entry point and import
-`crate::app::NotesApp`. The complete files at the end of this chapter include
-both the startup code and the quit handler.
-
-Create `src/app.rs` with the prelude import and an application component:
+Start with the screen you’ll see when the notes app opens. Create
+`src/app.rs` and add the following code.
 
 ```rust
 use leptatui::prelude::*;
@@ -63,11 +59,41 @@ pub(crate) fn NotesApp() -> impl IntoView {
 }
 ```
 
-`pub(crate)` lets the entry point use the component without exposing it outside
-this application. Each Rust module has its own imports; importing the prelude
-in `main.rs` does not import it into `app.rs`.
+The prelude brings in the types, traits, and macros you'll use throughout the
+guide. `#[component]` lets you use `NotesApp` as a tag inside `view!`, just
+like the built-in `Text` tag. You'll see that when you wire up `main.rs` below.
 
-Replace the generated `src/main.rs` with the startup code:
+Think of `view!` as a description of what goes on screen. Here it creates a
+single `Text` view, and the quoted string between its opening and closing tags
+is what `Text` displays. The return type, `impl IntoView`, tells Leptatui it
+can use the value returned by `NotesApp` as part of the interface. In the next
+chapter, you'll put several views together to build a bordered note.
+
+The text says Ctrl+Q quits, so let's give that key a job. Add this handler
+inside `NotesApp`, just above `view!`.
+
+```rust
+use_key_event(KeyEventKind::Press, |key| {
+    if key.code == KeyCode::Char('q')
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+    {
+        return KeyControl::Exit;
+    }
+    KeyControl::Pass
+});
+```
+
+When Leptatui sets up `NotesApp`, `use_key_event` registers the closure as a
+keyboard handler. `KeyEventKind::Press` makes it run on key presses. The
+closure checks both parts of the shortcut: `key.code` identifies the `q` key,
+and `key.modifiers` tells you whether Control was held down.
+
+When both checks pass, `KeyControl::Exit` tells Leptatui to close the app.
+A plain `q` returns `KeyControl::Pass`, so it can continue through normal
+handling. That will matter when you add an editor that needs to accept `q`
+as ordinary text. Keep this shortcut as you build on the app in later chapters.
+
+Now replace the generated `src/main.rs` with the code that starts the app.
 
 ```rust
 mod app;
@@ -82,8 +108,33 @@ async fn main() -> leptatui::app::Result<()> {
 }
 ```
 
-As the app grows, add files around responsibilities rather than accumulating
-components, styles, and data operations in the entry point:
+`mod app;` tells Rust to include `src/app.rs` as a module. `pub(crate)` makes
+`NotesApp` available inside this application, and `use crate::app::NotesApp;`
+brings the name into scope so you can write `<NotesApp />`. The tag closes
+itself because you're passing it no nested content. Each file imports the
+prelude for the names it uses.
+
+`App::new` takes that view as the starting point for the whole interface.
+`#[tokio::main]` starts the async runtime that runs `main`, and
+`.run().await` keeps the app running while Leptatui draws the screen and waits
+for input. Selecting `KeyControl::Exit` ends that loop and restores your
+terminal. The `Result` from `run` becomes the result of `main`, so a startup
+or runtime error can reach the shell.
+
+From the notes project, run this in an interactive terminal.
+
+```sh
+cargo run
+```
+
+You should see “My notes — Ctrl+Q to quit”. Press Ctrl+Q to return to your
+shell. If your terminal intercepts Ctrl+Q, change the key combination in
+`NotesApp` to one your terminal passes to the app.
+
+## As the app grows
+
+These two files are enough for your first screen. You'll add modules as the
+app needs them, while `main.rs` keeps the same job of starting it.
 
 - `app.rs` composes the application and owns shared state and routing.
 - `layouts/root` contains the persistent shell and its supporting components.
@@ -94,37 +145,8 @@ components, styles, and data operations in the entry point:
   can stay in a single file. A `mod.rs` declares private implementation modules
   and re-exports only what other parts of the application need.
 
-Create these modules as they become useful; do not add empty directories now.
-The [Markdown editor](../../examples/markdown-editor/README.md#architecture-and-data-flow)
-shows this organization in a complete application. We will apply it throughout
-this guide, including co-located styles when styling is introduced.
-
-Before running the app, add the following handler at the start of `NotesApp`
-in `src/app.rs`, before `view!`, so you can exit cleanly:
-
-```rust
-use_key_event(KeyEventKind::Press, |key| {
-    if key.code == KeyCode::Char('q')
-        && key.modifiers.contains(KeyModifiers::CONTROL)
-    {
-        return KeyControl::Exit;
-    }
-    KeyControl::Pass
-});
-```
-
-Run `cargo run` from the notes project. You should see the text, and Ctrl+Q
-should return to your shell. If your terminal captures Ctrl+Q, change the quit
-key combination to one it delivers to applications. Use an interactive terminal
-rather than an editor's output-only panel.
-
-`prelude::*` imports commonly used types, traits, and macros. `#[component]`
-turns a function into a reusable terminal component. `view!` constructs its
-interface. Tokio supplies the async runtime used by `App::run` and later data
-operations. `App` manages terminal setup, event polling, redraws, and cleanup.
-
-The quit behavior is explicit: this application registers it with
-`use_key_event`. Keep this handler in `NotesApp` throughout the guide.
+The complete Markdown editor shows how these pieces fit together.
+[Markdown editor architecture](../../examples/markdown-editor/README.md#architecture-and-data-flow)
 
 ## Optional: Run library examples
 

@@ -1,8 +1,11 @@
 # 8. Handling failures
 
-Prerequisites: [Chapter 7: Pages and navigation](07-pages-and-navigation.md).
+Continue from [chapter 7: Pages and navigation](07-pages-and-navigation.md).
 
-Prepare for operations that can fail. A component returning
+Your router can show Edit and Preview. Let's add two pages that let
+you see what happens when a page can't open.
+
+A component returning
 `ViewResult<impl IntoView>` can use `?` during setup. The component macro wraps
 its final bare view expression in `Ok` for you. The parameter and query models
 derive `Clone` because the tracked view captures their values.
@@ -12,6 +15,8 @@ parameter/query models. Re-export `NoteDetails` through its `mod.rs` and
 `pages/mod.rs`. Wire it to `/notes/:id` to try `/notes/1?line=3`:
 
 ```rust
+use leptatui::prelude::*;
+
 #[derive(Clone, RouteParams)]
 struct NoteParams {
     id: usize,
@@ -45,6 +50,8 @@ message needs application context. Put this page in
 `src/pages/required_file/page.rs` and re-export `RequiredFile` the same way:
 
 ```rust
+use leptatui::prelude::*;
+
 #[component]
 pub(crate) fn RequiredFile() -> ViewResult<impl IntoView> {
     let source = match std::fs::read_to_string("note.md") {
@@ -83,6 +90,44 @@ Inside `Routes`, after the preview route, add:
 ```rust
 <Route path="/notes/:id" view=NoteDetails />
 <Route path="/required-file" view=RequiredFile />
+```
+
+Create `src/pages/note_details/mod.rs` with these contents.
+
+```rust
+mod page;
+
+pub(crate) use page::NoteDetails;
+```
+
+Create `src/pages/required_file/mod.rs` with these contents.
+
+```rust
+mod page;
+
+pub(crate) use page::RequiredFile;
+```
+
+Update `src/pages/mod.rs` with these contents.
+
+```rust
+mod edit;
+mod not_found;
+mod note_details;
+mod preview;
+mod required_file;
+
+pub(crate) use edit::NoteEditor;
+pub(crate) use not_found::NotFound;
+pub(crate) use note_details::NoteDetails;
+pub(crate) use preview::NotePreview;
+pub(crate) use required_file::RequiredFile;
+```
+
+In `src/app.rs`, replace the page import.
+
+```rust
+use crate::pages::{NotFound, NoteDetails, NoteEditor, NotePreview, RequiredFile};
 ```
 
 Run `cargo run` and open **Note details**, then **Invalid note**. The latter

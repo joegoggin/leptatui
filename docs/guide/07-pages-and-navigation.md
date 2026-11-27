@@ -1,35 +1,142 @@
 # 7. Pages and navigation
 
-Prerequisites: [Chapter 6: Styling and layout](06-styling-and-layout.md).
+Continue from [chapter 6: Styling and layout](06-styling-and-layout.md).
 
-Give the notes app an editor page and a preview page. Routing selects a view
-using an in-memory path such as `/edit`; it does not start a web server.
+You can edit a draft in place. Let's add a Preview page so you can
+switch between editing and reading the same text.
 
-Keep the draft provider and quit handler in `src/app.rs`. Move
-`src/components/note_editor.rs` to `src/pages/edit/page.rs`, preserving its
-`NoteEditor` component and shared `Draft` import. Add `pages/edit/mod.rs` to
-re-export it. Create matching `preview` and `not_found` page directories, each
-with `page.rs` and `mod.rs`. These pages have no local style rules yet, so they
-do not need empty `style.rs` files.
+The router chooses a view using an in-memory path such as `/edit`.
 
-Declare and re-export the pages in `src/pages/mod.rs`, declare `mod pages;` in
-`main.rs`, and import them in `app.rs`. Delete the old `src/components` directory
-and its `mod components;` declaration after moving the editor; keep only one
-copy of the component.
+Move `src/components/note_editor.rs` to `src/pages/edit/page.rs`. The
+component stays the same because it already reads the shared draft through
+context. Delete the old `src/components/mod.rs` and its now-empty directory.
 
-In `src/layouts/root/component.rs`, replace the bordered wrapper with the
-`notes-shell` container, retaining the heading and `{children}`. Add
-`A:active { fg: Color::LightGreen; }` to `src/layouts/root/style.rs`.
+Create `src/pages/edit/mod.rs` with these contents.
 
-In `app.rs`, wrap `RootLayout` in `Router` and pass navigation plus `Routes`
-as its children. The complete files below include the new pages and wiring.
+```rust
+mod page;
+
+pub(crate) use page::NoteEditor;
+```
+
+Create `src/pages/preview/page.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+use crate::draft::Draft;
+
+#[component]
+pub(crate) fn NotePreview() -> impl IntoView {
+    let Draft { title, body, .. } = expect_context::<Draft>();
+    view! {
+        <Div>
+            <H2>{title}</H2>
+            <Paragraph>{body}</Paragraph>
+        </Div>
+    }
+}
+```
+
+Create `src/pages/preview/mod.rs` with these contents.
+
+```rust
+mod page;
+
+pub(crate) use page::NotePreview;
+```
+
+Create `src/pages/not_found/page.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+#[component]
+pub(crate) fn NotFound() -> impl IntoView {
+    view! { <Text>"Page not found. Choose Edit or Preview."</Text> }
+}
+```
+
+Create `src/pages/not_found/mod.rs` with these contents.
+
+```rust
+mod page;
+
+pub(crate) use page::NotFound;
+```
+
+Create `src/pages/mod.rs` with these contents.
+
+```rust
+mod edit;
+mod not_found;
+mod preview;
+
+pub(crate) use edit::NoteEditor;
+pub(crate) use not_found::NotFound;
+pub(crate) use preview::NotePreview;
+```
+
+In `src/main.rs`, remove `mod components;` and add `mod pages;`.
+
+Update `src/layouts/root/component.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+use super::components::NoteHeading;
+use super::style::use_root_layout_styles;
+
+#[component]
+pub(crate) fn RootLayout(children: Children) -> impl IntoView {
+    use_root_layout_styles();
+
+    view! {
+        <Div class="notes-shell">
+            <NoteHeading text="My notes" />
+            {children}
+        </Div>
+    }
+}
+```
+
+In `src/layouts/root/style.rs`, add this rule inside `stylesheet!` alongside the heading rule.
+
+```rust
+A:active { fg: Color::LightGreen; }
+```
+
+In `src/app.rs`, replace `use crate::components::NoteEditor;` with this import.
+
+```rust
+use crate::pages::{NotFound, NoteEditor, NotePreview};
+```
+
+Replace the final `view!` in `NotesApp` with the router.
+
+```rust
+view! {
+    <Router initial_path="/edit">
+        <RootLayout>
+            <Div class="notes-shell__actions">
+                <A href="/edit">"Edit"</A>
+                <A href="/preview">"Preview"</A>
+            </Div>
+            <Routes fallback=NotFound>
+                <Route path="/edit" view=NoteEditor />
+                <Route path="/preview" view=NotePreview />
+            </Routes>
+        </RootLayout>
+    </Router>
+}
+```
 
 `A` is an internal route anchor. `Link` opens a URL or local file with the
 system handler. The shell outside `Routes` stays mounted, so its context-owned
 draft survives navigation. Each route points to the component re-exported by
 its page module.
 
-Tab to Preview and activate it. It should show the latest draft; returning to
+Run `cargo run` and edit the body. Tab to Preview and press Enter. It should show the latest draft; returning to
 Edit should preserve the text. An active route anchor matches `A:active`.
 Use `exact=true` when a root anchor should match only its exact destination.
 

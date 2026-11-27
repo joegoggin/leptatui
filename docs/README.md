@@ -5,10 +5,6 @@ programming. Chapters 1–12 build a notes app: display a note, edit it, organiz
 its components and pages, load and save data, then add Markdown and themes.
 Chapter 13 explores custom views in a standalone application.
 
-Build application UI with `view!` and declare styles with `stylesheet!`.
-Direct view and style builders are low-level escape hatches and an anti-pattern
-for ordinary application code.
-
 ## Read in order
 
 1. [Getting started](guide/01-getting-started.md)
@@ -27,17 +23,16 @@ for ordinary application code.
 
 ## Code in each chapter
 
-Each chapter explains incremental edits and ends with complete contents of
-every new or changed file, labeled by path. Keep other files from the previous
-chapter and delete superseded files where instructed. Use the Cargo manifest
-from chapter 1 throughout. Chapters 1–12 progressively build the notes app;
-chapter 13 is a standalone extension lesson. Optional experiments are marked
-separately from the code to carry forward.
+Follow the edits in order in your notes project. Each step names the file
+and shows the code you need to add or replace. Run the chapter checkpoint
+to see what changed, then compare your work with the complete files if you
+get stuck. Carry those files and the chapter 1 Cargo manifest forward.
+Optional experiments include steps to get back to the main app. For chapter
+13, start from a separate copy of the chapter 1 project.
 
-Organize the project from chapter 1: keep startup in `main.rs`, application
-composition in `app.rs`, and add focused layout, page, component, and service
-modules as needed. Styled views keep their stylesheet in an adjacent `style.rs`.
-The guide follows the [Markdown editor's organization](../examples/markdown-editor/README.md#architecture-and-data-flow).
+As the app grows, you'll move the shell, pages, components, styles, and data
+operations into their own modules. You can see the same organization in the
+[complete Markdown editor](../examples/markdown-editor/README.md#architecture-and-data-flow).
 
 ## Reference
 

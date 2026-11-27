@@ -1,9 +1,9 @@
 # 4. Editing notes
 
-Prerequisites: [Chapter 3: State and interaction](03-state-and-interaction.md).
+Continue from [chapter 3: State and interaction](03-state-and-interaction.md).
 
-Turn the static note into an editable title and body. This chapter replaces
-the counter demonstration; we now keep the actual note in signals.
+The counter showed how a button can change a signal. Now you'll use
+signals to hold a note's title and body while you type.
 
 In `src/app.rs`, after the quit handler in `NotesApp`, replace `count` with:
 
@@ -28,13 +28,17 @@ view! {
             }
         >
             <Text>"Title"</Text>
-            <Input value=title placeholder="Title"
+            <Input
+                value=title
+                placeholder="Title"
                 on_input=move || {
                     status.set(String::from("Editing"));
                 }
             />
             <Text>"Body"</Text>
-            <TextArea value=body placeholder="Write a note"
+            <TextArea
+                value=body
+                placeholder="Write a note"
                 on_input=move || {
                     status.set(String::from("Editing"));
                 }
@@ -46,22 +50,28 @@ view! {
 }
 ```
 
-The controls bind directly to `RwSignal<String>`: pass `value=title` or
-`value=body`, and edits update that signal automatically. You do not need an
-`on_input` callback to make the control editable.
+Look at `<Input value=title ... />`. When you type in the title field,
+Leptatui writes the edited text to the `title` signal. The body field works
+the same way through `value=body`. Passing the signal as `value` is enough
+to keep the field and the draft in sync.
 
-The optional `on_input` callback takes no arguments and runs **after** the signal
-is updated. Here it resets the status message; it can also read the updated text
-with `title.get()` or `body.get()`. External signal writes update the control
-without invoking `on_input`.
+This form uses `on_input` for a second job. After the field writes the new
+text to its signal, Leptatui calls `on_input` and the callback sets the status
+back to `Editing`. The callback takes no arguments. If it needs the new text,
+it can read it with `title.get()` or `body.get()`.
 
-`view!` tracks the bound signal automatically. Signal changes update the existing
-control, preserving its focus, cursor, selection, undo history, and editing mode.
+The binding also works in the other direction. If your code calls
+`title.set(...)`, `view!` tracks that change and updates the existing title
+field. The field keeps its focus, cursor, selection, undo history, and editing
+mode. This kind of update leaves `on_input` idle, so it also leaves the status
+message alone unless your code changes it.
 
-These callbacks return `()`, which defaults to `AppControl::Continue`.
-Return `AppControl::Exit` when a callback should quit the app.
+Like the counter callbacks in chapter 3, these callbacks return `()`, so
+the app keeps running. A callback can return `AppControl::Exit` to quit.
 
 ## Try editing
+
+Run `cargo run` to try the form.
 
 1. Press Tab to focus the title. Controls start in Vim-style normal mode.
 2. Press `i`, type a title, then Esc to return to normal mode.

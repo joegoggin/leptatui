@@ -1,21 +1,94 @@
 # 6. Styling and layout
 
-Prerequisites: [Chapter 5: Reusable components](05-reusable-components.md).
+Continue from [chapter 5: Reusable components](05-reusable-components.md).
 
-Give the notes app a readable, responsive layout, continuing from chapter 5.
+Your editor has a shell of its own. Let's style it and add buttons
+that change layout as you resize the terminal.
 
 ## Co-locate styles with the shell
 
-Create `src/layouts/root/style.rs` with a synchronous
-`pub(super) fn use_root_layout_styles()` helper. Put the shell's `stylesheet!`
-in that helper and end the macro invocation with `;`, so the function returns
-`()`. Declare `mod style;` in `src/layouts/root/mod.rs`.
+The shell owns its styles, so register them when `RootLayout` is set up.
+The helper is synchronous and ends the `stylesheet!` invocation with a
+semicolon so it returns `()`.
 
-In `src/layouts/root/component.rs`, import the helper and call it at the start
-of `RootLayout`, before returning its view. Add a `Div class="notes-shell"`
-around the heading and children. This keeps shell presentation in the layout,
-while `src/app.rs` keeps the Reset and Quit callbacks and the editor composition.
-The complete files below show these changes.
+Create `src/layouts/root/style.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+pub(super) fn use_root_layout_styles() {
+    stylesheet! {
+        H1 { fg: Color::LightCyan; }
+        Button:focus { fg: Color::Yellow; }
+
+        .notes-shell {
+            padding: TuiSpacing::uniform(1);
+            &__actions {
+                display: Display::Flex;
+                gap: Axes::all(Length::cells(1.0));
+                @media (max-width: 60) {
+                    flex_direction: FlexDirection::Column;
+                }
+            }
+        }
+    };
+}
+```
+
+Update `src/layouts/root/mod.rs` with these contents.
+
+```rust
+mod component;
+mod components;
+mod style;
+
+pub(crate) use component::RootLayout;
+```
+
+Update `src/layouts/root/component.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+use super::components::NoteHeading;
+use super::style::use_root_layout_styles;
+
+#[component]
+pub(crate) fn RootLayout(children: Children) -> impl IntoView {
+    use_root_layout_styles();
+
+    view! {
+        <Block>
+            <Div>
+                <Div class="notes-shell">
+                    <NoteHeading text="My notes" />
+                    {children}
+                </Div>
+            </Div>
+        </Block>
+    }
+}
+```
+
+In `src/app.rs`, replace the final `view!` in `NotesApp`.
+
+```rust
+view! {
+    <RootLayout>
+        <Div class="notes-shell__actions">
+            <Button on_press=move || {
+                title.set(String::from("First note"));
+                body.set(String::from("Learn to build a terminal application."));
+                status.set(String::from("Reset in memory"));
+            }>
+                "Reset draft"
+            </Button>
+            <Button on_press=|| AppControl::Exit>"Quit"</Button>
+        </Div>
+        <NoteEditor />
+    </RootLayout>
+}
+```
 
 The nested `&__actions` selector expands to `.notes-shell__actions`, matching
 the action row in `app.rs`. The heading rule and focus rule apply throughout

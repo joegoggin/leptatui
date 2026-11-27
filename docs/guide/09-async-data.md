@@ -1,9 +1,37 @@
 # 9. Async data
 
-Prerequisites: [Chapter 8: Handling failures](08-handling-failures.md).
+Continue from [chapter 8: Handling failures](08-handling-failures.md).
 
-Add a mock service without requiring a network, account, or backend. Continue
-from chapter 8 and add a data toolbar to the routed editor shell.
+A failed page took you to the error screen. Let's add a toolbar that
+shows loading and saving results beside the editor.
+
+The mock service pauses briefly so you can watch the loading and saving states.
+
+Create `src/services/notes.rs` with these contents.
+
+```rust
+pub(crate) async fn load_note() -> Result<String, String> {
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    Ok(String::from("A note from the mock service"))
+}
+
+pub(crate) async fn save_note(body: String) -> Result<String, String> {
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    if body.trim().is_empty() {
+        Err(String::from("Write something before saving"))
+    } else {
+        Ok(format!("Accepted {} bytes", body.len()))
+    }
+}
+```
+
+Create `src/services/mod.rs` with these contents.
+
+```rust
+pub(crate) mod notes;
+```
+
+In `src/main.rs`, add `mod services;` with the other module declarations.
 
 ## Read with a resource
 
@@ -44,9 +72,7 @@ Actions also ignore stale completions. If you want to refresh a resource after
 a successful mutation, call `refetch()` or update the signal used as its source.
 
 The mock save acknowledges the text but does not persist it. The next chapter
-replaces it with real file operations. Start the app, wait for loading to finish
-without pressing a key, apply the loaded note, then save. Clear the body and
-save again to see a local error while the editor stays usable.
+replaces it with real file operations.
 
 For work outside resources/actions, `spawn` schedules a `Send` future and
 `spawn_local` supports local futures. Create async work under the running Tokio
@@ -57,14 +83,109 @@ state. See the [async reference](../reference/async.md) and run
 
 ## Connect the toolbar
 
-Create `src/layouts/root/components/data_toolbar.rs` and import `Draft` plus
-`load_note` and `save_note`. The toolbar owns resource/action handles, callbacks,
-and pending/result presentation; the service owns the mock data operations.
+The service handles the data operations. The toolbar decides when to call
+them and shows the result next to the editor.
 
-Re-export `DataToolbar` through the component and layout modules, then import
-`crate::layouts::DataToolbar` in `src/app.rs`. In `NotesApp`, insert
-`<DataToolbar />` immediately before `<Routes fallback=NotFound>`. Keep the
-routes and shared draft from chapter 8.
+Create `src/layouts/root/components/data_toolbar.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+use crate::draft::Draft;
+use crate::services::notes::{load_note, save_note};
+
+#[component]
+pub(crate) fn DataToolbar() -> impl IntoView {
+    let Draft { body, status, .. } = expect_context::<Draft>();
+    let loaded = Resource::new(|| (), |_| load_note());
+    let save = Action::new(|body: &String| save_note(body.clone()));
+    let reload = loaded.clone();
+    let apply = loaded.clone();
+    let save_button = save.clone();
+    view! {
+        <Div>
+            <Div class="notes-shell__actions">
+                <Button on_press=move || {
+                    reload.refetch();
+                }>"Reload"</Button>
+                <Button on_press=move || {
+                    if let Some(Ok(value)) = apply.get_untracked() {
+                        body.set(value);
+                        status.set(String::from("Loaded note applied"));
+                    }
+                }>"Use loaded note"</Button>
+                <Button on_press=move || {
+                    save_button.dispatch(body.get_untracked());
+                }>"Save body"</Button>
+            </Div>
+            <Text>{move || {
+                if loaded.is_loading() {
+                    String::from("Loading...")
+                } else {
+                    match loaded.get() {
+                        None => String::from("Not loaded"),
+                        Some(Ok(_)) => String::from("Loaded; choose Use loaded note to apply"),
+                        Some(Err(error)) => format!("Load failed: {error}"),
+                    }
+                }
+            }}</Text>
+            <Text>{move || {
+                if save.is_pending() {
+                    String::from("Saving...")
+                } else {
+                    match save.value().get() {
+                        None => String::from("No save yet"),
+                        Some(Ok(message)) => message,
+                        Some(Err(error)) => format!("Save failed: {error}"),
+                    }
+                }
+            }}</Text>
+        </Div>
+    }
+}
+```
+
+Update `src/layouts/root/components/mod.rs` with these contents.
+
+```rust
+mod data_toolbar;
+mod note_heading;
+
+pub(crate) use data_toolbar::DataToolbar;
+pub(super) use note_heading::NoteHeading;
+```
+
+Update `src/layouts/root/mod.rs` with these contents.
+
+```rust
+mod component;
+mod components;
+mod style;
+
+pub(crate) use component::RootLayout;
+pub(crate) use components::DataToolbar;
+```
+
+Update `src/layouts/mod.rs` with these contents.
+
+```rust
+mod root;
+
+pub(crate) use root::DataToolbar;
+pub(crate) use root::RootLayout;
+```
+
+In `src/app.rs`, add this import alongside the existing `RootLayout` import.
+
+```rust
+use crate::layouts::DataToolbar;
+```
+
+Inside `RootLayout`, add `<DataToolbar />` immediately above the opening `<Routes fallback=NotFound>` tag.
+
+Run `cargo run` and wait for loading to finish. Tab to **Use loaded note**
+and press Enter to fill the body. Activate **Save body**, then clear the body
+and activate **Save body** again to see a validation message.
 
 ## Complete files for this chapter
 

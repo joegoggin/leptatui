@@ -1,15 +1,13 @@
 # 11. Documents and media
 
-Prerequisites: [Chapter 10: Files and editors](10-files-and-editors.md).
+Continue from [chapter 10: Files and editors](10-files-and-editors.md).
 
-Continue from chapter 10 and extend the preview with Markdown formatting.
-Update `src/pages/preview/page.rs`; keep file loading, saving, and all existing
-routes unchanged.
-The later document and media examples are optional experiments.
+Preview already shows the draft text. Let's make it render headings
+and code blocks as you would see them in a Markdown reader.
 
 ## Preview Markdown
 
-In `NotePreview`, replace the paragraph displaying the body with a tracked
+In `NotePreview` in `src/pages/preview/page.rs`, replace the paragraph displaying the body with a tracked
 Markdown rendering helper inside `view!`:
 
 ```rust
@@ -19,8 +17,17 @@ Markdown rendering helper inside `view!`:
 )}
 ```
 
-Type `# Heading` and a fenced Rust code block into the editor, then navigate
-to Preview. You should see semantic headings and highlighted source. This
+Run `cargo run` and enter this sample in the body. Tab to Preview and press Enter.
+
+````markdown
+# Heading
+
+```rust
+let count = 1;
+```
+````
+
+You should see semantic headings and highlighted source. This
 renders the draft in memory; it does not read or write a file. The `Markdown`
 tag loads files, so this in-memory preview needs `markdown_with_options`;
 there is currently no equivalent tag for rendering a string.

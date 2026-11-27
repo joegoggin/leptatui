@@ -1,11 +1,8 @@
 # 13. Extending Leptatui
 
-Prerequisites: [Chapter 12: Themes and reusable styles](12-themes-and-reusable-styles.md).
-
-Use the extension interfaces when existing components cannot express a custom
-rendering need. This is an advanced, standalone lesson; the notes app can keep
-using built-in views. Use a separate project with the chapter 1 Cargo manifest
-for this lesson so you can keep your notes app.
+Let's build a horizontal rule as a custom view. Make a separate copy
+of the [chapter 1 project](01-getting-started.md), including its Cargo manifest and both Rust
+files, to follow this standalone lesson.
 
 ## A custom leaf view
 
@@ -16,6 +13,8 @@ code in `src/views/rule.rs`, with its own prelude import. Make `Rule`
 in `main.rs`:
 
 ```rust
+use leptatui::prelude::*;
+
 pub(crate) struct Rule;
 
 impl View for Rule {
@@ -91,6 +90,17 @@ Start from chapter 1's two-file application in this separate project. Keep
 ```rust
 view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> }
 ```
+
+Create `src/views/mod.rs` with these contents.
+
+```rust
+mod rule;
+
+pub(crate) use rule::Rule;
+```
+
+In `src/main.rs`, add `mod views;` below `mod app;`. In `src/app.rs`,
+add `use crate::views::Rule;` below the prelude import.
 
 Run `cargo run`. You should see a heading and a horizontal line of dashes;
 Ctrl+Q exits. This small example adds no direct Ratatui dependency.

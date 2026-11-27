@@ -1,9 +1,12 @@
 # 12. Themes and reusable styles
 
-Prerequisites: [Chapter 11: Documents and media](11-documents-and-media.md).
+Continue from [chapter 11: Documents and media](11-documents-and-media.md).
 
-Make the app's appearance reusable. Keep literal palette colors in a theme
-model and use named variables in component styles.
+The notes app uses a single palette. Let's add a theme toggle and
+watch the same views pick up new colors.
+
+The theme holds the palette colors. Component styles refer to those colors
+by name, so one change can update multiple views.
 
 Inside `NotesApp` in `src/app.rs`, after providing `Draft` and before its
 `view!`, add:
@@ -43,8 +46,7 @@ In `src/app.rs`, add the following button after Preview in the navigation `Div`:
 
 Styles resolve variables while rendering, so descendants repaint without
 changing their component code. For fixed themes, provide a plain
-`ThemeVariables` instead of its read signal. Run the app, toggle twice, and
-verify that the text and surface colors switch back while your draft remains.
+`ThemeVariables` instead of its read signal.
 The separate library example is `cargo run --example theme_switcher`.
 
 ## Variables, mixins, and imports
@@ -65,6 +67,55 @@ mixin; the second imports it with `@use note_styles as notes` and applies
 `@include notes.heading` to `H1`. Call `use_note_heading_styles()` during
 `NoteHeading` setup in `component.rs`. Keep the `text` prop unchanged.
 The complete files below include both helpers and the module facade.
+
+Create `src/layouts/root/components/note_heading/style.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+fn note_styles() -> StyleModule {
+    stylesheet! {
+        $accent: Color::LightCyan;
+        @mixin heading {
+            fg: $accent;
+            modifier: Modifier::BOLD;
+        }
+    }
+}
+
+pub(super) fn use_note_heading_styles() {
+    stylesheet! {
+        @use note_styles as notes;
+        H1 { @include notes.heading; }
+    };
+}
+```
+
+Create `src/layouts/root/components/note_heading/component.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+use super::style::use_note_heading_styles;
+
+#[component]
+pub(in crate::layouts::root) fn NoteHeading(#[prop(into)] text: String) -> impl IntoView {
+    use_note_heading_styles();
+    view! { <H1>{text}</H1> }
+}
+```
+
+Create `src/layouts/root/components/note_heading/mod.rs` with these contents.
+
+```rust
+mod component;
+mod style;
+
+pub(in crate::layouts::root) use component::NoteHeading;
+```
+
+Run `cargo run`. Tab to the theme button and press Enter twice. The colors
+should switch and then switch back while your draft stays in place.
 
 Nested rules express descendant selectors. `&:focus`, `&:active`, `&:insert`,
 `&:visual`, and `&:visited` combine supported states with the containing

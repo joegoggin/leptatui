@@ -1,6 +1,9 @@
 # 10. Files and editors
 
-Prerequisites: [Chapter 9: Async data](09-async-data.md).
+Continue from [chapter 9: Async data](09-async-data.md).
+
+The mock service can acknowledge a save. Let's save the body to a file
+so you can recover it after restarting the app.
 
 Replace the mock service with real note files. Delete
 `src/layouts/root/components/data_toolbar.rs` and the `src/services` directory;
@@ -39,11 +42,6 @@ A `FileOperation<T>` is an `Action<(), std::io::Result<T>>`. Observe pending,
 value, and version state; `dispatch(())` retries the same captured arguments.
 Retain separate handles if both read and write status need to stay visible.
 
-Run the app, edit the body, activate **Save body**, then **Load body**.
-Choose **Use loaded note** to apply the read result. Restart the app and load
-again to verify persistence. Loading before saving displays a missing-file
-error locally; it does not erase the draft.
-
 Relative paths resolve inside the root. Absolute paths and symlink targets
 must remain inside it. Leading `~` expands to the user's home and still obeys
 the boundary. Recursive root deletion is prohibited. The
@@ -59,6 +57,10 @@ Put this `FileToolbar` in the new `file_toolbar.rs`, importing the prelude and
 `<DataToolbar />` in `NotesApp` with `<FileToolbar />`:
 
 ```rust
+use leptatui::prelude::*;
+
+use crate::draft::Draft;
+
 #[component]
 pub(crate) fn FileToolbar() -> ViewResult<impl IntoView> {
     let Draft { body, status, .. } = expect_context::<Draft>();
@@ -112,6 +114,49 @@ pub(crate) fn FileToolbar() -> ViewResult<impl IntoView> {
 }
 ```
 
+Update `src/layouts/root/components/mod.rs` with these contents.
+
+```rust
+mod file_toolbar;
+mod note_heading;
+
+pub(crate) use file_toolbar::FileToolbar;
+pub(super) use note_heading::NoteHeading;
+```
+
+Update `src/layouts/root/mod.rs` with these contents.
+
+```rust
+mod component;
+mod components;
+mod style;
+
+pub(crate) use component::RootLayout;
+pub(crate) use components::FileToolbar;
+```
+
+Update `src/layouts/mod.rs` with these contents.
+
+```rust
+mod root;
+
+pub(crate) use root::FileToolbar;
+pub(crate) use root::RootLayout;
+```
+
+In `src/app.rs`, replace the old toolbar import with this one.
+
+```rust
+use crate::layouts::FileToolbar;
+```
+
+In `src/main.rs`, delete `mod services;`.
+
+Run `cargo run`, edit the body, activate **Save body**, then **Load body**.
+Choose **Use loaded note** to apply the read result. Restart the app and load
+again to verify persistence. Loading before saving displays a missing-file
+error locally; it does not erase the draft.
+
 ## Optional: Choose a file
 
 The selector owns its own full-screen interface. To try it, create
@@ -121,6 +166,8 @@ as `FileToolbar`, then import it in `src/app.rs` and insert `<FilePicker />`
 after `<FileToolbar />`. The selected path is displayed without replacing the draft:
 
 ```rust
+use leptatui::prelude::*;
+
 #[component]
 pub(crate) fn FilePicker() -> impl IntoView {
     let selector = use_file_selector();
@@ -143,6 +190,36 @@ pub(crate) fn FilePicker() -> impl IntoView {
 }
 ```
 
+Wire the component into the shell by adding these lines alongside the
+corresponding `FileToolbar` declarations.
+
+Add the declaration and re-export to `src/layouts/root/components/mod.rs`.
+
+```rust
+mod file_picker;
+pub(crate) use file_picker::FilePicker;
+```
+
+Re-export the component from `src/layouts/root/mod.rs`.
+
+```rust
+pub(crate) use components::FilePicker;
+```
+
+Expose it to the app from `src/layouts/mod.rs`.
+
+```rust
+pub(crate) use root::FilePicker;
+```
+
+In `src/app.rs`, add this import.
+
+```rust
+use crate::layouts::FilePicker;
+```
+
+In the same file, add `<FilePicker />` directly below `<FileToolbar />`.
+
 Read `selector.get_file()` inside a tracked closure or effect to observe a
 successful canonical path selection. `select()` uses the current directory
 without extension filtering; `clear()` removes the saved selection. Opening or
@@ -160,6 +237,10 @@ The first button edits the draft signal through a temporary Markdown file;
 the second edits the saved file:
 
 ```rust
+use leptatui::prelude::*;
+
+use crate::draft::Draft;
+
 #[component]
 pub(crate) fn EditorTools() -> impl IntoView {
     let Draft { body, .. } = expect_context::<Draft>();
@@ -184,6 +265,36 @@ pub(crate) fn EditorTools() -> impl IntoView {
     }
 }
 ```
+
+Wire the component into the shell by adding these lines alongside the
+corresponding `FileToolbar` declarations.
+
+Add the declaration and re-export to `src/layouts/root/components/mod.rs`.
+
+```rust
+mod editor_tools;
+pub(crate) use editor_tools::EditorTools;
+```
+
+Re-export the component from `src/layouts/root/mod.rs`.
+
+```rust
+pub(crate) use components::EditorTools;
+```
+
+Expose it to the app from `src/layouts/mod.rs`.
+
+```rust
+pub(crate) use root::EditorTools;
+```
+
+In `src/app.rs`, add this import.
+
+```rust
+use crate::layouts::EditorTools;
+```
+
+In the same file, add `<EditorTools />` directly below `<FileToolbar />`.
 
 The editor is chosen from `VISUAL`, then `EDITOR`, then `vi`. For example,
 set `VISUAL="nvim -f"` before launching your app.
