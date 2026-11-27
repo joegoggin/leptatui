@@ -12,6 +12,7 @@ Keep the draft provider and quit handler in `NotesApp`. Remove the unused
 #[component]
 fn NotePreview() -> impl IntoView {
     let Draft { title, body, .. } = expect_context::<Draft>();
+    
     view! {
         <Div>
             <H2>{title}</H2>
@@ -165,6 +166,7 @@ fn NotesApp() -> impl IntoView {
         }
         KeyControl::Pass
     });
+
     let title = RwSignal::new(String::from("First note"));
     let body = RwSignal::new(String::from("Learn to build a terminal application."));
     let status = RwSignal::new(String::from("Editing"));
@@ -173,20 +175,25 @@ fn NotesApp() -> impl IntoView {
 
     stylesheet! {
         H1 { fg: Color::LightCyan; }
+
         A:active { fg: Color::LightGreen; }
+
         Button:focus { fg: Color::Yellow; }
 
         .notes-shell {
             padding: TuiSpacing::uniform(1);
+
             &__actions {
                 display: Display::Flex;
                 gap: Axes::all(Length::cells(1.0));
+
                 @media (max-width: 60) {
                     flex_direction: FlexDirection::Column;
                 }
             }
         }
     }
+
     view! {
         <Router initial_path="/edit">
             <Div class="notes-shell">

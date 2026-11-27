@@ -25,6 +25,7 @@ struct NoteQuery {
 fn NoteDetails() -> ViewResult<impl IntoView> {
     let params = use_params::<NoteParams>()?;
     let query = use_query::<NoteQuery>()?;
+
     view! { <Text>{format!("Note {}, line {:?}", params.id, query.line)}</Text> }
 }
 ```
