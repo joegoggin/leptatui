@@ -4,13 +4,28 @@ Let's build a horizontal rule as a custom view. Make a separate copy
 of the [chapter 1 project](01-getting-started.md), including its Cargo manifest and both Rust
 files, to follow this standalone lesson.
 
+Create these empty files, including any directories they need.
+
+- `src/views/mod.rs`
+- `src/views/rule.rs`
+
+Add the following to `src/main.rs`.
+
+```rust
+mod views;
+```
+
+Add the following to `src/views/mod.rs`.
+
+```rust
+mod rule;
+```
+
 ## A custom leaf view
 
 `View` is an open, object-safe trait. A render-only leaf implements `render`,
 `as_any`, and `as_any_mut`; other methods have defaults. Add the following
-code in `src/views/rule.rs`, with its own prelude import. Make `Rule`
-`pub(crate)`, re-export it from `src/views/mod.rs`, and declare `mod views;`
-in `main.rs`:
+code in `src/views/rule.rs`, with its own prelude import.
 
 ```rust
 use leptatui::prelude::*;
@@ -81,17 +96,8 @@ behavior it adds. The [existing view tests](../../crates/leptatui/tests/view/sup
 show how the library tests rendering. Contributor checks live in
 [Working on Leptatui](../contributing.md).
 
-## Mount the custom view
-
-Start from chapter 1's two-file application in this separate project. Keep
-`main.rs` for startup and the Ctrl+Q handler in `app.rs`. Import
-`crate::views::Rule` in `app.rs`, then replace `NotesApp`'s final view with:
-
-```rust
-view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> }
-```
-
-Create `src/views/mod.rs` with these contents.
+Make `Rule` available as `crate::views::Rule` from `src/views/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod rule;
@@ -99,8 +105,14 @@ mod rule;
 pub(crate) use rule::Rule;
 ```
 
-In `src/main.rs`, add `mod views;` below `mod app;`. In `src/app.rs`,
-add `use crate::views::Rule;` below the prelude import.
+## Mount the custom view
+
+Import
+`crate::views::Rule` in `app.rs`, then replace `NotesApp`'s final view with:
+
+```rust
+view! { <Div><H1>"Custom leaf view"</H1>{Rule}<Text>"Ctrl+Q quits"</Text></Div> }
+```
 
 Run `cargo run`. You should see a heading and a horizontal line of dashes;
 Ctrl+Q exits. This small example adds no direct Ratatui dependency.

@@ -10,9 +10,34 @@ A component returning
 its final bare view expression in `Ok` for you. The parameter and query models
 derive `Clone` because the tracked view captures their values.
 
-Create `src/pages/note_details/page.rs` for the following page and its private
-parameter/query models. Re-export `NoteDetails` through its `mod.rs` and
-`pages/mod.rs`. Wire it to `/notes/:id` to try `/notes/1?line=3`:
+Create these empty files, including any directories they need.
+
+- `src/pages/note_details/mod.rs`
+- `src/pages/note_details/page.rs`
+- `src/pages/required_file/mod.rs`
+- `src/pages/required_file/page.rs`
+
+Add the following to `src/pages/mod.rs`.
+
+```rust
+mod note_details;
+mod required_file;
+```
+
+Add the following to `src/pages/note_details/mod.rs`.
+
+```rust
+mod page;
+```
+
+Add the following to `src/pages/required_file/mod.rs`.
+
+```rust
+mod page;
+```
+
+Fill in `src/pages/note_details/page.rs` for the following page and its private
+parameter and query models. You’ll connect it to `/notes/:id` below.
 
 ```rust
 use leptatui::prelude::*;
@@ -46,8 +71,8 @@ support the usual focus and activation keys.
 `view_error!("Could not load the note")` returns an intentional diagnostic.
 `view_error!(error => "Could not load the note")` preserves an underlying
 error as its source. Use it inside a fallible component when a lower-level
-message needs application context. Put this page in
-`src/pages/required_file/page.rs` and re-export `RequiredFile` the same way:
+message needs application context. Fill in
+`src/pages/required_file/page.rs` with the following code.
 
 ```rust
 use leptatui::prelude::*;
@@ -92,7 +117,8 @@ Inside `Routes`, after the preview route, add:
 <Route path="/required-file" view=RequiredFile />
 ```
 
-Create `src/pages/note_details/mod.rs` with these contents.
+Expose `NoteDetails` from its page module in `src/pages/note_details/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod page;
@@ -100,7 +126,8 @@ mod page;
 pub(crate) use page::NoteDetails;
 ```
 
-Create `src/pages/required_file/mod.rs` with these contents.
+Expose `RequiredFile` from its page module in `src/pages/required_file/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod page;
@@ -108,7 +135,8 @@ mod page;
 pub(crate) use page::RequiredFile;
 ```
 
-Update `src/pages/mod.rs` with these contents.
+Make both new pages available alongside the existing ones in `src/pages/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod edit;

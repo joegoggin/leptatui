@@ -23,7 +23,11 @@ Chapter 13 explores custom views in a standalone application.
 
 ## Code in each chapter
 
-Follow the edits in order in your notes project. Each step names the file
+Follow the edits in order in your notes project. When you add files, connect
+them to the crate through `main.rs` and any parent modules before writing the
+implementation.
+
+Each step names the file
 and shows the code you need to add or replace. Run the chapter checkpoint
 to see what changed, then compare your work with the complete files if you
 get stuck. Carry those files and the chapter 1 Cargo manifest forward.

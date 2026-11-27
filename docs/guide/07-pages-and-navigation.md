@@ -7,11 +7,54 @@ switch between editing and reading the same text.
 
 The router chooses a view using an in-memory path such as `/edit`.
 
-Move `src/components/note_editor.rs` to `src/pages/edit/page.rs`. The
-component stays the same because it already reads the shared draft through
-context. Delete the old `src/components/mod.rs` and its now-empty directory.
+Create these empty files, including any directories they need.
 
-Create `src/pages/edit/mod.rs` with these contents.
+- `src/pages/mod.rs`
+- `src/pages/edit/mod.rs`
+- `src/pages/edit/page.rs`
+- `src/pages/not_found/mod.rs`
+- `src/pages/not_found/page.rs`
+- `src/pages/preview/mod.rs`
+- `src/pages/preview/page.rs`
+
+Add the following to `src/main.rs`.
+
+```rust
+mod pages;
+```
+
+Add the following to `src/pages/mod.rs`.
+
+```rust
+mod edit;
+mod not_found;
+mod preview;
+```
+
+Add the following to `src/pages/edit/mod.rs`.
+
+```rust
+mod page;
+```
+
+Add the following to `src/pages/not_found/mod.rs`.
+
+```rust
+mod page;
+```
+
+Add the following to `src/pages/preview/mod.rs`.
+
+```rust
+mod page;
+```
+
+Copy the contents of `src/components/note_editor.rs` into
+`src/pages/edit/page.rs`. The editor already reads the shared draft through
+context. Keep the original file until the app uses the new module.
+
+Expose `NoteEditor` from the edit module in `src/pages/edit/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod page;
@@ -19,7 +62,7 @@ mod page;
 pub(crate) use page::NoteEditor;
 ```
 
-Create `src/pages/preview/page.rs` with these contents.
+Fill in `src/pages/preview/page.rs` with these contents.
 
 ```rust
 use leptatui::prelude::*;
@@ -38,7 +81,8 @@ pub(crate) fn NotePreview() -> impl IntoView {
 }
 ```
 
-Create `src/pages/preview/mod.rs` with these contents.
+Expose `NotePreview` from the preview module in `src/pages/preview/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod page;
@@ -46,7 +90,7 @@ mod page;
 pub(crate) use page::NotePreview;
 ```
 
-Create `src/pages/not_found/page.rs` with these contents.
+Fill in `src/pages/not_found/page.rs` with these contents.
 
 ```rust
 use leptatui::prelude::*;
@@ -57,7 +101,8 @@ pub(crate) fn NotFound() -> impl IntoView {
 }
 ```
 
-Create `src/pages/not_found/mod.rs` with these contents.
+Expose `NotFound` from the fallback module in `src/pages/not_found/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod page;
@@ -65,7 +110,8 @@ mod page;
 pub(crate) use page::NotFound;
 ```
 
-Create `src/pages/mod.rs` with these contents.
+Give `app.rs` one place to import all three pages through `src/pages/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod edit;
@@ -76,8 +122,6 @@ pub(crate) use edit::NoteEditor;
 pub(crate) use not_found::NotFound;
 pub(crate) use preview::NotePreview;
 ```
-
-In `src/main.rs`, remove `mod components;` and add `mod pages;`.
 
 Update `src/layouts/root/component.rs` with these contents.
 
@@ -135,6 +179,9 @@ view! {
 system handler. The shell outside `Routes` stays mounted, so its context-owned
 draft survives navigation. Each route points to the component re-exported by
 its page module.
+
+Now remove `mod components;` from `src/main.rs` and delete the old
+`src/components` directory. The editor now lives in `src/pages/edit`.
 
 Run `cargo run` and edit the body. Tab to Preview and press Enter. It should show the latest draft; returning to
 Edit should preserve the text. An active route anchor matches `A:active`.

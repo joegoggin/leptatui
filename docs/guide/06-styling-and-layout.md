@@ -11,7 +11,17 @@ The shell owns its styles, so register them when `RootLayout` is set up.
 The helper is synchronous and ends the `stylesheet!` invocation with a
 semicolon so it returns `()`.
 
-Create `src/layouts/root/style.rs` with these contents.
+Create these empty files, including any directories they need.
+
+- `src/layouts/root/style.rs`
+
+Add the following to `src/layouts/root/mod.rs`.
+
+```rust
+mod style;
+```
+
+Fill in `src/layouts/root/style.rs` with these contents.
 
 ```rust
 use leptatui::prelude::*;
@@ -33,16 +43,6 @@ pub(super) fn use_root_layout_styles() {
         }
     };
 }
-```
-
-Update `src/layouts/root/mod.rs` with these contents.
-
-```rust
-mod component;
-mod components;
-mod style;
-
-pub(crate) use component::RootLayout;
 ```
 
 Update `src/layouts/root/component.rs` with these contents.

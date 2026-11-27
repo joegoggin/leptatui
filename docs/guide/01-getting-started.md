@@ -47,8 +47,20 @@ for more options.
 
 ## Run your first screen
 
-Start with the screen you’ll see when the notes app opens. Create
-`src/app.rs` and add the following code.
+The first screen will live in `src/app.rs`. Create that file and leave it
+empty for now. Then add `mod app;` above the existing `main` function in
+`src/main.rs` so Rust knows where to find it.
+
+```rust
+mod app;
+
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+Now fill in `src/app.rs` with `NotesApp`, the component that displays the
+first screen.
 
 ```rust
 use leptatui::prelude::*;
@@ -108,8 +120,8 @@ async fn main() -> leptatui::app::Result<()> {
 }
 ```
 
-`mod app;` tells Rust to include `src/app.rs` as a module. `pub(crate)` makes
-`NotesApp` available inside this application, and `use crate::app::NotesApp;`
+`pub(crate)` makes `NotesApp` available inside this application, and
+`use crate::app::NotesApp;`
 brings the name into scope so you can write `<NotesApp />`. The tag closes
 itself because you're passing it no nested content. Each file imports the
 prelude for the names it uses.

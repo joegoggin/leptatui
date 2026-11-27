@@ -5,33 +5,57 @@ Continue from [chapter 4: Editing notes](04-editing-notes.md).
 The editor works inside one function. Let's give the form and shell
 separate components that can share the same draft.
 
-## Pass inputs with props
+Create these empty files, including any directories they need.
 
-A component's function parameters become props: values supplied by its parent.
-Declare data props with their value type, such as `String`. `#[component]`
-automatically wraps them in `Prop<T>` inside the component body. Render the
-handle directly in `view!`, or read its current value with `.get()` or `.with()`;
-`view!` automatically tracks those reads. Callers
-can write `<NoteHeading text={title.get()} />` without a tracking closure.
-Component setup runs once, so prop changes preserve local signals and state.
+- `src/components/mod.rs`
+- `src/components/note_editor.rs`
+- `src/draft.rs`
+- `src/layouts/mod.rs`
+- `src/layouts/root/mod.rs`
+- `src/layouts/root/component.rs`
+- `src/layouts/root/components/mod.rs`
+- `src/layouts/root/components/note_heading.rs`
 
-The root layout will own the heading and use `Children` to place the editor
-inside a border. First define the signal handles the editor will share.
-
-Create `src/draft.rs` with these contents.
+Add the following to `src/main.rs`.
 
 ```rust
-use leptatui::prelude::*;
-
-#[derive(Clone, Copy)]
-pub(crate) struct Draft {
-    pub(crate) title: RwSignal<String>,
-    pub(crate) body: RwSignal<String>,
-    pub(crate) status: RwSignal<String>,
-}
+mod components;
+mod draft;
+mod layouts;
 ```
 
-Create `src/layouts/root/components/note_heading.rs` with these contents.
+Add the following to `src/components/mod.rs`.
+
+```rust
+mod note_editor;
+```
+
+Add the following to `src/layouts/mod.rs`.
+
+```rust
+mod root;
+```
+
+Add the following to `src/layouts/root/mod.rs`.
+
+```rust
+mod component;
+mod components;
+```
+
+Add the following to `src/layouts/root/components/mod.rs`.
+
+```rust
+mod note_heading;
+```
+
+## Pass inputs with props
+
+The editor currently displays “My notes” with a `Text` view. We'll move
+that heading into its own component, `NoteHeading`, so the layout can
+choose what it says.
+
+Fill in `src/layouts/root/components/note_heading.rs` with these contents.
 
 ```rust
 use leptatui::prelude::*;
@@ -42,7 +66,30 @@ pub(in crate::layouts::root) fn NoteHeading(#[prop(into)] text: String) -> impl 
 }
 ```
 
-Create `src/layouts/root/component.rs` with these contents.
+The `text` parameter is a prop, an input the parent gives to a component.
+In `NoteHeading`, `{text}` displays that input inside `H1`, the
+highest-level heading. The `#[prop(into)]` attribute lets the parent pass
+a string literal such as `"My notes"` for the `String` parameter.
+
+Inside the component, `#[component]` turns the parameter into a
+`Prop<String>` that follows changes to the input. You can display it
+directly with `{text}` or read its current value with `.get()` or `.with()`
+inside `view!`.
+
+Make `NoteHeading` available to the layout from `src/layouts/root/components/mod.rs`.
+The full file should now look like this.
+
+```rust
+mod note_heading;
+
+pub(super) use note_heading::NoteHeading;
+```
+
+Now fill in the layout that uses the heading. `Children` is the content
+you'll put between the opening and closing `RootLayout` tags. Rendering
+`{children}` below the heading puts the editor inside the same border.
+
+Fill in `src/layouts/root/component.rs` with these contents.
 
 ```rust
 use leptatui::prelude::*;
@@ -62,15 +109,8 @@ pub(crate) fn RootLayout(children: Children) -> impl IntoView {
 }
 ```
 
-Create `src/layouts/root/components/mod.rs` with these contents.
-
-```rust
-mod note_heading;
-
-pub(super) use note_heading::NoteHeading;
-```
-
-Create `src/layouts/root/mod.rs` with these contents.
+Expose `RootLayout` from the root module in `src/layouts/root/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod component;
@@ -79,7 +119,8 @@ mod components;
 pub(crate) use component::RootLayout;
 ```
 
-Create `src/layouts/mod.rs` with these contents.
+Make `RootLayout` available as `crate::layouts::RootLayout` from `src/layouts/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod root;
@@ -87,28 +128,46 @@ mod root;
 pub(crate) use root::RootLayout;
 ```
 
-`H1` is the highest-level semantic heading; chapter 11 introduces the full
-document component set. `#[prop(into)]` permits inputs convertible into the
-requested value type, so a caller
-can write `<NoteHeading text="My notes" />`. `#[prop(optional)]` allows a prop
-to use its type's default; `#[prop(default = expression)]` supplies a chosen
-default. `Children` is a callable holding nested content.
+`RootLayout` gives `NoteHeading` the same title every time, `"My notes"`.
+If you wanted the heading to show the draft title, you could pass
+`<NoteHeading text={title.get()} />`. Leptatui updates the heading when the
+signal changes and keeps the component's existing state. To display the title
+in uppercase, write `{text.get().to_uppercase()}` inside `view!`. That puts
+the read where Leptatui can track it. Doing the same calculation during
+component setup would capture the initial title.
 
-`#[component]` retains `Children` lazily and exposes a repeatable handle inside
-the component. Render it directly with `{children}`; the callable form
-`{children()}` remains supported. Both forms preserve the original child nodes
-and their local state.
-Use `ChildrenFn` or `ChildrenMut` for explicitly repeatable or mutable factories.
-Mark event props with `#[prop(callback)]`; mark intentional setup-only inputs
-with `#[prop(static)]`. These inputs keep their declared types and are retained
-rather than automatically wrapped. Explicit `Prop<T>` data parameters remain
-supported without an additional wrapper.
+`{children}` marks the spot where the editor will appear. Leptatui holds the
+nested content until the layout renders it. You can also write `{children()}`.
+Both forms reuse the same child views and preserve their local state.
 
-Inside the body, a data prop is a handle: use `text.get().to_uppercase()` for
-string operations. Values computed during setup remain snapshots; put those
-reads inside `view!` to make the rendered result reactive.
+When you write your own components, you may need one of these options.
+
+- Use `#[prop(optional)]` to let callers omit a prop and use its type's
+  default. Use `#[prop(default = expression)]` to choose the default yourself.
+- Use `#[prop(callback)]` for an event handler passed by the parent and
+  `#[prop(static)]` for an input used only during setup. Both keep the types
+  you declare. You can also declare a data prop as `Prop<T>` directly.
+- Use `ChildrenFn` for a child factory you want to call repeatedly or
+  `ChildrenMut` for a factory that needs mutable access to what it captures.
 
 ## Share the draft through context
+
+Both the app and the editor need access to the same title, body, and status.
+Group those three signal handles in a `Draft` so the app can share them
+together.
+
+Fill in `src/draft.rs` with these contents.
+
+```rust
+use leptatui::prelude::*;
+
+#[derive(Clone, Copy)]
+pub(crate) struct Draft {
+    pub(crate) title: RwSignal<String>,
+    pub(crate) body: RwSignal<String>,
+    pub(crate) status: RwSignal<String>,
+}
+```
 
 Move the chapter 4 form, status, and keyboard instructions into a new
 `NoteEditor` component in `src/components/note_editor.rs`. Import
@@ -122,7 +181,11 @@ use crate::draft::Draft;
 
 #[component]
 pub(crate) fn NoteEditor() -> impl IntoView {
-    let Draft { title, body, status } = expect_context::<Draft>();
+    let Draft {
+        title,
+        body,
+        status
+    } = expect_context::<Draft>();
 
     view! {
         <Div>
@@ -135,7 +198,9 @@ pub(crate) fn NoteEditor() -> impl IntoView {
                 }
             >
                 <Text>"Title"</Text>
-                <Input value=title placeholder="Title"
+                <Input
+                    value=title
+                    placeholder="Title"
                     on_input=move || {
                         status.set(String::from("Editing"));
                     }
@@ -148,25 +213,36 @@ pub(crate) fn NoteEditor() -> impl IntoView {
                 />
             </Form>
             <Text>{status}</Text>
-            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
+            <Text>
+                "Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."
+            </Text>
         </Div>
     }
 }
 ```
 
-In `src/app.rs`, import `Draft`, `RootLayout`, and `NoteEditor`, then replace
-the existing `NotesApp` with the following definition. It keeps the
-quit handler and creates the draft signals, then provides them before returning
-the view. The heading stays in `RootLayout`, above the editor. Add these imports below the prelude import, then replace
-the component.
+Make `NoteEditor` available as `crate::components::NoteEditor` from `src/components/mod.rs`.
+The full file should now look like this.
 
 ```rust
+mod note_editor;
+
+pub(crate) use note_editor::NoteEditor;
+```
+
+Replace `src/app.rs` with the file below. It imports `Draft`, `RootLayout`,
+and `NoteEditor`. Inside `NotesApp`, keep the Ctrl+Q handler and create the
+`title`, `body`, and `status` signals. Then call `provide_context` with the
+`Draft` so `NoteEditor` can read those same signals. The `view!` block places
+`NoteEditor` inside `RootLayout`, which renders the heading above the editor.
+
+```rust
+use leptatui::prelude::*;
+
 use crate::components::NoteEditor;
 use crate::draft::Draft;
 use crate::layouts::RootLayout;
-```
 
-```rust
 #[component]
 pub(crate) fn NotesApp() -> impl IntoView {
     use_key_event(KeyEventKind::Press, |key| {
@@ -175,12 +251,15 @@ pub(crate) fn NotesApp() -> impl IntoView {
         }
         KeyControl::Pass
     });
-
     let title = RwSignal::new(String::from("First note"));
     let body = RwSignal::new(String::from("Learn to build a terminal application."));
     let status = RwSignal::new(String::from("Editing"));
 
-    provide_context(Draft { title, body, status });
+    provide_context(Draft {
+        title,
+        body,
+        status,
+    });
 
     view! {
         <RootLayout>
@@ -199,22 +278,6 @@ Context stores a value by Rust type for descendants to retrieve. Use
 is valid. Keep shared signals owned by `NotesApp` so replacing editor pages
 will not destroy the draft. Props are useful for explicit parent-to-child
 configuration; context is useful across many descendants.
-
-Create `src/components/mod.rs` with these contents.
-
-```rust
-mod note_editor;
-
-pub(crate) use note_editor::NoteEditor;
-```
-
-In `src/main.rs`, add these lines alongside `mod app;`.
-
-```rust
-mod components;
-mod draft;
-mod layouts;
-```
 
 Run `cargo run`. Tab to the title, press `i`, and type a few characters.
 You can still edit the draft, now inside the bordered layout.
@@ -337,20 +400,26 @@ pub(crate) fn NoteEditor() -> impl IntoView {
                 }
             >
                 <Text>"Title"</Text>
-                <Input value=title placeholder="Title"
+                <Input
+                    value=title
+                    placeholder="Title"
                     on_input=move || {
                         status.set(String::from("Editing"));
                     }
                 />
                 <Text>"Body"</Text>
-                <TextArea value=body placeholder="Write a note"
+                <TextArea
+                    value=body
+                    placeholder="Write a note"
                     on_input=move || {
                         status.set(String::from("Editing"));
                     }
                 />
             </Form>
             <Text>{status}</Text>
-            <Text>"Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."</Text>
+            <Text>
+                "Tab focuses. i edits. Esc returns to normal mode. Enter submits in normal mode. Ctrl+Q quits."
+            </Text>
         </Div>
     }
 }

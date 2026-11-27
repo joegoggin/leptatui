@@ -5,15 +5,18 @@ Continue from [chapter 9: Async data](09-async-data.md).
 The mock service can acknowledge a save. Let's save the body to a file
 so you can recover it after restarting the app.
 
-Replace the mock service with real note files. Delete
-`src/layouts/root/components/data_toolbar.rs` and the `src/services` directory;
-remove their module declarations and re-exports, including `mod services;`
-in `main.rs`. Create `src/layouts/root/components/file_toolbar.rs` instead,
-re-export `FileToolbar` through the layout modules, and update its import and
-usage in `src/app.rs`. Keep the editor and routes
-from chapter 9, and replace the data toolbar with load/save controls.
-It stores the body as `notes-data/note.md`, relative to the notes project's
-working directory. The title remains in memory.
+The new toolbar stores the body as `notes-data/note.md` relative to the
+notes project. The title stays in memory.
+
+Create these empty files, including any directories they need.
+
+- `src/layouts/root/components/file_toolbar.rs`
+
+Add the following to `src/layouts/root/components/mod.rs`.
+
+```rust
+mod file_toolbar;
+```
 
 ## Scope file operations to a directory
 
@@ -52,9 +55,7 @@ atomic replacement, copy, rename, deletion, retries, and expected failures.
 
 ## Connect file loading and saving
 
-Put this `FileToolbar` in the new `file_toolbar.rs`, importing the prelude and
-`crate::draft::Draft`. Replace
-`<DataToolbar />` in `NotesApp` with `<FileToolbar />`:
+Fill in `src/layouts/root/components/file_toolbar.rs`.
 
 ```rust
 use leptatui::prelude::*;
@@ -114,17 +115,21 @@ pub(crate) fn FileToolbar() -> ViewResult<impl IntoView> {
 }
 ```
 
-Update `src/layouts/root/components/mod.rs` with these contents.
+Expose `FileToolbar` from the components module in `src/layouts/root/components/mod.rs`.
+The full file should now look like this.
 
 ```rust
+mod data_toolbar;
 mod file_toolbar;
 mod note_heading;
 
+pub(crate) use data_toolbar::DataToolbar;
 pub(crate) use file_toolbar::FileToolbar;
 pub(super) use note_heading::NoteHeading;
 ```
 
-Update `src/layouts/root/mod.rs` with these contents.
+Pass `FileToolbar` through the root module in `src/layouts/root/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod component;
@@ -132,14 +137,17 @@ mod components;
 mod style;
 
 pub(crate) use component::RootLayout;
+pub(crate) use components::DataToolbar;
 pub(crate) use components::FileToolbar;
 ```
 
-Update `src/layouts/mod.rs` with these contents.
+Make the toolbar available as `crate::layouts::FileToolbar` from `src/layouts/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod root;
 
+pub(crate) use root::DataToolbar;
 pub(crate) use root::FileToolbar;
 pub(crate) use root::RootLayout;
 ```
@@ -150,7 +158,15 @@ In `src/app.rs`, replace the old toolbar import with this one.
 use crate::layouts::FileToolbar;
 ```
 
-In `src/main.rs`, delete `mod services;`.
+Replace `<DataToolbar />` with `<FileToolbar />` in `NotesApp`. The app now
+uses the file toolbar, so you can remove the mock service and its toolbar.
+
+1. Remove `pub(crate) use root::DataToolbar;` from `src/layouts/mod.rs`.
+2. Remove `pub(crate) use components::DataToolbar;` from `src/layouts/root/mod.rs`.
+3. In `src/layouts/root/components/mod.rs`, remove `mod data_toolbar;` and
+   `pub(crate) use data_toolbar::DataToolbar;`. Delete
+   `src/layouts/root/components/data_toolbar.rs`.
+4. Remove `mod services;` from `src/main.rs`, then delete `src/services`.
 
 Run `cargo run`, edit the body, activate **Save body**, then **Load body**.
 Choose **Use loaded note** to apply the read result. Restart the app and load
@@ -159,11 +175,17 @@ error locally; it does not erase the draft.
 
 ## Optional: Choose a file
 
-The selector owns its own full-screen interface. To try it, create
-`src/layouts/root/components/file_picker.rs` with the prelude import and this
-`pub(crate)` component. Declare and re-export it through the same layout modules
-as `FileToolbar`, then import it in `src/app.rs` and insert `<FilePicker />`
-after `<FileToolbar />`. The selected path is displayed without replacing the draft:
+Create these empty files, including any directories they need.
+
+- `src/layouts/root/components/file_picker.rs`
+
+Add the following to `src/layouts/root/components/mod.rs`.
+
+```rust
+mod file_picker;
+```
+
+The selector displays the chosen path without replacing the draft. Fill in `src/layouts/root/components/file_picker.rs`.
 
 ```rust
 use leptatui::prelude::*;
@@ -190,26 +212,40 @@ pub(crate) fn FilePicker() -> impl IntoView {
 }
 ```
 
-Wire the component into the shell by adding these lines alongside the
-corresponding `FileToolbar` declarations.
+Make `FilePicker` available to the shell through these module files.
 
-Add the declaration and re-export to `src/layouts/root/components/mod.rs`.
+`src/layouts/root/components/mod.rs`
 
 ```rust
 mod file_picker;
+mod file_toolbar;
+mod note_heading;
+
 pub(crate) use file_picker::FilePicker;
+pub(crate) use file_toolbar::FileToolbar;
+pub(super) use note_heading::NoteHeading;
 ```
 
-Re-export the component from `src/layouts/root/mod.rs`.
+`src/layouts/root/mod.rs`
 
 ```rust
+mod component;
+mod components;
+mod style;
+
+pub(crate) use component::RootLayout;
 pub(crate) use components::FilePicker;
+pub(crate) use components::FileToolbar;
 ```
 
-Expose it to the app from `src/layouts/mod.rs`.
+`src/layouts/mod.rs`
 
 ```rust
+mod root;
+
 pub(crate) use root::FilePicker;
+pub(crate) use root::FileToolbar;
+pub(crate) use root::RootLayout;
 ```
 
 In `src/app.rs`, add this import.
@@ -227,14 +263,24 @@ canceling preserves the previous selection. Enter selects, Esc or Ctrl+C
 cancels, and `q` exits the application. A picked path is not automatically
 inside your filesystem root: use an appropriate root before operating on it.
 
+Before moving on, remove the `FilePicker` import and tag from `src/app.rs`.
+Remove its three `pub use` lines and `mod file_picker;`, then delete
+`src/layouts/root/components/file_picker.rs`.
+
 ## Optional: Open an external editor
 
-Create `src/layouts/root/components/editor_tools.rs`, importing the prelude
-and `crate::draft::Draft`. Declare and re-export `EditorTools` through the layout
-modules as above, then import it in `src/app.rs` and insert `<EditorTools />`
-after `<FileToolbar />`. Save a note first before trying the saved-file button.
-The first button edits the draft signal through a temporary Markdown file;
-the second edits the saved file:
+Create these empty files, including any directories they need.
+
+- `src/layouts/root/components/editor_tools.rs`
+
+Add the following to `src/layouts/root/components/mod.rs`.
+
+```rust
+mod editor_tools;
+```
+
+The first button edits the draft through a temporary file. The second edits
+the saved file. Save a note before trying the saved-file button. Fill in `src/layouts/root/components/editor_tools.rs`.
 
 ```rust
 use leptatui::prelude::*;
@@ -266,26 +312,40 @@ pub(crate) fn EditorTools() -> impl IntoView {
 }
 ```
 
-Wire the component into the shell by adding these lines alongside the
-corresponding `FileToolbar` declarations.
+Make `EditorTools` available to the shell through these module files.
 
-Add the declaration and re-export to `src/layouts/root/components/mod.rs`.
+`src/layouts/root/components/mod.rs`
 
 ```rust
 mod editor_tools;
+mod file_toolbar;
+mod note_heading;
+
 pub(crate) use editor_tools::EditorTools;
+pub(crate) use file_toolbar::FileToolbar;
+pub(super) use note_heading::NoteHeading;
 ```
 
-Re-export the component from `src/layouts/root/mod.rs`.
+`src/layouts/root/mod.rs`
 
 ```rust
+mod component;
+mod components;
+mod style;
+
+pub(crate) use component::RootLayout;
 pub(crate) use components::EditorTools;
+pub(crate) use components::FileToolbar;
 ```
 
-Expose it to the app from `src/layouts/mod.rs`.
+`src/layouts/mod.rs`
 
 ```rust
+mod root;
+
 pub(crate) use root::EditorTools;
+pub(crate) use root::FileToolbar;
+pub(crate) use root::RootLayout;
 ```
 
 In `src/app.rs`, add this import.
@@ -312,9 +372,9 @@ app thread while the terminal is restored; do not run it directly during
 normal rendering. Run `cargo run --example external_editor` or explore the
 [Markdown editor application](../../examples/markdown-editor/README.md).
 
-The selector and external editor sections are optional integrations. Remove
-`file_picker.rs`, `editor_tools.rs`, their module declarations, re-exports,
-imports, and shell tags after trying them. The final
+Remove the `EditorTools` import and tag from `src/app.rs`. Remove its three
+`pub use` lines and `mod editor_tools;`, then delete
+`src/layouts/root/components/editor_tools.rs`. The final
 application below uses the fixed `notes-data/note.md` path and is the version
 to continue with in chapter 11. No additional Cargo dependencies are required.
 

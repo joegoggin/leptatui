@@ -55,11 +55,23 @@ Local `$variables` avoid repeating values; `@mixin` defines reusable
 declarations. Helpers returning only variables and mixins produce a
 `StyleModule`, which another stylesheet imports with `@use`.
 
-The heading now has its own styles. Replace
-`src/layouts/root/components/note_heading.rs` with a `note_heading` directory
-containing `component.rs`, `style.rs`, and `mod.rs`. Delete the old flat file
-so Rust sees only one module. Keep the parent `mod note_heading;` declaration
-and re-export unchanged.
+The heading now needs room for a stylesheet. Move
+`src/layouts/root/components/note_heading.rs` to
+`src/layouts/root/components/note_heading/mod.rs`. Move the file rather than
+copying it so Rust has a single definition for the module. The parent module
+still declares `mod note_heading;`, and the heading is still available.
+
+Create these empty files, including any directories they need.
+
+- `src/layouts/root/components/note_heading/component.rs`
+- `src/layouts/root/components/note_heading/style.rs`
+
+Add the following to `src/layouts/root/components/note_heading/mod.rs`.
+
+```rust
+mod component;
+mod style;
+```
 
 Put `note_styles() -> StyleModule` and `use_note_heading_styles()` in the new
 `style.rs`. The first helper defines the reusable accent variable and heading
@@ -68,7 +80,7 @@ mixin; the second imports it with `@use note_styles as notes` and applies
 `NoteHeading` setup in `component.rs`. Keep the `text` prop unchanged.
 The complete files below include both helpers and the module facade.
 
-Create `src/layouts/root/components/note_heading/style.rs` with these contents.
+Fill in `src/layouts/root/components/note_heading/style.rs` with these contents.
 
 ```rust
 use leptatui::prelude::*;
@@ -91,7 +103,7 @@ pub(super) fn use_note_heading_styles() {
 }
 ```
 
-Create `src/layouts/root/components/note_heading/component.rs` with these contents.
+Fill in `src/layouts/root/components/note_heading/component.rs` with these contents.
 
 ```rust
 use leptatui::prelude::*;
@@ -105,7 +117,10 @@ pub(in crate::layouts::root) fn NoteHeading(#[prop(into)] text: String) -> impl 
 }
 ```
 
-Create `src/layouts/root/components/note_heading/mod.rs` with these contents.
+Now replace the contents of
+`src/layouts/root/components/note_heading/mod.rs` with the module
+declarations and re-export below. The layout can keep importing the
+heading from the same module.
 
 ```rust
 mod component;

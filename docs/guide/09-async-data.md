@@ -7,7 +7,31 @@ shows loading and saving results beside the editor.
 
 The mock service pauses briefly so you can watch the loading and saving states.
 
-Create `src/services/notes.rs` with these contents.
+Create these empty files, including any directories they need.
+
+- `src/services/mod.rs`
+- `src/services/notes.rs`
+- `src/layouts/root/components/data_toolbar.rs`
+
+Add the following to `src/main.rs`.
+
+```rust
+mod services;
+```
+
+Add the following to `src/services/mod.rs`.
+
+```rust
+pub(crate) mod notes;
+```
+
+Add the following to `src/layouts/root/components/mod.rs`.
+
+```rust
+mod data_toolbar;
+```
+
+Fill in `src/services/notes.rs` with these contents.
 
 ```rust
 pub(crate) async fn load_note() -> Result<String, String> {
@@ -25,20 +49,10 @@ pub(crate) async fn save_note(body: String) -> Result<String, String> {
 }
 ```
 
-Create `src/services/mod.rs` with these contents.
-
-```rust
-pub(crate) mod notes;
-```
-
-In `src/main.rs`, add `mod services;` with the other module declarations.
-
 ## Read with a resource
 
 A resource runs an async fetcher when its reactive source changes or when you
-call `refetch`. Put the mock fetch in `src/services/notes.rs` as
-`pub(crate) async fn load_note() -> Result<String, String>`. Declare the module
-through `src/services/mod.rs` and `mod services;` in `main.rs`. The toolbar
+call `refetch`. The toolbar
 imports `load_note` and creates a resource during component setup:
 
 ```rust
@@ -86,7 +100,7 @@ state. See the [async reference](../reference/async.md) and run
 The service handles the data operations. The toolbar decides when to call
 them and shows the result next to the editor.
 
-Create `src/layouts/root/components/data_toolbar.rs` with these contents.
+Fill in `src/layouts/root/components/data_toolbar.rs` with these contents.
 
 ```rust
 use leptatui::prelude::*;
@@ -145,7 +159,8 @@ pub(crate) fn DataToolbar() -> impl IntoView {
 }
 ```
 
-Update `src/layouts/root/components/mod.rs` with these contents.
+Expose `DataToolbar` from the components module in `src/layouts/root/components/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod data_toolbar;
@@ -155,7 +170,8 @@ pub(crate) use data_toolbar::DataToolbar;
 pub(super) use note_heading::NoteHeading;
 ```
 
-Update `src/layouts/root/mod.rs` with these contents.
+Pass `DataToolbar` through the root module in `src/layouts/root/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod component;
@@ -166,7 +182,8 @@ pub(crate) use component::RootLayout;
 pub(crate) use components::DataToolbar;
 ```
 
-Update `src/layouts/mod.rs` with these contents.
+Make the toolbar available as `crate::layouts::DataToolbar` from `src/layouts/mod.rs`.
+The full file should now look like this.
 
 ```rust
 mod root;
